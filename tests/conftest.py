@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import io
-import zlib
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -38,6 +37,7 @@ def _clean_config(settings, tmp_path, monkeypatch):
     settings.TMP_DIR = settings.DATA_DIR / "tmp"
     settings.EXPORT_TMP_DIR = settings.DATA_DIR / "exports"
     crypto.reset_cache()
+    crypto.ensure_key()  # the installer always creates the key
     from apps.library import storage
 
     storage.ensure_dirs()
