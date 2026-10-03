@@ -144,7 +144,7 @@ def parse_labels(text: str) -> list[Proposal]:
                 if m:
                     val = m.group(1).strip().split("\n")[0].strip()
                     flags = []
-                    if key == "document_number" and re.search(r"[O0][I1l]|[I1l][O0]|[S5]{2}", val):
+                    if key == "document_number" and re.search(r"(?<=\d)[OIlSB]|[OIlSB](?=\d)", val[1:]):
                         flags.append("Possibly ambiguous characters (O/0, I/1, S/5) — please verify.")
                     out.append(Proposal(key, val, "ocr", 0.5, flags, m.group(0)[:200]))
                     break

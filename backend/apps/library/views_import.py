@@ -122,8 +122,6 @@ def import_retry(request, pk):
 def import_upload_item(request, pk):
     """Browser imports: the client uploads each pending item; retries of the same item are idempotent."""
     s = _session(request, pk)
-    if s.status != "importing":
-        return _err("Start the import first.")
     try:
         rel = I.normalize_rel(request.data.get("path", ""))
     except ValueError:
@@ -133,6 +131,8 @@ def import_upload_item(request, pk):
         return _err("This file was not part of the scanned selection.")
     if item.status == "done":
         return Response({"path": rel, "status": "done", "document": str(item.document_id), "duplicate_retry": True})
+    if s.status != "importing":
+        return _err("Start the import first.")
     if not I.item_allowed(s, item):
         return Response({"path": rel, "status": "skipped"})
     f = request.FILES.get("file")
