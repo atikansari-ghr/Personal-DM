@@ -1,0 +1,4 @@
+{% extends "_share_base.html" %}{% block body %}<h1>{{ title }}</h1>
+<p>{{ name }} · {{ size|filesizeformat }} · available until {{ expires|date:"j M Y H:i" }} UTC</p>
+<p>{% if previewable %}<a class="btn" href="/s/{{ token }}/file" target="_blank" rel="noopener">View</a>{% endif %}
+{% if allow_download %} <a class="btn secondary" href="/s/{{ token }}/file?download=1">Download</a>{% endif %}</p>{% endblock %}

@@ -1,0 +1,31 @@
+# Private reference material and anything that could contain real family data
+references/
+*.sqlite3
+*.dump
+*.pgdump
+/var/
+/data/
+backups/
+*.env
+!deployment/personaldocs.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+backend/static_build/
+backend/staticfiles/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+.env.dev
