@@ -1,0 +1,22 @@
+[Unit]
+Description=Personal Documents scheduler (reminders, deliveries, email polling, nightly backup)
+After=network-online.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=personaldocs
+Group=personaldocs
+EnvironmentFile=/etc/personaldocs/personaldocs.env
+WorkingDirectory=/opt/personaldocs/current/backend
+ExecStart=/opt/personaldocs/current/.venv/bin/python manage.py scheduler
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=40
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
