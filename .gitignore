@@ -30,3 +30,4 @@ backend/staticfiles/
 *.swp
 .env.dev
 tests/e2e/node_modules/
+*.tsbuildinfo
