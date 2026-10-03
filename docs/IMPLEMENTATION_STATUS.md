@@ -10,10 +10,10 @@ Every internal build stage (1–8) is implemented: data model, settings registry
 
 ## Completed (with evidence)
 
-- Backend: 80 automated tests passing (`docs/TEST_REPORT.md`).
+- Backend: 81 automated tests passing (`docs/TEST_REPORT.md`).
 - Frontend: type-checked production build; 13-step browser end-to-end flow passing on desktop and mobile viewports; screenshots in `docs/screenshots/`.
 - Tooling: `scripts/personaldocs` (install, upgrade, rollback, repair, status, doctor, backup, restore, integrity, recover-admin, setup-token, logs, manage), systemd units, `scripts/verify.sh`, GitHub Actions CI with prebuilt frontend release asset.
-- Documentation: 25 bundled guides (`docs/guides/`), requirements, traceability, architecture and 6 ADRs, generated settings reference, test report, release checklist, changelog.
+- Documentation: 27 bundled guides (`docs/guides/`), requirements, traceability, architecture and 6 ADRs, generated settings reference, test report, release checklist, changelog.
 
 ## Blockers (external validation)
 
