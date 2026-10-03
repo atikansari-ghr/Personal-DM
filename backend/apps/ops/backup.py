@@ -89,8 +89,16 @@ def _dump_db(dest: Path) -> None:
 
 
 def _previous_backups(target: Path) -> list[Path]:
-    return sorted([p for p in target.iterdir() if p.is_dir() and p.name.startswith("backup-") and not p.name.endswith(".partial")
-                   and (p / "manifest.json").exists()], reverse=True)
+    found = [p for p in target.iterdir() if p.is_dir() and p.name.startswith("backup-") and not p.name.endswith(".partial")
+             and (p / "manifest.json").exists()]
+
+    def created(p: Path) -> str:
+        try:
+            return json.loads((p / "manifest.json").read_text()).get("created_at", "")
+        except (OSError, ValueError):
+            return ""
+
+    return sorted(found, key=created, reverse=True)  # newest first, by manifest time (not folder name)
 
 
 def run_backup(actor=None, request=None) -> dict:
@@ -118,6 +126,10 @@ def _do_backup(target: Path) -> dict:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     ident = config.get("general.installation_id") or "personaldocs"
     final = target / f"backup-{stamp}-{ident}"
+    n = 2
+    while final.exists() or (target / (final.name + ".partial")).exists():
+        final = target / f"backup-{stamp}-{n}-{ident}"
+        n += 1
     work = target / (final.name + ".partial")
     work.mkdir(parents=True)
     prev = _previous_backups(target)
