@@ -41,6 +41,9 @@ function Fields({ doc, onChange }: { doc: DocDetail; onChange: () => void }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [value, setValue] = useState("");
   const [newKey, setNewKey] = useState("");
+  const [custom, setCustom] = useState<Meta["fields"]>([]);
+  useEffect(() => { if (canEdit) api<Meta>("metadata").then((m) => setCustom(m.fields)).catch(() => undefined); }, [canEdit]);
+  const customLabel = (key: string) => custom.find((c) => `custom:${c.key}` === key)?.label;
   const proposed = doc.fields.filter((f) => f.status === "proposed");
   const save = async (key: string, v: string, confirm = true) => {
     try {
@@ -70,11 +73,11 @@ function Fields({ doc, onChange }: { doc: DocDetail; onChange: () => void }) {
         ))}
         {doc.fields.map((f) => (
           <div key={f.key} style={{ display: "contents" }}>
-            <div className="k">{FIELD_LABELS[f.key] || f.key.replace(/^custom:/, "").replace(/_/g, " ")}</div>
+            <div className="k">{FIELD_LABELS[f.key] || customLabel(f.key) || f.key.replace(/^custom:/, "").replace(/_/g, " ")}</div>
             <div className="v">
               {editing === f.key ? (
                 <form className="row" onSubmit={(e) => { e.preventDefault(); save(f.key, value); }}>
-                  <input aria-label={`Edit ${f.key}`} type={DATE_KEYS.includes(f.key) ? "date" : "text"} value={value} onChange={(e) => setValue(e.target.value)} style={{ maxWidth: 220 }} autoFocus />
+                  <input aria-label={`Edit ${f.key}`} type={DATE_KEYS.includes(f.key) || custom.find((c) => `custom:${c.key}` === f.key)?.type === "date" ? "date" : custom.find((c) => `custom:${c.key}` === f.key)?.type === "number" ? "number" : "text"} value={value} onChange={(e) => setValue(e.target.value)} style={{ maxWidth: 220 }} autoFocus />
                   <button className="btn small primary">Save</button><button type="button" className="btn small" onClick={() => setEditing(null)}>Cancel</button>
                 </form>
               ) : (
@@ -101,10 +104,11 @@ function Fields({ doc, onChange }: { doc: DocDetail; onChange: () => void }) {
         ))}
       </div>
       {canEdit && (
-        <form className="row" onSubmit={(e) => { e.preventDefault(); if (newKey) { setEditing(newKey); setValue(""); save(newKey, "", false).then(() => setNewKey("")); } }}>
+        <form className="row" onSubmit={(e) => { e.preventDefault(); if (newKey) { setEditing(newKey); setValue(""); save(newKey, "", true).then(() => setNewKey("")); } }}>
           <select aria-label="Add a detail" value={newKey} onChange={(e) => setNewKey(e.target.value)} style={{ maxWidth: 260 }}>
             <option value="">Add a detail…</option>
             {Object.entries(FIELD_LABELS).filter(([k]) => !doc.fields.some((f) => f.key === k)).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            {custom.filter((c) => !doc.fields.some((f) => f.key === `custom:${c.key}`)).map((c) => <option key={c.key} value={`custom:${c.key}`}>{c.label} ({c.type})</option>)}
           </select>
           <button className="btn small" disabled={!newKey}><Icon name="plus" size={16} /> Add</button>
         </form>
