@@ -1,0 +1,27 @@
+[Unit]
+Description=Personal Documents processing worker (OCR, previews, imports, backups)
+After=network-online.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=personaldocs
+Group=personaldocs
+EnvironmentFile=/etc/personaldocs/personaldocs.env
+WorkingDirectory=/opt/personaldocs/current/backend
+ExecStart=/opt/personaldocs/current/.venv/bin/python manage.py worker
+Restart=on-failure
+RestartSec=10
+# Let the current job finish (OCR can take minutes) before stopping.
+KillSignal=SIGTERM
+TimeoutStopSec=900
+Nice=5
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+MemoryHigh=2800M
+MemoryMax=3200M
+
+[Install]
+WantedBy=multi-user.target
