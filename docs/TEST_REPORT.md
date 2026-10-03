@@ -18,7 +18,7 @@ Date: 2026-10-03. Revision: the branch head at the commit that adds this file.
 | Command | Result |
 |---|---|
 | `scripts/verify.sh` (compile, `manage.py check`, `makemigrations --check`, settings reference, `bash -n` + shellcheck, pytest, `tsc` + `vite build`, repository hygiene) | **All passed** |
-| `pytest` (`tests/`) | **80 passed**, 0 failed, 0 skipped (OCR and LibreOffice tests ran) |
+| `pytest` (`tests/`) | **81 passed**, 0 failed, 0 skipped (OCR and LibreOffice tests ran) |
 | `node tests/e2e/flow.mjs` against gunicorn + worker on a fresh database | **13/13 steps passed** (`docs/screenshots/e2e-results.json`) |
 
 The end-to-end flow covers: the setup wizard creating six accounts, sign-in, uploading a synthetic image-only "passport" scan, OCR, dashboard, the three-panel browser with PDF preview, confirming suggested dates (generated name "Sam Sample Passport (2016–2026)"), search, admin notification and family settings, switching to the blue theme, bundled help, and a second user on a mobile viewport (forced password change, independent green theme, no horizontal overflow, manifest checks). It also asserts there are no uncaught page errors.

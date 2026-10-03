@@ -251,6 +251,13 @@ def _resolve_owner(request, folder: Folder):
             raise S.DomainError("Unknown owner.")
         if folder.owner_id and owner.pk != folder.owner_id and not request.user.is_main_admin:
             raise S.DomainError("Documents in a personal folder belong to that person.")
+        if not request.user.is_main_admin and owner.pk != request.user.pk and owner.pk != folder.owner_id:
+            from apps.accounts.models import GroupMembership
+            from apps.accounts.services import delegations_for
+
+            groups = {d.group_id for d in delegations_for(request.user, "documents")}
+            if not GroupMembership.objects.filter(user=owner, group_id__in=groups).exists():
+                raise S.DomainError("You can only add documents for yourself or for people you manage documents for.")
         return owner
     return folder.owner or request.user
 

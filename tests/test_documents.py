@@ -216,3 +216,17 @@ def test_upload_requires_folder_upload_permission(family, clients):
     shared = Folder.objects.get(name="Shared family")
     r = upload(clients["son1"], shared)
     assert r.status_code == 404  # not even visible
+
+
+def test_owner_attribution_on_shared_folders_is_restricted(family, clients):
+    from apps.library.models import AccessRule
+    from apps.library import permissions as P
+
+    shared = Folder.objects.get(name="Shared family")
+    AccessRule.objects.create(folder=shared, user=family["son1"], caps=P.VIEW | P.UPLOAD)
+    r = upload(clients["son1"], shared, owner=str(family["mom"].pk))
+    assert r.status_code == 400
+    r = upload(clients["son1"], shared)
+    assert r.status_code == 201 and r.json()["documents"][0]["owner"]["id"] == str(family["son1"].pk)
+    r = upload(clients["dad"], shared, owner=str(family["mom"].pk))
+    assert r.status_code == 201
