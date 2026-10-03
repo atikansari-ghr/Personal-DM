@@ -1,0 +1,45 @@
+import { Link, useParams } from "react-router-dom";
+import { useSession } from "../session";
+import AccountSettings from "./settings/Account";
+import { ActivityPanel, AuthPanel, ConnectionsPanel, DocumentsPanel, NotificationsAdmin, ProcessingPanel, StoragePanel } from "./settings/Admin";
+import FamilyPanel from "./settings/Family";
+import SettingsForm from "../components/SettingsForm";
+
+const ADMIN_TABS: [string, string][] = [
+  ["general", "General"], ["family", "Family & access"], ["documents", "Documents & folders"], ["processing", "OCR & processing"],
+  ["notifications", "Notifications"], ["connections", "Connections"], ["authentication", "Authentication"], ["storage", "Storage & backup"],
+  ["activity", "Activity & health"], ["ai", "Future local AI"],
+];
+
+export default function SettingsPage() {
+  const { section } = useParams();
+  const { session } = useSession();
+  const admin = !!session?.user?.is_main_admin;
+  const delegate = (session?.delegations || []).length > 0;
+  const tabs: [string, string][] = [["account", "My account"], ...(admin ? ADMIN_TABS : delegate ? [["family", "Family & access"] as [string, string]] : []), ["help", "Help & documentation"]];
+  const active = section || (admin ? "general" : "account");
+  return (
+    <div>
+      <div className="page-head"><div><h1>Settings</h1><p className="muted">{admin ? "Manage your family workspace" : "Manage your account"}</p></div></div>
+      <nav className="tabs" aria-label="Settings sections">
+        {tabs.map(([k, l]) => <Link key={k} to={k === "help" ? "/help" : `/settings/${k}`} className={active === k ? "active" : ""} aria-current={active === k ? "page" : undefined}>{l}</Link>)}
+      </nav>
+      {active === "account" && <AccountSettings />}
+      {active === "general" && admin && <SettingsForm section="general" title="General" />}
+      {active === "family" && (admin || delegate) && <FamilyPanel />}
+      {active === "documents" && admin && <DocumentsPanel />}
+      {active === "processing" && admin && <ProcessingPanel />}
+      {active === "notifications" && admin && <NotificationsAdmin />}
+      {active === "connections" && admin && <ConnectionsPanel />}
+      {active === "authentication" && admin && <AuthPanel />}
+      {active === "storage" && admin && <StoragePanel />}
+      {active === "activity" && admin && <ActivityPanel />}
+      {active === "ai" && admin && (
+        <div className="stack">
+          <SettingsForm section="ai" title="Future local AI" />
+          <div className="card"><p>Local AI assistance (model-assisted OCR, classification suggestions, chat with documents and semantic similarity) is planned for a later release. It will be off by default, use only a server you choose, and never fall back to cloud services. Nothing AI-related runs in this release.</p><Link to="/help/settings#future">Read the extension plan</Link></div>
+        </div>
+      )}
+    </div>
+  );
+}

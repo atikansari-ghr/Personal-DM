@@ -539,7 +539,9 @@ def _stream(request, path, content_type, filename, disposition):
     safe = filename.replace('"', "")
     resp["Content-Disposition"] = f"{disposition}; filename=\"{safe.encode('ascii', 'replace').decode()}\"; filename*=UTF-8''{quote(safe)}"
     resp["X-Content-Type-Options"] = "nosniff"
-    resp["Content-Security-Policy"] = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox"
+    # Browsers' built-in PDF viewers refuse to run in sandboxed documents, so only non-PDF/image types get `sandbox`.
+    viewer_safe = content_type.startswith(("application/pdf", "image/"))
+    resp["Content-Security-Policy"] = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'" + ("" if viewer_safe else "; sandbox")
     resp["Cache-Control"] = "no-store, private"
     return resp
 
