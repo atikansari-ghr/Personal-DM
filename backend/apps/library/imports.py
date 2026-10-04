@@ -289,6 +289,9 @@ def finish_if_done(session: ImportSession) -> None:
         session.finished_at = timezone.now()
         session.save(update_fields=["status", "finished_at"])
         audit.record("import.finish", actor=session.created_by, target=session, failed=failed)
+        from apps.notify import events
+
+        events.import_finished(session)
 
 
 @jobs.handler("import_server")

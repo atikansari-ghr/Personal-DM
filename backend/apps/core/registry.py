@@ -90,6 +90,35 @@ def _validate_template(value: str):
         raise SettingError("Template must include {version_id} so files never collide.")
 
 
+DEFAULT_MEMBER_TEMPLATE = "\n".join([
+    "Identity/Passport", "Identity/Visa & Residence", "Identity/National ID", "Education", "Medical", "Travel",
+    "Banking & Finance", "Insurance", "Vehicle", "House & Property", "Certificates",
+])
+
+
+def template_lines(value: str) -> list[list[str]]:
+    paths = []
+    for raw in (value or "").splitlines():
+        line = raw.strip().strip("/")
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split("/") if p.strip()]
+        paths.append(parts)
+    return paths
+
+
+def _validate_folder_template(value: str):
+    paths = template_lines(value)
+    if len(paths) > 100:
+        raise SettingError("Use at most 100 template folders.")
+    for parts in paths:
+        if len(parts) > 8:
+            raise SettingError(f"'{'/'.join(parts)}' is nested too deeply (at most 8 levels).")
+        for part in parts:
+            if part in (".", "..") or "\\" in part or len(part) > 200:
+                raise SettingError(f"'{part}' is not a valid folder name.")
+
+
 SETTINGS: list[SettingDef] = [
     # ---- General
     SettingDef("general.app_name", "Application name", "Name shown in the header, browser tab and notifications.",
@@ -123,6 +152,11 @@ SETTINGS: list[SettingDef] = [
                "Suggest an emoji from the folder name (Travel ✈️, Passport 🛂 …) when folders are created.",
                "bool", True, "documents", effect="New folders get a suggested emoji; existing overrides stay.",
                help="folder-imports#emoji"),
+    SettingDef("documents.member_template", "Folder template for new members",
+               "Optional folders (one path per line, use / for sub-folders) offered when adding a person or applied to an existing folder. Nothing is created unless you choose to apply it.",
+               "str", DEFAULT_MEMBER_TEMPLATE, "documents", max=4000, validator=_validate_folder_template,
+               effect="Used the next time a template is applied; existing folders are never removed or renamed.",
+               help="folder-imports#templates", example="Identity/Passport"),
     SettingDef("documents.import_roots", "Approved server import folders",
                "Server/NAS paths (one per line) from which the main administrator may import. Sources are copied, never modified.",
                "str", "", "documents", effect="Only listed folders can be scanned by the server import wizard.",
@@ -241,6 +275,9 @@ SETTINGS: list[SettingDef] = [
                "three_panel", "appearance", scope=USER, editable_by=SELF, choices=LAYOUTS, help="themes#layout"),
     SettingDef("me.channels", "My notification channels", "Channels you want reminders on. Required channels stay on.",
                "channel_list", None, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#channels"),
+    SettingDef("me.event_alerts", "Other alerts by email/Telegram",
+               "Also send access, import and (for administrators) backup and integrity alerts to your email/Telegram channels. They always appear in the in-app feed.",
+               "bool", True, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#other-alerts"),
     SettingDef("me.dashboard_widgets", "Dashboard widgets", "Statistics shown on your dashboard.", "str",
                "documents,members,expiring,storage", "appearance", scope=USER, editable_by=SELF, help="getting-started#dashboard"),
 ]

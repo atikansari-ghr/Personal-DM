@@ -18,8 +18,9 @@ Date: 2026-10-03. Revision: the branch head at the commit that adds this file.
 | Command | Result |
 |---|---|
 | `scripts/verify.sh` (compile, `manage.py check`, `makemigrations --check`, settings reference, `bash -n` + shellcheck, pytest, `tsc` + `vite build`, repository hygiene) | **All passed** |
-| `pytest` (`tests/`) | **81 passed**, 0 failed, 0 skipped (OCR and LibreOffice tests ran) |
-| `node tests/e2e/flow.mjs` against gunicorn + worker on a fresh database | **13/13 steps passed** (`docs/screenshots/e2e-results.json`) |
+| `pytest` (`tests/`) | **101 passed**, 0 failed, 0 skipped (OCR and LibreOffice tests ran) |
+| `scripts/e2e.sh` (fresh database: `tests/e2e/flow.mjs` then `tests/e2e/a11y.mjs`) | **13/13 flow steps passed**; accessibility audit: **0 serious/critical violations** across 13 screens × 3 themes, document panel, share dialog and mobile layouts (`docs/a11y-report.json`) |
+| veraPDF 1.30.2 on OCRmyPDF output (`tests/test_pdfa.py`) | PDF/A-2b **compliant**; plain PDFs correctly rejected |
 
 The end-to-end flow covers: the setup wizard creating six accounts, sign-in, uploading a synthetic image-only "passport" scan, OCR, dashboard, the three-panel browser with PDF preview, confirming suggested dates (generated name "Sam Sample Passport (2016–2026)"), search, admin notification and family settings, switching to the blue theme, bundled help, and a second user on a mobile viewport (forced password change, independent green theme, no horizontal overflow, manifest checks). It also asserts there are no uncaught page errors.
 
@@ -49,5 +50,4 @@ This ran on a 4 vCPU / 15 GB host, so it does **not** prove the 2 vCPU / 4 GB ta
 | Real-device PWA (AT-14) | No physical devices | Install on Android Chrome and iOS Safari; test camera upload, share-in (Android) and share-out; record results |
 | Browser offline behaviour (AT-15) | Not automated | Save a document offline, go offline (DevTools), open it; sign out and in as another user (not listed); revoke access, reconnect, confirm removal |
 | Resource-constrained load and disk-full (AT-27) | Host differs | On the LXC run `scripts/bench_processing.py` with `N=200` (instructions in the file header) while watching `free`/`top`; fill the disk to <512 MB free and confirm uploads are refused with a clear message |
-| Accessibility audit | Not run | Run axe or Lighthouse against each page in all three themes |
-| PDF/A validation with veraPDF | Not installed | `verapdf derivatives/**/searchable.pdf` |
+| Screen-reader review | Automated audit only | Walk through setup, upload and settings with NVDA/VoiceOver |

@@ -68,6 +68,7 @@ export interface Version {
   error: string;
   ocr_applied: boolean;
   pdfa: boolean;
+  pdfa_check: { validator: string; profile: string; compliant: boolean; full_validation: boolean; failed_rules: { description: string; clause?: string }[]; note?: string } | null;
   page_count: number | null;
   has_preview: boolean;
   has_thumbnail: boolean;

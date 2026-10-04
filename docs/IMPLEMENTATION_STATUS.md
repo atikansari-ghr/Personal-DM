@@ -10,7 +10,7 @@ Every internal build stage (1–8) is implemented: data model, settings registry
 
 ## Completed (with evidence)
 
-- Backend: 81 automated tests passing (`docs/TEST_REPORT.md`).
+- Backend: 101 automated tests passing (`docs/TEST_REPORT.md`).
 - Frontend: type-checked production build; 13-step browser end-to-end flow passing on desktop and mobile viewports; screenshots in `docs/screenshots/`.
 - Tooling: `scripts/personaldocs` (install, upgrade, rollback, repair, status, doctor, backup, restore, integrity, recover-admin, setup-token, logs, manage), systemd units, `scripts/verify.sh`, GitHub Actions CI with prebuilt frontend release asset.
 - Documentation: 27 bundled guides (`docs/guides/`), requirements, traceability, architecture and 6 ADRs, generated settings reference, test report, release checklist, changelog.
@@ -31,13 +31,9 @@ None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT
 
 ## Known limitations and simplifications
 
-- Panels in the three-panel view are fixed-width responsive columns (not draggable).
-- The "Active sessions" panel shows the current session and offers "sign out other devices"; it does not list each device.
 - Browser offline storage behaviour (quota, account switching) is implemented but covered by manual steps, not automated tests.
-- PDF/A conformance relies on OCRmyPDF's own validation (exit status); veraPDF is not run.
-- Only expiry events generate external notifications. Other events appear in the audit log.
-- Optional folder templates for new members are not provided as a separate feature. Administrators create or import any structure; emoji suggestions apply automatically.
 - The audit log records document views on the detail endpoint. File and preview fetches are not individually audited, except downloads.
+- The accessibility audit is automated (axe-core, WCAG 2.1 A/AA) and clean; a manual screen-reader review has not been done.
 
 ## Next executable steps
 
@@ -49,5 +45,7 @@ None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT
 6. Tag `v0.1.0` once the gates pass (`docs/RELEASE_CHECKLIST.md`).
 
 ## Session log
+
+- 2026-10-04: closed the previous limitations — resizable panels (mouse and keyboard, remembered per account), per-device session list with individual sign-out, optional folder templates for new members, event notifications (access granted, import finished, processing failed, backup failed, integrity problems), PDF/A-2b validation (veraPDF when installed, structural check otherwise), automated accessibility audit with a CI end-to-end job. Fixed during verification: an outbox duplicate-key insert could break an enclosing transaction (now a savepoint); changing your own password signed out the current device (now only other devices).
 
 - 2026-10-03: initial implementation of the whole scope. Commands run are summarised in `TEST_REPORT.md`. Fixed during verification: a row lock on an outer join in processing; backup folder name collisions and pruning order (now sorted by manifest time); `on_commit` handling in tests; idempotent retry of completed browser import items; Chrome PDF preview blocked by CSP sandbox (sandbox now applied only to non-PDF/image responses).

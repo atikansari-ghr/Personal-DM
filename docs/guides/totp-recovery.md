@@ -10,7 +10,7 @@ Passwords need at least 10 characters and cannot be common or similar to your us
 
 ## Sessions {#sessions}
 
-"Remember me" keeps you signed in for the number of days set by the administrator (default 14). **Sign out other devices** ends all other sessions. Repeated failed sign-ins are slowed down; error messages never reveal whether a username exists.
+"Remember me" keeps you signed in for the number of days set by the administrator (default 14). **My account → Password & security → Active sessions** lists every device where you are signed in (browser, system, last activity, address). Sign out any single device, or **Sign out all other devices**. Changing your password signs out your other devices but keeps the one you are using. Repeated failed sign-ins are slowed down; error messages never reveal whether a username exists.
 
 ## Forgotten password {#reset}
 

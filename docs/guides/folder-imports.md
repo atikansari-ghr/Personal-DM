@@ -38,6 +38,18 @@ Uploading the same file twice on purpose creates two separate documents with the
 
 The maximum upload size per file is set in **Documents & folders → Maximum upload size**. Before importing, the preview warns if the server may not have enough free space (originals plus previews).
 
+## Folder templates {#templates}
+
+A template is an optional list of folders to create for a person, for example `Identity/Passport`, `Education`, `Medical` and `Travel`. The main administrator edits it in **Settings → Documents & folders → Folder template for new members** (one path per line, `/` for sub-folders).
+
+Nothing is created automatically. You choose to apply the template:
+
+- when adding a family member (tick *Create template folders*);
+- in the setup wizard (tick *Create the suggested folders for each person*);
+- on any folder you may organise: open it and choose **Apply folder template**.
+
+Applying a template again only adds missing folders. It never removes, renames or moves existing ones, and the folders get normal emoji suggestions and inherited access.
+
 ## Folder emoji {#emoji}
 
 New folders get an emoji suggested from their name (Travel ✈️, Passport 🛂, Visa 🛃, House 🏠, Education 🎓, Medical 🩺, Banking 🏦, Insurance 🛡️, Vehicle 🚗, Certificates 📜, others 📁). Change it with **Rename / emoji**. Emoji are labels only; they never affect access and are not added to stored filenames.
