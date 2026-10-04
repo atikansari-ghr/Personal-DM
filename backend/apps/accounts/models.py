@@ -1,0 +1,127 @@
+import uuid
+
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+from django.utils import timezone
+
+DELEGATION_SCOPES = ("documents", "membership", "folder_permissions", "reminders", "notifications")
+
+AVATAR_COLORS = ("#d8eadb", "#f6d5d5", "#d6e4f5", "#e5d9f2", "#f8e7b9", "#cdeee6", "#f3dcc7", "#dfe7c9")
+
+
+class User(AbstractUser):
+    """Every person whose documents are managed has an account (immutable UUID id)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    display_name = models.CharField(max_length=80)
+    full_name = models.CharField(max_length=150, blank=True)
+    role_label = models.CharField(max_length=40, blank=True, help_text="Relationship label, e.g. Dad, Mom, Son1")
+    is_main_admin = models.BooleanField(default=False)
+    must_change_password = models.BooleanField(default=False)
+    password_changed_at = models.DateTimeField(null=True, blank=True)
+    totp_secret_enc = models.TextField(blank=True)
+    totp_enabled = models.BooleanField(default=False)
+    totp_pending_enc = models.TextField(blank=True)
+    avatar_color = models.CharField(max_length=9, default=AVATAR_COLORS[0])
+    sort_order = models.IntegerField(default=100)
+    reminder_group = models.ForeignKey("FamilyGroup", null=True, blank=True, on_delete=models.SET_NULL,
+                                       related_name="reminder_members",
+                                       help_text="Group whose head receives this person's expiry reminders")
+    session_epoch = models.IntegerField(default=0, help_text="Incremented to invalidate all sessions")
+
+    class Meta:
+        ordering = ["sort_order", "display_name"]
+
+    def __str__(self):
+        return self.display_name or self.username
+
+    @property
+    def initials(self) -> str:
+        name = (self.display_name or self.username).strip()
+        parts = name.split()
+        if len(parts) >= 2:
+            return (parts[0][0] + parts[1][0]).upper()
+        return name[:2].upper()
+
+
+class FamilyGroup(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True)
+    head = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="headed_groups")
+    sort_order = models.IntegerField(default=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class GroupMembership(models.Model):
+    group = models.ForeignKey(FamilyGroup, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="memberships")
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("group", "user")]
+
+
+class Delegation(models.Model):
+    """A scoped delegation over one family group. Granted only by the main administrator."""
+
+    delegate = models.ForeignKey(User, on_delete=models.CASCADE, related_name="delegations")
+    group = models.ForeignKey(FamilyGroup, on_delete=models.CASCADE, related_name="delegations")
+    scopes = models.JSONField(default=list)
+    granted_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("delegate", "group")]
+
+
+class RecoveryCode(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="recovery_codes")
+    code_hash = models.CharField(max_length=128)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reset_tokens")
+    token_hash = models.CharField(max_length=128, unique=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def valid(self) -> bool:
+        return self.used_at is None and self.expires_at > timezone.now()
+
+
+class GoogleIdentity(models.Model):
+    """Link between a Google (issuer, subject) and exactly one local account."""
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="google_identity")
+    issuer = models.CharField(max_length=100)
+    subject = models.CharField(max_length=255)
+    email = models.CharField(max_length=254, blank=True)
+    linked_at = models.DateTimeField(auto_now_add=True)
+    last_login_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = [("issuer", "subject")]
+
+
+class SetupState(models.Model):
+    """Singleton tracking the first-run wizard."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    token_hash = models.CharField(max_length=128, blank=True)
+    token_created_at = models.DateTimeField(null=True, blank=True)
+    progress = models.JSONField(default=dict, blank=True)
+
+    @classmethod
+    def get(cls) -> "SetupState":
+        obj, _ = cls.objects.get_or_create(id=1)
+        return obj
