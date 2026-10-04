@@ -25,6 +25,9 @@ def integrity_job(job):
     from apps.notify.models import SchedulerRun
 
     SchedulerRun.objects.update_or_create(name="integrity_report", defaults={"state": report})
+    from apps.notify import events
+
+    events.integrity_problems(report["problem_count"])
     return {"problems": report["problem_count"]}
 
 

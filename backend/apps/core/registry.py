@@ -275,6 +275,9 @@ SETTINGS: list[SettingDef] = [
                "three_panel", "appearance", scope=USER, editable_by=SELF, choices=LAYOUTS, help="themes#layout"),
     SettingDef("me.channels", "My notification channels", "Channels you want reminders on. Required channels stay on.",
                "channel_list", None, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#channels"),
+    SettingDef("me.event_alerts", "Other alerts by email/Telegram",
+               "Also send access, import and (for administrators) backup and integrity alerts to your email/Telegram channels. They always appear in the in-app feed.",
+               "bool", True, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#other-alerts"),
     SettingDef("me.dashboard_widgets", "Dashboard widgets", "Statistics shown on your dashboard.", "str",
                "documents,members,expiring,storage", "appearance", scope=USER, editable_by=SELF, help="getting-started#dashboard"),
 ]

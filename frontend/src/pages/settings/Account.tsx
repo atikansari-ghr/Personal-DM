@@ -193,6 +193,7 @@ function Channels() {
         ))}
         <p className="small muted"><Icon name="info" size={14} /> Administrator-required channels cannot be turned off.</p>
       </div>
+      <div style={{ gridColumn: "1 / -1" }}><SettingsForm keys={["me.event_alerts"]} title="Other alerts" /></div>
       <div className="card">
         <h2>Telegram</h2>
         {data.telegram.linked ? (

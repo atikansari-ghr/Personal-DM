@@ -99,17 +99,22 @@ def expiry_message(doc, days: int) -> tuple[str, str, str]:
     return subject, body, f"/documents/{doc.id}"
 
 
-def dispatch(user, *, kind: str, key: str, subject: str, body: str, link: str = "", document=None) -> None:
+def dispatch(user, *, kind: str, key: str, subject: str, body: str, link: str = "", document=None,
+             external_subject: str | None = None, external_body: str | None = None, external: bool = True) -> None:
+    """In-app always; external channels per the user's choices. External text may be more minimal than in-app text."""
     for channel in channels_for(user):
         if channel == "in_app":
             _in_app(user, kind, key, subject, body, link, document)
             continue
+        if not external:
+            continue
         issue = channel_issue(user, channel)
         try:
-            OutboxMessage.objects.create(key=f"{key}:{user.pk}:{channel}", user=user, channel=channel, kind=kind, subject=subject,
-                                         body=body, document=document,
-                                         status=OutboxMessage.SKIPPED if issue else OutboxMessage.PENDING,
-                                         last_error=issue or "", next_attempt_at=timezone.now())
+            with transaction.atomic():  # savepoint: a duplicate key must not poison an enclosing transaction
+                OutboxMessage.objects.create(key=f"{key}:{user.pk}:{channel}", user=user, channel=channel, kind=kind,
+                                             subject=external_subject or subject, body=external_body or body, document=document,
+                                             status=OutboxMessage.SKIPPED if issue else OutboxMessage.PENDING,
+                                             last_error=issue or "", next_attempt_at=timezone.now())
         except IntegrityError:
             pass  # already queued by an earlier (possibly interrupted) run
 

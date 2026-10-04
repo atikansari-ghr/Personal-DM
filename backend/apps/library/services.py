@@ -469,9 +469,15 @@ def grant(*, ctx: P.AccessContext, actor, target, caps: int, user=None, group=No
         audit.record("permission.revoke", request=request, actor=actor, target=target,
                      subject=str(getattr(user or group, "pk", "")))
         return None
+    previous = AccessRule.objects.filter(**filters).values_list("caps", flat=True).first() or 0
     rule, _ = AccessRule.objects.update_or_create(**filters, defaults={"caps": caps, "created_by": actor})
     audit.record("permission.grant", request=request, actor=actor, target=target, caps=P.names(caps),
                  subject=str(getattr(user or group, "pk", "")))
+    if caps & P.VIEW and not previous & P.VIEW:
+        from apps.notify import events
+
+        recipients = [user] if user is not None else [m.user for m in group.memberships.select_related("user")]
+        transaction.on_commit(lambda: events.access_granted(actor=actor, target=target, users=recipients, caps_names=P.names(caps)))
     return rule
 
 
