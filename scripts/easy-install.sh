@@ -11,6 +11,8 @@
 #   PD_ANSWERS=/root/answers.env bash easy-install.sh --yes   # unattended, answers from a file (see docs)
 set -Eeuo pipefail
 umask 027
+export LANG=C.UTF-8 LC_ALL=C.UTF-8   # works on every Debian system, whatever the console/SSH session sends
+unset LANGUAGE LC_CTYPE LC_COLLATE LC_MESSAGES 2>/dev/null || true
 
 DEFAULT_REPO="https://github.com/atikansari-ghr/Personal-DM.git"
 CONF_DIR=/etc/personaldocs
@@ -345,13 +347,14 @@ table inet personaldocs {
   chain input {
     type filter hook input priority 0; policy accept;
     tcp dport $PD_PORT ip saddr != { 127.0.0.1, $PD_PROXY_IP } drop
+    tcp dport $PD_PORT meta nfproto ipv6 ip6 saddr != ::1 drop
   }
 }
 EOF
     grep -q 'nftables.d/personaldocs.nft' /etc/nftables.conf 2>/dev/null || echo 'include "/etc/nftables.d/personaldocs.nft"' >>/etc/nftables.conf
   fi
-  run systemctl enable nftables
-  run systemctl restart nftables
+  if run systemctl enable nftables && run systemctl restart nftables; then ok "Firewall rule active"
+  else warn "The firewall could not be enabled in this container (the app works without it). Restrict port $PD_PORT on the Proxmox firewall instead."; fi
 fi
 
 say "• Applying app settings"
