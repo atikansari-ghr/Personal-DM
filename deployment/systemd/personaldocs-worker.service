@@ -18,8 +18,6 @@ TimeoutStopSec=900
 Nice=5
 UMask=0027
 NoNewPrivileges=yes
-ProtectSystem=full
-PrivateTmp=yes
 MemoryHigh=2800M
 MemoryMax=3200M
 

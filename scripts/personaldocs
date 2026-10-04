@@ -322,9 +322,23 @@ XML
   env_set PD_VERAPDF_CMD /opt/verapdf/verapdf
 }
 
+sandbox_supported() { # can systemd give services private mounts here? (needs nesting in an LXC)
+  [ -n "${SANDBOX_OK:-}" ] || {
+    if systemd-run --wait --quiet --collect -p PrivateTmp=yes -p ProtectSystem=full /bin/true >/dev/null 2>&1; then SANDBOX_OK=y; else SANDBOX_OK=n; fi
+  }
+  [ "$SANDBOX_OK" = y ]
+}
+
 install_units() {
   local src=${1:-$CURRENT}/deployment/systemd
   for u in "${UNITS[@]}"; do install -m 0644 "$src/$u.service" /etc/systemd/system/; done
+  # Optional isolation (ProtectSystem/PrivateTmp) only where mount namespaces work, otherwise the services cannot start.
+  if [ -f "$src/hardening.conf" ] && sandbox_supported; then
+    for u in "${UNITS[@]}"; do install -d /etc/systemd/system/$u.service.d; install -m 0644 "$src/hardening.conf" /etc/systemd/system/$u.service.d/10-hardening.conf; done
+  else
+    for u in "${UNITS[@]}"; do rm -f /etc/systemd/system/$u.service.d/10-hardening.conf; done
+    [ -f "$src/hardening.conf" ] && c_warn "This container does not allow mount namespaces, so the services run without the extra systemd isolation. For more isolation enable Proxmox: container -> Options -> Features -> Nesting, then run: personaldocs repair"
+  fi
   # NAS connection from Settings: a root path unit runs `personaldocs nas-apply` when the app requests a mount
   if [ -f "$src/personaldocs-nas.path" ]; then
     install -m 0644 "$src/personaldocs-nas.path" "$src/personaldocs-nas.service" /etc/systemd/system/
@@ -332,6 +346,11 @@ install_units() {
   fi
   systemctl daemon-reload
   [ -f /etc/systemd/system/personaldocs-nas.path ] && systemctl enable --now personaldocs-nas.path >/dev/null 2>&1 || true
+}
+
+show_web_failure() { # print the last service messages so the cause is visible without a second command
+  c_err "Last messages from personaldocs-web:"
+  journalctl -u personaldocs-web -n 25 --no-pager -o cat 2>/dev/null | redact >&2 || true
 }
 
 cmd_nas_apply() { # root: apply the NAS settings saved in the app (mount /mnt/pdnas)
@@ -425,7 +444,7 @@ cmd_install() {
   install -m 0755 "$dir/scripts/personaldocs" /usr/local/bin/personaldocs
   install_units "$dir"
   for u in "${UNITS[@]}"; do systemctl enable --now "$u" >/dev/null; systemctl restart "$u"; done
-  health || die "the web service did not become healthy; see: journalctl -u personaldocs-web -n 50"
+  health || { show_web_failure; die "the web service did not become healthy; see: journalctl -u personaldocs-web -n 50"; }
   prune_releases
   log "=== install complete: $(version_of "$dir") ($REV)"
   c_ok "Personal Documents $(version_of "$dir") is installed and running on $PD_BIND."
@@ -473,7 +492,7 @@ cmd_upgrade() {
   install_units "$new"
   for u in "${UNITS[@]}"; do systemctl restart "$u"; done
   if ! health; then
-    c_err "Health check failed after upgrade."
+    c_err "Health check failed after upgrade."; show_web_failure
     if schema_compatible "$old"; then
       activate "$old"; install_units "$old"; for u in "${UNITS[@]}"; do systemctl restart "$u"; done
       die "rolled back to $(basename "$old") (schema compatible)"
@@ -493,7 +512,7 @@ cmd_rollback() {
   local cur; cur=$(readlink -f "$CURRENT")
   activate "$prev"; install_units "$prev"
   for u in "${UNITS[@]}"; do systemctl restart "$u"; done
-  health || die "previous release is not healthy"
+  health || { show_web_failure; die "previous release is not healthy"; }
   c_ok "Rolled back $(basename "$cur") -> $(basename "$prev")."
 }
 
@@ -514,7 +533,7 @@ cmd_repair() {
   manage shell -c "from apps.core.models import Job; from django.utils import timezone; print('requeued', Job.objects.filter(status='running', locked_until__lt=timezone.now()).update(status='queued'))"
   manage reindex
   for u in "${UNITS[@]}"; do systemctl enable "$u" >/dev/null; systemctl restart "$u"; done
-  health || die "web service still unhealthy; see journalctl -u personaldocs-web"
+  health || { show_web_failure; die "web service still unhealthy; see journalctl -u personaldocs-web"; }
   c_ok "Repair complete. No data, keys or accounts were reset."
 }
 
