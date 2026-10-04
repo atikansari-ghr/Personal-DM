@@ -6,6 +6,15 @@ Scans and photos are read locally with Tesseract (English) through OCRmyPDF. The
 
 Processing states: *Queued*, *Processing*, *Needs review*, *Ready*, *Failed* (retry from the document's menu) and *No preview* (stored safely, but no preview for this format).
 
+## PDF/A validation {#pdfa}
+
+Every searchable copy is checked against PDF/A-2b, the long-term archiving standard:
+
+- If the optional **veraPDF** validator is installed (`personaldocs install --with-verapdf`, about 250 MB including Java), the copy gets a full conformance validation by the PDF Association's reference tool.
+- Otherwise a built-in structural check verifies the most important requirements: PDF/A identification, colour profile, embedded fonts, no encryption and no scripts. It is not a full validation, so its badge is marked with \*.
+
+The result appears as a **PDF/A ✓** or **PDF/A issues** badge in the document's *Versions* tab (hover for details). Administrators can re-check every copy with `personaldocs manage pdfa_check`. The original file is never changed either way.
+
 ## Suggested details {#suggestions}
 
 The app suggests details such as name, document number, issue and expiry dates using deterministic rules, including passport machine-readable zones (with check-digit validation). Suggestions:

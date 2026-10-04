@@ -118,6 +118,7 @@ def process_version(job):
     fmt = version.format_class
     text, preview, searchable, thumb = "", "", "", ""
     pages, ocr_applied, pdfa, state, error = None, False, False, "ready", ""
+    pdfa_report: dict = {}
     try:
         if fmt == "pdf":
             pages, text, encrypted = _pdf_info(original)
@@ -186,10 +187,16 @@ def process_version(job):
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
+    if searchable:
+        from .pdfa import validate
+
+        pdfa_report = validate(storage.resolve_derivative(searchable), timeout=min(timeout, 300))
+        pdfa = bool(pdfa and pdfa_report.get("compliant"))
+
     with transaction.atomic():
         DocumentVersion.objects.filter(pk=vid).update(
             text=text, preview_path=preview, searchable_path=searchable, thumbnail_path=thumb, page_count=pages,
-            ocr_applied=ocr_applied, pdfa=pdfa, state=state, error=error[:2000])
+            ocr_applied=ocr_applied, pdfa=pdfa, pdfa_report=pdfa_report, state=state, error=error[:2000])
         doc = Document.objects.select_for_update(of=("self",)).select_related("owner", "doc_type").get(pk=doc.pk)
         if doc.current_version_id == version.id:
             _apply_to_document(doc, version, text, state)

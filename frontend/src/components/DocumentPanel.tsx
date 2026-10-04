@@ -315,7 +315,12 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
         <table className="responsive"><thead><tr><th>Version</th><th>File</th><th>Added</th><th /></tr></thead><tbody>
           {doc.versions.map((ver) => (
             <tr key={ver.id}>
-              <td>v{ver.number} {ver.id === v?.id && <span className="badge">Current</span>}{ver.pdfa && <span className="badge neutral" title="Searchable PDF/A copy available">PDF/A</span>}</td>
+              <td>v{ver.number} {ver.id === v?.id && <span className="badge">Current</span>}{ver.pdfa_check && (
+                <span className={`badge ${ver.pdfa_check.compliant ? "ok" : "soon"}`}
+                  title={ver.pdfa_check.compliant ? `${ver.pdfa_check.profile} — ${ver.pdfa_check.full_validation ? "validated by veraPDF" : "structural check, not a full validation"}` : ver.pdfa_check.failed_rules.map((r) => r.description).join("; ")}>
+                  {ver.pdfa_check.compliant ? "PDF/A ✓" : "PDF/A issues"}{ver.pdfa_check.full_validation ? "" : "*"}
+                </span>
+              )}</td>
               <td>{ver.original_name}<div className="small muted">{formatBytes(ver.size)} · {ver.comment}</div><div className="small muted mono" title="SHA-256 checksum">{ver.sha256.slice(0, 16)}…</div></td>
               <td>{formatDateTime(ver.created_at)}<div className="small muted">{ver.created_by}</div></td>
               <td className="row">
