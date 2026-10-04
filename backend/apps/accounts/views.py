@@ -181,7 +181,7 @@ def change_password(request):
         audit.record("auth.password_change", request=request, outcome="failure")
         return _fail("Your current password is incorrect.")
     try:
-        S.set_password(user, request.data.get("new_password") or "", temporary=False)
+        S.set_password(user, request.data.get("new_password") or "", temporary=False, keep_device=request.session.get("device"))
     except S.AccountError as exc:
         return _fail(str(exc))
     user.refresh_from_db()

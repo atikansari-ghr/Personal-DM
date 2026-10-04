@@ -62,3 +62,13 @@ def test_sign_out_others_logout_and_password_reset(family):
     set_password(family["son1"], "Reset-By-Admin-77", temporary=True)
     assert c.get("/api/dashboard").status_code in (401, 403)
     assert not UserSession.objects.filter(user=family["son1"], revoked_at__isnull=True, ended_at__isnull=True).exists()
+
+
+def test_changing_own_password_keeps_this_device_and_signs_out_others(family):
+    a = _device("son1", CHROME_WIN, "10.0.0.5")
+    b = _device("son1", SAFARI_IOS, "10.0.0.6")
+    r = a.post("/api/auth/password/change", {"current_password": PASSWORD, "new_password": "Changed-Passw0rd-1"}, format="json")
+    assert r.status_code == 200
+    assert a.get("/api/dashboard").status_code == 200
+    assert b.get("/api/dashboard").status_code in (401, 403)
+    assert len(a.get("/api/me/sessions").json()["sessions"]) == 1

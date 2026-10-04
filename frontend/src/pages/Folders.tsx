@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, formatBytes, formatDate } from "../api";
 import DocumentPanel from "../components/DocumentPanel";
+import { PanelHandles, usePanelWidths } from "../components/PanelResizer";
 import PermissionsDialog from "../components/PermissionsDialog";
 import UploadDialog from "../components/UploadDialog";
 import { Confirm, EmojiPicker, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useToast } from "../components/ui";
@@ -50,6 +51,9 @@ export default function FoldersPage() {
   const [emoji, setEmoji] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showTree, setShowTree] = useState(!folderId);
+  const panels = usePanelWidths(session?.user?.id);
+  const treeRef = useRef<HTMLElement>(null);
+  const listRef = useRef<HTMLElement>(null);
   const fullPage = session?.preferences?.layout === "full_page";
 
   const loadFolders = () => api<{ folders: FolderNode[] }>("folders").then((r) => setFolders(r.folders));
@@ -115,13 +119,14 @@ export default function FoldersPage() {
           </div>
         </div>
       </div>
-      <div className={`browser ${docId ? "has-doc" : ""} ${showTree ? "show-tree" : ""}`}>
-        <section className="tree tree-pane" aria-label="Folder tree">
+      <div className={`browser ${docId ? "has-doc" : ""} ${showTree ? "show-tree" : ""}`} style={panels.style}>
+        <PanelHandles treeRef={treeRef} listRef={listRef} widths={panels.widths} save={panels.save} reset={panels.reset} />
+        <section className="tree tree-pane" aria-label="Folder tree" ref={treeRef}>
           <ul role="tree">{roots.map((r) => <TreeNode key={r.id} node={r} children={childrenOf.get(r.id) || []} active={folderId || ""} expanded={expanded} level={1}
             toggle={(id) => setExpanded((e) => { const n = new Set(e); n.has(id) ? n.delete(id) : n.add(id); return n; })}
             select={(id) => { setShowTree(false); nav(`/folders/${id}`); }} />)}</ul>
         </section>
-        <section className="list-pane" aria-label="Documents">
+        <section className="list-pane" aria-label="Documents" ref={listRef}>
           <div className="row between" style={{ paddingRight: ".6rem" }}>
             <nav className="breadcrumb" aria-label="Breadcrumb">
               <button className="btn small ghost" onClick={() => setShowTree(true)} aria-label="Show folders" style={{ padding: "0 .3rem" }}>☰</button>
@@ -201,7 +206,7 @@ export default function FoldersPage() {
             } catch (x: any) { toast(x.message, "error"); }
           }}>
             <div className="field"><label htmlFor="fname">Name</label><input id="fname" type="text" value={name} onChange={(e) => setName(e.target.value)} /></div>
-            <div className="field"><label>Emoji <span className="muted small">(optional — a suggestion is made from the name)</span></label><EmojiPicker value={emoji} onPick={(e) => setEmoji(e === emoji ? "" : e)} /></div>
+            <div className="field"><p style={{ fontWeight: 550, margin: "0 0 .3rem" }}>Emoji <span className="muted small">(optional — a suggestion is made from the name)</span></p><EmojiPicker value={emoji} onPick={(e) => setEmoji(e === emoji ? "" : e)} /></div>
             <p className="small muted">Emoji are only labels; they never change who can see the folder.</p>
             <div className="row" style={{ justifyContent: "flex-end" }}><button type="button" className="btn" onClick={() => setDialog("")}>Cancel</button><button className="btn primary" disabled={!name.trim()}>Save</button></div>
           </form>
