@@ -1,0 +1,490 @@
+#!/usr/bin/env bash
+# personaldocs — install, upgrade, rollback, repair and operate Personal Documents on Debian 13 (native, no Docker).
+#
+#   personaldocs install [--public-origin URL] [--bind ADDR:PORT] [--ref REF] [--repo URL] [--build-frontend]
+#   personaldocs upgrade [--ref REF] [--skip-backup]
+#   personaldocs rollback
+#   personaldocs repair
+#   personaldocs status | doctor | backup | integrity [...] | logs [web|worker|scheduler]
+#   personaldocs restore BACKUP_DIR [--verify-only] [--no-key]
+#   personaldocs recover-admin USERNAME [--generate] [--reset-totp]
+#   personaldocs setup-token
+#   personaldocs manage <django command> [...]
+#
+# Credentials for the private repository are read from /etc/personaldocs/github-token (fine-grained, read-only
+# token) or an SSH deploy key (PD_GIT_SSH_KEY). They are never placed in URLs, arguments or logs.
+set -Eeuo pipefail
+umask 027
+
+APP=personaldocs
+PREFIX=/opt/personaldocs
+RELEASES=$PREFIX/releases
+CURRENT=$PREFIX/current
+MIRROR=$PREFIX/repo.git
+CONF_DIR=/etc/personaldocs
+ENV_FILE=$CONF_DIR/personaldocs.env
+TOKEN_FILE=$CONF_DIR/github-token
+DATA_DIR=/var/lib/personaldocs
+LOG_DIR=/var/log/personaldocs
+LOG=$LOG_DIR/install.log
+LOCK=/run/personaldocs.lock
+STATE=$PREFIX/state
+UNITS=(personaldocs-web personaldocs-worker personaldocs-scheduler)
+MIN_RAM_MB=1800
+MIN_DISK_MB=4096
+
+APT_PACKAGES=(
+  python3 python3-venv python3-dev build-essential libpq-dev
+  postgresql postgresql-client
+  tesseract-ocr tesseract-ocr-eng ocrmypdf ghostscript qpdf unpaper pngquant poppler-utils
+  libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui fonts-dejavu-core
+  git curl ca-certificates jq util-linux rsync iproute2
+)
+
+# ------------------------------------------------------------------ helpers
+c_ok() { printf '\033[32m%s\033[0m\n' "$*"; }
+c_warn() { printf '\033[33m%s\033[0m\n' "$*" >&2; }
+c_err() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
+redact() { sed -E 's/(gh[pousr]_[A-Za-z0-9_]{10,}|github_pat_[A-Za-z0-9_]{20,})/[REDACTED]/g; s/(password|token|secret)=[^ ]*/\1=[REDACTED]/Ig'; }
+log() { local m="[$(date -Is)] $*"; echo "$m" | redact; [ -d "$LOG_DIR" ] && echo "$m" | redact >>"$LOG" || true; }
+die() { c_err "ERROR: $*"; log "ERROR: $*"; c_err "Details: $LOG. Fix the problem and run the same command again; completed steps are skipped safely."; exit 1; }
+need_root() { [ "$(id -u)" -eq 0 ] || die "run as root (sudo personaldocs $CMD)"; }
+trap 'c_err "Failed at line $LINENO: $BASH_COMMAND"; log "failed at line $LINENO"' ERR
+
+with_lock() {
+  exec 9>"$LOCK"
+  flock -n 9 || die "another personaldocs operation is running"
+}
+
+load_env() {
+  if [ -f "$ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+    set +a
+  fi
+  PD_REPO_URL=${PD_REPO_URL:-}
+  PD_BRANCH=${PD_BRANCH:-main}
+  PD_BIND=${PD_BIND:-127.0.0.1:8000}
+}
+
+env_set() { # env_set KEY VALUE — idempotently write a key into the env file
+  local k=$1 v=$2
+  if grep -q "^$k=" "$ENV_FILE" 2>/dev/null; then
+    sed -i "s|^$k=.*|$k=${v//|/\\|}|" "$ENV_FILE"
+  else
+    echo "$k=$v" >>"$ENV_FILE"
+  fi
+}
+
+git_auth() { # run git with the stored credential, without exposing it
+  if [ -n "${PD_GIT_SSH_KEY:-}" ]; then
+    GIT_SSH_COMMAND="ssh -i $PD_GIT_SSH_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" git "$@"
+  elif [ -f "$TOKEN_FILE" ]; then
+    git -c credential.helper= -c "credential.helper=!f(){ echo username=x-access-token; printf 'password=%s\n' \"\$(cat $TOKEN_FILE)\"; }; f" "$@"
+  else
+    git "$@"
+  fi
+}
+
+manage() { # run a Django management command as the service user with the protected env file
+  local rel=${MANAGE_RELEASE:-$CURRENT}
+  runuser -u $APP -- bash -c "set -a; . '$ENV_FILE'; set +a; export PD_FRONTEND_DIST='$rel/frontend/dist'; cd '$rel/backend' && exec '$rel/.venv/bin/python' manage.py \"\$@\"" _ "$@"
+}
+
+health() {
+  local port=${PD_BIND##*:} host=${PD_BIND%:*}
+  [ "$host" = "0.0.0.0" ] && host=127.0.0.1
+  for _ in $(seq 1 30); do
+    if curl -fsS "http://$host:$port/api/health" >/dev/null 2>&1; then return 0; fi
+    sleep 2
+  done
+  return 1
+}
+
+version_of() { cat "$1/VERSION" 2>/dev/null || echo unknown; }
+
+# ------------------------------------------------------------------ preflight
+preflight() {
+  log "preflight checks"
+  . /etc/os-release
+  [ "${ID:-}" = debian ] || c_warn "This installer targets Debian 13; detected ${PRETTY_NAME:-unknown}."
+  [ "${VERSION_ID:-}" = 13 ] || c_warn "Debian 13 (trixie) is the tested target; detected ${VERSION_ID:-unknown}."
+  case "$(uname -m)" in x86_64|aarch64) ;; *) die "unsupported architecture $(uname -m)";; esac
+  command -v systemctl >/dev/null && [ -d /run/systemd/system ] || die "systemd is required"
+  local ram disk
+  ram=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+  [ "$ram" -ge "$MIN_RAM_MB" ] || die "at least ${MIN_RAM_MB} MB RAM required (found ${ram} MB)"
+  mkdir -p "$(dirname "$DATA_DIR")"
+  disk=$(df -Pm "$(dirname "$DATA_DIR")" | awk 'NR==2 {print $4}')
+  [ "$disk" -ge "$MIN_DISK_MB" ] || die "at least ${MIN_DISK_MB} MB free disk required (found ${disk} MB)"
+  getent hosts deb.debian.org >/dev/null || c_warn "DNS lookup of deb.debian.org failed; package installation may fail"
+  local port=${PD_BIND##*:}
+  if ss -ltn "sport = :$port" | grep -q LISTEN && ! systemctl is-active --quiet personaldocs-web; then
+    die "port $port is already in use by another program (choose another with --bind)"
+  fi
+  c_ok "preflight OK (RAM ${ram} MB, free disk ${disk} MB)"
+}
+
+install_packages() {
+  log "installing packages"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -q
+  apt-get install -y -q --no-install-recommends "${APT_PACKAGES[@]}"
+  if [ "${NEED_NODE:-0}" = 1 ]; then apt-get install -y -q --no-install-recommends nodejs npm; fi
+  systemctl enable --now postgresql >/dev/null
+}
+
+ensure_user_dirs() {
+  log "service account and directories"
+  id $APP >/dev/null 2>&1 || useradd --system --home-dir "$DATA_DIR" --shell /usr/sbin/nologin $APP
+  install -d -m 0750 -o root -g $APP "$CONF_DIR"
+  install -d -m 0750 -o $APP -g $APP "$DATA_DIR" "$DATA_DIR/storage" "$DATA_DIR/storage/originals" "$DATA_DIR/storage/derivatives" \
+    "$DATA_DIR/staging" "$DATA_DIR/tmp" "$DATA_DIR/exports" "$DATA_DIR/quarantine" "$DATA_DIR/pre-upgrade"
+  install -d -m 0755 "$PREFIX" "$RELEASES" "$STATE"
+  install -d -m 0750 "$LOG_DIR"
+  [ -f "$TOKEN_FILE" ] && chmod 600 "$TOKEN_FILE" && chown root:root "$TOKEN_FILE"
+}
+
+ensure_config() {
+  log "configuration"
+  if [ ! -f "$ENV_FILE" ]; then
+    install -m 0640 -o root -g $APP /dev/null "$ENV_FILE"
+    cat >"$ENV_FILE" <<EOF
+PD_PUBLIC_ORIGIN=${OPT_ORIGIN:-http://localhost:8000}
+PD_ALLOWED_HOSTS=localhost,127.0.0.1
+PD_BEHIND_PROXY=1
+PD_TRUSTED_PROXY_IPS=127.0.0.1
+PD_BIND=${OPT_BIND:-127.0.0.1:8000}
+PD_WEB_WORKERS=2
+PD_DATA_DIR=$DATA_DIR
+PD_CONFIG_DIR=$CONF_DIR
+PD_FRONTEND_DIST=$CURRENT/frontend/dist
+PD_DB_NAME=personaldocs
+PD_DB_USER=personaldocs
+PD_DB_HOST=/var/run/postgresql
+PD_DB_PASSWORD=
+PD_PROCESS_MEMORY_LIMIT_MB=1536
+PD_LOG_LEVEL=INFO
+PD_REPO_URL=${OPT_REPO:-}
+PD_BRANCH=${OPT_BRANCH:-main}
+EOF
+  fi
+  [ -n "${OPT_ORIGIN:-}" ] && env_set PD_PUBLIC_ORIGIN "$OPT_ORIGIN" && env_set PD_ALLOWED_HOSTS "$(echo "$OPT_ORIGIN" | sed -E 's#^https?://##; s#/.*##; s#:.*##'),localhost,127.0.0.1"
+  [ -n "${OPT_BIND:-}" ] && env_set PD_BIND "$OPT_BIND"
+  [ -n "${OPT_REPO:-}" ] && env_set PD_REPO_URL "$OPT_REPO"
+  if [ ! -s "$CONF_DIR/secret_key" ]; then
+    install -m 0640 -o root -g $APP /dev/null "$CONF_DIR/secret_key"
+    head -c 48 /dev/urandom | base64 | tr -d '\n=+/' >"$CONF_DIR/secret_key"
+  fi
+  chown root:$APP "$ENV_FILE" "$CONF_DIR/secret_key"
+  chmod 0640 "$ENV_FILE" "$CONF_DIR/secret_key"
+  load_env
+}
+
+ensure_database() {
+  log "database"
+  runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='personaldocs'" | grep -q 1 ||
+    runuser -u postgres -- psql -qc "CREATE ROLE personaldocs LOGIN"
+  runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='personaldocs'" | grep -q 1 ||
+    runuser -u postgres -- createdb -O personaldocs -E UTF8 personaldocs
+}
+
+# ------------------------------------------------------------------ releases
+fetch_source() { # sets REV and REL_ID
+  local ref=${OPT_REF:-${PD_BRANCH:-main}}
+  if [ -n "${SRC_DIR:-}" ]; then
+    REV=$(git -C "$SRC_DIR" rev-parse HEAD 2>/dev/null || echo local)
+    REL_ID="$(version_of "$SRC_DIR")-${REV:0:10}"
+    return
+  fi
+  [ -n "${PD_REPO_URL:-}" ] || die "PD_REPO_URL is not set (use --repo https://github.com/OWNER/REPO.git)"
+  if [ ! -d "$MIRROR" ]; then
+    log "cloning repository mirror"
+    git_auth clone --quiet --mirror "$PD_REPO_URL" "$MIRROR" || die "could not clone the repository; check $TOKEN_FILE / deploy key"
+  else
+    git_auth --git-dir="$MIRROR" remote set-url origin "$PD_REPO_URL"
+    git_auth --git-dir="$MIRROR" fetch --quiet --prune origin '+refs/*:refs/*' || die "git fetch failed; check credentials and network"
+  fi
+  REV=$(git --git-dir="$MIRROR" rev-parse --verify "$ref^{commit}" 2>/dev/null) || die "revision $ref not found"
+  REL_ID="$(git --git-dir="$MIRROR" show "$REV:VERSION" 2>/dev/null | tr -d '\n' || echo 0)-${REV:0:10}"
+}
+
+build_release() { # creates $RELEASES/$REL_ID with venv and frontend
+  local dir=$RELEASES/$REL_ID
+  if [ -f "$dir/.complete" ]; then log "release $REL_ID already built"; echo "$dir"; return; fi
+  rm -rf "$dir.tmp"
+  mkdir -p "$dir.tmp"
+  if [ -n "${SRC_DIR:-}" ]; then
+    rsync -a --exclude .git --exclude node_modules --exclude .venv --exclude '__pycache__' "$SRC_DIR"/ "$dir.tmp"/
+  else
+    git --git-dir="$MIRROR" archive "$REV" | tar -x -C "$dir.tmp"
+  fi
+  echo "$REV" >"$dir.tmp/REVISION"
+  log "creating Python environment for $REL_ID"
+  python3 -m venv "$dir.tmp/.venv"
+  "$dir.tmp/.venv/bin/pip" install --quiet --upgrade pip >/dev/null
+  "$dir.tmp/.venv/bin/pip" install --quiet --no-cache-dir -r "$dir.tmp/backend/requirements.txt" || die "Python dependency installation failed"
+  if [ ! -f "$dir.tmp/frontend/dist/index.html" ]; then
+    fetch_frontend_asset "$dir.tmp" || build_frontend "$dir.tmp"
+  fi
+  [ -f "$dir.tmp/frontend/dist/index.html" ] || die "frontend assets missing"
+  rm -rf "$dir.tmp/frontend/node_modules"
+  chown -R root:$APP "$dir.tmp"
+  chmod -R g+rX,o-rwx "$dir.tmp"
+  touch "$dir.tmp/.complete"
+  mv "$dir.tmp" "$dir"
+  echo "$dir"
+}
+
+fetch_frontend_asset() { # download frontend-dist.tar.gz from the GitHub release for a tag (if any)
+  local dest=$1 tag repo api asset_url hdr
+  tag=$(git --git-dir="$MIRROR" describe --tags --exact-match "$REV" 2>/dev/null) || return 1
+  [ -f "$TOKEN_FILE" ] || return 1
+  repo=$(echo "$PD_REPO_URL" | sed -E 's#^https://github.com/##; s#^git@github.com:##; s#\.git$##')
+  hdr=$(mktemp)
+  printf 'Authorization: Bearer %s\n' "$(cat "$TOKEN_FILE")" >"$hdr"
+  api=$(curl -fsS -H @"$hdr" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$repo/releases/tags/$tag" 2>/dev/null) || { rm -f "$hdr"; return 1; }
+  asset_url=$(echo "$api" | jq -r '.assets[] | select(.name=="frontend-dist.tar.gz") | .url' | head -1)
+  if [ -z "$asset_url" ]; then rm -f "$hdr"; return 1; fi
+  log "downloading prebuilt frontend for $tag"
+  curl -fsSL -H @"$hdr" -H "Accept: application/octet-stream" "$asset_url" -o "$dest/frontend-dist.tar.gz" || { rm -f "$hdr"; return 1; }
+  rm -f "$hdr"
+  mkdir -p "$dest/frontend" && tar -xzf "$dest/frontend-dist.tar.gz" -C "$dest/frontend" && rm -f "$dest/frontend-dist.tar.gz"
+}
+
+build_frontend() {
+  local dir=$1
+  log "building frontend locally (one-off; needs ~1 GB RAM)"
+  command -v npm >/dev/null || apt-get install -y -q --no-install-recommends nodejs npm
+  (cd "$dir/frontend" && npm ci --no-audit --no-fund --loglevel=error && npm run build --silent) || die "frontend build failed"
+}
+
+install_units() {
+  local src=${1:-$CURRENT}/deployment/systemd
+  for u in "${UNITS[@]}"; do install -m 0644 "$src/$u.service" /etc/systemd/system/; done
+  systemctl daemon-reload
+}
+
+ensure_key() {
+  if [ ! -s "$CONF_DIR/encryption.key" ]; then
+    log "creating encryption key for integration secrets"
+    install -m 0600 -o $APP -g $APP /dev/null "$CONF_DIR/encryption.key"
+    "$1/.venv/bin/python" -c 'from cryptography.fernet import Fernet;import sys;sys.stdout.write(Fernet.generate_key().decode())' >"$CONF_DIR/encryption.key"
+  fi
+  chown $APP:$APP "$CONF_DIR/encryption.key"
+  chmod 0600 "$CONF_DIR/encryption.key"
+}
+
+activate() { # activate RELEASE_DIR
+  local dir=$1
+  if [ -L "$CURRENT" ] && [ "$(readlink -f "$CURRENT")" != "$dir" ]; then readlink -f "$CURRENT" >"$STATE/previous"; fi
+  ln -sfn "$dir" "$CURRENT.new" && mv -T "$CURRENT.new" "$CURRENT"
+  echo "$dir" >"$STATE/current"
+}
+
+prune_releases() {
+  local keep=3 cur prev
+  cur=$(readlink -f "$CURRENT" 2>/dev/null || true)
+  prev=$(cat "$STATE/previous" 2>/dev/null || true)
+  ls -1dt "$RELEASES"/*/ 2>/dev/null | sed 's#/$##' | tail -n +$((keep + 1)) | while read -r d; do
+    [ "$d" = "$cur" ] || [ "$d" = "$prev" ] || rm -rf "$d"
+  done
+}
+
+db_snapshot() { # quick local DB dump used for schema rollback
+  local f="$DATA_DIR/pre-upgrade/db-$(date +%Y%m%d-%H%M%S).pgdump"
+  runuser -u $APP -- pg_dump --format=custom --no-owner -h /var/run/postgresql personaldocs -f "$f" || die "pre-upgrade database dump failed"
+  ls -1t "$DATA_DIR"/pre-upgrade/db-*.pgdump | tail -n +4 | xargs -r rm -f
+  echo "$f"
+}
+
+schema_compatible() { # schema_compatible RELEASE_DIR — every applied migration of our apps exists in that release
+  local dir=$1 applied missing=0
+  applied=$(runuser -u $APP -- psql -h /var/run/postgresql -tA personaldocs -c \
+    "SELECT app||'/'||name FROM django_migrations WHERE app IN ('core','accounts','library','notify','mailimport','ops')")
+  while read -r m; do
+    [ -z "$m" ] && continue
+    [ -f "$dir/backend/apps/${m%%/*}/migrations/${m##*/}.py" ] || { missing=1; log "migration $m unknown to $(basename "$dir")"; }
+  done <<<"$applied"
+  return $missing
+}
+
+# ------------------------------------------------------------------ commands
+cmd_install() {
+  need_root; mkdir -p "$LOG_DIR"; with_lock
+  load_env
+  OPT_BIND=${OPT_BIND:-}; [ -n "$OPT_BIND" ] && PD_BIND=$OPT_BIND
+  log "=== install started ($(date))"
+  preflight
+  [ "${OPT_BUILD_FRONTEND:-0}" = 1 ] && NEED_NODE=1
+  install_packages
+  ensure_user_dirs
+  ensure_config
+  ensure_database
+  if [ -z "${PD_REPO_URL:-}" ] && [ -z "${OPT_REPO:-}" ]; then
+    local here origin
+    here=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+    origin=$(git -C "$here" remote get-url origin 2>/dev/null || true)
+    if [ -n "$origin" ] && [[ "$origin" != *@*:*@* ]] && [[ "$origin" != *://*:*@* ]]; then
+      PD_REPO_URL=$origin; env_set PD_REPO_URL "$origin"
+      [ -z "$OPT_REF" ] && OPT_REF=$(git -C "$here" rev-parse HEAD)
+      log "using repository $origin (from the bootstrap checkout)"
+    else
+      SRC_DIR=$here
+      log "no repository URL configured; installing from local source $SRC_DIR (upgrades need PD_REPO_URL)"
+    fi
+  fi
+  fetch_source
+  local dir; dir=$(build_release | tail -1)
+  ensure_key "$dir"
+  MANAGE_RELEASE=$dir manage migrate --noinput
+  MANAGE_RELEASE=$dir manage check --deploy --fail-level ERROR >/dev/null 2>&1 || MANAGE_RELEASE=$dir manage check
+  activate "$dir"
+  install -m 0755 "$dir/scripts/personaldocs" /usr/local/bin/personaldocs
+  install_units "$dir"
+  for u in "${UNITS[@]}"; do systemctl enable --now "$u" >/dev/null; systemctl restart "$u"; done
+  health || die "the web service did not become healthy; see: journalctl -u personaldocs-web -n 50"
+  prune_releases
+  log "=== install complete: $(version_of "$dir") ($REV)"
+  c_ok "Personal Documents $(version_of "$dir") is installed and running on $PD_BIND."
+  if manage shell -c "from apps.accounts.models import SetupState; import sys; sys.exit(0 if SetupState.get().completed_at else 1)" 2>/dev/null; then
+    echo "Setup already completed."
+  else
+    echo; manage setup_token; echo
+  fi
+  echo "Next: configure your reverse proxy for $(grep ^PD_PUBLIC_ORIGIN "$ENV_FILE" | cut -d= -f2-), then open it in a browser."
+}
+
+cmd_upgrade() {
+  need_root; with_lock; load_env
+  [ -L "$CURRENT" ] || die "not installed (run personaldocs install)"
+  local old new snap
+  old=$(readlink -f "$CURRENT")
+  log "=== upgrade started from $(basename "$old")"
+  local disk; disk=$(df -Pm "$DATA_DIR" | awk 'NR==2 {print $4}')
+  [ "$disk" -ge 2048 ] || die "less than 2 GB free; free space before upgrading"
+  fetch_source
+  new=$(build_release | tail -1)
+  if [ "$new" = "$old" ]; then c_ok "Already at $(basename "$new")."; return; fi
+  if [ "${OPT_SKIP_BACKUP:-0}" != 1 ]; then
+    if manage shell -c "from apps.core import config; import sys; sys.exit(0 if config.get('backup.target') else 1)" 2>/dev/null; then
+      log "pre-upgrade application backup"
+      manage backup || die "pre-upgrade backup failed (fix the NAS or rerun with --skip-backup if you have a verified backup)"
+    else
+      c_warn "No backup destination configured: only a local database snapshot is taken."
+    fi
+  fi
+  snap=$(db_snapshot)
+  log "database snapshot: $snap"
+  MANAGE_RELEASE=$new manage check >/dev/null || die "new release failed its checks; nothing was changed"
+  systemctl stop personaldocs-scheduler personaldocs-worker
+  if ! MANAGE_RELEASE=$new manage migrate --noinput; then
+    c_err "Migration failed. Restoring the database snapshot and restarting the previous release."
+    runuser -u $APP -- pg_restore --clean --if-exists --no-owner -h /var/run/postgresql -d personaldocs "$snap" || true
+    systemctl start personaldocs-worker personaldocs-scheduler
+    die "upgrade aborted; previous release still active"
+  fi
+  activate "$new"
+  install -m 0755 "$new/scripts/personaldocs" /usr/local/bin/personaldocs
+  install_units "$new"
+  for u in "${UNITS[@]}"; do systemctl restart "$u"; done
+  if ! health; then
+    c_err "Health check failed after upgrade."
+    if schema_compatible "$old"; then
+      activate "$old"; install_units "$old"; for u in "${UNITS[@]}"; do systemctl restart "$u"; done
+      die "rolled back to $(basename "$old") (schema compatible)"
+    fi
+    die "the new schema is not compatible with $(basename "$old"); restore with: pg_restore from $snap or personaldocs restore <backup>"
+  fi
+  prune_releases
+  log "=== upgrade complete: $(basename "$old") -> $(basename "$new")"
+  c_ok "Upgraded $(version_of "$old") -> $(version_of "$new") ($(cat "$new/REVISION" | cut -c1-10))."
+}
+
+cmd_rollback() {
+  need_root; with_lock; load_env
+  local prev; prev=$(cat "$STATE/previous" 2>/dev/null || true)
+  [ -n "$prev" ] && [ -d "$prev" ] || die "no previous release recorded"
+  schema_compatible "$prev" || die "database contains migrations unknown to $(basename "$prev"); restore the pre-upgrade backup instead"
+  local cur; cur=$(readlink -f "$CURRENT")
+  activate "$prev"; install_units "$prev"
+  for u in "${UNITS[@]}"; do systemctl restart "$u"; done
+  health || die "previous release is not healthy"
+  c_ok "Rolled back $(basename "$cur") -> $(basename "$prev")."
+}
+
+cmd_repair() {
+  need_root; with_lock; load_env
+  log "=== repair started"
+  echo "Diagnosis before repair:"; cmd_doctor_inner || true
+  install_packages
+  ensure_user_dirs
+  ensure_config
+  ensure_database
+  [ -L "$CURRENT" ] || die "no active release; run personaldocs install"
+  ensure_key "$(readlink -f "$CURRENT")"
+  chown -R $APP:$APP "$DATA_DIR"
+  find "$DATA_DIR/storage/originals" -type f -exec chmod 0440 {} + 2>/dev/null || true
+  install_units
+  manage migrate --noinput
+  manage shell -c "from apps.core.models import Job; from django.utils import timezone; print('requeued', Job.objects.filter(status='running', locked_until__lt=timezone.now()).update(status='queued'))"
+  manage reindex
+  for u in "${UNITS[@]}"; do systemctl enable "$u" >/dev/null; systemctl restart "$u"; done
+  health || die "web service still unhealthy; see journalctl -u personaldocs-web"
+  c_ok "Repair complete. No data, keys or accounts were reset."
+}
+
+cmd_status() {
+  load_env
+  echo "Version:  $(version_of "$(readlink -f "$CURRENT" 2>/dev/null || echo /nonexistent)") ($(cat "$CURRENT/REVISION" 2>/dev/null | cut -c1-10))"
+  for u in "${UNITS[@]}"; do printf '%-26s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"; done
+  if health; then c_ok "Health:   OK ($PD_BIND)"; else c_err "Health:   FAILED"; fi
+}
+
+cmd_doctor_inner() { manage doctor; }
+
+usage() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; }
+
+CMD=${1:-help}; shift || true
+OPT_REF=""; OPT_ORIGIN=""; OPT_BIND=""; OPT_REPO=""; OPT_SKIP_BACKUP=0; OPT_BUILD_FRONTEND=0; ARGS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ref) OPT_REF=$2; shift 2;;
+    --public-origin) OPT_ORIGIN=${2%/}; shift 2;;
+    --bind) OPT_BIND=$2; shift 2;;
+    --repo) OPT_REPO=$2; PD_REPO_URL=$2; shift 2;;
+    --branch) OPT_BRANCH=$2; shift 2;;
+    --skip-backup) OPT_SKIP_BACKUP=1; shift;;
+    --build-frontend) OPT_BUILD_FRONTEND=1; shift;;
+    *) ARGS+=("$1"); shift;;
+  esac
+done
+
+case "$CMD" in
+  install) cmd_install;;
+  upgrade) cmd_upgrade;;
+  rollback) cmd_rollback;;
+  repair) cmd_repair;;
+  status) cmd_status;;
+  doctor) need_root; load_env; manage doctor;;
+  backup) need_root; load_env; manage backup;;
+  integrity) need_root; load_env; manage integrity "${ARGS[@]}";;
+  restore)
+    need_root; load_env; with_lock
+    [ ${#ARGS[@]} -ge 1 ] || die "usage: personaldocs restore BACKUP_DIR [--verify-only] [--no-key]"
+    if printf '%s\n' "${ARGS[@]}" | grep -qx -- --verify-only; then manage restore "${ARGS[@]}"; exit; fi
+    read -rp "This replaces the current database with the backup. Type RESTORE to continue: " ans
+    [ "$ans" = RESTORE ] || die "cancelled"
+    systemctl stop "${UNITS[@]}"
+    manage restore "${ARGS[@]}" --yes
+    manage migrate --noinput
+    systemctl start "${UNITS[@]}"
+    health && c_ok "Restore complete and healthy." || die "restored, but the web service is unhealthy";;
+  recover-admin) need_root; load_env; manage recover_admin "${ARGS[@]}";;
+  setup-token) need_root; load_env; manage setup_token;;
+  logs) journalctl -f -u "personaldocs-${ARGS[0]:-web}";;
+  manage) need_root; load_env; manage "${ARGS[@]}";;
+  help|-h|--help) usage;;
+  *) usage; exit 2;;
+esac

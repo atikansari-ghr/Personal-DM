@@ -1,0 +1,25 @@
+[Unit]
+Description=Personal Documents web (gunicorn)
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=personaldocs
+Group=personaldocs
+EnvironmentFile=/etc/personaldocs/personaldocs.env
+WorkingDirectory=/opt/personaldocs/current/backend
+ExecStart=/opt/personaldocs/current/.venv/bin/gunicorn personaldocs.wsgi --bind ${PD_BIND} --workers ${PD_WEB_WORKERS} --timeout 900 --graceful-timeout 30 --max-requests 2000 --max-requests-jitter 200 --access-logfile - --forwarded-allow-ips ${PD_TRUSTED_PROXY_IPS}
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=40
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target

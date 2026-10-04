@@ -1,0 +1,54 @@
+[
+ [
+  "PASS",
+  "first-run setup wizard creates six accounts"
+ ],
+ [
+  "PASS",
+  "login page and sign in as Dad"
+ ],
+ [
+  "PASS",
+  "upload a scanned passport (synthetic) and process it"
+ ],
+ [
+  "PASS",
+  "dashboard shows stats, members and recent document"
+ ],
+ [
+  "PASS",
+  "three-panel folder browser with preview and suggested details"
+ ],
+ [
+  "PASS",
+  "confirm suggested dates -> generated name with years"
+ ],
+ [
+  "PASS",
+  "search with highlighted snippet"
+ ],
+ [
+  "PASS",
+  "notifications settings (admin) render with reminder days"
+ ],
+ [
+  "PASS",
+  "family & access settings"
+ ],
+ [
+  "PASS",
+  "profile page and blue theme applies"
+ ],
+ [
+  "PASS",
+  "help guide renders bundled documentation"
+ ],
+ [
+  "PASS",
+  "another user keeps their own (green) theme and forced password change"
+ ],
+ [
+  "PASS",
+  "no uncaught page errors"
+ ]
+]
