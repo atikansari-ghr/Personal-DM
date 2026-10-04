@@ -51,8 +51,8 @@ function Input({ def, value, onChange }: { def: SettingDef; value: any; onChange
       return <div className="row">{Object.entries(CHANNEL_LABELS).map(([k, l]) => <label key={k} className="check"><input type="checkbox" disabled={disabled} checked={cur.includes(k)} onChange={(e) => onChange(e.target.checked ? [...cur, k] : cur.filter((x) => x !== k))} /> {l}</label>)}</div>;
     }
     default:
-      return def.key === "documents.import_roots"
-        ? <textarea id={id} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)} placeholder={def.example} />
+      return def.key === "documents.import_roots" || def.key === "documents.member_template"
+        ? <textarea id={id} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)} placeholder={def.example} rows={def.key === "documents.member_template" ? 8 : 3} />
         : <input id={id} type={def.type === "email" ? "email" : "text"} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)} placeholder={def.example} />;
   }
 }
@@ -106,7 +106,7 @@ export default function SettingsForm({ section, keys, title, children }: { secti
             <div>
               <Input def={d} value={value} onChange={(v) => setDraft({ ...draft, [d.key]: v })} />
               {errors[d.key] && <div className="error-text small" role="alert">{errors[d.key]}</div>}
-              {d.type !== "secret" && d.default !== null && d.default !== undefined && <div className="small muted">Default: {Array.isArray(d.default) ? d.default.join(", ") || "none" : String(CHOICE_LABELS[d.default] || d.default) || "empty"}</div>}
+              {d.type !== "secret" && d.key !== "documents.member_template" && d.default !== null && d.default !== undefined && <div className="small muted">Default: {Array.isArray(d.default) ? d.default.join(", ") || "none" : String(CHOICE_LABELS[d.default] || d.default) || "empty"}</div>}
             </div>
           </div>
         );

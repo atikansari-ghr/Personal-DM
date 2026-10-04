@@ -105,17 +105,39 @@ function Security() {
               <pre className="mono">{codes.join("\n")}</pre><CopyButton label="Recovery codes" getValue={() => codes.join("\n")} /></div>
           )}
         </div>
-        <div className="card">
-          <h2>Active sessions</h2>
-          <p className="row"><Icon name="eye" /> This browser · <span className="badge ok">Current session</span></p>
-          <button className="btn" onClick={() => api("me/sessions/revoke", { method: "POST" }).then(() => toast("Other devices were signed out"))}>Sign out other devices</button>
-        </div>
+        <Sessions />
         <div className="card">
           <h2>Recent sign-in activity</h2>
           {audit.loading ? <Skeleton /> : <ul className="small">{audit.data?.events.slice(0, 10).map((e) => <li key={e.id}>{formatDateTime(e.at)} — {e.action} ({e.outcome}){e.context?.method ? ` via ${e.context.method}` : ""}</li>)}</ul>}
         </div>
       </div>
       {reauth && <Reauth onClose={() => setReauth(null)} onDone={reauth} />}
+    </div>
+  );
+}
+
+function Sessions() {
+  const toast = useToast();
+  const { data, reload } = useAsync(() => api<{ sessions: any[] }>("me/sessions"), []);
+  return (
+    <div className="card">
+      <h2>Active sessions</h2>
+      <p className="small muted">Devices where you are signed in. Sign out any device you do not recognise and change your password.</p>
+      {!data ? <Skeleton /> : (
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }} aria-label="Signed-in devices">
+          {data.sessions.map((s) => (
+            <li key={s.id} className="list-item">
+              <Icon name="eye" />
+              <div className="grow">
+                <div style={{ fontWeight: 600 }}>{s.device} {s.current && <span className="badge ok">This device</span>}</div>
+                <div className="small muted">Last active {formatDateTime(s.last_seen_at)} · signed in {formatDateTime(s.created_at)}{s.ip ? ` · ${s.ip}` : ""}{s.method ? ` · ${s.method}` : ""}</div>
+              </div>
+              {!s.current && <button className="btn small danger" aria-label={`Sign out ${s.device}`} onClick={() => api(`me/sessions/${s.id}`, { method: "DELETE" }).then(() => { toast(`${s.device} signed out`); reload(); }).catch((e) => toast(e.message, "error"))}>Sign out</button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <button className="btn" style={{ marginTop: ".6rem" }} onClick={() => api("me/sessions/revoke", { method: "POST" }).then(() => { toast("Other devices were signed out"); reload(); })}>Sign out all other devices</button>
     </div>
   );
 }

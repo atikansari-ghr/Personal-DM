@@ -106,6 +106,19 @@ Suggest an emoji from the folder name (Travel ✈️, Passport 🛂 …) when fo
 - **Restart needed:** no
 - **Learn more:** [folder-imports#emoji](guides/folder-imports.md#emoji)
 
+### Folder template for new members (`documents.member_template`)
+
+Optional folders (one path per line, use / for sub-folders) offered when adding a person or applied to an existing folder. Nothing is created unless you choose to apply it.
+
+- **Default:** `'Identity/Passport\nIdentity/Visa & Residence\nIdentity/National ID\nEducation\nMedical\nTravel\nBanking & Finance\nInsurance\nVehicle\nHouse & Property\nCertificates'`
+- **Allowed values:** –4000
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Used the next time a template is applied; existing folders are never removed or renamed.
+- **Restart needed:** no
+- **Learn more:** [folder-imports#templates](guides/folder-imports.md#templates)
+- **Example:** Identity/Passport
+
 ### Approved server import folders (`documents.import_roots`)
 
 Server/NAS paths (one per line) from which the main administrator may import. Sources are copied, never modified.

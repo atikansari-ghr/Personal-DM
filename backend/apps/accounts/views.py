@@ -60,6 +60,9 @@ def _complete_login(request, user: User, method: str, remember: bool = True):
     request.session["reauth_at"] = timezone.now().isoformat()
     request.session.set_expiry(int(config.get("auth.session_days")) * 86400 if remember else 0)
     request.session.pop("pending_2fa", None)
+    from . import sessions
+
+    sessions.start(request, user, method)
     audit.record("auth.login", request=request, actor=user, method=method, subject_user=user)
 
 
@@ -162,6 +165,9 @@ def totp_verify(request):
 @permission_classes([AllowAny])
 def logout_view(request):
     if request.user.is_authenticated:
+        from . import sessions
+
+        sessions.end(request)
         audit.record("auth.logout", request=request)
     logout(request)
     return Response({"status": "ok"})
@@ -343,18 +349,43 @@ def recovery_codes(request):
 @api_view(["GET"])
 @permission_classes([IsActiveAuthenticated])
 def my_sessions(request):
-    return Response({"current": {"started": request.session.get("reauth_at")}, "note": "Signing out everywhere invalidates other sessions."})
+    from . import sessions
+
+    current = request.session.get("device")
+    rows = sessions.active_for(request.user, int(config.get("auth.session_days")))
+    return Response({"sessions": [{
+        "id": str(r.id), "device": sessions.describe(r.user_agent), "ip": r.ip, "method": r.method,
+        "created_at": r.created_at, "last_seen_at": r.last_seen_at, "current": str(r.id) == current,
+    } for r in rows], "current_tracked": bool(current)})
+
+
+@api_view(["DELETE"])
+@permission_classes([IsActiveAuthenticated])
+def revoke_session(request, pk):
+    from .models import UserSession
+
+    row = get_object_or_404(UserSession, pk=pk, user=request.user)
+    if str(row.id) == request.session.get("device"):
+        return _fail("Use Sign out to end this session.")
+    if row.revoked_at is None:
+        row.revoked_at = timezone.now()
+        row.save(update_fields=["revoked_at"])
+        audit.record("account.session_revoke", request=request, target=row)
+    return Response(status=204)
 
 
 @api_view(["POST"])
 @permission_classes([IsActiveAuthenticated])
 def sign_out_everywhere(request):
+    from . import sessions
+
     u = request.user
     u.session_epoch += 1
     u.save(update_fields=["session_epoch"])
     request.session["epoch"] = u.session_epoch
-    audit.record("account.sign_out_everywhere", request=request)
-    return Response({"status": "ok"})
+    n = sessions.revoke_others(u, request.session.get("device"))
+    audit.record("account.sign_out_everywhere", request=request, sessions=n)
+    return Response({"status": "ok", "revoked": n})
 
 
 # ------------------------------------------------------------------ family administration
@@ -399,7 +430,11 @@ def members(request):
             u.save()
             if group:
                 GroupMembership.objects.get_or_create(group=group, user=u)
-            S.create_personal_root(actor=request.user, user=u, library_root=S.library_root(request.user))
+            personal = S.create_personal_root(actor=request.user, user=u, library_root=S.library_root(request.user))
+            if d.get("apply_template"):
+                from apps.library.services import apply_template
+
+                apply_template(actor=request.user, root=personal)
     except S.AccountError as exc:
         return _fail(str(exc))
     audit.record("family.member_add", request=request, target=u)

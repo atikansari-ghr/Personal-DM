@@ -163,6 +163,18 @@ def folder_archive(request, pk):
 
 
 @api_view(["POST"])
+@permission_classes([IsActiveAuthenticated])
+def folder_apply_template(request, pk):
+    folder = get_folder(request, pk, P.ORGANIZE)
+    try:
+        created = S.apply_template(actor=request.user, root=folder)
+    except S.DomainError as exc:
+        return _err(str(exc))
+    audit.record("folder.apply_template", request=request, target=folder, created=created)
+    return Response({"created": created})
+
+
+@api_view(["POST"])
 @permission_classes([IsMainAdmin])
 def folder_restore(request, pk):
     folder = get_object_or_404(Folder, pk=pk)
