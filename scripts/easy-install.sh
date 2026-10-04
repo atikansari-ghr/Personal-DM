@@ -146,6 +146,10 @@ system_check() {
   else check fail "systemd" "not running" "a systemd-based container is required"; fi
   if getent hosts deb.debian.org >/dev/null 2>&1 && getent hosts github.com >/dev/null 2>&1; then check pass "Internet / DNS" "deb.debian.org, github.com resolve"
   else check fail "Internet / DNS" "lookup failed" "check the container network, gateway and DNS"; fi
+  if command -v systemd-run >/dev/null && [ -d /run/systemd/system ]; then
+    if systemd-run --wait --quiet --collect -p PrivateTmp=yes -p ProtectSystem=full /bin/true >/dev/null 2>&1; then check pass "Service isolation" "supported (nesting on)"
+    else check warn "Service isolation" "not available" "Proxmox: Options -> Features -> Nesting; the app runs without it"; fi
+  fi
   if [ "$UNPRIVILEGED" = y ]; then check warn "Container type" "unprivileged" "the app cannot mount NFS/SMB itself; use a host bind mount"
   else check pass "Container type" "privileged (can mount NFS/SMB with the mount=nfs;cifs feature)"; fi
   if [ "$problems" -gt 0 ]; then

@@ -15,8 +15,6 @@ RestartSec=10
 TimeoutStopSec=40
 UMask=0027
 NoNewPrivileges=yes
-ProtectSystem=full
-PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target
