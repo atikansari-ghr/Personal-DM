@@ -10,6 +10,7 @@
 #   personaldocs recover-admin USERNAME [--generate] [--reset-totp]
 #   personaldocs nas-apply [--from-settings]   (mount the NAS configured in Settings → Storage & backup)
 #   personaldocs setup-token
+#   personaldocs check-access                   (why the app is not reachable through the reverse proxy)
 #   personaldocs manage <django command> [...]
 #
 # Credentials for the private repository are read from /etc/personaldocs/github-token (fine-grained, read-only
@@ -546,6 +547,85 @@ cmd_status() {
 
 cmd_doctor_inner() { manage doctor; }
 
+cmd_check_access() { # explain, step by step, why the app is (not) reachable through the reverse proxy
+  load_env
+  local origin domain port bindhost myip proxy="" proxy_ip="" bad=0 code ips pubip
+  origin=${PD_PUBLIC_ORIGIN:-}; domain=$(echo "$origin" | sed -E 's#^https?://##; s#/.*##; s#:.*##')
+  port=${PD_BIND##*:}; bindhost=${PD_BIND%:*}
+  myip=$(hostname -I 2>/dev/null | awk '{print $1}')
+  if [ -r "$CONF_DIR/install-answers.env" ]; then
+    proxy=$(sed -n 's/^PD_PROXY=//p' "$CONF_DIR/install-answers.env" | tr -d "'\"")
+    proxy_ip=$(sed -n 's/^PD_PROXY_IP=//p' "$CONF_DIR/install-answers.env" | tr -d "'\"")
+  fi
+  ok_() { printf '  \033[32m✔\033[0m %s\n' "$*"; }
+  bad_() { printf '  \033[31m✘\033[0m %s\n' "$1"; [ -n "${2:-}" ] && printf '      → %s\n' "$2"; bad=$((bad+1)); }
+  info_() { printf '  • %s\n' "$*"; }
+  echo "Access check for $origin  (container ${myip:-?}, app port $port)"
+  echo "1. The app inside this container"
+  local u; for u in "${UNITS[@]}"; do
+    if systemctl is-active --quiet "$u"; then ok_ "$u running"; else bad_ "$u is not running" "journalctl -u $u -n 50 --no-pager   (then: personaldocs repair)"; fi
+  done
+  if health; then ok_ "app answers on http://127.0.0.1:$port"; else bad_ "the app does not answer locally" "journalctl -u personaldocs-web -n 50 --no-pager"; fi
+  echo "2. Reachable from the proxy"
+  if [ "$bindhost" = 127.0.0.1 ] || [ "$bindhost" = localhost ]; then
+    if [ "$proxy" = 3 ]; then ok_ "listens on 127.0.0.1 (proxy runs in this container)"
+    else bad_ "the app only listens on 127.0.0.1, so a proxy on another machine cannot reach it" "personaldocs install --bind 0.0.0.0:$port   (or re-run easy-install.sh)"; fi
+  else
+    if ! command -v ss >/dev/null; then info_ "configured to listen on $bindhost:$port (install iproute2 to verify)"
+    elif ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "(^|:|\])$port\$"; then ok_ "listening on $bindhost:$port"
+    else bad_ "nothing listens on port $port" "personaldocs repair"; fi
+  fi
+  if command -v nft >/dev/null && nft list table inet personaldocs >/dev/null 2>&1; then
+    local allowed; allowed=$(nft list table inet personaldocs 2>/dev/null | grep -o 'saddr != {[^}]*}' | head -1)
+    info_ "firewall rule active: port $port only from ${allowed#saddr != }"
+    if [ -n "$proxy_ip" ] && ! nft list table inet personaldocs | grep -q "$proxy_ip"; then
+      bad_ "the firewall does not allow the proxy $proxy_ip" "re-run easy-install.sh with the correct proxy IP, or: nft delete table inet personaldocs"
+    fi
+    info_ "if the proxy connects from a different IP than ${proxy_ip:-configured} (Newt/Pangolin, Docker, VPN), it is blocked → remove with: nft delete table inet personaldocs; rm /etc/nftables.d/personaldocs.nft"
+  else
+    ok_ "no Personal Documents firewall rule (port $port open to the network)"
+  fi
+  if grep -q "^PD_ALLOWED_HOSTS=.*$domain" "$ENV_FILE" 2>/dev/null; then ok_ "$domain is an allowed host name"
+  else bad_ "$domain is not in PD_ALLOWED_HOSTS" "personaldocs install --public-origin $origin"; fi
+  echo "   Proxy target to configure:  http://${myip:-<container-ip>}:$port   (test from the proxy machine: curl http://${myip:-<container-ip>}:$port/api/health)"
+  echo "3. Public DNS for $domain (asked via Cloudflare DNS-over-HTTPS)"
+  ips=$(curl -fsS -m 10 -H 'accept: application/dns-json' "https://cloudflare-dns.com/dns-query?name=$domain&type=A" 2>/dev/null | grep -o '"data":"[0-9.]*"' | cut -d'"' -f4 | tr '\n' ' ')
+  if [ -z "$ips" ]; then
+    bad_ "$domain has no public DNS A record" "create an A record (or CNAME) for $domain at your DNS provider pointing to the public IP of your proxy (home router for NPM, the VPS for Pangolin)"
+  else
+    ok_ "$domain → $ips"
+    if echo "$ips" | grep -qE '(^| )(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)'; then
+      info_ "that is a private address: only works inside your home network (or with local DNS)"
+    fi
+    pubip=$(curl -fsS -m 8 https://api.ipify.org 2>/dev/null || true)
+    if [ -n "$pubip" ]; then
+      if echo " $ips " | grep -q " $pubip "; then info_ "it points to this network's public IP ($pubip): the router must forward TCP 80 and 443 to the Nginx Proxy Manager host"
+      elif [ "$proxy" != 2 ]; then info_ "this network's public IP is $pubip, which is not in the DNS answer; correct for Pangolin/a VPS, otherwise update the DNS record"; fi
+    fi
+  fi
+  echo "4. HTTPS on $origin"
+  code=$(curl -sS -o /dev/null -m 15 -w '%{http_code}' "$origin/api/health" 2>/tmp/pd-access.err || true)
+  case "$code" in
+    200) ok_ "$origin/api/health answers 200: the app is reachable through the proxy" ;;
+    502|503|504) bad_ "the proxy answers $code: it cannot reach the app" "set the proxy target to http://${myip:-<container-ip>}:$port and check the firewall above" ;;
+    404) bad_ "$domain answers, but not with this app (HTTP $code)" "create the proxy host for $domain → http://${myip:-<container-ip>}:$port (NPM: Hosts → Proxy Hosts; Pangolin: Resources)" ;;
+    400) bad_ "the app rejects the host name (400)" "the proxy must pass the original Host header (NPM does by default); check PD_ALLOWED_HOSTS" ;;
+    000|"")
+      local err; err=$(tr -d '\r' </tmp/pd-access.err | tail -1)
+      case "$err" in
+        *"resolve host"*) bad_ "this container cannot resolve $domain" "DNS record missing (see 3), or the container's DNS server cannot see it" ;;
+        *"timed out"*|*"Timeout"*) bad_ "connection to $domain timed out" "router port forwarding of 80/443 to the proxy, the proxy host firewall, or no NAT loopback on the router (then test from a phone on mobile data)" ;;
+        *"refused"*) bad_ "connection to $domain refused" "the proxy is not listening on 443 at that address: check the NPM/Pangolin host and port forwarding" ;;
+        *"SSL"*|*"certificate"*) bad_ "HTTPS certificate problem for $domain" "in NPM: SSL tab → request a Let's Encrypt certificate for exactly $domain (needs port 80 reachable)" ;;
+        *) bad_ "$domain could not be reached: ${err:-unknown error}" "check DNS, port forwarding and the proxy host" ;;
+      esac ;;
+    *) info_ "$origin/api/health answered HTTP $code" ;;
+  esac
+  rm -f /tmp/pd-access.err
+  echo
+  if [ "$bad" -eq 0 ]; then c_ok "No problems found."; else c_err "$bad problem(s) found; fix them in the order shown."; return 1; fi
+}
+
 usage() { sed -n '2,/^set -Eeuo/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; }
 
 CMD=${1:-help}; shift || true
@@ -587,6 +667,7 @@ case "$CMD" in
   recover-admin) need_root; load_env; manage recover_admin "${ARGS[@]}";;
   nas-apply) cmd_nas_apply "${ARGS[@]}";;
   setup-token) need_root; load_env; manage setup_token;;
+  check-access) need_root; cmd_check_access || exit 1;;
   logs) journalctl -f -u "personaldocs-${ARGS[0]:-web}";;
   manage) need_root; load_env; manage "${ARGS[@]}";;
   help|-h|--help) usage;;
