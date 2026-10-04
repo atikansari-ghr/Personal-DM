@@ -219,6 +219,9 @@ def _apply_to_document(doc: Document, version: DocumentVersion, text: str, versi
     has_proposed = doc.fields.filter(status=DocumentField.PROPOSED).exists()
     if version_state == "failed":
         doc.state = Document.FAILED
+        from apps.notify import events
+
+        transaction.on_commit(lambda: events.processing_failed(version))
     elif version_state == "unsupported":
         doc.state = Document.NEEDS_REVIEW if has_proposed else Document.UNSUPPORTED
     else:
@@ -234,3 +237,6 @@ def process_version_failed(job):
     if v:
         DocumentVersion.objects.filter(pk=vid).update(state="failed", error=job.last_error[:500])
         Document.objects.filter(pk=v.document_id, current_version_id=vid).update(state=Document.FAILED)
+        from apps.notify import events
+
+        events.processing_failed(v)

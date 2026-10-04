@@ -39,3 +39,17 @@ Each person receives one message even if they hold several roles. Disabled accou
 The administrator chooses default channels and may make channels **required**; users cannot turn required channels off. If a channel cannot deliver (no email address, Telegram not linked), the person sees the reason in **My account → Notifications** and the delivery is recorded as skipped — never as sent.
 
 Messages contain only the person's name, document type, expiry date, days remaining and a link that requires sign-in. Never a document number or attachment.
+
+## Other alerts {#other-alerts}
+
+Besides expiry reminders, the app notifies you when:
+
+| Event | Who |
+|---|---|
+| Someone gives you (or your group) access to a folder or document | The person or group members |
+| A folder import finishes | The person who started it |
+| A document you uploaded could not be processed | The uploader |
+| A backup fails | Main administrators (at most once a day) |
+| The integrity check finds problems | Main administrators (at most once a day) |
+
+These always appear in the in-app feed. They are also sent to your email/Telegram channels unless you turn off **Other alerts by email/Telegram** in My account → Notifications. External messages only say what happened and link to the app; they never contain document numbers or files.

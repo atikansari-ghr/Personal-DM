@@ -626,6 +626,18 @@ Channels you want reminders on. Required channels stay on.
 - **Restart needed:** no
 - **Learn more:** [expiry-rules#channels](guides/expiry-rules.md#channels)
 
+### Other alerts by email/Telegram (`me.event_alerts`)
+
+Also send access, import and (for administrators) backup and integrity alerts to your email/Telegram channels. They always appear in the in-app feed.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [expiry-rules#other-alerts](guides/expiry-rules.md#other-alerts)
+
 ## Section: appearance
 
 ### Dashboard widgets (`me.dashboard_widgets`)
