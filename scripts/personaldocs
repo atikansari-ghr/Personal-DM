@@ -396,7 +396,9 @@ cmd_install() {
   prune_releases
   log "=== install complete: $(version_of "$dir") ($REV)"
   c_ok "Personal Documents $(version_of "$dir") is installed and running on $PD_BIND."
-  if manage shell -c "from apps.accounts.models import SetupState; import sys; sys.exit(0 if SetupState.get().completed_at else 1)" 2>/dev/null; then
+  if [ "${PD_QUIET_TOKEN:-0}" = 1 ]; then
+    :  # the guided installer prints the setup code in its own summary
+  elif manage shell -c "from apps.accounts.models import SetupState; import sys; sys.exit(0 if SetupState.get().completed_at else 1)" 2>/dev/null; then
     echo "Setup already completed."
   else
     echo; manage setup_token; echo

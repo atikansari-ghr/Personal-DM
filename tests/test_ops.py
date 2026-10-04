@@ -315,3 +315,18 @@ def test_at24_restore_recovers_accounts_permissions_versions_settings_and_keys(t
     assert User.objects.get(username="dad").is_main_admin
     assert config.get("notifications.expiry_days") == [60, 7, 0]
     assert config.get("smtp.password") == "synthetic-secret-value"  # decryptable with the restored key
+
+
+def test_apply_settings_command_validates_and_deletes_file(db, tmp_path):
+    from django.core.management import call_command
+    from django.core.management.base import CommandError
+
+    f = tmp_path / "s.json"
+    f.write_text(json.dumps({"general.timezone": "Asia/Kolkata", "nas.type": "smb", "nas.password": "pw-from-file"}))
+    call_command("apply_settings", str(f), stdout=io.StringIO())
+    assert not f.exists()
+    assert config.get("general.timezone") == "Asia/Kolkata" and config.get("nas.password") == "pw-from-file"
+    f.write_text(json.dumps({"nas.server": "bad;host"}))
+    with pytest.raises(CommandError):
+        call_command("apply_settings", str(f), stdout=io.StringIO())
+    assert not f.exists()

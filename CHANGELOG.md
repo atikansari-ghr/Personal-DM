@@ -12,6 +12,10 @@ The first implementation of the full initial-release scope. See `docs/IMPLEMENTA
 - PDF/A-2b validation of searchable copies (veraPDF when installed via `--with-verapdf`, structural check otherwise) and `manage.py pdfa_check`.
 - Automated accessibility audit (axe-core) and a CI end-to-end job.
 
+- Connect the NAS backup share (NFS or SMB) from Settings → Storage & backup, with status, Disconnect and actionable errors (`personaldocs nas-apply`).
+- Guided installers: `scripts/proxmox-create-lxc.sh` (creates the Debian 13 container on Proxmox) and `scripts/easy-install.sh` (asks every parameter and installs, configures, connects the NAS, backs up and checks), with `--dry-run`.
+- `manage.py apply_settings FILE` to apply validated settings from a file.
+
 ### Fixed (2026-10-04)
 - Duplicate notification keys could abort an enclosing database transaction.
 - Changing your own password signed out the device you were using.
