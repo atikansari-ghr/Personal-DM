@@ -63,3 +63,30 @@ def test_verapdf_failure_falls_back_to_structural_check(tmp_path, settings):
     with mock.patch.object(sandbox, "run", side_effect=sandbox.ToolError("verapdf timed out")):
         report = pdfa.validate(p)
     assert report["validator"] == "builtin" and "veraPDF could not run" in report["note"]
+
+
+def test_unusable_verapdf_is_skipped_or_falls_back(tmp_path, settings):
+    """Field failure: /opt/verapdf installed root-only -> PermissionError must not break processing."""
+    p = tmp_path / "plain.pdf"
+    p.write_bytes(make_text_pdf("x"))
+    no_exec = tmp_path / "verapdf"
+    no_exec.write_text("#!/bin/sh\n")
+    no_exec.chmod(0o644)
+    settings.VERAPDF_CMD = str(no_exec)
+    assert pdfa.verapdf_cmd() is None
+    assert pdfa.validate(p)["validator"] == "builtin"
+    settings.VERAPDF_CMD = "/bin/true"
+    with mock.patch.object(sandbox, "run", side_effect=PermissionError(13, "Permission denied", "/opt/verapdf/verapdf")):
+        report = pdfa.validate(p)
+    assert report["validator"] == "builtin" and "Permission denied" in report["note"]
+
+
+@pytest.mark.tools
+@pytest.mark.skipif(not HAS_OCR, reason="tesseract not installed")
+def test_processing_survives_a_crashing_validator(family, clients):
+    with mock.patch("apps.library.pdfa.validate", side_effect=RuntimeError("validator exploded")):
+        r = upload(clients["son1"], personal_root(family["son1"]), name="scan.pdf", content=make_image_pdf("SYNTHETIC PERMIT"))
+        run_jobs()
+    v = Document.objects.get(pk=r.json()["documents"][0]["id"]).current_version
+    assert v.state == "ready" and v.searchable_path and not v.pdfa, (v.state, v.error)
+    assert "validator exploded" in v.pdfa_report["note"]

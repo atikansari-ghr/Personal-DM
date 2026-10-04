@@ -152,6 +152,7 @@ ensure_user_dirs() {
   install -d -m 0755 "$PREFIX" "$RELEASES" "$STATE"
   install -d -m 0750 "$LOG_DIR"
   if [ -f "$TOKEN_FILE" ]; then chmod 600 "$TOKEN_FILE"; chown root:root "$TOKEN_FILE"; fi
+  fix_tool_permissions
 }
 
 ensure_config() {
@@ -321,7 +322,12 @@ install_verapdf() { # optional reference PDF/A validator (Java, ~250 MB)
 XML
   java -jar "$tmp"/verapdf-greenfield-*/verapdf-izpack-installer-*.jar "$tmp/auto.xml" >/dev/null || die "veraPDF installation failed"
   rm -rf "$tmp"
+  fix_tool_permissions
   env_set PD_VERAPDF_CMD /opt/verapdf/verapdf
+}
+
+fix_tool_permissions() { # tools installed by root under umask 027 must be usable by the service account
+  if [ -d /opt/verapdf ]; then chmod -R a+rX /opt/verapdf; fi
 }
 
 sandbox_supported() { # can systemd give services private mounts here? (needs nesting in an LXC)
@@ -468,6 +474,7 @@ cmd_upgrade() {
   log "=== upgrade started from $(basename "$old")"
   local disk; disk=$(df -Pm "$DATA_DIR" | awk 'NR==2 {print $4}')
   [ "$disk" -ge 2048 ] || die "less than 2 GB free; free space before upgrading"
+  fix_tool_permissions
   fetch_source
   new=$(build_release | tail -1)
   if [ "$new" = "$old" ]; then c_ok "Already at $(basename "$new")."; return; fi

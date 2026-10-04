@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -22,7 +23,9 @@ FLAVOUR = "2b"
 
 def verapdf_cmd() -> str | None:
     cmd = getattr(settings, "VERAPDF_CMD", "verapdf")
-    return shutil.which(cmd) or (cmd if Path(cmd).is_file() else None)
+    found = shutil.which(cmd) or (cmd if Path(cmd).is_file() else None)
+    # Only use it when this (service) user can actually run it, e.g. not a root-only /opt/verapdf.
+    return found if found and os.access(found, os.X_OK) else None
 
 
 def validate(path: Path, timeout: int = 300) -> dict:
@@ -30,7 +33,7 @@ def validate(path: Path, timeout: int = 300) -> dict:
     if cmd:
         try:
             return _verapdf(cmd, path, timeout)
-        except (sandbox.ToolError, ValueError, KeyError) as exc:
+        except Exception as exc:  # optional validator: any failure falls back to the structural check
             result = _builtin(path)
             result["note"] = f"veraPDF could not run ({exc}); structural check used instead."
             return result
