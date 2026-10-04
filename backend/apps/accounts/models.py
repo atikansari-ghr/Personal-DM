@@ -125,3 +125,24 @@ class SetupState(models.Model):
     def get(cls) -> "SetupState":
         obj, _ = cls.objects.get_or_create(id=1)
         return obj
+
+
+class UserSession(models.Model):
+    """One signed-in browser/device. The id is stored inside the Django session as session['device']."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="device_sessions")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=300, blank=True)
+    method = models.CharField(max_length=40, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-last_seen_at"]
+
+    @property
+    def active(self) -> bool:
+        return self.revoked_at is None and self.ended_at is None

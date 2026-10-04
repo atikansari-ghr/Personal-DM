@@ -136,6 +136,7 @@ export default function FoldersPage() {
                   <div className="suggest" role="menu" style={{ right: 0, left: "auto", minWidth: 220 }}>
                     {can("organize") && <button role="menuitem" onClick={() => { setName(""); setEmoji(""); setDialog("new"); }}>New subfolder</button>}
                     {can("organize") && <button role="menuitem" onClick={() => { setName(folder.name); setEmoji(folder.emoji); setDialog("rename"); }}>Rename / emoji</button>}
+                    {can("organize") && <button role="menuitem" onClick={() => api<{ created: number }>(`folders/${folder.id}/apply-template`, { method: "POST" }).then((r) => { toast(r.created ? `${r.created} template folder(s) added` : "All template folders already exist"); setDialog(""); loadFolders(); }).catch((e) => toast(e.message, "error"))}>Apply folder template</button>}
                     <button role="menuitem" onClick={() => setDialog("perms")}>Who has access</button>
                     {can("download") && <a role="menuitem" className="suggest-link" style={{ display: "block", padding: ".55rem .8rem", color: "inherit", textDecoration: "none" }} href={`/api/export/download?folder=${folder.id}`}>Download folder (ZIP)</a>}
                     {can("archive") && folder.parent && <button role="menuitem" onClick={() => setDialog("archive")}>Archive folder</button>}

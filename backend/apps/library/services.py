@@ -473,3 +473,15 @@ def grant(*, ctx: P.AccessContext, actor, target, caps: int, user=None, group=No
     audit.record("permission.grant", request=request, actor=actor, target=target, caps=P.names(caps),
                  subject=str(getattr(user or group, "pk", "")))
     return rule
+
+
+def apply_template(*, actor, root: Folder, template: str | None = None) -> int:
+    """Create template folders under `root` (idempotent; existing folders are reused, nothing is removed)."""
+    from apps.core.registry import template_lines
+
+    if template is None:
+        template = config.get("documents.member_template")
+    before = Folder.objects.count()
+    for parts in template_lines(template):
+        get_or_create_folder_path(actor=actor, root=root, parts=parts)
+    return Folder.objects.count() - before
