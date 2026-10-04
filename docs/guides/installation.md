@@ -3,10 +3,10 @@
 
 ## Target {#target}
 
-- Proxmox LXC running **Debian 13 (trixie)**, unprivileged is fine. Recommended: 2 vCPU, 4 GB RAM, 50 GB disk.
+- Proxmox LXC running **Debian 13 (trixie)**. Recommended: 2 vCPU, 4 GB RAM, 50 GB disk. To let the app mount the NAS itself (Settings → Storage & backup) the container must be **privileged with the `mount=nfs;cifs` feature**; an unprivileged container works too when the Proxmox host bind-mounts the share (see [Container requirements](backup-restore.md#lxc-requirements)).
 - No Docker. Native services under systemd.
 - HTTPS is provided by your existing **Nginx Proxy Manager** or **Pangolin** (see [Reverse proxy](reverse-proxy.md)).
-- A NAS share mounted in the container for backups (see [Backup and restore](backup-restore.md)).
+- A NAS share (NFS or SMB) for backups — connected from Settings, or bind-mounted by the host (see [Backup and restore](backup-restore.md#nas)).
 
 ## What the installer does {#what}
 
@@ -28,7 +28,57 @@
 5. Installs systemd units `personaldocs-web` (gunicorn), `personaldocs-worker` and `personaldocs-scheduler`, then starts them and runs a health check.
 6. Prints a one-time setup code.
 
-## Install {#install}
+## Guided installation (recommended) {#guided}
+
+Two scripts ask for everything they need and do the rest. Neither puts the GitHub token in a URL, process argument or log.
+
+**Option A — from the Proxmox host (creates the container too).** As root on the Proxmox host:
+
+```
+read -rsp "GitHub read-only token: " T; echo
+printf 'Authorization: Bearer %s\n' "$T" > /root/.pd-gh-header; chmod 600 /root/.pd-gh-header; unset T
+curl -fsSL -H @/root/.pd-gh-header -H "Accept: application/vnd.github.raw" \
+  https://api.github.com/repos/OWNER/REPO/contents/scripts/proxmox-create-lxc.sh -o /root/proxmox-create-lxc.sh
+rm -f /root/.pd-gh-header
+bash /root/proxmox-create-lxc.sh            # add --dry-run first to only see what it would do
+```
+
+It asks for the container ID, hostname, storage, disk/CPU/RAM, network (DHCP or static), root password or SSH key and how backups
+reach the NAS:
+
+1. **The app mounts the NAS** → privileged container with `features: nesting=1,mount=nfs;cifs` (default).
+2. **The host mounts the NAS** → unprivileged container plus a bind mount of `<host-folder>/personaldocs` to `/mnt/nas-backup/personaldocs`.
+3. **No NAS for now.**
+
+It then downloads the Debian 13 template if needed, creates and starts the container, copies the guided installer and the token
+into it and starts the installer (Option B) inside the container.
+
+**Option B — inside an existing Debian 13 container.** As root in the container, fetch `scripts/easy-install.sh` the same way
+(or copy it in with `pct push`) and run:
+
+```
+bash easy-install.sh                # interactive
+bash easy-install.sh --dry-run      # ask the questions, show the commands, change nothing
+```
+
+It asks for: repository and branch/tag, GitHub token (skipped when `/etc/personaldocs/github-token` exists), public domain,
+reverse proxy (Nginx Proxy Manager, Pangolin or local) and the IP it connects from, port, an optional firewall rule that only lets
+the proxy reach the port, timezone, NAS (NFS server + export, or SMB server + share + user + password, or an already-mounted folder,
+or later), daily backup time and optional veraPDF. After a summary and confirmation it:
+
+1. installs git/curl, stores the token (`/etc/personaldocs/github-token`, 0600) and clones the repository;
+2. runs `personaldocs install` with the right origin, bind address and ref;
+3. sets the trusted proxy IP, optionally adds the nftables rule;
+4. applies the settings (`personaldocs manage apply_settings`, validated like the Settings screen);
+5. connects the NAS (`personaldocs nas-apply --from-settings`) and runs a first backup;
+6. runs `status` and `doctor`, prints the reverse-proxy settings to enter and the one-time setup code.
+
+Answers (never passwords or tokens) are remembered in `/etc/personaldocs/install-answers.env`, so re-running the script offers the
+previous values; every step is safe to repeat. For an unattended install put the same `PD_…` variables in a file and run
+`PD_ANSWERS=/root/answers.env bash easy-install.sh --yes` (an SMB password cannot be given this way — enter it later in Settings).
+Progress is logged to `/var/log/personaldocs/easy-install.log`.
+
+## Manual install {#install}
 
 The repository is private, so the installer needs a read-only credential (see [Private GitHub access](private-github.md)). On the LXC as root:
 
@@ -49,7 +99,7 @@ Useful options: `--bind 0.0.0.0:8000` (when the proxy runs on another host), `--
 
 1. Configure the reverse proxy and open the public address.
 2. Enter the setup code (`personaldocs setup-token` prints a new one) and create the family accounts.
-3. Configure the backup destination (Settings → Storage & backup) and run **Back up now**.
+3. Connect the NAS and check the backup destination (Settings → Storage & backup → **Connect NAS**), then run **Back up now** (the guided installer already did this if you answered the NAS questions).
 4. Optionally configure SMTP, Telegram, Google sign-in.
 5. Run `personaldocs doctor`.
 

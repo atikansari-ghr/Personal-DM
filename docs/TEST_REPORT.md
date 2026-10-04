@@ -18,8 +18,10 @@ Date: 2026-10-03. Revision: the branch head at the commit that adds this file.
 | Command | Result |
 |---|---|
 | `scripts/verify.sh` (compile, `manage.py check`, `makemigrations --check`, settings reference, `bash -n` + shellcheck, pytest, `tsc` + `vite build`, repository hygiene) | **All passed** |
-| `pytest` (`tests/`) | **101 passed**, 0 failed, 0 skipped (OCR and LibreOffice tests ran) |
+| `pytest` (`tests/`) | **119 passed**, 0 failed, 0 skipped (OCR and LibreOffice tests ran) |
 | `scripts/e2e.sh` (fresh database: `tests/e2e/flow.mjs` then `tests/e2e/a11y.mjs`) | **13/13 flow steps passed**; accessibility audit: **0 serious/critical violations** across 13 screens × 3 themes, document panel, share dialog and mobile layouts (`docs/a11y-report.json`) |
+| `bash scripts/easy-install.sh --dry-run --yes` (answers file) and `scripts/proxmox-create-lxc.sh --dry-run` (piped answers, NAS modes 1 and 2) | Questions, validation, summary and the full command sequence printed; nothing changed on the system. **Not executed for real** (no Proxmox/Debian 13) |
+| `tests/test_nas.py` (NAS from Settings with a simulated `systemctl`) | Injection attempts rejected, mount units/credentials rendered, request → helper → destination adopted, failure hints, unmount, permissions |
 | veraPDF 1.30.2 on OCRmyPDF output (`tests/test_pdfa.py`) | PDF/A-2b **compliant**; plain PDFs correctly rejected |
 
 The end-to-end flow covers: the setup wizard creating six accounts, sign-in, uploading a synthetic image-only "passport" scan, OCR, dashboard, the three-panel browser with PDF preview, confirming suggested dates (generated name "Sam Sample Passport (2016–2026)"), search, admin notification and family settings, switching to the blue theme, bundled help, and a second user on a mobile viewport (forced password change, independent green theme, no horizontal overflow, manifest checks). It also asserts there are no uncaught page errors.
@@ -43,6 +45,7 @@ This ran on a 4 vCPU / 15 GB host, so it does **not** prove the 2 vCPU / 4 GB ta
 |---|---|---|
 | AT-26 install, upgrade, rollback and repair on Debian 13 | No Debian 13 LXC with systemd available | Create a fresh Debian 13 LXC (2 vCPU / 4 GB, nesting on). Follow `guides/installation.md`. Interrupt the install (Ctrl-C during packages) and rerun. Tag v0.1.1 and run `personaldocs upgrade --ref v0.1.1`, then `personaldocs rollback`, then `personaldocs repair`. Check `status`/`doctor` after each step. |
 | Private update flow (AT-30) | Same | As above, using a fine-grained read-only token in `/etc/personaldocs/github-token`; confirm the token never appears in `/var/log/personaldocs/install.log` or `ps` output |
+| Guided installers and real NAS mounting | No Proxmox host or NAS | On the Proxmox host run `bash proxmox-create-lxc.sh --dry-run`, then for real with NAS mode 1; in the app use Settings → Storage & backup → *Connect NAS* with an NFS export and then an SMB share; confirm `/mnt/pdnas/personaldocs` holds the backup and `ps`/logs never show the token or SMB password. Repeat with NAS mode 2 (unprivileged + host bind mount) |
 | Restore into a clean LXC (AT-24) | Same | Back up on server A, install on server B, `personaldocs restore <dir>`; verify sign-in, permissions, document versions, SMTP password still decrypts |
 | Real SMTP / Telegram delivery (AT-17) | No provider credentials | Configure in Settings → Connections, use *Send test* buttons, then *Run reminder check now* with a document expiring in 7 days |
 | Real IMAP mailbox (AT-19) | No mailbox credentials | Add a test mailbox (e.g. a local Dovecot or an app-password Gmail account), send a matching attachment, *Check now* twice and confirm a single import |

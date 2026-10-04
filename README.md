@@ -24,7 +24,9 @@ Later phases (not in this release): local AI assistance and personal WhatsApp no
 
 ## Production quick start (Debian 13 LXC)
 
-See [docs/guides/installation.md](docs/guides/installation.md) for details and [private GitHub access](docs/guides/private-github.md) for the read-only credential.
+The guided installer asks for everything (domain, proxy, NAS, backup time, …) and does the whole installation. On the Proxmox host, `scripts/proxmox-create-lxc.sh` also creates the container; inside an existing Debian 13 LXC run `bash scripts/easy-install.sh` (both support `--dry-run`). See [installation](docs/guides/installation.md#guided) and [private GitHub access](docs/guides/private-github.md) for the read-only token.
+
+Manual alternative:
 
 ```bash
 apt-get update && apt-get install -y git ca-certificates curl

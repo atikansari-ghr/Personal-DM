@@ -20,8 +20,8 @@ step "Settings reference is current"
 (cd backend && PD_DEBUG=1 ../$PY manage.py settings_reference --check)
 
 step "Shell scripts"
-bash -n scripts/personaldocs scripts/verify.sh scripts/dev-server.sh
-if command -v shellcheck >/dev/null; then shellcheck -S error scripts/personaldocs scripts/verify.sh scripts/dev-server.sh; fi
+bash -n scripts/personaldocs scripts/verify.sh scripts/dev-server.sh scripts/easy-install.sh scripts/proxmox-create-lxc.sh
+if command -v shellcheck >/dev/null; then shellcheck -S error scripts/personaldocs scripts/verify.sh scripts/dev-server.sh scripts/easy-install.sh scripts/proxmox-create-lxc.sh; fi
 
 step "Backend tests"
 $PY -m pytest -q -W ignore::UserWarning ${PYTEST_ARGS:-}
