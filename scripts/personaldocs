@@ -8,13 +8,21 @@
 #   personaldocs status | doctor | backup | integrity [...] | logs [web|worker|scheduler]
 #   personaldocs restore BACKUP_DIR [--verify-only] [--no-key]
 #   personaldocs recover-admin USERNAME [--generate] [--reset-totp]
+#   personaldocs nas-apply [--from-settings]   (mount the NAS configured in Settings → Storage & backup)
 #   personaldocs setup-token
+#   personaldocs check-access                   (why the app is not reachable through the reverse proxy)
+#   personaldocs local-access on|off|status     (also open the app at http://<container-ip>:<port> on the home network)
 #   personaldocs manage <django command> [...]
 #
 # Credentials for the private repository are read from /etc/personaldocs/github-token (fine-grained, read-only
 # token) or an SSH deploy key (PD_GIT_SSH_KEY). They are never placed in URLs, arguments or logs.
 set -Eeuo pipefail
 umask 027
+# Always run with a UTF-8 locale that exists on every Debian system. Containers often have LANG=C/POSIX
+# (Proxmox console, pct enter) or an uninstalled locale forwarded by SSH (en_US.UTF-8, LC_CTYPE=UTF-8);
+# PostgreSQL would then create an SQL_ASCII cluster, or fail to create one at all.
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
+unset LANGUAGE LC_CTYPE LC_COLLATE LC_MESSAGES 2>/dev/null || true
 
 APP=personaldocs
 PREFIX=/opt/personaldocs
@@ -38,7 +46,7 @@ APT_PACKAGES=(
   postgresql postgresql-client
   tesseract-ocr tesseract-ocr-eng ocrmypdf ghostscript qpdf unpaper pngquant poppler-utils
   libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui fonts-dejavu-core
-  git curl ca-certificates jq util-linux rsync iproute2
+  git curl ca-certificates jq util-linux rsync iproute2 nfs-common cifs-utils
 )
 
 # ------------------------------------------------------------------ helpers
@@ -143,7 +151,7 @@ ensure_user_dirs() {
     "$DATA_DIR/staging" "$DATA_DIR/tmp" "$DATA_DIR/exports" "$DATA_DIR/quarantine" "$DATA_DIR/pre-upgrade"
   install -d -m 0755 "$PREFIX" "$RELEASES" "$STATE"
   install -d -m 0750 "$LOG_DIR"
-  [ -f "$TOKEN_FILE" ] && chmod 600 "$TOKEN_FILE" && chown root:root "$TOKEN_FILE"
+  if [ -f "$TOKEN_FILE" ]; then chmod 600 "$TOKEN_FILE"; chown root:root "$TOKEN_FILE"; fi
 }
 
 ensure_config() {
@@ -172,6 +180,7 @@ EOF
   fi
   [ -n "${OPT_ORIGIN:-}" ] && env_set PD_PUBLIC_ORIGIN "$OPT_ORIGIN" && env_set PD_ALLOWED_HOSTS "$(echo "$OPT_ORIGIN" | sed -E 's#^https?://##; s#/.*##; s#:.*##'),localhost,127.0.0.1"
   [ -n "${OPT_BIND:-}" ] && env_set PD_BIND "$OPT_BIND"
+  grep -q '^LANG=' "$ENV_FILE" || echo 'LANG=C.UTF-8' >>"$ENV_FILE"   # OCR/LibreOffice/file names in the services
   [ -n "${OPT_REPO:-}" ] && env_set PD_REPO_URL "$OPT_REPO"
   if [ ! -s "$CONF_DIR/secret_key" ]; then
     install -m 0640 -o root -g $APP /dev/null "$CONF_DIR/secret_key"
@@ -184,10 +193,34 @@ EOF
 
 ensure_database() {
   log "database"
+  # A cluster whose creation failed during package installation (invalid locale) is created here.
+  if ! pg_lsclusters -h 2>/dev/null | grep -q .; then
+    local ver; ver=$(ls /usr/lib/postgresql 2>/dev/null | sort -V | tail -1)
+    [ -n "$ver" ] || die "PostgreSQL is not installed"
+    log "creating PostgreSQL $ver cluster (UTF-8)"
+    pg_createcluster --locale C.UTF-8 --encoding UTF8 "$ver" main >/dev/null
+  fi
+  systemctl enable --now postgresql >/dev/null 2>&1 || true
+  for _ in $(seq 1 30); do runuser -u postgres -- psql -tAc 'SELECT 1' >/dev/null 2>&1 && break; sleep 1; done
+  runuser -u postgres -- psql -tAc 'SELECT 1' >/dev/null 2>&1 || die "PostgreSQL is not running; see: journalctl -u postgresql -n 50"
   runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='personaldocs'" | grep -q 1 ||
     runuser -u postgres -- psql -qc "CREATE ROLE personaldocs LOGIN"
-  runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='personaldocs'" | grep -q 1 ||
-    runuser -u postgres -- createdb -O personaldocs -E UTF8 personaldocs
+  # The app needs a UTF-8 database. template0 + an explicit locale works even when the cluster itself was
+  # initialised as SQL_ASCII (container without a locale when PostgreSQL was installed).
+  local enc
+  enc=$(runuser -u postgres -- psql -tAc "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname='personaldocs'")
+  if [ -n "$enc" ] && [ "$enc" != UTF8 ]; then
+    if [ "$(runuser -u postgres -- psql -d personaldocs -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public'")" = 0 ]; then
+      log "recreating the empty personaldocs database as UTF-8 (was $enc)"
+      runuser -u postgres -- dropdb personaldocs
+      enc=""
+    else
+      die "database 'personaldocs' uses encoding $enc and already holds data; it must be UTF8 (dump, recreate as UTF8 and restore)"
+    fi
+  fi
+  if [ -z "$enc" ]; then
+    runuser -u postgres -- createdb -O personaldocs -E UTF8 -T template0 --lc-collate=C.UTF-8 --lc-ctype=C.UTF-8 personaldocs
+  fi
 }
 
 # ------------------------------------------------------------------ releases
@@ -211,29 +244,32 @@ fetch_source() { # sets REV and REL_ID
 }
 
 build_release() { # creates $RELEASES/$REL_ID with venv and frontend
+  # Built in its final location: virtualenv scripts (gunicorn, pip) hard-code their own path, so the
+  # directory must never be renamed afterwards. ".complete" marks a finished build; anything else is redone.
   local dir=$RELEASES/$REL_ID
-  if [ -f "$dir/.complete" ]; then log "release $REL_ID already built"; echo "$dir"; return; fi
-  rm -rf "$dir.tmp"
-  mkdir -p "$dir.tmp"
+  if [ -f "$dir/.complete" ] && head -1 "$dir/.venv/bin/gunicorn" 2>/dev/null | grep -qF "$dir/.venv/"; then
+    log "release $REL_ID already built"; echo "$dir"; return
+  fi
+  rm -rf "$dir" "$dir.tmp"
+  mkdir -p "$dir"
   if [ -n "${SRC_DIR:-}" ]; then
-    rsync -a --exclude .git --exclude node_modules --exclude .venv --exclude '__pycache__' "$SRC_DIR"/ "$dir.tmp"/
+    rsync -a --exclude .git --exclude node_modules --exclude .venv --exclude '__pycache__' "$SRC_DIR"/ "$dir"/
   else
-    git --git-dir="$MIRROR" archive "$REV" | tar -x -C "$dir.tmp"
+    git --git-dir="$MIRROR" archive "$REV" | tar -x -C "$dir"
   fi
-  echo "$REV" >"$dir.tmp/REVISION"
+  echo "$REV" >"$dir/REVISION"
   log "creating Python environment for $REL_ID"
-  python3 -m venv "$dir.tmp/.venv"
-  "$dir.tmp/.venv/bin/pip" install --quiet --upgrade pip >/dev/null
-  "$dir.tmp/.venv/bin/pip" install --quiet --no-cache-dir -r "$dir.tmp/backend/requirements.txt" || die "Python dependency installation failed"
-  if [ ! -f "$dir.tmp/frontend/dist/index.html" ]; then
-    fetch_frontend_asset "$dir.tmp" || build_frontend "$dir.tmp"
+  python3 -m venv "$dir/.venv"
+  "$dir/.venv/bin/python" -m pip install --quiet --upgrade pip >/dev/null
+  "$dir/.venv/bin/python" -m pip install --quiet --no-cache-dir -r "$dir/backend/requirements.txt" || die "Python dependency installation failed"
+  if [ ! -f "$dir/frontend/dist/index.html" ]; then
+    fetch_frontend_asset "$dir" || build_frontend "$dir"
   fi
-  [ -f "$dir.tmp/frontend/dist/index.html" ] || die "frontend assets missing"
-  rm -rf "$dir.tmp/frontend/node_modules"
-  chown -R root:$APP "$dir.tmp"
-  chmod -R g+rX,o-rwx "$dir.tmp"
-  touch "$dir.tmp/.complete"
-  mv "$dir.tmp" "$dir"
+  [ -f "$dir/frontend/dist/index.html" ] || die "frontend assets missing"
+  rm -rf "$dir/frontend/node_modules"
+  chown -R root:$APP "$dir"
+  chmod -R g+rX,o-rwx "$dir"
+  touch "$dir/.complete"
   echo "$dir"
 }
 
@@ -288,10 +324,47 @@ XML
   env_set PD_VERAPDF_CMD /opt/verapdf/verapdf
 }
 
+sandbox_supported() { # can systemd give services private mounts here? (needs nesting in an LXC)
+  [ -n "${SANDBOX_OK:-}" ] || {
+    if systemd-run --wait --quiet --collect -p PrivateTmp=yes -p ProtectSystem=full /bin/true >/dev/null 2>&1; then SANDBOX_OK=y; else SANDBOX_OK=n; fi
+  }
+  [ "$SANDBOX_OK" = y ]
+}
+
 install_units() {
   local src=${1:-$CURRENT}/deployment/systemd
   for u in "${UNITS[@]}"; do install -m 0644 "$src/$u.service" /etc/systemd/system/; done
+  # Optional isolation (ProtectSystem/PrivateTmp) only where mount namespaces work, otherwise the services cannot start.
+  if [ -f "$src/hardening.conf" ] && sandbox_supported; then
+    for u in "${UNITS[@]}"; do install -d /etc/systemd/system/$u.service.d; install -m 0644 "$src/hardening.conf" /etc/systemd/system/$u.service.d/10-hardening.conf; done
+  else
+    for u in "${UNITS[@]}"; do rm -f /etc/systemd/system/$u.service.d/10-hardening.conf; done
+    [ -f "$src/hardening.conf" ] && c_warn "This container does not allow mount namespaces, so the services run without the extra systemd isolation. For more isolation enable Proxmox: container -> Options -> Features -> Nesting, then run: personaldocs repair"
+  fi
+  # NAS connection from Settings: a root path unit runs `personaldocs nas-apply` when the app requests a mount
+  if [ -f "$src/personaldocs-nas.path" ]; then
+    install -m 0644 "$src/personaldocs-nas.path" "$src/personaldocs-nas.service" /etc/systemd/system/
+    install -d -m 0750 -o $APP -g $APP "$DATA_DIR/nas"
+  fi
   systemctl daemon-reload
+  [ -f /etc/systemd/system/personaldocs-nas.path ] && systemctl enable --now personaldocs-nas.path >/dev/null 2>&1 || true
+}
+
+show_web_failure() { # print the last service messages so the cause is visible without a second command
+  c_err "Last messages from personaldocs-web:"
+  journalctl -u personaldocs-web -n 25 --no-pager -o cat 2>/dev/null | redact >&2 || true
+}
+
+cmd_nas_apply() { # root: apply the NAS settings saved in the app (mount /mnt/pdnas)
+  need_root; load_env
+  [ -L "$CURRENT" ] || die "not installed"
+  if [ ! -f "$DATA_DIR/nas/request.json" ] || [ "${1:-}" = "--from-settings" ]; then
+    manage nas_request || die "the NAS settings are incomplete or invalid (Settings → Storage & backup)"
+  fi
+  local rc=0
+  "$CURRENT/.venv/bin/python" "$CURRENT/backend/apps/ops/nas_helper.py" --data-dir "$DATA_DIR" || rc=$?
+  manage nas_request --sync >/dev/null 2>&1 || true
+  return $rc
 }
 
 ensure_key() {
@@ -373,11 +446,13 @@ cmd_install() {
   install -m 0755 "$dir/scripts/personaldocs" /usr/local/bin/personaldocs
   install_units "$dir"
   for u in "${UNITS[@]}"; do systemctl enable --now "$u" >/dev/null; systemctl restart "$u"; done
-  health || die "the web service did not become healthy; see: journalctl -u personaldocs-web -n 50"
+  health || { show_web_failure; die "the web service did not become healthy; see: journalctl -u personaldocs-web -n 50"; }
   prune_releases
   log "=== install complete: $(version_of "$dir") ($REV)"
   c_ok "Personal Documents $(version_of "$dir") is installed and running on $PD_BIND."
-  if manage shell -c "from apps.accounts.models import SetupState; import sys; sys.exit(0 if SetupState.get().completed_at else 1)" 2>/dev/null; then
+  if [ "${PD_QUIET_TOKEN:-0}" = 1 ]; then
+    :  # the guided installer prints the setup code in its own summary
+  elif manage shell -c "from apps.accounts.models import SetupState; import sys; sys.exit(0 if SetupState.get().completed_at else 1)" 2>/dev/null; then
     echo "Setup already completed."
   else
     echo; manage setup_token; echo
@@ -419,7 +494,7 @@ cmd_upgrade() {
   install_units "$new"
   for u in "${UNITS[@]}"; do systemctl restart "$u"; done
   if ! health; then
-    c_err "Health check failed after upgrade."
+    c_err "Health check failed after upgrade."; show_web_failure
     if schema_compatible "$old"; then
       activate "$old"; install_units "$old"; for u in "${UNITS[@]}"; do systemctl restart "$u"; done
       die "rolled back to $(basename "$old") (schema compatible)"
@@ -439,7 +514,7 @@ cmd_rollback() {
   local cur; cur=$(readlink -f "$CURRENT")
   activate "$prev"; install_units "$prev"
   for u in "${UNITS[@]}"; do systemctl restart "$u"; done
-  health || die "previous release is not healthy"
+  health || { show_web_failure; die "previous release is not healthy"; }
   c_ok "Rolled back $(basename "$cur") -> $(basename "$prev")."
 }
 
@@ -460,7 +535,7 @@ cmd_repair() {
   manage shell -c "from apps.core.models import Job; from django.utils import timezone; print('requeued', Job.objects.filter(status='running', locked_until__lt=timezone.now()).update(status='queued'))"
   manage reindex
   for u in "${UNITS[@]}"; do systemctl enable "$u" >/dev/null; systemctl restart "$u"; done
-  health || die "web service still unhealthy; see journalctl -u personaldocs-web"
+  health || { show_web_failure; die "web service still unhealthy; see journalctl -u personaldocs-web"; }
   c_ok "Repair complete. No data, keys or accounts were reset."
 }
 
@@ -473,7 +548,113 @@ cmd_status() {
 
 cmd_doctor_inner() { manage doctor; }
 
-usage() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; }
+cmd_local_access() { # local-access on|off|status — opt-in plain-HTTP access from the home network
+  need_root; load_env
+  local port=${PD_BIND##*:} bindhost=${PD_BIND%:*} ip origin
+  ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+  case "${1:-status}" in
+    on)
+      [ "$bindhost" != 127.0.0.1 ] && [ "$bindhost" != localhost ] || die "the app only listens on 127.0.0.1; reinstall with --bind 0.0.0.0:$port first"
+      [ -n "$ip" ] || die "could not determine this container's IP address"
+      origin="http://$ip:$port"
+      env_set PD_LOCAL_ORIGINS "$origin"
+      systemctl restart personaldocs-web
+      health || { show_web_failure; die "the web service did not come back"; }
+      c_ok "Home-network access enabled: $origin"
+      c_warn "This address uses plain HTTP: anyone on your home network could read the traffic. Use it only on a trusted network;"
+      c_warn "camera upload, installing as an app and offline copies need the HTTPS address (${PD_PUBLIC_ORIGIN:-})."
+      c_warn "Give the container a fixed IP (DHCP reservation); if it changes, run 'personaldocs local-access on' again." ;;
+    off)
+      sed -i '/^PD_LOCAL_ORIGINS=/d' "$ENV_FILE"
+      systemctl restart personaldocs-web
+      c_ok "Home-network access disabled; the app is only available at ${PD_PUBLIC_ORIGIN:-the public address}." ;;
+    status)
+      if [ -n "${PD_LOCAL_ORIGINS:-}" ]; then echo "Home-network access: on ($PD_LOCAL_ORIGINS)"; else echo "Home-network access: off (enable with: personaldocs local-access on)"; fi ;;
+    *) die "usage: personaldocs local-access on|off|status" ;;
+  esac
+}
+
+cmd_check_access() { # explain, step by step, why the app is (not) reachable through the reverse proxy
+  load_env
+  local origin domain port bindhost myip proxy="" proxy_ip="" bad=0 code ips pubip
+  origin=${PD_PUBLIC_ORIGIN:-}; domain=$(echo "$origin" | sed -E 's#^https?://##; s#/.*##; s#:.*##')
+  port=${PD_BIND##*:}; bindhost=${PD_BIND%:*}
+  myip=$(hostname -I 2>/dev/null | awk '{print $1}')
+  if [ -r "$CONF_DIR/install-answers.env" ]; then
+    proxy=$(sed -n 's/^PD_PROXY=//p' "$CONF_DIR/install-answers.env" | tr -d "'\"")
+    proxy_ip=$(sed -n 's/^PD_PROXY_IP=//p' "$CONF_DIR/install-answers.env" | tr -d "'\"")
+  fi
+  ok_() { printf '  \033[32m✔\033[0m %s\n' "$*"; }
+  bad_() { printf '  \033[31m✘\033[0m %s\n' "$1"; [ -n "${2:-}" ] && printf '      → %s\n' "$2"; bad=$((bad+1)); }
+  info_() { printf '  • %s\n' "$*"; }
+  echo "Access check for $origin  (container ${myip:-?}, app port $port)"
+  echo "1. The app inside this container"
+  local u; for u in "${UNITS[@]}"; do
+    if systemctl is-active --quiet "$u"; then ok_ "$u running"; else bad_ "$u is not running" "journalctl -u $u -n 50 --no-pager   (then: personaldocs repair)"; fi
+  done
+  if health; then ok_ "app answers on http://127.0.0.1:$port"; else bad_ "the app does not answer locally" "journalctl -u personaldocs-web -n 50 --no-pager"; fi
+  echo "2. Reachable from the proxy"
+  if [ "$bindhost" = 127.0.0.1 ] || [ "$bindhost" = localhost ]; then
+    if [ "$proxy" = 3 ]; then ok_ "listens on 127.0.0.1 (proxy runs in this container)"
+    else bad_ "the app only listens on 127.0.0.1, so a proxy on another machine cannot reach it" "personaldocs install --bind 0.0.0.0:$port   (or re-run easy-install.sh)"; fi
+  else
+    if ! command -v ss >/dev/null; then info_ "configured to listen on $bindhost:$port (install iproute2 to verify)"
+    elif ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "(^|:|\])$port\$"; then ok_ "listening on $bindhost:$port"
+    else bad_ "nothing listens on port $port" "personaldocs repair"; fi
+  fi
+  if command -v nft >/dev/null && nft list table inet personaldocs >/dev/null 2>&1; then
+    local allowed; allowed=$(nft list table inet personaldocs 2>/dev/null | grep -o 'saddr != {[^}]*}' | head -1)
+    info_ "firewall rule active: port $port only from ${allowed#saddr != }"
+    if [ -n "$proxy_ip" ] && ! nft list table inet personaldocs | grep -q "$proxy_ip"; then
+      bad_ "the firewall does not allow the proxy $proxy_ip" "re-run easy-install.sh with the correct proxy IP, or: nft delete table inet personaldocs"
+    fi
+    info_ "if the proxy connects from a different IP than ${proxy_ip:-configured} (Newt/Pangolin, Docker, VPN), it is blocked → remove with: nft delete table inet personaldocs; rm /etc/nftables.d/personaldocs.nft"
+  else
+    ok_ "no Personal Documents firewall rule (port $port open to the network)"
+  fi
+  if grep -q "^PD_ALLOWED_HOSTS=.*$domain" "$ENV_FILE" 2>/dev/null; then ok_ "$domain is an allowed host name"
+  else bad_ "$domain is not in PD_ALLOWED_HOSTS" "personaldocs install --public-origin $origin"; fi
+  echo "   Proxy target to configure:  http://${myip:-<container-ip>}:$port   (test from the proxy machine: curl -H \"Host: $domain\" http://${myip:-<container-ip>}:$port/api/health ; calling it by IP without the Host header gives \"Bad Request (400)\", which is normal)"
+  if [ -n "${PD_LOCAL_ORIGINS:-}" ]; then info_ "home-network access is on: $PD_LOCAL_ORIGINS"; else info_ "to open the app by IP on your home network: personaldocs local-access on"; fi
+  echo "3. Public DNS for $domain (asked via Cloudflare DNS-over-HTTPS)"
+  ips=$(curl -fsS -m 10 -H 'accept: application/dns-json' "https://cloudflare-dns.com/dns-query?name=$domain&type=A" 2>/dev/null | grep -o '"data":"[0-9.]*"' | cut -d'"' -f4 | tr '\n' ' ')
+  if [ -z "$ips" ]; then
+    bad_ "$domain has no public DNS A record" "create an A record (or CNAME) for $domain at your DNS provider pointing to the public IP of your proxy (home router for NPM, the VPS for Pangolin)"
+  else
+    ok_ "$domain → $ips"
+    if echo "$ips" | grep -qE '(^| )(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)'; then
+      info_ "that is a private address: only works inside your home network (or with local DNS)"
+    fi
+    pubip=$(curl -fsS -m 8 https://api.ipify.org 2>/dev/null || true)
+    if [ -n "$pubip" ]; then
+      if echo " $ips " | grep -q " $pubip "; then info_ "it points to this network's public IP ($pubip): the router must forward TCP 80 and 443 to the Nginx Proxy Manager host"
+      elif [ "$proxy" != 2 ]; then info_ "this network's public IP is $pubip, which is not in the DNS answer; correct for Pangolin/a VPS, otherwise update the DNS record"; fi
+    fi
+  fi
+  echo "4. HTTPS on $origin"
+  code=$(curl -sS -o /dev/null -m 15 -w '%{http_code}' "$origin/api/health" 2>/tmp/pd-access.err || true)
+  case "$code" in
+    200) ok_ "$origin/api/health answers 200: the app is reachable through the proxy" ;;
+    502|503|504) bad_ "the proxy answers $code: it cannot reach the app" "set the proxy target to http://${myip:-<container-ip>}:$port and check the firewall above" ;;
+    404) bad_ "$domain answers, but not with this app (HTTP $code)" "create the proxy host for $domain → http://${myip:-<container-ip>}:$port (NPM: Hosts → Proxy Hosts; Pangolin: Resources)" ;;
+    400) bad_ "the app rejects the host name (400)" "the proxy must pass the original Host header (NPM does by default); check PD_ALLOWED_HOSTS" ;;
+    000|"")
+      local err; err=$(tr -d '\r' </tmp/pd-access.err | tail -1)
+      case "$err" in
+        *"resolve host"*) bad_ "this container cannot resolve $domain" "DNS record missing (see 3), or the container's DNS server cannot see it" ;;
+        *"timed out"*|*"Timeout"*) bad_ "connection to $domain timed out" "router port forwarding of 80/443 to the proxy, the proxy host firewall, or no NAT loopback on the router (then test from a phone on mobile data)" ;;
+        *"refused"*) bad_ "connection to $domain refused" "the proxy is not listening on 443 at that address: check the NPM/Pangolin host and port forwarding" ;;
+        *"SSL"*|*"certificate"*) bad_ "HTTPS certificate problem for $domain" "in NPM: SSL tab → request a Let's Encrypt certificate for exactly $domain (needs port 80 reachable)" ;;
+        *) bad_ "$domain could not be reached: ${err:-unknown error}" "check DNS, port forwarding and the proxy host" ;;
+      esac ;;
+    *) info_ "$origin/api/health answered HTTP $code" ;;
+  esac
+  rm -f /tmp/pd-access.err
+  echo
+  if [ "$bad" -eq 0 ]; then c_ok "No problems found."; else c_err "$bad problem(s) found; fix them in the order shown."; return 1; fi
+}
+
+usage() { sed -n '2,/^set -Eeuo/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; }
 
 CMD=${1:-help}; shift || true
 OPT_VERAPDF=0; OPT_REF=""; OPT_ORIGIN=""; OPT_BIND=""; OPT_REPO=""; OPT_SKIP_BACKUP=0; OPT_BUILD_FRONTEND=0; ARGS=()
@@ -497,7 +678,7 @@ case "$CMD" in
   rollback) cmd_rollback;;
   repair) cmd_repair;;
   status) cmd_status;;
-  doctor) need_root; load_env; manage doctor;;
+  doctor) need_root; load_env; manage doctor || exit 1;;   # failed checks are listed above; not a script error
   backup) need_root; load_env; manage backup;;
   integrity) need_root; load_env; manage integrity "${ARGS[@]}";;
   restore)
@@ -512,7 +693,10 @@ case "$CMD" in
     systemctl start "${UNITS[@]}"
     health && c_ok "Restore complete and healthy." || die "restored, but the web service is unhealthy";;
   recover-admin) need_root; load_env; manage recover_admin "${ARGS[@]}";;
+  nas-apply) cmd_nas_apply "${ARGS[@]}";;
   setup-token) need_root; load_env; manage setup_token;;
+  check-access) need_root; cmd_check_access || exit 1;;
+  local-access) cmd_local_access "${ARGS[@]}";;
   logs) journalctl -f -u "personaldocs-${ARGS[0]:-web}";;
   manage) need_root; load_env; manage "${ARGS[@]}";;
   help|-h|--help) usage;;

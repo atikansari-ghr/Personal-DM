@@ -34,6 +34,12 @@ class BackupError(Exception):
 
 
 def check_target() -> Path:
+    try:
+        from . import nas
+
+        nas.sync()
+    except Exception:  # noqa: BLE001 - a broken status file must not block backups to a configured folder
+        pass
     raw = config.get("backup.target")
     if not raw:
         raise BackupError("No backup destination is configured (Settings → Storage & Backup).")

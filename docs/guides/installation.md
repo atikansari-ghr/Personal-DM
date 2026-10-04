@@ -3,10 +3,10 @@
 
 ## Target {#target}
 
-- Proxmox LXC running **Debian 13 (trixie)**, unprivileged is fine. Recommended: 2 vCPU, 4 GB RAM, 50 GB disk.
+- Proxmox LXC running **Debian 13 (trixie)**. Recommended: 2 vCPU, 4 GB RAM, 50 GB disk, and **Options → Features → Nesting** enabled (lets systemd isolate the services; without it the installer detects this and runs them without that extra isolation). To let the app mount the NAS itself (Settings → Storage & backup) the container must be **privileged with the `mount=nfs;cifs` feature**; an unprivileged container works too when the Proxmox host bind-mounts the share (see [Container requirements](backup-restore.md#lxc-requirements)).
 - No Docker. Native services under systemd.
 - HTTPS is provided by your existing **Nginx Proxy Manager** or **Pangolin** (see [Reverse proxy](reverse-proxy.md)).
-- A NAS share mounted in the container for backups (see [Backup and restore](backup-restore.md)).
+- A NAS share (NFS or SMB) for backups — connected from Settings, or bind-mounted by the host (see [Backup and restore](backup-restore.md#nas)).
 
 ## What the installer does {#what}
 
@@ -28,7 +28,53 @@
 5. Installs systemd units `personaldocs-web` (gunicorn), `personaldocs-worker` and `personaldocs-scheduler`, then starts them and runs a health check.
 6. Prints a one-time setup code.
 
-## Install {#install}
+## Guided installation (recommended) {#guided}
+
+Run everything **inside the Debian 13 container**, as root (Proxmox: `pct enter <id>` or the container console).
+
+**1. Copy the repository into the container**
+
+```
+apt-get update && apt-get install -y git
+git clone https://github.com/OWNER/REPO.git /root/personaldocs-src
+```
+
+The repository is private, so git asks for a username and password: enter your GitHub username and, as the password, a
+fine-grained token with read-only *Contents* access (see [Private GitHub access](private-github.md)). Typing it at the prompt keeps
+it out of the URL, shell history and process list. Add `-b <branch>` to install a branch other than `main`.
+
+**2. Run the installation script**
+
+```
+cd /root/personaldocs-src
+bash scripts/easy-install.sh            # add --dry-run first to only see what it would do
+```
+
+The script then:
+
+1. **Checks the system** and shows the result: operating system, CPU cores (2+ recommended), memory (4 GB recommended,
+   2 GB minimum), free disk (40 GB+ recommended, 10 GB minimum), systemd, internet/DNS and whether the container can mount
+   NFS/SMB. Missing requirements stop the script before anything is changed; warnings ask whether to continue.
+2. **Asks the parameters**: the GitHub token again (stored root-only in `/etc/personaldocs/github-token` for later upgrades; it is
+   tested immediately), public domain, reverse proxy (Nginx Proxy Manager, Pangolin or local) and the IP it connects from, port,
+   an optional firewall rule that only lets the proxy reach the port, timezone, NAS (NFS server + export, SMB server + share + user +
+   password, an already-mounted folder, or later), daily backup time and optional veraPDF. It shows a summary and asks for confirmation.
+3. **Installs the dependencies**: Python, PostgreSQL, Tesseract OCR, OCRmyPDF, Ghostscript, LibreOffice, NFS/SMB client tools and more.
+4. **Completes the installation**: database, application release built from this checkout, systemd services, trusted proxy,
+   firewall, app settings (`manage.py apply_settings`, validated like the Settings screen), NAS connection
+   (`personaldocs nas-apply --from-settings`), a first backup, `status` and `doctor`.
+5. **Prints what to do next**: the exact settings to enter in Nginx Proxy Manager or Pangolin and the one-time setup code.
+
+Answers (never passwords or tokens) are remembered in `/etc/personaldocs/install-answers.env`, so re-running the script offers the
+previous values; every step is safe to repeat after an error. Progress is logged to `/var/log/personaldocs/easy-install.log`.
+For an unattended install put the same `PD_…` variables in a file and run `PD_ANSWERS=/root/answers.env bash scripts/easy-install.sh --yes`
+(an SMB password cannot be given this way — enter it later in Settings).
+
+**Optional: create the container from the Proxmox host.** `scripts/proxmox-create-lxc.sh` (run as root on the host, `--dry-run`
+supported) asks for the container ID, hostname, storage, disk/CPU/RAM, network and how backups reach the NAS, creates a matching
+container (privileged with `mount=nfs;cifs`, or unprivileged with a host bind mount), and starts the installer inside it.
+
+## Manual install {#install}
 
 The repository is private, so the installer needs a read-only credential (see [Private GitHub access](private-github.md)). On the LXC as root:
 
@@ -49,7 +95,7 @@ Useful options: `--bind 0.0.0.0:8000` (when the proxy runs on another host), `--
 
 1. Configure the reverse proxy and open the public address.
 2. Enter the setup code (`personaldocs setup-token` prints a new one) and create the family accounts.
-3. Configure the backup destination (Settings → Storage & backup) and run **Back up now**.
+3. Connect the NAS and check the backup destination (Settings → Storage & backup → **Connect NAS**), then run **Back up now** (the guided installer already did this if you answered the NAS questions).
 4. Optionally configure SMTP, Telegram, Google sign-in.
 5. Run `personaldocs doctor`.
 

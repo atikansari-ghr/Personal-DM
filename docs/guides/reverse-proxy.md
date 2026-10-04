@@ -16,6 +16,14 @@ PD_TRUSTED_PROXY_IPS=10.0.0.5        # the proxy's address, for client IPs in th
 
 Then `systemctl restart personaldocs-web`.
 
+## Opening the app by IP on the home network {#local}
+
+The app only answers to its public domain, so `http://<container-ip>:8000` shows **Bad Request (400)** by design. To also use it
+directly on a trusted home network (for example while DNS or the proxy is not ready), run `sudo personaldocs local-access on`.
+It sets `PD_LOCAL_ORIGINS=http://<container-ip>:<port>`. On that address only, sign-in cookies are sent without the HTTPS-only flag;
+the public HTTPS address keeps full protection. Traffic on the plain-HTTP address is not encrypted, and camera upload, installing
+as an app and offline copies need HTTPS. Give the container a fixed IP; `sudo personaldocs local-access off` turns it off again.
+
 ## Nginx Proxy Manager {#npm}
 
 Proxy host: domain `docs.example.com`, scheme `http`, forward host = LXC IP, port 8000, *Websockets* not required, *Block common exploits* on. SSL: request a certificate, *Force SSL*, *HTTP/2*. Advanced tab:
