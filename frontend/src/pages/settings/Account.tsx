@@ -56,7 +56,7 @@ function Profile() {
         <div className="field"><label htmlFor="pf">Full name</label><input id="pf" type="text" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Enter your full name" /></div>
         <div className="field"><label htmlFor="pd">Display name</label><input id="pd" type="text" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></div>
         <div className="field"><label htmlFor="pe">Email address</label><input id="pe" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Add your email" /><div className="hint">Needed for email reminders and self-service password reset.</div></div>
-        <div className="field"><label>Username</label><input type="text" value={u.username} disabled /></div>
+        <div className="field"><label htmlFor="pu">Username</label><input id="pu" type="text" value={u.username} disabled /></div>
         <button className="btn primary">Save profile</button>
       </form>
       <div className="stack">

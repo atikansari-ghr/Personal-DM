@@ -4,6 +4,18 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-04)
+- Resizable folder-tree and document-list panels (mouse and keyboard), remembered per account.
+- Active sessions list with sign-out of individual devices.
+- Optional folder templates for new members (setup wizard, add member, apply to any folder).
+- Notifications for access granted, finished imports, processing failures, failed backups and integrity problems, with a per-user switch for external channels.
+- PDF/A-2b validation of searchable copies (veraPDF when installed via `--with-verapdf`, structural check otherwise) and `manage.py pdfa_check`.
+- Automated accessibility audit (axe-core) and a CI end-to-end job.
+
+### Fixed (2026-10-04)
+- Duplicate notification keys could abort an enclosing database transaction.
+- Changing your own password signed out the device you were using.
+
 ### Added
 - First-run setup wizard (one-time console code) creating the six family accounts; extended-family groups, heads and scoped delegation.
 - Default-deny capability permissions with folder inheritance, document exceptions and access explanations.
