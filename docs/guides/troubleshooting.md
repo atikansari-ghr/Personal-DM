@@ -5,7 +5,7 @@
 - `sudo personaldocs status` and `sudo personaldocs doctor` (safe, read-only, redacted).
 - Settings → Activity & health: services, tools, disk, failed jobs.
 - `sudo personaldocs logs worker` for processing errors.
-- The app does not open in the browser: `sudo personaldocs check-access` checks each link from the container to your domain (services, listening port, firewall rule, allowed host name, public DNS record, HTTPS through the proxy) and prints the fix for the first broken one.
+- The app does not open in the browser: `sudo personaldocs check-access` checks each link from the container to your domain (services, listening port, firewall rule, allowed host name, public DNS record, HTTPS through the proxy) and prints the fix for the first broken one. Opening `http://<container-ip>:8000` directly shows "Bad Request (400)": the app only answers to its domain name, so test with `curl -H "Host: <domain>" http://<container-ip>:8000/api/health`.
 
 ## Common problems {#common}
 
