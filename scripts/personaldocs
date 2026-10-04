@@ -215,29 +215,32 @@ fetch_source() { # sets REV and REL_ID
 }
 
 build_release() { # creates $RELEASES/$REL_ID with venv and frontend
+  # Built in its final location: virtualenv scripts (gunicorn, pip) hard-code their own path, so the
+  # directory must never be renamed afterwards. ".complete" marks a finished build; anything else is redone.
   local dir=$RELEASES/$REL_ID
-  if [ -f "$dir/.complete" ]; then log "release $REL_ID already built"; echo "$dir"; return; fi
-  rm -rf "$dir.tmp"
-  mkdir -p "$dir.tmp"
+  if [ -f "$dir/.complete" ] && head -1 "$dir/.venv/bin/gunicorn" 2>/dev/null | grep -qF "$dir/.venv/"; then
+    log "release $REL_ID already built"; echo "$dir"; return
+  fi
+  rm -rf "$dir" "$dir.tmp"
+  mkdir -p "$dir"
   if [ -n "${SRC_DIR:-}" ]; then
-    rsync -a --exclude .git --exclude node_modules --exclude .venv --exclude '__pycache__' "$SRC_DIR"/ "$dir.tmp"/
+    rsync -a --exclude .git --exclude node_modules --exclude .venv --exclude '__pycache__' "$SRC_DIR"/ "$dir"/
   else
-    git --git-dir="$MIRROR" archive "$REV" | tar -x -C "$dir.tmp"
+    git --git-dir="$MIRROR" archive "$REV" | tar -x -C "$dir"
   fi
-  echo "$REV" >"$dir.tmp/REVISION"
+  echo "$REV" >"$dir/REVISION"
   log "creating Python environment for $REL_ID"
-  python3 -m venv "$dir.tmp/.venv"
-  "$dir.tmp/.venv/bin/pip" install --quiet --upgrade pip >/dev/null
-  "$dir.tmp/.venv/bin/pip" install --quiet --no-cache-dir -r "$dir.tmp/backend/requirements.txt" || die "Python dependency installation failed"
-  if [ ! -f "$dir.tmp/frontend/dist/index.html" ]; then
-    fetch_frontend_asset "$dir.tmp" || build_frontend "$dir.tmp"
+  python3 -m venv "$dir/.venv"
+  "$dir/.venv/bin/python" -m pip install --quiet --upgrade pip >/dev/null
+  "$dir/.venv/bin/python" -m pip install --quiet --no-cache-dir -r "$dir/backend/requirements.txt" || die "Python dependency installation failed"
+  if [ ! -f "$dir/frontend/dist/index.html" ]; then
+    fetch_frontend_asset "$dir" || build_frontend "$dir"
   fi
-  [ -f "$dir.tmp/frontend/dist/index.html" ] || die "frontend assets missing"
-  rm -rf "$dir.tmp/frontend/node_modules"
-  chown -R root:$APP "$dir.tmp"
-  chmod -R g+rX,o-rwx "$dir.tmp"
-  touch "$dir.tmp/.complete"
-  mv "$dir.tmp" "$dir"
+  [ -f "$dir/frontend/dist/index.html" ] || die "frontend assets missing"
+  rm -rf "$dir/frontend/node_modules"
+  chown -R root:$APP "$dir"
+  chmod -R g+rX,o-rwx "$dir"
+  touch "$dir/.complete"
   echo "$dir"
 }
 
