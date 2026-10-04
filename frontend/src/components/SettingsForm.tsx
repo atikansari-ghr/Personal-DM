@@ -10,7 +10,8 @@ export interface SettingDef {
 }
 
 const CHANNEL_LABELS: Record<string, string> = { in_app: "In-app", email: "Email", telegram: "Telegram" };
-const CHOICE_LABELS: Record<string, string> = { green: "Green & White", blue: "Blue & White", mono: "Black & White", three_panel: "Three-panel view", full_page: "Full-page viewer", planned: "Planned (not available)", unavailable: "Unavailable in this release", starttls: "STARTTLS", ssl: "SSL/TLS", none: "None (not recommended)" };
+const CHOICE_LABELS: Record<string, string> = { green: "Green & White", blue: "Blue & White", mono: "Black & White", three_panel: "Three-panel view", full_page: "Full-page viewer", planned: "Planned (not available)", unavailable: "Unavailable in this release", starttls: "STARTTLS", ssl: "SSL/TLS", none: "None (not recommended)", nfs: "NFS", smb: "SMB / Windows share" };
+const KEY_CHOICE_LABELS: Record<string, Record<string, string>> = { "nas.type": { none: "Already mounted (Proxmox bind mount)" } };
 
 export function helpHref(help: string) {
   const [slug, anchor] = help.split("#");
@@ -24,7 +25,7 @@ function Input({ def, value, onChange }: { def: SettingDef; value: any; onChange
     case "bool":
       return <label className="switch"><input id={id} type="checkbox" checked={!!value} disabled={disabled} onChange={(e) => onChange(e.target.checked)} aria-label={def.label} /><span /></label>;
     case "choice":
-      return <select id={id} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)}>{def.choices.map((c) => <option key={c} value={c}>{CHOICE_LABELS[c] || c}</option>)}</select>;
+      return <select id={id} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)}>{def.choices.map((c) => <option key={c} value={c}>{KEY_CHOICE_LABELS[def.key]?.[c] || CHOICE_LABELS[c] || c}</option>)}</select>;
     case "int":
       return <input id={id} type="number" min={def.min ?? undefined} max={def.max ?? undefined} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))} style={{ maxWidth: 160 }} />;
     case "time":
@@ -106,7 +107,7 @@ export default function SettingsForm({ section, keys, title, children }: { secti
             <div>
               <Input def={d} value={value} onChange={(v) => setDraft({ ...draft, [d.key]: v })} />
               {errors[d.key] && <div className="error-text small" role="alert">{errors[d.key]}</div>}
-              {d.type !== "secret" && d.key !== "documents.member_template" && d.default !== null && d.default !== undefined && <div className="small muted">Default: {Array.isArray(d.default) ? d.default.join(", ") || "none" : String(CHOICE_LABELS[d.default] || d.default) || "empty"}</div>}
+              {d.type !== "secret" && d.key !== "documents.member_template" && d.default !== null && d.default !== undefined && <div className="small muted">Default: {Array.isArray(d.default) ? d.default.join(", ") || "none" : String(KEY_CHOICE_LABELS[d.key]?.[d.default] || CHOICE_LABELS[d.default] || d.default) || "empty"}</div>}
             </div>
           </div>
         );

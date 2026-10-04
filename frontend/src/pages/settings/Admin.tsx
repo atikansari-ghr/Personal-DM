@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, formatBytes, formatDateTime } from "../../api";
 import SettingsForm from "../../components/SettingsForm";
 import { CopyButton, Icon, Skeleton, useAsync, useToast } from "../../components/ui";
@@ -133,6 +133,40 @@ export function AuthPanel() {
   );
 }
 
+function NasCard({ onChange }: { onChange: () => void }) {
+  const toast = useToast();
+  const { data, reload } = useAsync(() => api<{ status: any; mount_point: string }>("backup/nas"), []);
+  const state = data?.status?.state;
+  useEffect(() => {
+    if (state !== "pending") return;
+    const t = setTimeout(() => { reload(); onChange(); }, 2500);
+    return () => clearTimeout(t);
+  }, [data]);
+  const act = (action: string) => api("backup/nas", { body: { action } }).then(() => { reload(); }).catch((e) => toast(e.message, "error"));
+  const badge: Record<string, [string, string]> = {
+    mounted: ["ok", "Connected"], pending: ["neutral", "Connecting…"], error: ["danger", "Problem"],
+    unmounted: ["neutral", "Disconnected"], not_configured: ["neutral", "Not connected"],
+  };
+  const [cls, label] = badge[state] || ["neutral", state || "…"];
+  return (
+    <SettingsForm keys={["nas.type", "nas.server", "nas.share", "nas.subfolder", "nas.username", "nas.password", "nas.domain", "nas.version"]} title="NAS connection">
+      <div className="card" style={{ marginTop: ".8rem", background: "var(--brand-softer)" }} role="status" aria-live="polite">
+        <div className="row between">
+          <div className="row"><strong>Status:</strong> <span className={`badge ${cls}`}>{label}</span></div>
+          <div className="row">
+            <button className="btn primary" disabled={state === "pending"} onClick={() => act("mount")}>Connect NAS</button>
+            {state === "mounted" && <button className="btn" onClick={() => act("unmount")}>Disconnect</button>}
+          </div>
+        </div>
+        {data?.status?.message && <p className="small" style={{ marginTop: ".4rem" }}>{data.status.message}</p>}
+        {data?.status?.free_bytes !== undefined && state === "mounted" && <p className="small muted">{formatBytes(data.status.free_bytes)} free of {formatBytes(data.status.total_bytes)}</p>}
+        {data?.status?.detail && <details><summary className="small">Technical details</summary><pre className="preview-text small">{data.status.detail}</pre></details>}
+        <p className="small muted">Save the fields above first, then press Connect NAS. The share is mounted at {data?.mount_point || "/mnt/pdnas"} and used as the backup destination. NFS/SMB mounting needs a privileged container with the Proxmox feature mount=nfs;cifs — otherwise choose “Already mounted” and enter the folder in Backup settings. <a href="/help/backup-restore#nas">Help</a></p>
+      </div>
+    </SettingsForm>
+  );
+}
+
 export function StoragePanel() {
   const toast = useToast();
   const st = useAsync(() => api<any>("backup"), []);
@@ -151,7 +185,8 @@ export function StoragePanel() {
           <p className="small muted">Restores are done from the server console (<code>personaldocs restore</code>) so a web session can never overwrite the library. A Proxmox snapshot is a useful extra layer but is not a verified application backup.</p>
         </div>
       )}
-      <SettingsForm section="storage" title="Backup settings" />
+      <NasCard onChange={st.reload} />
+      <SettingsForm keys={["backup.target", "backup.require_mount", "backup.schedule_time", "backup.keep_daily", "backup.include_keys"]} title="Backup settings" />
       <div className="card">
         <h2>Integrity check</h2>
         <p className="small muted">Looks for missing or altered originals, broken version references and orphaned files. Repairs never delete originals or regenerate keys.</p>

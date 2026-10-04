@@ -496,6 +496,105 @@ Stored encrypted and never shown again.
 
 ## Section: storage
 
+### NAS connection (`nas.type`)
+
+How the backup share is reached. 'Already mounted' means Proxmox (or you) mounted it into the container; NFS/SMB lets the app mount it.
+
+- **Default:** `'none'`
+- **Allowed values:** none, nfs, smb
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Click 'Connect NAS' after changing. The share is mounted at /mnt/pdnas and used as the backup destination.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#nas](guides/backup-restore.md#nas)
+
+### NAS server (`nas.server`)
+
+Hostname or IP address of the NAS.
+
+- **Default:** `''`
+- **Allowed values:** –253
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#nas](guides/backup-restore.md#nas)
+- **Example:** 192.168.1.20
+
+### Share / export (`nas.share`)
+
+NFS export path (e.g. /volume1/backups) or SMB share name (e.g. backups).
+
+- **Default:** `''`
+- **Allowed values:** –200
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#nas](guides/backup-restore.md#nas)
+- **Example:** /volume1/backups
+
+### Folder on the share (`nas.subfolder`)
+
+Sub-folder used for this installation's backups (created if missing).
+
+- **Default:** `'personaldocs'`
+- **Allowed values:** –100
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#nas](guides/backup-restore.md#nas)
+
+### SMB username (`nas.username`)
+
+Account on the NAS (SMB only).
+
+- **Default:** `''`
+- **Allowed values:** –100
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#nas](guides/backup-restore.md#nas)
+
+### SMB password (`nas.password`)
+
+Stored encrypted; written to a root-only credentials file when mounting.
+
+- **Default:** (secret, not shown)
+- **Allowed values:** secret
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#nas](guides/backup-restore.md#nas)
+
+### SMB domain/workgroup (`nas.domain`)
+
+Optional (SMB only).
+
+- **Default:** `''`
+- **Allowed values:** –100
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#nas](guides/backup-restore.md#nas)
+
+### Protocol version (`nas.version`)
+
+NFS version (3, 4, 4.1) or SMB dialect (3.0, 2.1).
+
+- **Default:** `''`
+- **Allowed values:** –10
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#nas](guides/backup-restore.md#nas)
+- **Example:** 4.1
+
 ### Backup destination (`backup.target`)
 
 Mounted NAS/file-share path for backups.

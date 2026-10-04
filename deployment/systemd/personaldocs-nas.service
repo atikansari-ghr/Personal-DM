@@ -1,0 +1,10 @@
+[Unit]
+Description=Apply Personal Documents NAS settings (mount the backup share)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Runs as root because mounting requires it. It only reads validated settings and writes a fixed mount unit.
+ExecStart=/usr/local/bin/personaldocs nas-apply
+TimeoutStartSec=180

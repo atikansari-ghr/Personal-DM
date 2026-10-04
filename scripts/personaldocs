@@ -8,6 +8,7 @@
 #   personaldocs status | doctor | backup | integrity [...] | logs [web|worker|scheduler]
 #   personaldocs restore BACKUP_DIR [--verify-only] [--no-key]
 #   personaldocs recover-admin USERNAME [--generate] [--reset-totp]
+#   personaldocs nas-apply [--from-settings]   (mount the NAS configured in Settings → Storage & backup)
 #   personaldocs setup-token
 #   personaldocs manage <django command> [...]
 #
@@ -38,7 +39,7 @@ APT_PACKAGES=(
   postgresql postgresql-client
   tesseract-ocr tesseract-ocr-eng ocrmypdf ghostscript qpdf unpaper pngquant poppler-utils
   libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui fonts-dejavu-core
-  git curl ca-certificates jq util-linux rsync iproute2
+  git curl ca-certificates jq util-linux rsync iproute2 nfs-common cifs-utils
 )
 
 # ------------------------------------------------------------------ helpers
@@ -291,7 +292,25 @@ XML
 install_units() {
   local src=${1:-$CURRENT}/deployment/systemd
   for u in "${UNITS[@]}"; do install -m 0644 "$src/$u.service" /etc/systemd/system/; done
+  # NAS connection from Settings: a root path unit runs `personaldocs nas-apply` when the app requests a mount
+  if [ -f "$src/personaldocs-nas.path" ]; then
+    install -m 0644 "$src/personaldocs-nas.path" "$src/personaldocs-nas.service" /etc/systemd/system/
+    install -d -m 0750 -o $APP -g $APP "$DATA_DIR/nas"
+  fi
   systemctl daemon-reload
+  [ -f /etc/systemd/system/personaldocs-nas.path ] && systemctl enable --now personaldocs-nas.path >/dev/null 2>&1 || true
+}
+
+cmd_nas_apply() { # root: apply the NAS settings saved in the app (mount /mnt/pdnas)
+  need_root; load_env
+  [ -L "$CURRENT" ] || die "not installed"
+  if [ ! -f "$DATA_DIR/nas/request.json" ] || [ "${1:-}" = "--from-settings" ]; then
+    manage nas_request || die "the NAS settings are incomplete or invalid (Settings → Storage & backup)"
+  fi
+  local rc=0
+  "$CURRENT/.venv/bin/python" "$CURRENT/backend/apps/ops/nas_helper.py" --data-dir "$DATA_DIR" || rc=$?
+  manage nas_request --sync >/dev/null 2>&1 || true
+  return $rc
 }
 
 ensure_key() {
@@ -473,7 +492,7 @@ cmd_status() {
 
 cmd_doctor_inner() { manage doctor; }
 
-usage() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,/^set -Eeuo/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; }
 
 CMD=${1:-help}; shift || true
 OPT_VERAPDF=0; OPT_REF=""; OPT_ORIGIN=""; OPT_BIND=""; OPT_REPO=""; OPT_SKIP_BACKUP=0; OPT_BUILD_FRONTEND=0; ARGS=()
@@ -512,6 +531,7 @@ case "$CMD" in
     systemctl start "${UNITS[@]}"
     health && c_ok "Restore complete and healthy." || die "restored, but the web service is unhealthy";;
   recover-admin) need_root; load_env; manage recover_admin "${ARGS[@]}";;
+  nas-apply) cmd_nas_apply "${ARGS[@]}";;
   setup-token) need_root; load_env; manage setup_token;;
   logs) journalctl -f -u "personaldocs-${ARGS[0]:-web}";;
   manage) need_root; load_env; manage "${ARGS[@]}";;

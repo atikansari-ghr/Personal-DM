@@ -79,6 +79,34 @@ def _validate_thresholds(value):
             raise SettingError("Reminder days must be between 0 and 730.")
 
 
+_HOST_RX = re.compile(r"^(?=.{1,253}$)([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$|^\[?[0-9A-Fa-f:.]+\]?$")
+
+
+def _validate_host(value: str):
+    if value and not _HOST_RX.match(value):
+        raise SettingError("Enter a hostname or IP address, e.g. 192.168.1.20 or nas.local.")
+
+
+def _validate_share(value: str):
+    if value and (not re.fullmatch(r"[A-Za-z0-9/_.\- $]{1,200}", value) or ".." in value.split("/")):
+        raise SettingError("Use letters, numbers, spaces and / _ . - $ only.")
+
+
+def _validate_subfolder(value: str):
+    if value and (not re.fullmatch(r"[A-Za-z0-9_.\-]{1,100}", value) or value in (".", "..")):
+        raise SettingError("Use a single folder name (letters, numbers, _ . -).")
+
+
+def _validate_plain(value: str):
+    if value and not re.fullmatch(r"[^\s,=\\'\"\x00-\x1f]{1,100}", value):
+        raise SettingError("Spaces, commas, quotes, backslashes and '=' are not allowed.")
+
+
+def _validate_version(value: str):
+    if value and not re.fullmatch(r"[0-9](\.[0-9])?", value):
+        raise SettingError("Enter a version such as 4.1 or 3.0.")
+
+
 def _validate_template(value: str):
     if ".." in value or value.startswith("/") or "\\" in value:
         raise SettingError("Templates cannot contain '..', '\\' or start with '/'.")
@@ -248,6 +276,24 @@ SETTINGS: list[SettingDef] = [
     SettingDef("google.client_secret", "Google OAuth client secret", "Stored encrypted and never shown again.",
                "secret", "", "authentication", help="google#credentials"),
     # ---- Storage & backup
+    SettingDef("nas.type", "NAS connection", "How the backup share is reached. 'Already mounted' means Proxmox (or you) mounted it into the container; NFS/SMB lets the app mount it.",
+               "choice", "none", "storage", choices=("none", "nfs", "smb"),
+               effect="Click 'Connect NAS' after changing. The share is mounted at /mnt/pdnas and used as the backup destination.",
+               help="backup-restore#nas"),
+    SettingDef("nas.server", "NAS server", "Hostname or IP address of the NAS.", "str", "", "storage", max=253,
+               validator=_validate_host, help="backup-restore#nas", example="192.168.1.20"),
+    SettingDef("nas.share", "Share / export", "NFS export path (e.g. /volume1/backups) or SMB share name (e.g. backups).", "str", "",
+               "storage", max=200, validator=_validate_share, help="backup-restore#nas", example="/volume1/backups"),
+    SettingDef("nas.subfolder", "Folder on the share", "Sub-folder used for this installation's backups (created if missing).",
+               "str", "personaldocs", "storage", max=100, validator=_validate_subfolder, help="backup-restore#nas"),
+    SettingDef("nas.username", "SMB username", "Account on the NAS (SMB only).", "str", "", "storage", max=100,
+               validator=_validate_plain, help="backup-restore#nas"),
+    SettingDef("nas.password", "SMB password", "Stored encrypted; written to a root-only credentials file when mounting.",
+               "secret", "", "storage", help="backup-restore#nas"),
+    SettingDef("nas.domain", "SMB domain/workgroup", "Optional (SMB only).", "str", "", "storage", max=100,
+               validator=_validate_plain, help="backup-restore#nas"),
+    SettingDef("nas.version", "Protocol version", "NFS version (3, 4, 4.1) or SMB dialect (3.0, 2.1).", "str", "", "storage",
+               max=10, validator=_validate_version, help="backup-restore#nas", example="4.1"),
     SettingDef("backup.target", "Backup destination", "Mounted NAS/file-share path for backups.", "path", "",
                "storage", effect="Backups are refused when this path is not a mount point or lacks the marker file.",
                help="backup-restore#target", example="/mnt/nas-backup/personaldocs"),
