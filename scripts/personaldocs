@@ -16,6 +16,11 @@
 # token) or an SSH deploy key (PD_GIT_SSH_KEY). They are never placed in URLs, arguments or logs.
 set -Eeuo pipefail
 umask 027
+# Always run with a UTF-8 locale that exists on every Debian system. Containers often have LANG=C/POSIX
+# (Proxmox console, pct enter) or an uninstalled locale forwarded by SSH (en_US.UTF-8, LC_CTYPE=UTF-8);
+# PostgreSQL would then create an SQL_ASCII cluster, or fail to create one at all.
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
+unset LANGUAGE LC_CTYPE LC_COLLATE LC_MESSAGES 2>/dev/null || true
 
 APP=personaldocs
 PREFIX=/opt/personaldocs
@@ -173,6 +178,7 @@ EOF
   fi
   [ -n "${OPT_ORIGIN:-}" ] && env_set PD_PUBLIC_ORIGIN "$OPT_ORIGIN" && env_set PD_ALLOWED_HOSTS "$(echo "$OPT_ORIGIN" | sed -E 's#^https?://##; s#/.*##; s#:.*##'),localhost,127.0.0.1"
   [ -n "${OPT_BIND:-}" ] && env_set PD_BIND "$OPT_BIND"
+  grep -q '^LANG=' "$ENV_FILE" || echo 'LANG=C.UTF-8' >>"$ENV_FILE"   # OCR/LibreOffice/file names in the services
   [ -n "${OPT_REPO:-}" ] && env_set PD_REPO_URL "$OPT_REPO"
   if [ ! -s "$CONF_DIR/secret_key" ]; then
     install -m 0640 -o root -g $APP /dev/null "$CONF_DIR/secret_key"
@@ -185,13 +191,34 @@ EOF
 
 ensure_database() {
   log "database"
+  # A cluster whose creation failed during package installation (invalid locale) is created here.
+  if ! pg_lsclusters -h 2>/dev/null | grep -q .; then
+    local ver; ver=$(ls /usr/lib/postgresql 2>/dev/null | sort -V | tail -1)
+    [ -n "$ver" ] || die "PostgreSQL is not installed"
+    log "creating PostgreSQL $ver cluster (UTF-8)"
+    pg_createcluster --locale C.UTF-8 --encoding UTF8 "$ver" main >/dev/null
+  fi
   systemctl enable --now postgresql >/dev/null 2>&1 || true
   for _ in $(seq 1 30); do runuser -u postgres -- psql -tAc 'SELECT 1' >/dev/null 2>&1 && break; sleep 1; done
   runuser -u postgres -- psql -tAc 'SELECT 1' >/dev/null 2>&1 || die "PostgreSQL is not running; see: journalctl -u postgresql -n 50"
   runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='personaldocs'" | grep -q 1 ||
     runuser -u postgres -- psql -qc "CREATE ROLE personaldocs LOGIN"
-  runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='personaldocs'" | grep -q 1 ||
-    runuser -u postgres -- createdb -O personaldocs -E UTF8 personaldocs
+  # The app needs a UTF-8 database. template0 + an explicit locale works even when the cluster itself was
+  # initialised as SQL_ASCII (container without a locale when PostgreSQL was installed).
+  local enc
+  enc=$(runuser -u postgres -- psql -tAc "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname='personaldocs'")
+  if [ -n "$enc" ] && [ "$enc" != UTF8 ]; then
+    if [ "$(runuser -u postgres -- psql -d personaldocs -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public'")" = 0 ]; then
+      log "recreating the empty personaldocs database as UTF-8 (was $enc)"
+      runuser -u postgres -- dropdb personaldocs
+      enc=""
+    else
+      die "database 'personaldocs' uses encoding $enc and already holds data; it must be UTF8 (dump, recreate as UTF8 and restore)"
+    fi
+  fi
+  if [ -z "$enc" ]; then
+    runuser -u postgres -- createdb -O personaldocs -E UTF8 -T template0 --lc-collate=C.UTF-8 --lc-ctype=C.UTF-8 personaldocs
+  fi
 }
 
 # ------------------------------------------------------------------ releases
