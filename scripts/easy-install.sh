@@ -227,6 +227,12 @@ else
   PD_FIREWALL=n
 fi
 
+if [ "$PD_BIND_HOST" = 0.0.0.0 ]; then
+  ask_yn PD_LOCAL "Also allow opening the app directly at http://${MYIP:-<container-ip>}:$PD_PORT from your home network (plain HTTP, trusted network only)?" n
+else
+  PD_LOCAL=n
+fi
+
 step "3/7  Regional settings"
 ask PD_TZ "Timezone for expiry reminders" "Asia/Riyadh" '^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$' "Use a name like Asia/Riyadh or Asia/Kolkata."
 [ "$DRY" = 1 ] || [ -e "/usr/share/zoneinfo/$PD_TZ" ] || [ ! -d /usr/share/zoneinfo ] || warn "$PD_TZ was not found in /usr/share/zoneinfo; the app will reject it if it is wrong."
@@ -269,6 +275,7 @@ cat <<EOF
   Public address     $ORIGIN
   Listens on         $PD_BIND_HOST:$PD_PORT   (container IP: ${MYIP:-unknown})
   Trusted proxy      $PD_PROXY_IP$( [ "$PD_FIREWALL" = y ] && echo "   + firewall: only the proxy may connect")
+  Home network       $( [ "$PD_LOCAL" = y ] && echo "also http://${MYIP:-<container-ip>}:$PD_PORT (plain HTTP)" || echo "HTTPS address only")
   Timezone           $PD_TZ
   Backups            $(case "$PD_NAS" in 1) echo "NFS $PD_NAS_SERVER:$PD_NAS_SHARE → $PD_NAS_SUBFOLDER";; 2) echo "SMB //$PD_NAS_SERVER/$PD_NAS_SHARE as $PD_NAS_USER → $PD_NAS_SUBFOLDER";; 3) echo "existing folder $PD_NAS_PATH";; *) echo "configure later in Settings";; esac), daily at $PD_BACKUP_TIME
   veraPDF            $PD_VERAPDF
@@ -283,7 +290,7 @@ if [ "$DRY" = 0 ]; then
   umask 077
   {
     for v in PD_REPO PD_REF PD_DOMAIN PD_PROXY PD_PROXY_IP PD_PORT PD_FIREWALL PD_TZ PD_NAS PD_NAS_SERVER PD_NAS_SHARE PD_NAS_USER \
-             PD_NAS_DOMAIN PD_NAS_SUBFOLDER PD_NAS_PATH PD_BACKUP_TIME PD_VERAPDF; do
+             PD_NAS_DOMAIN PD_NAS_SUBFOLDER PD_NAS_PATH PD_BACKUP_TIME PD_VERAPDF PD_LOCAL; do
       printf '%s=%q\n' "$v" "${!v:-}"
     done
   } >"$ANSWERS_FILE"
@@ -359,6 +366,13 @@ EOF
   fi
   if run systemctl enable nftables && run systemctl restart nftables; then ok "Firewall rule active"
   else warn "The firewall could not be enabled in this container (the app works without it). Restrict port $PD_PORT on the Proxmox firewall instead."; fi
+fi
+
+if [ "$PD_LOCAL" = y ]; then
+  say "• Home-network access"
+  run personaldocs local-access on || warn "Could not enable home-network access; try later: personaldocs local-access on"
+else
+  run personaldocs local-access off >/dev/null 2>&1 || true
 fi
 
 say "• Applying app settings"

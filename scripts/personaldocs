@@ -11,6 +11,7 @@
 #   personaldocs nas-apply [--from-settings]   (mount the NAS configured in Settings → Storage & backup)
 #   personaldocs setup-token
 #   personaldocs check-access                   (why the app is not reachable through the reverse proxy)
+#   personaldocs local-access on|off|status     (also open the app at http://<container-ip>:<port> on the home network)
 #   personaldocs manage <django command> [...]
 #
 # Credentials for the private repository are read from /etc/personaldocs/github-token (fine-grained, read-only
@@ -547,6 +548,32 @@ cmd_status() {
 
 cmd_doctor_inner() { manage doctor; }
 
+cmd_local_access() { # local-access on|off|status — opt-in plain-HTTP access from the home network
+  need_root; load_env
+  local port=${PD_BIND##*:} bindhost=${PD_BIND%:*} ip origin
+  ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+  case "${1:-status}" in
+    on)
+      [ "$bindhost" != 127.0.0.1 ] && [ "$bindhost" != localhost ] || die "the app only listens on 127.0.0.1; reinstall with --bind 0.0.0.0:$port first"
+      [ -n "$ip" ] || die "could not determine this container's IP address"
+      origin="http://$ip:$port"
+      env_set PD_LOCAL_ORIGINS "$origin"
+      systemctl restart personaldocs-web
+      health || { show_web_failure; die "the web service did not come back"; }
+      c_ok "Home-network access enabled: $origin"
+      c_warn "This address uses plain HTTP: anyone on your home network could read the traffic. Use it only on a trusted network;"
+      c_warn "camera upload, installing as an app and offline copies need the HTTPS address (${PD_PUBLIC_ORIGIN:-})."
+      c_warn "Give the container a fixed IP (DHCP reservation); if it changes, run 'personaldocs local-access on' again." ;;
+    off)
+      sed -i '/^PD_LOCAL_ORIGINS=/d' "$ENV_FILE"
+      systemctl restart personaldocs-web
+      c_ok "Home-network access disabled; the app is only available at ${PD_PUBLIC_ORIGIN:-the public address}." ;;
+    status)
+      if [ -n "${PD_LOCAL_ORIGINS:-}" ]; then echo "Home-network access: on ($PD_LOCAL_ORIGINS)"; else echo "Home-network access: off (enable with: personaldocs local-access on)"; fi ;;
+    *) die "usage: personaldocs local-access on|off|status" ;;
+  esac
+}
+
 cmd_check_access() { # explain, step by step, why the app is (not) reachable through the reverse proxy
   load_env
   local origin domain port bindhost myip proxy="" proxy_ip="" bad=0 code ips pubip
@@ -588,6 +615,7 @@ cmd_check_access() { # explain, step by step, why the app is (not) reachable thr
   if grep -q "^PD_ALLOWED_HOSTS=.*$domain" "$ENV_FILE" 2>/dev/null; then ok_ "$domain is an allowed host name"
   else bad_ "$domain is not in PD_ALLOWED_HOSTS" "personaldocs install --public-origin $origin"; fi
   echo "   Proxy target to configure:  http://${myip:-<container-ip>}:$port   (test from the proxy machine: curl -H \"Host: $domain\" http://${myip:-<container-ip>}:$port/api/health ; calling it by IP without the Host header gives \"Bad Request (400)\", which is normal)"
+  if [ -n "${PD_LOCAL_ORIGINS:-}" ]; then info_ "home-network access is on: $PD_LOCAL_ORIGINS"; else info_ "to open the app by IP on your home network: personaldocs local-access on"; fi
   echo "3. Public DNS for $domain (asked via Cloudflare DNS-over-HTTPS)"
   ips=$(curl -fsS -m 10 -H 'accept: application/dns-json' "https://cloudflare-dns.com/dns-query?name=$domain&type=A" 2>/dev/null | grep -o '"data":"[0-9.]*"' | cut -d'"' -f4 | tr '\n' ' ')
   if [ -z "$ips" ]; then
@@ -668,6 +696,7 @@ case "$CMD" in
   nas-apply) cmd_nas_apply "${ARGS[@]}";;
   setup-token) need_root; load_env; manage setup_token;;
   check-access) need_root; cmd_check_access || exit 1;;
+  local-access) cmd_local_access "${ARGS[@]}";;
   logs) journalctl -f -u "personaldocs-${ARGS[0]:-web}";;
   manage) need_root; load_env; manage "${ARGS[@]}";;
   help|-h|--help) usage;;
