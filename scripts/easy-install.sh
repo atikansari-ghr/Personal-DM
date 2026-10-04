@@ -5,7 +5,8 @@
 # configures and checks the whole system. Safe to run again: answers are remembered (without secrets) and every
 # step is idempotent.
 #
-#   bash easy-install.sh              # interactive
+#   git clone https://github.com/OWNER/REPO.git /root/personaldocs-src && cd /root/personaldocs-src
+#   bash scripts/easy-install.sh      # interactive; installs the code of this checkout
 #   bash easy-install.sh --dry-run    # ask the questions and show what would be done, change nothing
 #   PD_ANSWERS=/root/answers.env bash easy-install.sh --yes   # unattended, answers from a file (see docs)
 set -Eeuo pipefail
@@ -100,31 +101,107 @@ HOST_RX='^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$'
 DOMAIN_RX='^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$'
 TIME_RX='^([01][0-9]|2[0-3]):[0-5][0-9]$'
 
+# Running from a cloned repository? Then install that checkout instead of cloning again.
+HERE=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+LOCAL_SRC=n
+if [ -f "$HERE/scripts/personaldocs" ] && git -C "$HERE" rev-parse --git-dir >/dev/null 2>&1; then
+  LOCAL_SRC=y; SRC=$HERE
+  origin=$(git -C "$HERE" remote get-url origin 2>/dev/null || true)
+  origin=$(printf '%s' "$origin" | sed -E 's#^(https?://)[^/@]*@#\1#')   # never keep credentials from the URL
+  [ -n "$origin" ] && DEFAULT_REPO=$origin
+  branch=$(git -C "$HERE" symbolic-ref --quiet --short HEAD 2>/dev/null || git -C "$HERE" rev-parse HEAD)
+  PD_REF=$branch   # always install what is checked out
+fi
+
+# ------------------------------------------------------------------ system check
+MIN_CPU=1; REC_CPU=2; MIN_RAM_MB=1800; REC_RAM_MB=3500; MIN_DISK_GB=10; REC_DISK_GB=40
+system_check() {
+  local problems=0 warnings=0 cpu ram disk arch
+  check() { # check pass|warn|fail "label" "value" "advice"
+    case "$1" in
+      pass) printf '  %s✔%s %-22s %s\n' "$G" "$N" "$2" "$3" ;;
+      warn) printf '  %s!%s %-22s %s  %s(%s)%s\n' "$Y" "$N" "$2" "$3" "$Y" "$4" "$N"; warnings=$((warnings+1)) ;;
+      fail) printf '  %s✘%s %-22s %s  %s(%s)%s\n' "$R" "$N" "$2" "$3" "$R" "$4" "$N"; problems=$((problems+1)) ;;
+    esac
+  }
+  cpu=$(nproc 2>/dev/null || echo 1)
+  ram=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+  mkdir -p /var/lib 2>/dev/null || true
+  disk=$(df -Pm /var/lib | awk 'NR==2 {print int($4/1024)}')
+  arch=$(uname -m)
+  if [ "${ID:-}" = debian ] && [ "${VERSION_ID:-}" = 13 ]; then check pass "Operating system" "${PRETTY_NAME:-Debian 13}"
+  else check warn "Operating system" "${PRETTY_NAME:-unknown}" "Debian 13 is the tested target"; fi
+  case "$arch" in x86_64|aarch64) check pass "Architecture" "$arch" ;; *) check fail "Architecture" "$arch" "x86_64 or aarch64 required" ;; esac
+  if [ "$cpu" -ge "$REC_CPU" ]; then check pass "CPU cores" "$cpu"
+  elif [ "$cpu" -ge "$MIN_CPU" ]; then check warn "CPU cores" "$cpu" "$REC_CPU+ recommended; OCR will be slow"; fi
+  if [ "$ram" -ge "$REC_RAM_MB" ]; then check pass "Memory" "${ram} MB"
+  elif [ "$ram" -ge "$MIN_RAM_MB" ]; then check warn "Memory" "${ram} MB" "4096 MB recommended"
+  else check fail "Memory" "${ram} MB" "at least 2048 MB required"; fi
+  if [ "$disk" -ge "$REC_DISK_GB" ]; then check pass "Free disk (/var/lib)" "${disk} GB"
+  elif [ "$disk" -ge "$MIN_DISK_GB" ]; then check warn "Free disk (/var/lib)" "${disk} GB" "${REC_DISK_GB}+ GB recommended for documents"
+  else check fail "Free disk (/var/lib)" "${disk} GB" "at least ${MIN_DISK_GB} GB required"; fi
+  if command -v systemctl >/dev/null && [ -d /run/systemd/system ]; then check pass "systemd" "running"
+  else check fail "systemd" "not running" "a systemd-based container is required"; fi
+  if getent hosts deb.debian.org >/dev/null 2>&1 && getent hosts github.com >/dev/null 2>&1; then check pass "Internet / DNS" "deb.debian.org, github.com resolve"
+  else check fail "Internet / DNS" "lookup failed" "check the container network, gateway and DNS"; fi
+  if [ "$UNPRIVILEGED" = y ]; then check warn "Container type" "unprivileged" "the app cannot mount NFS/SMB itself; use a host bind mount"
+  else check pass "Container type" "privileged (can mount NFS/SMB with the mount=nfs;cifs feature)"; fi
+  if [ "$problems" -gt 0 ]; then
+    [ "$DRY" = 1 ] && { warn "$problems requirement(s) not met (ignored in dry run)."; return; }
+    fail "$problems requirement(s) not met. Fix them (Proxmox: container → Resources / Network) and run this script again."
+  fi
+  if [ "$warnings" -gt 0 ] && [ "$YES" != 1 ] && [ "$DRY" != 1 ]; then
+    ask_yn CONTINUE "There are $warnings warning(s). Continue anyway?" y
+    [ "$CONTINUE" = y ] || { say "Stopped. Nothing was changed."; exit 0; }
+  fi
+  ok "System check passed"
+}
+
 # ------------------------------------------------------------------ preflight
 [ "$(id -u)" -eq 0 ] || fail "Run as root inside the container (for example: pct enter <id>, then bash easy-install.sh)."
-if [ "$DRY" = 1 ]; then LOG=/dev/null; else
-  mkdir -p "$(dirname "$LOG")" "$CONF_DIR"; chmod 700 "$CONF_DIR" 2>/dev/null || true
-  : >>"$LOG"
-fi
 . /etc/os-release 2>/dev/null || true
 say "${B}Personal Documents — guided installation${N}"
-say "Log: $LOG$( [ "$DRY" = 1 ] && echo "   (DRY RUN: nothing will be changed)")"
-[ "${ID:-}" = debian ] && [ "${VERSION_ID:-}" = 13 ] || warn "This is ${PRETTY_NAME:-an unknown system}; Debian 13 is the tested target."
+say "Log: $( [ "$DRY" = 1 ] && echo "none   (DRY RUN: nothing will be changed)" || echo "$LOG")"
 UNPRIVILEGED=n
 if [ -r /proc/self/uid_map ] && awk 'NR==1 && $1==0 && $2!=0 {f=1} END {exit !f}' /proc/self/uid_map; then UNPRIVILEGED=y; fi
 MYIP=$(hostname -I 2>/dev/null | awk '{print $1}')
 
+step "System check (CPU, memory, disk, network)"
+system_check
+if [ "$DRY" = 1 ]; then LOG=/dev/null; else
+  mkdir -p "$(dirname "$LOG")" "$CONF_DIR"; chmod 700 "$CONF_DIR" 2>/dev/null || true
+  : >>"$LOG"
+fi
+
 # ------------------------------------------------------------------ questions
 step "1/7  Where the code comes from"
-ask PD_REPO "GitHub repository URL" "$DEFAULT_REPO" '^(https://github\.com/[^ ]+|git@github\.com:[^ ]+)$' "Use https://github.com/OWNER/REPO.git"
-ask PD_REF "Branch or tag to install" "main" '^[A-Za-z0-9._/-]+$'
+if [ "$LOCAL_SRC" = y ]; then
+  PD_REPO=$DEFAULT_REPO
+  ok "Installing this checkout: $SRC ($PD_REF)"
+  say "   Repository for later upgrades: $PD_REPO"
+else
+  ask PD_REPO "GitHub repository URL" "$DEFAULT_REPO" '^(https://github\.com/[^ ]+|git@github\.com:[^ ]+)$' "Use https://github.com/OWNER/REPO.git"
+  ask PD_REF "Branch or tag to install" "main" '^[A-Za-z0-9._/-]+$'
+fi
 GITHUB_TOKEN=""
+token_works() { # token_works [token] -> can we read the repository?
+  local hdr=()
+  if [ -n "${1:-}" ]; then hdr=(-c credential.helper= -c "credential.helper=!f(){ echo username=x-access-token; printf 'password=%s\\n' \"\$PD_TMP_TOKEN\"; }; f"); fi
+  PD_TMP_TOKEN=${1:-} GIT_TERMINAL_PROMPT=0 git "${hdr[@]}" ls-remote --heads "$PD_REPO" >/dev/null 2>&1
+}
 if [ -s "$TOKEN_FILE" ]; then
   ok "A GitHub token is already stored in $TOKEN_FILE."
+elif [ "$DRY" = 0 ] && command -v git >/dev/null && token_works; then
+  ok "The repository is public; no token needed."
 else
-  say "The repository is private: paste a fine-grained token with read-only 'Contents' access to it."
-  say "(GitHub → Settings → Developer settings → Fine-grained tokens. Leave empty if the repository is public.)"
-  ask_secret GITHUB_TOKEN "GitHub token (hidden)" 1
+  say "The repository is private. The installer and later upgrades ('personaldocs upgrade') need a fine-grained"
+  say "token with read-only 'Contents' access (GitHub → Settings → Developer settings → Fine-grained tokens)."
+  for try in 1 2 3; do
+    ask_secret GITHUB_TOKEN "GitHub token (hidden)" 1
+    if [ "$DRY" = 1 ] || [ "$YES" = 1 ] || ! command -v git >/dev/null || token_works "$GITHUB_TOKEN"; then break; fi
+    warn "This token cannot read $PD_REPO (attempt $try of 3)."
+    [ "$try" = 3 ] && fail "Could not access the repository with the token. Check its repository access and 'Contents: Read-only'."
+  done
 fi
 
 step "2/7  Web address and reverse proxy"
@@ -208,7 +285,7 @@ if [ "$DRY" = 0 ]; then
 fi
 
 # ------------------------------------------------------------------ installation
-step "7/7  Installing (10–25 minutes; progress is logged to $LOG)"
+step "7/7  Installing dependencies and the application (10–25 minutes; progress is logged to $LOG)"
 
 say "• Base tools"
 run apt-get update -q
@@ -227,12 +304,15 @@ git_auth() {
   fi
 }
 
-say "• Downloading the application"
-if [ -d "$SRC/.git" ]; then
+if [ "$LOCAL_SRC" = y ]; then
+  say "• Using the application code in $SRC"
+elif [ -d "$SRC/.git" ]; then
+  say "• Updating the application code"
   run git_auth -C "$SRC" remote set-url origin "$PD_REPO"
   run git_auth -C "$SRC" fetch --quiet --tags origin || fail "Could not download from GitHub. Check the token (Contents: read-only) and network."
   run git -C "$SRC" checkout --quiet --detach "origin/$PD_REF" 2>/dev/null || run git -C "$SRC" checkout --quiet --detach "$PD_REF"
 else
+  say "• Downloading the application"
   run git_auth clone --quiet "$PD_REPO" "$SRC" || fail "Could not download from GitHub. Check the token (Contents: read-only) and network."
   run git -C "$SRC" checkout --quiet --detach "$PD_REF" 2>/dev/null || run git -C "$SRC" checkout --quiet --detach "origin/$PD_REF"
 fi
@@ -247,6 +327,10 @@ say "• Trusting the reverse proxy at $PD_PROXY_IP"
 if [ "$DRY" = 0 ]; then
   sed -i "s|^PD_TRUSTED_PROXY_IPS=.*|PD_TRUSTED_PROXY_IPS=127.0.0.1,$PD_PROXY_IP|" "$ENV_FILE"
   grep -q '^PD_BEHIND_PROXY=' "$ENV_FILE" && sed -i 's|^PD_BEHIND_PROXY=.*|PD_BEHIND_PROXY=1|' "$ENV_FILE" || echo 'PD_BEHIND_PROXY=1' >>"$ENV_FILE"
+  # upgrades follow the installed branch (not for tags or commits)
+  if git -C "$SRC" show-ref --verify --quiet "refs/remotes/origin/$PD_REF" || git -C "$SRC" show-ref --verify --quiet "refs/heads/$PD_REF"; then
+    grep -q '^PD_BRANCH=' "$ENV_FILE" && sed -i "s|^PD_BRANCH=.*|PD_BRANCH=$PD_REF|" "$ENV_FILE" || echo "PD_BRANCH=$PD_REF" >>"$ENV_FILE"
+  fi
 fi
 run systemctl restart personaldocs-web
 

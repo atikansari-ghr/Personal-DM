@@ -30,53 +30,49 @@
 
 ## Guided installation (recommended) {#guided}
 
-Two scripts ask for everything they need and do the rest. Neither puts the GitHub token in a URL, process argument or log.
+Run everything **inside the Debian 13 container**, as root (Proxmox: `pct enter <id>` or the container console).
 
-**Option A — from the Proxmox host (creates the container too).** As root on the Proxmox host:
-
-```
-read -rsp "GitHub read-only token: " T; echo
-printf 'Authorization: Bearer %s\n' "$T" > /root/.pd-gh-header; chmod 600 /root/.pd-gh-header; unset T
-curl -fsSL -H @/root/.pd-gh-header -H "Accept: application/vnd.github.raw" \
-  https://api.github.com/repos/OWNER/REPO/contents/scripts/proxmox-create-lxc.sh -o /root/proxmox-create-lxc.sh
-rm -f /root/.pd-gh-header
-bash /root/proxmox-create-lxc.sh            # add --dry-run first to only see what it would do
-```
-
-It asks for the container ID, hostname, storage, disk/CPU/RAM, network (DHCP or static), root password or SSH key and how backups
-reach the NAS:
-
-1. **The app mounts the NAS** → privileged container with `features: nesting=1,mount=nfs;cifs` (default).
-2. **The host mounts the NAS** → unprivileged container plus a bind mount of `<host-folder>/personaldocs` to `/mnt/nas-backup/personaldocs`.
-3. **No NAS for now.**
-
-It then downloads the Debian 13 template if needed, creates and starts the container, copies the guided installer and the token
-into it and starts the installer (Option B) inside the container.
-
-**Option B — inside an existing Debian 13 container.** As root in the container, fetch `scripts/easy-install.sh` the same way
-(or copy it in with `pct push`) and run:
+**1. Copy the repository into the container**
 
 ```
-bash easy-install.sh                # interactive
-bash easy-install.sh --dry-run      # ask the questions, show the commands, change nothing
+apt-get update && apt-get install -y git
+git clone https://github.com/OWNER/REPO.git /root/personaldocs-src
 ```
 
-It asks for: repository and branch/tag, GitHub token (skipped when `/etc/personaldocs/github-token` exists), public domain,
-reverse proxy (Nginx Proxy Manager, Pangolin or local) and the IP it connects from, port, an optional firewall rule that only lets
-the proxy reach the port, timezone, NAS (NFS server + export, or SMB server + share + user + password, or an already-mounted folder,
-or later), daily backup time and optional veraPDF. After a summary and confirmation it:
+The repository is private, so git asks for a username and password: enter your GitHub username and, as the password, a
+fine-grained token with read-only *Contents* access (see [Private GitHub access](private-github.md)). Typing it at the prompt keeps
+it out of the URL, shell history and process list. Add `-b <branch>` to install a branch other than `main`.
 
-1. installs git/curl, stores the token (`/etc/personaldocs/github-token`, 0600) and clones the repository;
-2. runs `personaldocs install` with the right origin, bind address and ref;
-3. sets the trusted proxy IP, optionally adds the nftables rule;
-4. applies the settings (`personaldocs manage apply_settings`, validated like the Settings screen);
-5. connects the NAS (`personaldocs nas-apply --from-settings`) and runs a first backup;
-6. runs `status` and `doctor`, prints the reverse-proxy settings to enter and the one-time setup code.
+**2. Run the installation script**
+
+```
+cd /root/personaldocs-src
+bash scripts/easy-install.sh            # add --dry-run first to only see what it would do
+```
+
+The script then:
+
+1. **Checks the system** and shows the result: operating system, CPU cores (2+ recommended), memory (4 GB recommended,
+   2 GB minimum), free disk (40 GB+ recommended, 10 GB minimum), systemd, internet/DNS and whether the container can mount
+   NFS/SMB. Missing requirements stop the script before anything is changed; warnings ask whether to continue.
+2. **Asks the parameters**: the GitHub token again (stored root-only in `/etc/personaldocs/github-token` for later upgrades; it is
+   tested immediately), public domain, reverse proxy (Nginx Proxy Manager, Pangolin or local) and the IP it connects from, port,
+   an optional firewall rule that only lets the proxy reach the port, timezone, NAS (NFS server + export, SMB server + share + user +
+   password, an already-mounted folder, or later), daily backup time and optional veraPDF. It shows a summary and asks for confirmation.
+3. **Installs the dependencies**: Python, PostgreSQL, Tesseract OCR, OCRmyPDF, Ghostscript, LibreOffice, NFS/SMB client tools and more.
+4. **Completes the installation**: database, application release built from this checkout, systemd services, trusted proxy,
+   firewall, app settings (`manage.py apply_settings`, validated like the Settings screen), NAS connection
+   (`personaldocs nas-apply --from-settings`), a first backup, `status` and `doctor`.
+5. **Prints what to do next**: the exact settings to enter in Nginx Proxy Manager or Pangolin and the one-time setup code.
 
 Answers (never passwords or tokens) are remembered in `/etc/personaldocs/install-answers.env`, so re-running the script offers the
-previous values; every step is safe to repeat. For an unattended install put the same `PD_…` variables in a file and run
-`PD_ANSWERS=/root/answers.env bash easy-install.sh --yes` (an SMB password cannot be given this way — enter it later in Settings).
-Progress is logged to `/var/log/personaldocs/easy-install.log`.
+previous values; every step is safe to repeat after an error. Progress is logged to `/var/log/personaldocs/easy-install.log`.
+For an unattended install put the same `PD_…` variables in a file and run `PD_ANSWERS=/root/answers.env bash scripts/easy-install.sh --yes`
+(an SMB password cannot be given this way — enter it later in Settings).
+
+**Optional: create the container from the Proxmox host.** `scripts/proxmox-create-lxc.sh` (run as root on the host, `--dry-run`
+supported) asks for the container ID, hostname, storage, disk/CPU/RAM, network and how backups reach the NAS, creates a matching
+container (privileged with `mount=nfs;cifs`, or unprivileged with a host bind mount), and starts the installer inside it.
 
 ## Manual install {#install}
 
