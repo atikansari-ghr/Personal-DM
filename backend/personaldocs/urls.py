@@ -134,6 +134,7 @@ api = [
     path("admin/email-connectors", mail.admin_connectors),
     path("backup", ops.backup_status),
     path("backup/run", ops.backup_now),
+    path("backup/nas", ops.nas_api),
     path("integrity", ops.integrity_api),
     path("help", core.help_index),
     path("help/<str:slug>", core.help_guide),
