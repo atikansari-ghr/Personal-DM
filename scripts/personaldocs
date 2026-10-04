@@ -524,7 +524,7 @@ case "$CMD" in
   rollback) cmd_rollback;;
   repair) cmd_repair;;
   status) cmd_status;;
-  doctor) need_root; load_env; manage doctor;;
+  doctor) need_root; load_env; manage doctor || exit 1;;   # failed checks are listed above; not a script error
   backup) need_root; load_env; manage backup;;
   integrity) need_root; load_env; manage integrity "${ARGS[@]}";;
   restore)
