@@ -3,7 +3,7 @@
 
 ## Target {#target}
 
-- Proxmox LXC running **Debian 13 (trixie)**. Recommended: 2 vCPU, 4 GB RAM, 50 GB disk. To let the app mount the NAS itself (Settings → Storage & backup) the container must be **privileged with the `mount=nfs;cifs` feature**; an unprivileged container works too when the Proxmox host bind-mounts the share (see [Container requirements](backup-restore.md#lxc-requirements)).
+- Proxmox LXC running **Debian 13 (trixie)**. Recommended: 2 vCPU, 4 GB RAM, 50 GB disk, and **Options → Features → Nesting** enabled (lets systemd isolate the services; without it the installer detects this and runs them without that extra isolation). To let the app mount the NAS itself (Settings → Storage & backup) the container must be **privileged with the `mount=nfs;cifs` feature**; an unprivileged container works too when the Proxmox host bind-mounts the share (see [Container requirements](backup-restore.md#lxc-requirements)).
 - No Docker. Native services under systemd.
 - HTTPS is provided by your existing **Nginx Proxy Manager** or **Pangolin** (see [Reverse proxy](reverse-proxy.md)).
 - A NAS share (NFS or SMB) for backups — connected from Settings, or bind-mounted by the host (see [Backup and restore](backup-restore.md#nas)).
