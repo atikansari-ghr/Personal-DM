@@ -33,6 +33,7 @@ def version_json(v: DocumentVersion) -> dict:
         "id": str(v.id), "number": v.number, "original_name": v.original_name, "size": v.size, "sha256": v.sha256,
         "mime": v.mime, "format": v.format_class, "comment": v.comment, "state": v.state, "error": v.error,
         "ocr_applied": v.ocr_applied, "pdfa": v.pdfa, "page_count": v.page_count,
+        "pdfa_check": {k: v.pdfa_report.get(k) for k in ("validator", "profile", "compliant", "full_validation", "failed_rules", "note")} if v.pdfa_report else None,
         "has_preview": bool(v.preview_path or v.searchable_path or v.format_class in ("pdf", "image", "text")),
         "has_thumbnail": bool(v.thumbnail_path), "created_at": v.created_at,
         "created_by": v.created_by.display_name if v.created_by_id and v.created_by else None,

@@ -116,6 +116,9 @@ def run_backup(actor=None, request=None) -> dict:
     except Exception as exc:
         _write_status(last_error=str(exc)[:500], running=False, last_failure=timezone.now().isoformat())
         audit.record("backup.run", request=request, actor=actor, outcome="failure", reason=str(exc)[:200])
+        from apps.notify import events
+
+        events.backup_failed(str(exc))
         raise
 
 

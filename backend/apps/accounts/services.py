@@ -152,7 +152,11 @@ def complete_setup(data: dict, request=None) -> dict:
         user.save()
         created[slot] = str(user.pk)
         GroupMembership.objects.get_or_create(group=group, user=user)
-        create_personal_root(actor=None, user=user, library_root=root)
+        personal = create_personal_root(actor=None, user=user, library_root=root)
+        if data.get("apply_template"):
+            from apps.library.services import apply_template
+
+            apply_template(actor=None, root=personal)
     dad = User.objects.get(pk=created["dad"])
     group.head = dad
     group.save()
@@ -248,7 +252,7 @@ def verify_second_factor(user: User, code: str = "", recovery_code: str = "") ->
 
 # ------------------------------------------------------------------ passwords
 
-def set_password(user: User, password: str, *, temporary: bool) -> None:
+def set_password(user: User, password: str, *, temporary: bool, keep_device: str | None = None) -> None:
     check_new_password(password, user)
     user.set_password(password)
     user.must_change_password = temporary
@@ -256,6 +260,9 @@ def set_password(user: User, password: str, *, temporary: bool) -> None:
     user.session_epoch += 1
     user.save(update_fields=["password", "must_change_password", "password_changed_at", "session_epoch"])
     user.reset_tokens.filter(used_at__isnull=True).update(used_at=timezone.now())
+    from .sessions import revoke_others
+
+    revoke_others(user, keep_device)  # the epoch bump already ends them; this keeps the device list accurate
 
 
 def active_main_admins():

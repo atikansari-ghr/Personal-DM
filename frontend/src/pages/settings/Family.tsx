@@ -15,7 +15,7 @@ const SCOPE_LABELS: Record<string, string> = {
 function MemberDialog({ member, groups, onClose, onDone }: { member?: User; groups: Group[]; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const [f, setF] = useState<any>(member ? { display_name: member.display_name, full_name: member.full_name, email: member.email, role_label: member.role_label, username: member.username, reminder_group: member.reminder_group || "" }
-    : { display_name: "", full_name: "", email: "", role_label: "", username: "", group: groups[0]?.id || "" });
+    : { display_name: "", full_name: "", email: "", role_label: "", username: "", group: groups[0]?.id || "", apply_template: true });
   const [temp, setTemp] = useState("");
   return (
     <Modal title={member ? `Edit ${member.display_name}` : "Add family member"} onClose={onClose}>
@@ -34,6 +34,7 @@ function MemberDialog({ member, groups, onClose, onDone }: { member?: User; grou
           ))}
           <div className="field"><label htmlFor="m-g">{member ? "Reminder group (whose head gets their expiry reminders)" : "Family group"}</label>
             <select id="m-g" value={member ? f.reminder_group : f.group} onChange={(e) => setF({ ...f, [member ? "reminder_group" : "group"]: e.target.value })}><option value="">None</option>{groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+          {!member && <label className="check"><input type="checkbox" checked={!!f.apply_template} onChange={(e) => setF({ ...f, apply_template: e.target.checked })} /> Create template folders (Settings → Documents & folders)</label>}
           <p className="small muted">Every person whose documents are managed gets their own account, even if they never sign in. A personal folder is created for them, visible only to them and the main administrator.</p>
           <button className="btn primary">{member ? "Save" : "Add member"}</button>
         </form>

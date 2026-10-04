@@ -57,6 +57,50 @@ jobs:
           name: frontend-dist
           path: frontend-dist.tar.gz
 
+  e2e:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: personaldocs
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: personaldocs
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U personaldocs" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PD_DB_HOST: 127.0.0.1
+      PD_DB_USER: personaldocs
+      PD_DB_PASSWORD: ci-only-password
+      PD_OCRMYPDF_CMD: ocrmypdf
+    steps:
+      - uses: actions/checkout@v4
+      - name: System packages
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends tesseract-ocr tesseract-ocr-eng ocrmypdf ghostscript qpdf poppler-utils fonts-dejavu-core
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        run: |
+          python -m venv .venv && .venv/bin/pip install -q -r backend/requirements-dev.txt
+          (cd frontend && npm ci && npm run build)
+          (cd tests/e2e && npm ci && npx playwright install --with-deps chromium)
+      - name: Browser flow and accessibility audit
+        run: scripts/e2e.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: |
+            docs/screenshots/
+            docs/a11y-report.json
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: verify

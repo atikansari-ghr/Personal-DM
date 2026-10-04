@@ -12,6 +12,7 @@ export default function Setup() {
   const [groupName, setGroupName] = useState("My family");
   const [timezone, setTimezone] = useState("Asia/Riyadh");
   const [shareView, setShareView] = useState(false);
+  const [applyTemplate, setApplyTemplate] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [result, setResult] = useState<{ issued_passwords: Record<string, string> } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -33,7 +34,7 @@ export default function Setup() {
     setError("");
     try {
       const included = members.filter((m) => m.slot === "dad" || m.display_name.trim());
-      const r = await api("setup/complete", { body: { token, group_name: groupName, timezone, share_family_folder_view: shareView, members: included } });
+      const r = await api("setup/complete", { body: { token, group_name: groupName, timezone, share_family_folder_view: shareView, apply_template: applyTemplate, members: included } });
       setResult(r);
       setStep(4);
     } catch (e: any) {
@@ -88,6 +89,7 @@ export default function Setup() {
             <div className="field"><label htmlFor="g">Family group name</label><input id="g" type="text" value={groupName} onChange={(e) => setGroupName(e.target.value)} /></div>
             <div className="field"><label htmlFor="tz">Timezone</label><input id="tz" type="text" value={timezone} onChange={(e) => setTimezone(e.target.value)} /><div className="hint">Used for expiry reminders, e.g. Asia/Riyadh or Asia/Kolkata.</div></div>
             <label className="check field"><input type="checkbox" checked={shareView} onChange={(e) => setShareView(e.target.checked)} /> Let everyone in the family group view the "Shared family" folder</label>
+            <label className="check field"><input type="checkbox" checked={applyTemplate} onChange={(e) => setApplyTemplate(e.target.checked)} /> Create the suggested folders for each person (Identity, Education, Medical, Travel…)</label>
             <p className="muted small">Each person can see only their own folder until you grant more access. You can change all of this later in Settings → Family & access.</p>
             <div className="row"><button className="btn" onClick={() => setStep(2)}>Back</button><button className="btn primary" onClick={submit} disabled={busy}>Create accounts</button></div>
           </div>

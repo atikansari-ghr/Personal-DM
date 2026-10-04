@@ -12,12 +12,12 @@ Status key: **Done** means implemented with automated tests passing. **Partial**
 | AT-04 | Browser mapping of old names to confirmed accounts; deep paths kept; shared/unmapped need explicit treatment | `library/imports.py`, `views_import.py`, `pages/ImportWizard.tsx` | `test_imports::test_at04_*`, `test_regular_user_cannot_map_*` | guides/folder-imports.md | Done (browser folder picker not run in e2e) |
 | AT-05 | Server import leaves source unchanged; rejects escape and outside symlinks; resumes without duplicates | `imports.py::scan_server, import_server_job, import_item` | `test_imports::test_at05_*` (2 tests) | guides/folder-imports.md#server | Done |
 | AT-06 | Two identical uploads stay separate; colliding names never overwrite | `storage.py`, `services.py::_commit_version` | `test_documents::test_at06_*` | guides/folder-imports.md#duplicates | Done |
-| AT-07 | Image-only PDF becomes searchable; original byte-identical; PDF/A validated; unsupported is honest | `processing.py` | `test_processing::test_at07_*`, `test_image_upload_is_ocrd`, `test_born_digital_*`, `test_documents::test_uploaded_executable_*` | guides/ocr-corrections.md | Done (PDF/A = OCRmyPDF exit status; no separate veraPDF validation) |
+| AT-07 | Image-only PDF becomes searchable; original byte-identical; PDF/A validated; unsupported is honest | `processing.py` | `test_processing::test_at07_*`, `test_image_upload_is_ocrd`, `test_born_digital_*`, `test_documents::test_uploaded_executable_*` | guides/ocr-corrections.md | Done (PDF/A-2b validated by veraPDF 1.30.2 in tests; built-in structural check when veraPDF is absent — `test_pdfa`) |
 | AT-08 | Discrepancies go to review; confirmed corrections change naming and reminders; manual entry when extraction fails | `extraction.py`, `services.py::apply_confirmed_fields` | `test_processing::test_mrz_*, test_labelled_*, test_at08_*`, `test_documents::test_impossible_dates_*`, `test_expiry::test_proposed_dates_never_*` | guides/ocr-corrections.md | Done |
 | AT-09 | Renewals separate with confirmed year ranges; improved scans use versions | `services.py::create_document(renews), add_version, generated_title` | `test_documents::test_at09_*`, e2e step 6 | guides/originals-versions.md | Done |
 | AT-10 | Office previews local, originals kept; DICOM export keeps paths and hashes; executables never run | `processing.py::_office_to_pdf`, `export.py` | `test_processing::test_at10_*` (2), `test_documents::test_uploaded_executable_*` | guides/office-dicom.md | Done |
 | AT-11 | Filtering, autocomplete, highlights, saved views and similarity without leaks | `search.py` | `test_processing::test_at11_*`, `test_born_digital_*`, `test_permissions::test_at03_*` | guides/search.md | Done |
-| AT-12 | Three-panel and full-page views, per-user themes on desktop and mobile; independent choices | `pages/Folders.tsx`, `Lists.tsx::DocumentPage`, `styles.css`, `me.theme` | e2e steps 5, 10, 12; `test_ops::test_settings_api_*` | guides/themes.md | Partial: no automated accessibility audit; full-page layout preference not covered by e2e |
+| AT-12 | Three-panel and full-page views, per-user themes on desktop and mobile; independent choices | `pages/Folders.tsx`, `Lists.tsx::DocumentPage`, `styles.css`, `me.theme` | e2e steps 5, 10, 12; `test_ops::test_settings_api_*` | guides/themes.md | Done: e2e flow + automated axe audit in all themes (`tests/e2e/a11y.mjs`); full-page layout preference not covered by e2e |
 | AT-13 | Emoji suggestions and overrides persist and never change access | `services.py::suggest_emoji`, `views.py::folder_detail` | `test_documents::test_at13_*` | guides/folder-imports.md#emoji | Done |
 | AT-14 | PWA installable, camera/file upload, native sharing, tested fallbacks | `manifest.webmanifest`, `sw.ts`, `UploadDialog.tsx`, `DocumentPanel.tsx::ShareDialog`, `UploadShared.tsx` | e2e step 12 (manifest checks, mobile viewport) | guides/mobile-pwa.md | Pending-env: real Android/iOS install, share sheet and camera not tested |
 | AT-15 | Offline saves and export; quota, restart, account switch, revocation on reconnect; limits explained | `offline.ts`, `export.py` | `test_ops::test_export_*` (2), `test_offline_revalidation_*`, `test_processing::test_at10_dicom_*` | guides/offline-export.md | Partial: browser-side cache, quota and account-switch behaviour implemented but not automated |
@@ -49,3 +49,14 @@ Status key: **Done** means implemented with automated tests passing. **Partial**
 | OPS-1 mount detection | `backup.check_target` (mount point + marker) | `test_at24_backup_detects_*` | Done |
 | OPS-4 audit retention | `scheduler.tick` | — | Implemented; untested |
 | OPS-5 upgrade/rollback | `cmd_upgrade`, `schema_compatible`, `cmd_rollback` | — | Pending-env |
+
+## Additions (2026-10-04)
+
+| Feature | Implementation | Tests | Docs | Status |
+|---|---|---|---|---|
+| Resizable panels | `components/PanelResizer.tsx`, `styles.css` | `a11y.mjs` keyboard resize + persistence | guides/themes.md#resize | Done |
+| Per-device sessions | `accounts/sessions.py`, `UserSession`, `me/sessions` API, Security tab | `test_sessions` (5) | guides/totp-recovery.md#sessions | Done |
+| Folder templates | `registry.documents.member_template`, `services.apply_template`, setup/member/folder actions | `test_templates` (5) | guides/folder-imports.md#templates | Done |
+| Event notifications | `notify/events.py` (access, import, processing, backup, integrity) | `test_events` (6) | guides/expiry-rules.md#other-alerts | Done |
+| PDF/A validation | `library/pdfa.py`, `pdfa_check` command, `--with-verapdf` | `test_pdfa` (4) | guides/ocr-corrections.md#pdfa | Done |
+| Accessibility audit | `tests/e2e/a11y.mjs`, `scripts/e2e.sh`, CI `e2e` job | — | guides/testing.md | Done |

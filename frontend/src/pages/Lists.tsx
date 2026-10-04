@@ -111,7 +111,7 @@ export function NotificationsPage() {
         <div className="card" style={{ padding: 0 }}>
           {data.notifications.map((n) => (
             <div key={n.id} className="list-item" style={{ padding: ".8rem 1rem", background: n.read ? "transparent" : "var(--brand-softer)" }}>
-              <Icon name={n.kind === "expiry" ? "clock" : "bell"} />
+              <Icon name={({ expiry: "clock", access: "users", import: "folder", backup: "db", integrity: "shield", processing: "file" } as Record<string, string>)[n.kind] || "bell"} />
               <div className="grow">
                 <div style={{ fontWeight: n.read ? 500 : 700 }}>{n.title} {!n.read && <span className="sr-only">(unread)</span>}</div>
                 <div className="small muted">{formatDateTime(n.created_at)}</div>
