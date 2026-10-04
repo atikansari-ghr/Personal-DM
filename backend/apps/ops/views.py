@@ -73,3 +73,30 @@ def integrity_api(request):
         return Response({"status": "queued"})
     row = SchedulerRun.objects.filter(name="integrity_report").first()
     return Response({"report": row.state if row else None})
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsMainAdmin])
+def nas_api(request):
+    from . import nas
+
+    if request.method == "POST":
+        action = request.data.get("action", "mount")
+        try:
+            nas.request_apply(request.user, action)
+        except nas.NasError as exc:
+            return Response({"error": str(exc)}, status=400)
+        audit.record("nas.apply_requested", request=request, nas_action=action)
+    status = nas.sync()
+    if status.get("state") == "pending":
+        from datetime import datetime, timezone as tz
+
+        try:
+            age = (datetime.now(tz.utc) - datetime.fromisoformat(status["at"])).total_seconds()
+        except (KeyError, ValueError):
+            age = 0
+        if age > 60:
+            status = {**status, "state": "error",
+                      "message": "The system service did not pick up the request. Run 'sudo personaldocs repair' to install it, "
+                                 "or 'sudo personaldocs nas-apply' on the server to apply now."}
+    return Response({"status": status, "mount_point": str(nas.MOUNT_POINT)})

@@ -5,11 +5,14 @@
 - `sudo personaldocs status` and `sudo personaldocs doctor` (safe, read-only, redacted).
 - Settings → Activity & health: services, tools, disk, failed jobs.
 - `sudo personaldocs logs worker` for processing errors.
+- The app does not open in the browser: `sudo personaldocs check-access` checks each link from the container to your domain (services, listening port, firewall rule, allowed host name, public DNS record, HTTPS through the proxy) and prints the fix for the first broken one. Opening `http://<container-ip>:8000` directly shows "Bad Request (400)": the app only answers to its domain name, so test with `curl -H "Host: <domain>" http://<container-ip>:8000/api/health`.
 
 ## Common problems {#common}
 
 | Problem | What to do |
 |---|---|
+| Browser says the site can't be reached | DNS record or router port forwarding (80/443 to the proxy) is missing, or the proxy host is not set up. Run `sudo personaldocs check-access`. |
+| Proxy shows 502/504 | The proxy cannot reach `http://<container-ip>:8000`: wrong target, firewall rule allowing a different IP, or the app is stopped. Run `sudo personaldocs check-access`. |
 | "Forbidden (CSRF)" or sign-in loops | `PD_PUBLIC_ORIGIN` must match the address in the browser exactly (https, no trailing slash); `PD_BEHIND_PROXY=1` behind NPM/Pangolin |
 | Uploads fail at a certain size | Raise the proxy's body size limit and the app's Maximum upload size |
 | Document stuck in *Processing* | Check the worker is running; failed jobs can be retried in OCR & processing |

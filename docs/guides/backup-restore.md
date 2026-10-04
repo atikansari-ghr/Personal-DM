@@ -11,17 +11,41 @@
 
 Consistency: originals are write-once and are always on disk before the database refers to them; the dump is a snapshot; files referenced by the snapshot are copied and verified; the backup folder is renamed from `.partial` only when complete. Unchanged originals are hard-linked from the previous backup to save space.
 
+## Connecting the NAS {#nas}
+
+Set this up in **Settings → Storage & backup → NAS connection**:
+
+| Field | NFS example | SMB (Windows/Samba share) example |
+|---|---|---|
+| NAS connection | NFS | SMB |
+| NAS server | `192.168.1.20` | `nas.local` |
+| Share / export | `/volume1/backups` | `backups` |
+| Folder on the share | `personaldocs` | `personaldocs` |
+| SMB username / password / domain | — | `backup-user` / password / optional |
+| Protocol version | optional (`4.1`) | optional (`3.0`) |
+
+Click **Save settings**, then **Connect NAS**. A small system service mounts the share at `/mnt/pdnas`, creates the folder, checks that the app can write to it, and sets it as the backup destination automatically. The status line shows the result, with a plain-language explanation if something is wrong (wrong password, export not allowed for this container's IP, NAS unreachable, …). **Disconnect** unmounts it. The share is mounted again automatically after a reboot.
+
+The SMB password is stored encrypted and written only to a root-only credentials file for the mount. The app never runs arbitrary mount options: only the fields above are used, and each is validated.
+
+### Container requirements {#lxc-requirements}
+
+Proxmox only allows NFS/SMB mounts inside **privileged** containers with the feature **mount=nfs;cifs** (`pct set <id> --features nesting=1,mount=nfs\;cifs`). The guided installer can create such a container for you.
+
+If you prefer an **unprivileged** container (more isolated), let the Proxmox host mount the share and pass it in:
+
+```
+# on the Proxmox host
+mount -t nfs 192.168.1.20:/volume1/backups /mnt/nas-backup      # or add to /etc/fstab
+mkdir -p /mnt/nas-backup/personaldocs && chown 100000:100000 /mnt/nas-backup/personaldocs
+pct set <id> -mp0 /mnt/nas-backup/personaldocs,mp=/mnt/nas-backup/personaldocs
+```
+
+Then choose **NAS connection: Already mounted**, set **Backup destination** to `/mnt/nas-backup/personaldocs`, and create the marker file once inside the container: `touch /mnt/nas-backup/personaldocs/.personaldocs-backup-target`.
+
 ## Backup destination {#target}
 
-1. Mount your NAS share in the LXC (for an unprivileged container, mount on the Proxmox host and bind-mount into the container, or use NFS/SMB inside a privileged one). Example `/etc/fstab` line inside the LXC: `nas:/volume1/backups /mnt/nas-backup nfs defaults,_netdev 0 0`.
-2. Create the folder and marker once:
-   ```
-   mkdir -p /mnt/nas-backup/personaldocs && touch /mnt/nas-backup/personaldocs/.personaldocs-backup-target
-   chown -R personaldocs: /mnt/nas-backup/personaldocs
-   ```
-3. Settings → Storage & backup → **Backup destination** `/mnt/nas-backup/personaldocs`.
-
-The marker file and the *Require mounted destination* check stop backups from silently filling the local disk when the NAS is not mounted. Status shows reachability, last success, size, duration and verification.
+The destination is set automatically when the NAS is connected from Settings. For an *Already mounted* folder, enter its path in **Backup destination**. The marker file `.personaldocs-backup-target` and the *Require mounted destination* check stop backups from silently filling the local disk when the NAS is not mounted. Status shows reachability, last success, size, duration and verification.
 
 ## Identity {#identity}
 

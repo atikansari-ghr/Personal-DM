@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 REPO_DIR = BASE_DIR.parent
@@ -53,6 +54,19 @@ CSRF_TRUSTED_ORIGINS = [PUBLIC_ORIGIN] + [
     o.strip() for o in (env("CSRF_TRUSTED_ORIGINS", "") or "").split(",") if o.strip()
 ]
 
+# Optional direct access from the home network over plain HTTP (opt-in, e.g. http://192.168.10.195:8000;
+# `personaldocs local-access on`). The public HTTPS address keeps Secure cookies; see LocalAccessCookieMiddleware.
+LOCAL_ORIGINS = []
+for _o in (env("LOCAL_ORIGINS", "") or "").split(","):
+    _o = _o.strip().rstrip("/")
+    _u = urlsplit(_o)
+    if _u.scheme in ("http", "https") and _u.hostname:
+        LOCAL_ORIGINS.append(_o)
+        if _u.hostname not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(_u.hostname)
+        CSRF_TRUSTED_ORIGINS.append(_o)
+LOCAL_HOSTS = {urlsplit(o).netloc for o in LOCAL_ORIGINS}
+
 # Reverse proxy (NPM / Pangolin) support. Only enable when the app is reachable solely via the proxy.
 if env_bool("BEHIND_PROXY", False):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -89,6 +103,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "apps.core.middleware.LocalAccessCookieMiddleware",  # outermost: adjusts the final response
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

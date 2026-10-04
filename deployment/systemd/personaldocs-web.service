@@ -17,8 +17,6 @@ KillSignal=SIGTERM
 TimeoutStopSec=40
 UMask=0027
 NoNewPrivileges=yes
-ProtectSystem=full
-PrivateTmp=yes
 LimitNOFILE=8192
 
 [Install]
