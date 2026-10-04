@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # personaldocs — install, upgrade, rollback, repair and operate Personal Documents on Debian 13 (native, no Docker).
 #
-#   personaldocs install [--public-origin URL] [--bind ADDR:PORT] [--ref REF] [--repo URL] [--build-frontend]
+#   personaldocs install [--public-origin URL] [--bind ADDR:PORT] [--ref REF] [--repo URL] [--build-frontend] [--with-verapdf]
 #   personaldocs upgrade [--ref REF] [--skip-backup]
 #   personaldocs rollback
 #   personaldocs repair
@@ -260,6 +260,34 @@ build_frontend() {
   (cd "$dir/frontend" && npm ci --no-audit --no-fund --loglevel=error && npm run build --silent) || die "frontend build failed"
 }
 
+install_verapdf() { # optional reference PDF/A validator (Java, ~250 MB)
+  [ -x /opt/verapdf/verapdf ] && { log "veraPDF already installed"; return; }
+  log "installing veraPDF (optional PDF/A validator)"
+  apt-get install -y -q --no-install-recommends default-jre-headless unzip
+  local tmp; tmp=$(mktemp -d)
+  curl -fsSL https://software.verapdf.org/releases/verapdf-installer.zip -o "$tmp/verapdf.zip" || die "veraPDF download failed"
+  unzip -q "$tmp/verapdf.zip" -d "$tmp"
+  cat >"$tmp/auto.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<AutomatedInstallation langpack="eng">
+  <com.izforge.izpack.panels.htmlhello.HTMLHelloPanel id="welcome"/>
+  <com.izforge.izpack.panels.target.TargetPanel id="install_dir"><installpath>/opt/verapdf</installpath></com.izforge.izpack.panels.target.TargetPanel>
+  <com.izforge.izpack.panels.packs.PacksPanel id="sdk_pack_select">
+    <pack index="0" name="veraPDF GUI" selected="true"/>
+    <pack index="1" name="veraPDF Batch files" selected="true"/>
+    <pack index="2" name="veraPDF Validation model" selected="false"/>
+    <pack index="3" name="veraPDF Documentation" selected="false"/>
+    <pack index="4" name="veraPDF Sample Plugins" selected="false"/>
+  </com.izforge.izpack.panels.packs.PacksPanel>
+  <com.izforge.izpack.panels.install.InstallPanel id="install"/>
+  <com.izforge.izpack.panels.finish.FinishPanel id="finish"/>
+</AutomatedInstallation>
+XML
+  java -jar "$tmp"/verapdf-greenfield-*/verapdf-izpack-installer-*.jar "$tmp/auto.xml" >/dev/null || die "veraPDF installation failed"
+  rm -rf "$tmp"
+  env_set PD_VERAPDF_CMD /opt/verapdf/verapdf
+}
+
 install_units() {
   local src=${1:-$CURRENT}/deployment/systemd
   for u in "${UNITS[@]}"; do install -m 0644 "$src/$u.service" /etc/systemd/system/; done
@@ -322,6 +350,7 @@ cmd_install() {
   ensure_user_dirs
   ensure_config
   ensure_database
+  [ "${OPT_VERAPDF:-0}" = 1 ] && install_verapdf
   if [ -z "${PD_REPO_URL:-}" ] && [ -z "${OPT_REPO:-}" ]; then
     local here origin
     here=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
@@ -447,7 +476,7 @@ cmd_doctor_inner() { manage doctor; }
 usage() { sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; }
 
 CMD=${1:-help}; shift || true
-OPT_REF=""; OPT_ORIGIN=""; OPT_BIND=""; OPT_REPO=""; OPT_SKIP_BACKUP=0; OPT_BUILD_FRONTEND=0; ARGS=()
+OPT_VERAPDF=0; OPT_REF=""; OPT_ORIGIN=""; OPT_BIND=""; OPT_REPO=""; OPT_SKIP_BACKUP=0; OPT_BUILD_FRONTEND=0; ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --ref) OPT_REF=$2; shift 2;;
@@ -457,6 +486,7 @@ while [ $# -gt 0 ]; do
     --branch) OPT_BRANCH=$2; shift 2;;
     --skip-backup) OPT_SKIP_BACKUP=1; shift;;
     --build-frontend) OPT_BUILD_FRONTEND=1; shift;;
+    --with-verapdf) OPT_VERAPDF=1; shift;;
     *) ARGS+=("$1"); shift;;
   esac
 done
