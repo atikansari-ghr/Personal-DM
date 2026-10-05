@@ -349,3 +349,11 @@ tr.clickable:hover td { background: var(--brand-softer); }
 .row-menu .suggest { right: 0; left: auto; min-width: 180px; }
 .import-tree { list-style: none; margin: 0.5rem 0 0; padding: 0.5rem; max-height: 420px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
 .import-tree li { padding: 0.15rem 0; }
+.widget-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.widget-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.45rem; border: 1px solid var(--line); border-radius: 10px; background: #fff; min-height: 44px; }
+.widget-item.off { border-style: dashed; background: transparent; }
+.widget-item.drop-ok { outline: 2px dashed var(--brand); }
+.widget-item .drag-handle { cursor: grab; color: var(--muted); padding: 0 0.2rem; user-select: none; }
+.widget-item .btn.small { min-width: 36px; min-height: 36px; }
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 1.2rem; align-items: start; }
+.dash-grid > .wide { grid-column: 1 / -1; }

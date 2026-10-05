@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { HelpTip, Icon, Skeleton, useToast } from "./ui";
+import WidgetListEditor from "./WidgetListEditor";
 
 export interface SettingDef {
   key: string; label: string; description: string; type: string; default: any; section: string; scope: string; editable_by: string;
   choices: string[]; min: number | null; max: number | null; depends_on: string[]; effect: string; restart: boolean; help: string;
-  example: string; secret: boolean; value: any; configured: boolean | null; can_edit: boolean;
+  example: string; secret: boolean; value: any; configured: boolean | null; can_edit: boolean; choice_labels?: Record<string, string>;
 }
 
 const CHANNEL_LABELS: Record<string, string> = { in_app: "In-app", email: "Email", telegram: "Telegram" };
@@ -51,6 +52,8 @@ function Input({ def, value, onChange }: { def: SettingDef; value: any; onChange
       const cur: string[] = Array.isArray(value) ? value : [];
       return <div className="row">{Object.entries(CHANNEL_LABELS).map(([k, l]) => <label key={k} className="check"><input type="checkbox" disabled={disabled} checked={cur.includes(k)} onChange={(e) => onChange(e.target.checked ? [...cur, k] : cur.filter((x) => x !== k))} /> {l}</label>)}</div>;
     }
+    case "widget_list":
+      return <WidgetListEditor value={Array.isArray(value) ? value : []} choices={def.choices} labels={def.choice_labels || {}} disabled={disabled} onChange={onChange} />;
     default:
       return def.key === "documents.import_roots" || def.key === "documents.member_template"
         ? <textarea id={id} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)} placeholder={def.example} rows={def.key === "documents.member_template" ? 8 : 3} />
@@ -107,7 +110,7 @@ export default function SettingsForm({ section, keys, title, children }: { secti
             <div>
               <Input def={d} value={value} onChange={(v) => setDraft({ ...draft, [d.key]: v })} />
               {errors[d.key] && <div className="error-text small" role="alert">{errors[d.key]}</div>}
-              {d.type !== "secret" && d.key !== "documents.member_template" && d.default !== null && d.default !== undefined && <div className="small muted">Default: {Array.isArray(d.default) ? d.default.join(", ") || "none" : String(KEY_CHOICE_LABELS[d.key]?.[d.default] || CHOICE_LABELS[d.default] || d.default) || "empty"}</div>}
+              {d.type !== "secret" && d.key !== "documents.member_template" && d.default !== null && d.default !== undefined && <div className="small muted">Default: {d.type === "widget_list" ? "all widgets" : Array.isArray(d.default) ? d.default.join(", ") || "none" : String(KEY_CHOICE_LABELS[d.key]?.[d.default] || CHOICE_LABELS[d.default] || d.default) || "empty"}</div>}
             </div>
           </div>
         );

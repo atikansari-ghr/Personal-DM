@@ -14,7 +14,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from apps.core import audit, config, crypto, ratelimit
+from apps.core import audit, config, crypto, ratelimit, registry
 from apps.security import login_audit
 
 from . import passkeys as PK
@@ -114,7 +114,7 @@ def session_state(request):
         data["preferences"] = {
             "theme": config.get_user(u, "me.theme"),
             "layout": config.get_user(u, "me.layout"),
-            "dashboard_widgets": config.get_user(u, "me.dashboard_widgets"),
+            "dashboard_widgets": registry.normalize_widgets(config.get_user(u, "me.dashboard_widgets")),
         }
         data["date_format"] = config.get("general.date_format")
         data["timezone"] = config.get("general.timezone")

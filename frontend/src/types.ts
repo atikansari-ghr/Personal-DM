@@ -34,7 +34,7 @@ export interface Session {
   passwordless_enabled?: boolean;
   totp_allowed?: boolean;
   user: User | null;
-  preferences?: { theme: string; layout: string; dashboard_widgets: string };
+  preferences?: { theme: string; layout: string; dashboard_widgets: string[] };
   date_format?: string;
   timezone?: string;
   delegations?: { group: string; group_id: string; scopes: string[] }[];

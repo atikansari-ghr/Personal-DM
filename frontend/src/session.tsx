@@ -65,7 +65,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     window.addEventListener("online", out);
     window.addEventListener("pd:settings-saved", out);
     window.addEventListener("pd:2fa-setup", out);
+    // Account preferences (theme, dashboard widgets, layout…) live on the server; pick up changes made on another
+    // device when this one comes back to the foreground (at most once a minute).
+    let last = Date.now();
+    const visible = () => {
+      if (document.visibilityState === "visible" && Date.now() - last > 60_000) { last = Date.now(); refresh().catch(() => undefined); }
+    };
+    document.addEventListener("visibilitychange", visible);
     return () => {
+      document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("pd:settings-saved", out);
       window.removeEventListener("pd:signed-out", out);
       window.removeEventListener("pd:2fa-setup", out);
