@@ -3,6 +3,7 @@ from django.http import FileResponse, Http404, HttpResponse
 from django.urls import path, re_path
 
 from apps.accounts import google
+from apps.ai import views as ai
 from apps.accounts import views as acc
 from apps.core import views as core
 from apps.library import export, views as lib, views_import as imp, views_share as share
@@ -105,6 +106,18 @@ api = [
     path("documents/<uuid:pk>/similar", lib.document_similar),
     path("documents/<uuid:pk>/shares", share.document_shares),
     path("shares/<uuid:sid>", share.share_revoke),
+    path("documents/<uuid:pk>/ai/analyze", ai.document_analyze),
+    path("documents/<uuid:pk>/ai/suggestions", ai.document_suggestions),
+    path("documents/<uuid:pk>/ai/suggestions/<int:sid>", ai.suggestion_decide),
+    path("ai/status", ai.ai_status),
+    path("ai/assistant", ai.assistant),
+    path("ai/semantic", ai.semantic),
+    path("ai/profiles", ai.profiles),
+    path("ai/profiles/<int:pk>", ai.profile_detail),
+    path("ai/profiles/<int:pk>/test", ai.profile_test),
+    path("ai/profiles/<int:pk>/models", ai.profile_models),
+    path("ai/jobs", ai.ai_jobs_api),
+    path("ai/reindex", ai.reindex),
     path("search/autocomplete", lib.autocomplete),
     path("views", lib.saved_views),
     path("views/<int:pk>", lib.saved_view_detail),

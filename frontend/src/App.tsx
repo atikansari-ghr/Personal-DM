@@ -16,6 +16,7 @@ import Setup from "./pages/Setup";
 import SharedPage from "./pages/Shared";
 import UploadShared from "./pages/UploadShared";
 import { useSession } from "./session";
+import AssistantPage from "./pages/Assistant";
 
 export default function App() {
   const { session, offline } = useSession();
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="/settings/:section" element={<SettingsPage />} />
         <Route path="/imports/new" element={<ImportWizard />} />
         <Route path="/imports/:id" element={<ImportWizard />} />
+        <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/help/:slug" element={<HelpPage />} />
         <Route path="/upload-shared" element={<UploadShared />} />
