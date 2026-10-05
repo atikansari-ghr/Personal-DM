@@ -213,10 +213,15 @@ def delivery_problems(request):
 
     from . import catalog
 
+    required = set()
+    for key in catalog.EVENTS:
+        required |= set(catalog.locked_channels(key))
+    unconfigured = [{"channel": ch, "issue": catalog.channel_issue(request.user, ch)}
+                    for ch in catalog.CHANNELS if ch in required and not catalog.channel_configured(ch)]
     out = []
     for u in User.objects.filter(is_active=True).order_by("display_name"):
-        problems = catalog.delivery_problems(u)
+        problems = catalog.delivery_problems(u, include_unconfigured=False)
         if problems:
             out.append({"user": u.display_name, "username": u.username, "problems": problems})
     skipped = OutboxMessage.objects.filter(status=OutboxMessage.SKIPPED).exclude(channel="in_app").count()
-    return Response({"people": out, "skipped_messages": skipped})
+    return Response({"unconfigured": unconfigured, "people": out, "skipped_messages": skipped})

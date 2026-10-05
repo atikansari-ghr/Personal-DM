@@ -28,6 +28,7 @@ export default defineConfig({
     outDir: "dist",
     assetsDir: "static/app",
     sourcemap: false,
+    chunkSizeWarningLimit: 600, // PDF.js is loaded on demand, only when a document is viewed
     rollupOptions: { input: { main: "index.html", sw: "src/sw.ts" }, output: { entryFileNames: (c) => (c.name === "sw" ? "sw.js" : "static/app/[name]-[hash].js") } },
   },
   server: { proxy: { "/api": "http://127.0.0.1:8000", "/s/": "http://127.0.0.1:8000" } },

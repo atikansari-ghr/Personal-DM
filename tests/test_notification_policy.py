@@ -159,3 +159,16 @@ def test_at70_bulk_actions_send_one_summary(family, clients):
     archived = Notification.objects.filter(user=son1, kind="archive")
     assert archived.count() == 1 and "5 documents of yours archived" in archived.get().title
     assert "restore" in archived.get().body  # archive is clearly not deletion
+
+
+def test_unconfigured_channels_are_an_administrator_problem_not_each_members(family, clients):
+    # SMTP and Telegram are off in a fresh install but listed as critical channels by default
+    assert clients["son1"].get("/api/me/notification-preferences").json()["problems"] == []
+    admin = clients["dad"].get("/api/notifications/problems").json()
+    assert {u["channel"] for u in admin["unconfigured"]} == {"email", "telegram"}
+    assert admin["people"] == []
+    config.set_value("smtp.enabled", True)
+    config.set_value("smtp.host", "smtp.invalid")
+    # now email works, so a member without an address is told (and listed for the administrator)
+    assert any(p["channel"] == "email" for p in clients["son1"].get("/api/me/notification-preferences").json()["problems"])
+    assert any(p["username"] == "son1" for p in clients["dad"].get("/api/notifications/problems").json()["people"])

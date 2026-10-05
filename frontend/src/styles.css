@@ -325,7 +325,12 @@ tr.clickable:hover td { background: var(--brand-softer); }
 .viewer-error { text-align: center; padding: 2rem 1rem; border: 1px solid var(--line); border-radius: 10px; }
 @media (max-width: 640px) {
   .viewer, .viewer.compact { height: 70vh; }
-  .viewer-toolbar .page-nav .small { font-size: 0.8rem; }
+  /* one row that scrolls sideways instead of four wrapped rows; every control stays reachable */
+  .viewer-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .viewer-toolbar > * { flex-shrink: 0; }
+  .viewer-toolbar .grow { display: none; }
+  .viewer-toolbar .page-nav { flex-wrap: nowrap; }
+  .viewer-toolbar .page-nav .small { font-size: 0.8rem; white-space: nowrap; }
 }
 
 /* ---- folder picker, drag and drop */
@@ -344,7 +349,7 @@ tr.clickable:hover td { background: var(--brand-softer); }
 .doc-card.dragging { opacity: 0.5; }
 .my-area { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.5rem; margin-bottom: 0.4rem; border-radius: 10px; background: var(--brand-softer); color: inherit; text-decoration: none; font-weight: 650; }
 .my-area.active { background: var(--brand-soft); }
-.my-area small { display: block; font-weight: 500; color: var(--muted); }
+.my-area small { display: block; font-weight: 500; color: inherit; }
 .row-menu { position: relative; }
 .row-menu .suggest { right: 0; left: auto; min-width: 180px; }
 .import-tree { list-style: none; margin: 0.5rem 0 0; padding: 0.5rem; max-height: 420px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
@@ -372,3 +377,14 @@ tr.clickable:hover td { background: var(--brand-softer); }
   .matrix td { width: auto; border: 0; display: flex; gap: 0.35rem; align-items: center; justify-content: center; }
   .matrix td::before { content: attr(data-label); font-size: 0.8rem; color: var(--muted); }
 }
+
+/* ---- responsive safety (tablet widths between the mobile and desktop layouts) */
+.grid > * { min-width: 0; }
+.card:has(> table), .card:has(> .table-scroll) { overflow-x: auto; }
+table.responsive td.row, table.responsive td > .row { flex-wrap: wrap; }
+.help-layout { grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); align-items: start; }
+.markdown table { display: block; max-width: 100%; overflow-x: auto; }
+@media (max-width: 900px) { .help-layout { grid-template-columns: minmax(0, 1fr); } }
+.doc-open { all: unset; cursor: pointer; font-weight: 600; display: block; border-radius: 4px; overflow-wrap: anywhere; }
+.doc-open:focus-visible { box-shadow: var(--focus); }
+.doc-open.small { font-size: 0.875rem; }

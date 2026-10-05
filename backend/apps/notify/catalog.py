@@ -83,13 +83,27 @@ def applies_to(user, key: str) -> bool:
     return not EVENTS[key].admins_only or user.is_main_admin
 
 
-def delivery_problems(user) -> list[dict]:
-    """Required (critical / required-for-reminders) channels that cannot reach this person."""
+def channel_configured(channel: str) -> bool:
+    if channel == "email":
+        return bool(config.get("smtp.enabled"))
+    if channel == "telegram":
+        return bool(config.get("telegram.enabled"))
+    return True
+
+
+def delivery_problems(user, include_unconfigured: bool | None = None) -> list[dict]:
+    """Required (critical / required-for-reminders) channels that cannot reach this person. A channel the
+    administrator has not set up at all is an installation problem: it is reported to the main administrator
+    (and in the administrator's overview), not to every member."""
+    if include_unconfigured is None:
+        include_unconfigured = user.is_main_admin
     out = {}
     for key in EVENTS:
         if not applies_to(user, key):
             continue
         for ch in locked_channels(key):
+            if not include_unconfigured and not channel_configured(ch):
+                continue
             issue = channel_issue(user, ch)
             if issue:
                 out.setdefault(ch, {"channel": ch, "issue": issue, "events": []})["events"].append(LABELS[key])

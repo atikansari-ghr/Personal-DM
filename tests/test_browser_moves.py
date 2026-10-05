@@ -233,3 +233,9 @@ def test_at74_member_move_that_would_widen_access_is_refused(family, clients):
     # the main administrator may do it deliberately
     r = clients["dad"].post("/api/documents/bulk", {"ids": [str(doc.id)], "action": "move", "value": str(shared.id)}, format="json")
     assert r.json()["succeeded"] == 1
+
+
+def test_malformed_list_filters_return_nothing_instead_of_an_error(family, clients):
+    for q in ({"folder": "undefined"}, {"owner": "x"}, {"type": "abc"}, {"expiring_days": "soon"}, {"added_after": "yesterday"}):
+        r = clients["son1"].get("/api/documents", q)
+        assert r.status_code == 200 and r.json()["documents"] == [], q

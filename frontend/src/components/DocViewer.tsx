@@ -207,7 +207,7 @@ export default function DocViewer({ kind, src, title, downloadHref, onUseBrowser
         {downloadHref && <a className="btn small" href={downloadHref} aria-label="Download"><Icon name="download" size={16} /></a>}
       </div>
       <p id="viewer-keys" className="sr-only">Keys: plus and minus zoom, 0 actual size, W fit width, P fit page.</p>
-      <div className="viewer-scroll" ref={scrollRef} onScroll={onScroll}>
+      <div className="viewer-scroll" ref={scrollRef} onScroll={onScroll} tabIndex={0} aria-label={`${title} — scroll to read; use the toolbar to zoom`}>
         {!pages ? <div className="empty"><Icon name="refresh" /> Loading preview…</div> : kind === "image" ? (
           <div className="viewer-stage" style={{ padding: GAP }}>
             <img src={src} alt={`Preview of ${title}`} draggable={false}

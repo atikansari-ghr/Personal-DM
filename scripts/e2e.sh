@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Browser end-to-end flow + accessibility audit against a throwaway instance.
+# Browser end-to-end flow, accessibility audit and desktop/tablet/mobile parity checks against a throwaway instance.
 # Needs an EMPTY database configured through PD_DB_* (it runs the first-run setup), Chromium for Playwright,
 # and `npm ci` in tests/e2e. Usage: scripts/e2e.sh
 set -euo pipefail
@@ -20,3 +20,5 @@ trap 'kill $WEB $WORKER 2>/dev/null || true' EXIT
 for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/api/health >/dev/null 2>&1 && break; sleep 1; done
 BASE=http://localhost:8000 SETUP_TOKEN="$TOKEN" FIXTURE="$FIXTURE" node tests/e2e/flow.mjs
 BASE=http://localhost:8000 node tests/e2e/a11y.mjs
+$PY tests/e2e/make_parity_fixtures.py "$LOGDIR/parity" >/dev/null
+BASE=http://localhost:8000 PARITY="$LOGDIR/parity" node tests/e2e/parity.mjs

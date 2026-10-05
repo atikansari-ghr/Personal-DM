@@ -1,0 +1,98 @@
+[
+ [
+  "PASS",
+  "setup: synthetic folders and files in Sam Sample's area"
+ ],
+ [
+  "PASS",
+  "AT-61 signed-in user's own area is identified at the top of the tree"
+ ],
+ [
+  "PASS",
+  "AT-62 file-type icons with readable labels in list and grid"
+ ],
+ [
+  "PASS",
+  "AT-72 drag a document onto a sub-folder (chip and tree)"
+ ],
+ [
+  "PASS",
+  "AT-73 drag a folder; a drop into its own sub-folder is refused"
+ ],
+ [
+  "PASS",
+  "AT-75 Move to… with the folder picker (desktop)"
+ ],
+ [
+  "PASS",
+  "AT-81 PDF viewer: zoom, percentage, fit page/width, 100%, pages, keyboard, resize"
+ ],
+ [
+  "PASS",
+  "AT-82 image viewer keeps the aspect ratio and scrolls when zoomed"
+ ],
+ [
+  "PASS",
+  "AT-84 damaged file fails safely; previews need a session; no external viewer"
+ ],
+ [
+  "PASS",
+  "AT-65/66 dashboard widgets: tick and order visually"
+ ],
+ [
+  "PASS",
+  "AT-68 optional notification matrix persists; critical events locked"
+ ],
+ [
+  "PASS",
+  "AT-71 backup frequency shows the right fields and the next run"
+ ],
+ [
+  "PASS",
+  "AT-63/64 import into a chosen sub-folder with the exact final hierarchy"
+ ],
+ [
+  "PASS",
+  "screens for the README (desktop)"
+ ],
+ [
+  "PASS",
+  "AT-76/77 tablet: every screen renders without horizontal overflow"
+ ],
+ [
+  "PASS",
+  "AT-83 tablet: viewer controls are reachable and large enough"
+ ],
+ [
+  "PASS",
+  "AT-76/77 mobile-portrait: every screen renders without horizontal overflow"
+ ],
+ [
+  "PASS",
+  "AT-83 mobile-portrait: viewer controls are reachable and large enough"
+ ],
+ [
+  "PASS",
+  "AT-75 mobile-portrait: Move to… by touch, and back navigation"
+ ],
+ [
+  "PASS",
+  "AT-78 account preferences changed on desktop appear on mobile and back"
+ ],
+ [
+  "PASS",
+  "AT-76/77 mobile-landscape: every screen renders without horizontal overflow"
+ ],
+ [
+  "PASS",
+  "AT-83 mobile-landscape: viewer controls are reachable and large enough"
+ ],
+ [
+  "PASS",
+  "AT-75 mobile-landscape: Move to… by touch, and back navigation"
+ ],
+ [
+  "PASS",
+  "no uncaught page errors"
+ ]
+]

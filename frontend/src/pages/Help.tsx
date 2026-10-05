@@ -17,7 +17,7 @@ export default function HelpPage() {
     if (guide && loc.hash) document.getElementById(loc.hash.slice(1))?.scrollIntoView();
   }, [guide, loc.hash]);
   return (
-    <div className="grid" style={{ gridTemplateColumns: "minmax(220px, 300px) 1fr", alignItems: "start" }}>
+    <div className="grid help-layout">
       <aside className="card">
         <h2>Help & guides</h2>
         <input type="search" aria-label="Search help" placeholder="Search help" value={q} onChange={(e) => setQ(e.target.value)} />

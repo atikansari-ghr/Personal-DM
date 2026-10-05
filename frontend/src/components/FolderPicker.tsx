@@ -40,15 +40,20 @@ export function FolderIcon({ f }: { f: FolderNode }) {
  * Accessible folder-tree picker used by "Move to…" and the import destination. ``reason`` returns why a folder
  * cannot be chosen (shown, not hidden, so the tree keeps its shape), or "" when it can.
  */
-export default function FolderPicker({ folders, value, onChange, reason, meId, label = "Destination folder" }: {
+export default function FolderPicker({ folders, value, onChange, reason, meId, label = "Destination folder", near }: {
   folders: FolderNode[]; value: string; onChange: (id: string) => void; reason: (f: FolderNode) => string; meId?: string | null; label?: string;
+  near?: string | null; // a folder to open the tree at (e.g. where the items are now)
 }) {
   const children = useMemo(() => folderChildren(folders, meId), [folders, meId]);
   const byId = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState<Set<string>>(() => {
     const s = new Set<string>((children.get(null) || []).map((r) => r.id));
-    for (let n = byId.get(value); n?.parent; n = byId.get(n.parent)) s.add(n.parent);
+    for (const start of [value, near]) {
+      if (!start) continue;
+      s.add(start); // show the folder's own sub-folders too
+      for (let n = byId.get(start); n?.parent; n = byId.get(n.parent)) s.add(n.parent);
+    }
     return s;
   });
   const q = filter.trim().toLowerCase();

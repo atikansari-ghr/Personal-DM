@@ -30,7 +30,28 @@ def update_search_vector(doc: Document) -> None:
     )
 
 
+def _valid(params: dict) -> bool:
+    """Malformed filter values (a bad id, a non-number, a bad date) match nothing instead of failing."""
+    import uuid
+    from datetime import date
+
+    try:
+        for k in ("folder", "owner"):
+            if params.get(k):
+                uuid.UUID(str(params[k]))
+        for k in ("type", "tag", "correspondent", "expiring_days"):
+            if params.get(k):
+                int(params[k])
+        if params.get("added_after"):
+            date.fromisoformat(str(params["added_after"]))
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
 def _filters(qs, params: dict):
+    if not _valid(params):
+        return qs.none()
     if params.get("folder"):
         qs = qs.filter(folder_id=params["folder"])
     if params.get("owner"):
