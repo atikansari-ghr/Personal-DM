@@ -61,6 +61,7 @@ export function Avatar({ user, size }: { user?: UserMini | null; size?: "sm" | "
 }
 export function ExpiryBadge({ expiry }: { expiry: Expiry | null }) {
   if (!expiry) return null;
+  if (expiry.level === "none") return <span className="badge neutral" title="Confirmed as having no expiry date">No expiry</span>;
   const text = expiry.level === "expired" ? "Expired" : expiry.level === "soon" ? `${expiry.days} days left` : "Valid";
   return (
     <span className={`badge ${expiry.level === "ok" ? "ok" : expiry.level}`}>

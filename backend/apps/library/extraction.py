@@ -13,21 +13,42 @@ from datetime import date
 MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
 
 
-def parse_date(text: str) -> date | None:
-    text = (text or "").strip()
-    m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", text)
+def parse_date_info(text: str) -> tuple[date | None, bool]:
+    """(date, ambiguous). Numeric dates are read day-first (common on Saudi/Indian documents); when that is
+    impossible (e.g. 12-31-2030) month-first is used. Both readings valid and different -> ambiguous."""
+    text = (text or "").strip().rstrip(".,")
     try:
+        m = re.fullmatch(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})", text)
         if m:
-            return date(int(m[1]), int(m[2]), int(m[3]))
+            return date(int(m[1]), int(m[2]), int(m[3])), False
         m = re.fullmatch(r"(\d{1,2})[/.\- ](\d{1,2})[/.\- ](\d{4})", text)
-        if m:  # day-first (common on Indian/Saudi documents)
-            return date(int(m[3]), int(m[2]), int(m[1]))
+        if m:
+            a, b, y = int(m[1]), int(m[2]), int(m[3])
+            dmy = mdy = None
+            try:
+                dmy = date(y, b, a)
+            except ValueError:
+                pass
+            try:
+                mdy = date(y, a, b)
+            except ValueError:
+                pass
+            if dmy and mdy and dmy != mdy:
+                return dmy, True
+            return dmy or mdy, False
         m = re.fullmatch(r"(\d{1,2})[\s\-/]*([A-Za-z]{3})[A-Za-z]*[\s\-/,]*(\d{4})", text)
         if m and m[2].lower() in MONTHS:
-            return date(int(m[3]), MONTHS[m[2].lower()], int(m[1]))
+            return date(int(m[3]), MONTHS[m[2].lower()], int(m[1])), False
+        m = re.fullmatch(r"([A-Za-z]{3})[A-Za-z]*[\s\-/]*(\d{1,2}),?[\s\-/]*(\d{4})", text)
+        if m and m[1].lower() in MONTHS:
+            return date(int(m[3]), MONTHS[m[1].lower()], int(m[2])), False
     except ValueError:
-        return None
-    return None
+        return None, False
+    return None, False
+
+
+def parse_date(text: str) -> date | None:
+    return parse_date_info(text)[0]
 
 
 @dataclass
@@ -116,15 +137,74 @@ def parse_mrz(text: str) -> list[Proposal]:
 
 
 LABELS = {
-    "issue_date": [r"date\s*of\s*issue", r"issue\s*date", r"issued\s*on", r"date\s*issued"],
-    "expiry_date": [r"date\s*of\s*expiry", r"expiry\s*date", r"expiration\s*date", r"valid\s*(?:until|till|thru|through)", r"expires?\s*(?:on)?"],
+    "issue_date": [r"date\s*of\s*issue", r"issue\s*date", r"issued\s*on", r"date\s*issued", r"\bissued\b"],
+    "expiry_date": [r"date\s*of\s*expiry", r"expiry\s*date", r"expiration\s*date", r"exp(?:iry|\.)?\s*date",
+                    r"valid\s*(?:until|till|thru|through|upto|up\s*to)", r"expires?\s*(?:on)?", r"\bexpiry\b"],
     "date_of_birth": [r"date\s*of\s*birth", r"\bdob\b", r"birth\s*date"],
-    "document_number": [r"passport\s*no\.?", r"document\s*(?:no\.?|number)", r"licen[cs]e\s*(?:no\.?|number)", r"id\s*(?:no\.?|number)", r"policy\s*(?:no\.?|number)"],
-    "issuer": [r"issuing\s*authority", r"authority", r"issued\s*by"],
+    "document_number": [r"passport\s*no\.?", r"document\s*(?:no\.?|number)", r"licen[cs]e\s*(?:no\.?|number)",
+                        r"(?:national\s*)?id\s*(?:no\.?|number|#)", r"policy\s*(?:no\.?|number)", r"badge\s*(?:no\.?|number|#)",
+                        r"employee\s*(?:no\.?|number|id)", r"iqama\s*(?:no\.?|number)", r"resident\s*(?:id|no\.?|number)",
+                        r"card\s*(?:no\.?|number)", r"certificate\s*(?:no\.?|number)"],
+    "issuer": [r"issuing\s*authority", r"issued\s*by"],
     "place_of_issue": [r"place\s*of\s*issue"],
     "nationality": [r"nationality"],
 }
-DATE_RX = r"(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/.\- ]\d{1,2}[/.\- ]\d{4}|\d{1,2}[\s\-/]*[A-Za-z]{3,9}[\s\-/,]*\d{4})"
+DATE_RX = r"(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{4}|\d{1,2}[\s\-/]*[A-Za-z]{3,9}[\s\-/,]*\d{4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4})"
+NO_EXPIRY_RX = r"\b(?:no\s+expiry(?:\s+date)?|no\s+expiration(?:\s+date)?|does\s+not\s+expire|non[-\s]?expiring|valid\s+(?:indefinitely|for\s+life|permanently)|lifetime\s+validity|permanent)\b"
+ID_RX = r"[A-Z0-9][A-Z0-9\-/]{2,30}"
+DATE_KEYS = ("issue_date", "expiry_date", "date_of_birth")
+
+
+def _date_proposal(key: str, raw: str, source: str, excerpt: str, confidence: float = 0.6) -> Proposal | None:
+    d, ambiguous = parse_date_info(raw)
+    if d is None:
+        return None
+    flags = ["Day and month could be read either way — please check."] if ambiguous else []
+    return Proposal(key, d.isoformat(), source, confidence - (0.2 if ambiguous else 0), flags, excerpt[:200])
+
+
+def _label_spans(line: str) -> list[tuple[int, int, str]]:
+    """Non-overlapping (start, end, key) label matches on one line, left to right (longest match wins)."""
+    found = []
+    for key, patterns in LABELS.items():
+        for pat in patterns:
+            for m in re.finditer(pat, line, re.I):
+                found.append((m.start(), m.end(), key))
+    found.sort(key=lambda s: (s[0], -(s[1] - s[0])))
+    out, end = [], -1
+    for s in found:
+        if s[0] >= end:
+            out.append(s)
+            end = s[1]
+    return out
+
+
+def parse_columns(lines: list[str]) -> list[Proposal]:
+    """A header line with several labels followed by a line of values (ID-card tables such as
+    'Badge No   Expiry Date' / '145070   12-31-2030'): pair values with labels left to right by type."""
+    out = []
+    for i in range(len(lines) - 1):
+        spans = _label_spans(lines[i])
+        rest = re.sub(r"[\W_]+", "", re.sub("|".join(p for ps in LABELS.values() for p in ps), "", lines[i], flags=re.I))
+        if len(spans) < 2 or len(rest) > 6:  # a real header line holds (almost) only labels
+            continue
+        values = lines[i + 1]
+        dates = [(m.start(), m.group(0)) for m in re.finditer(DATE_RX, values)]
+        others = [(m.start(), m.group(0)) for m in re.finditer(ID_RX, values)
+                  if not any(ds <= m.start() < ds + len(dv) for ds, dv in dates)]
+        for _s, _e, key in spans:
+            pool = dates if key in DATE_KEYS else others
+            if not pool:
+                continue
+            _pos, raw = pool.pop(0)
+            excerpt = f"{lines[i].strip()} / {values.strip()}"
+            if key in DATE_KEYS:
+                p = _date_proposal(key, raw, "ocr", excerpt, 0.65)
+                if p:
+                    out.append(p)
+            else:
+                out.append(Proposal(key, raw.strip(), "ocr", 0.55, [], excerpt[:200]))
+    return out
 
 
 def parse_labels(text: str) -> list[Proposal]:
@@ -132,17 +212,23 @@ def parse_labels(text: str) -> list[Proposal]:
     flat = text.replace("\r", "")
     for key, patterns in LABELS.items():
         for pat in patterns:
-            if key.endswith("_date") or key == "date_of_birth":
+            if key in DATE_KEYS:
                 m = re.search(pat + r"[\s:./-]*\n?\s*" + DATE_RX, flat, re.I)
                 if m:
-                    d = parse_date(m.group(1))
-                    if d:
-                        out.append(Proposal(key, d.isoformat(), "ocr", 0.6, [], m.group(0)[:200]))
+                    p = _date_proposal(key, m.group(1), "ocr", m.group(0))
+                    if p:
+                        out.append(p)
                         break
             else:
-                m = re.search(pat + r"[\s:./-]*\n?\s*([A-Z0-9][A-Z0-9 \-/]{2,40})", flat, re.I)
+                m = re.search(pat + r"[\s:#./-]*\n?\s*([A-Z0-9][A-Z0-9 \-/]{2,40})", flat, re.I)
                 if m:
                     val = m.group(1).strip().split("\n")[0].strip()
+                    if _label_spans(val) and _label_spans(val)[0][0] == 0 or re.match(r"(?i)name\b", val):
+                        continue  # the next label, not a value
+                    if key == "document_number":
+                        val = val.split("  ")[0].split(" ")[0] if re.search(r"\d", val.split(" ")[0]) else val
+                        if not re.search(r"\d", val):
+                            continue  # a number field without digits is a misread label, not a value
                     flags = []
                     if key == "document_number" and re.search(r"(?<=\d)[OIlSB]|[OIlSB](?=\d)", val[1:]):
                         flags.append("Possibly ambiguous characters (O/0, I/1, S/5) — please verify.")
@@ -151,9 +237,38 @@ def parse_labels(text: str) -> list[Proposal]:
     return out
 
 
+def find_no_expiry(lines: list[str]) -> Proposal | None:
+    """An explicit 'No Expiry Date' / 'Does not expire' statement — but not the end of a 'Badge No' label
+    followed by an 'Expiry Date' column header."""
+    for ln in lines:
+        for m in re.finditer(NO_EXPIRY_RX, ln, re.I):
+            covered = any(s <= m.start() < e and key != "expiry_date" for s, e, key in _label_spans(ln))
+            if not covered:
+                return Proposal("no_expiry", "yes", "ocr", 0.6, ["The document says it does not expire — please confirm."], ln.strip()[:200])
+    return None
+
+
+def find_holder(lines: list[str], owner_names: list[str]) -> Proposal | None:
+    """A line that carries the owner's name (at least two of its words) is proposed as the holder's name."""
+    for n in owner_names or []:
+        toks = [t.lower() for t in re.findall(r"[A-Za-z]{2,}", n)]
+        if len(toks) < 2:
+            continue
+        for ln in lines:
+            words = [w.lower() for w in re.findall(r"[A-Za-z]{2,}", ln)]
+            hits = sum(1 for t in toks if t in words)
+            if hits >= 2 and len(words) <= len(toks) + 3:
+                value = re.sub(r"^(?:name|holder|full\s*name)\s*[:\-]?\s*", "", ln.strip(), flags=re.I)
+                return Proposal("full_name", value.title(), "ocr", 0.55, [], ln.strip()[:200])
+    return None
+
+
 def extract(text: str, *, owner_names: list[str] | None = None, template: str = "generic") -> list[Proposal]:
     proposals: dict[str, Proposal] = {}
+    lines = [ln for ln in (text or "").splitlines() if ln.strip()]
     for p in parse_labels(text or ""):
+        proposals[p.key] = p
+    for p in parse_columns(lines):  # header/value tables are more specific than a loose label match
         proposals[p.key] = p
     for p in parse_mrz(text or ""):  # MRZ wins over labels when both exist, but conflicts are flagged
         prev = proposals.get(p.key)
@@ -161,6 +276,16 @@ def extract(text: str, *, owner_names: list[str] | None = None, template: str = 
             p.flags.append(f"Conflicts with printed value '{prev.value}'.")
             p.confidence = min(p.confidence, 0.5)
         proposals[p.key] = p
+    if "full_name" not in proposals:
+        holder = find_holder(lines, owner_names or [])
+        if holder:
+            proposals["full_name"] = holder
+    no_exp = find_no_expiry(lines)
+    if no_exp:
+        if "expiry_date" in proposals:
+            proposals["expiry_date"].flags.append("The document also says it does not expire — please check.")
+        else:
+            proposals["no_expiry"] = no_exp
     issue = parse_date(proposals["issue_date"].value) if "issue_date" in proposals else None
     expiry = parse_date(proposals["expiry_date"].value) if "expiry_date" in proposals else None
     dob = parse_date(proposals["date_of_birth"].value) if "date_of_birth" in proposals else None

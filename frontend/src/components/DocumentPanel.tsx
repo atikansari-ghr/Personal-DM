@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, formatBytes, formatDate, formatDateTime, upload } from "../api";
 import { saveOffline } from "../offline";
 import { useSession } from "../session";
-import type { DocDetail, DocRow, Meta } from "../types";
+import type { DocDetail, DocRow, Meta, Version } from "../types";
 import PermissionsDialog from "./PermissionsDialog";
 import { Avatar, Confirm, CopyButton, ExpiryBadge, HelpTip, Icon, Modal, Skeleton, StateBadge, useToast } from "./ui";
 import AISuggestions from "./AISuggestions";
@@ -14,6 +14,7 @@ import { useAiStatus } from "../ai";
 const FIELD_LABELS: Record<string, string> = {
   full_name: "Full name", document_number: "Document number", issue_date: "Issue date", expiry_date: "Expiry date", date_of_birth: "Date of birth",
   nationality: "Nationality", issuer: "Issuer", country_code: "Country code", sex: "Sex", place_of_issue: "Place of issue",
+  no_expiry: "Does not expire",
 };
 const DATE_KEYS = ["issue_date", "expiry_date", "date_of_birth"];
 
@@ -91,13 +92,17 @@ function Fields({ doc, onChange }: { doc: DocDetail; onChange: () => void }) {
             <div className="v">
               {editing === f.key ? (
                 <form className="row" onSubmit={(e) => { e.preventDefault(); save(f.key, value); }}>
-                  <input aria-label={`Edit ${f.key}`} type={DATE_KEYS.includes(f.key) || custom.find((c) => `custom:${c.key}` === f.key)?.type === "date" ? "date" : custom.find((c) => `custom:${c.key}` === f.key)?.type === "number" ? "number" : "text"} value={value} onChange={(e) => setValue(e.target.value)} style={{ maxWidth: 220 }} autoFocus />
+                  {f.key === "no_expiry" ? (
+                    <select aria-label="Does not expire" value={value} onChange={(e) => setValue(e.target.value)} style={{ maxWidth: 220 }} autoFocus>
+                      <option value="yes">Yes — this document has no expiry date</option><option value="no">No</option>
+                    </select>
+                  ) : <input aria-label={`Edit ${f.key}`} type={DATE_KEYS.includes(f.key) || custom.find((c) => `custom:${c.key}` === f.key)?.type === "date" ? "date" : custom.find((c) => `custom:${c.key}` === f.key)?.type === "number" ? "number" : "text"} value={value} onChange={(e) => setValue(e.target.value)} style={{ maxWidth: 220 }} autoFocus />}
                   <button className="btn small primary">Save</button><button type="button" className="btn small" onClick={() => setEditing(null)}>Cancel</button>
                 </form>
               ) : (
                 <>
-                  <span>{DATE_KEYS.includes(f.key) ? formatDate(f.value) : f.value || "—"}</span>
-                  {f.key === "expiry_date" && f.status === "confirmed" && <ExpiryBadge expiry={doc.expiry} />}
+                  <span>{DATE_KEYS.includes(f.key) ? formatDate(f.value) : f.key === "no_expiry" ? (f.value === "yes" ? "Yes" : f.value === "no" ? "No" : "—") : f.value || "—"}</span>
+                  {(f.key === "expiry_date" || f.key === "no_expiry") && f.status === "confirmed" && <ExpiryBadge expiry={doc.expiry} />}
                   {f.status === "proposed" && <span className="badge soon" title={`Source: ${f.source}`}>Suggested</span>}
                   {f.flags.map((fl) => <span key={fl} className="badge danger" title={fl}>Check</span>)}
                   {f.excerpt && f.status === "proposed" && <HelpTip text={`Found in text: “${f.excerpt}”`} />}
@@ -132,6 +137,56 @@ function Fields({ doc, onChange }: { doc: DocDetail; onChange: () => void }) {
       {doc.tags.length > 0 && <div className="row">{doc.tags.map((t) => <span key={t.id} className="badge">{t.name}</span>)}</div>}
       {doc.source_path && <p className="small muted">Imported from: {doc.source_path}</p>}
     </div>
+  );
+}
+
+function OcrText({ text, applied, confidence, lowLines, quality, onRerun }: {
+  text: string; applied: boolean; confidence: number | null; lowLines: number[]; quality: Version["ocr_quality"]; onRerun?: () => void;
+}) {
+  const low = new Set(lowLines);
+  const lines = text.split("\n");
+  const level = confidence === null ? "" : confidence >= 85 ? "ok" : confidence >= 60 ? "soon" : "danger";
+  return (
+    <div className="stack">
+      <div className="row between">
+        <span className="small muted">
+          {applied ? "Recognised locally with OCR — check important values." : "Text extracted from the file."}
+          {applied && confidence !== null && <> <span className={`badge ${level}`} title="Mean word confidence reported by the OCR engine">OCR confidence {Math.round(confidence)}%</span></>}
+          {quality?.rotation ? <> <span className="badge neutral">Rotated {quality.rotation}°</span></> : null}
+        </span>
+        <span className="row" style={{ gap: ".3rem" }}>
+          {onRerun && applied && <button className="btn small" onClick={onRerun}><Icon name="refresh" size={16} /> Re-run OCR…</button>}
+          <CopyButton label="Text" getValue={() => text} />
+        </span>
+      </div>
+      {low.size > 0 && <p className="small muted">Greyed lines were read with low confidence. They are not used for suggested details. If most of the text looks wrong, try <em>Re-run OCR</em> with a rotation or upload a better scan.</p>}
+      <pre className="preview-text">{lines.map((ln, i) => low.has(i) ? <span key={i} className="ocr-low" title="Low confidence">{ln}{"\n"}</span> : <span key={i}>{ln}{"\n"}</span>)}</pre>
+    </div>
+  );
+}
+
+function RerunDialog({ doc, onClose, onDone }: { doc: DocDetail; onClose: () => void; onDone: () => void }) {
+  const [rotate, setRotate] = useState("auto");
+  const [err, setErr] = useState("");
+  const isImage = doc.current_version?.format === "image";
+  return (
+    <Modal title="Re-run OCR" onClose={onClose}>
+      <form className="stack" onSubmit={async (e) => {
+        e.preventDefault();
+        try { await api(`documents/${doc.id}/reprocess`, { body: rotate === "auto" ? {} : { rotate: Number(rotate) } }); onDone(); } catch (x: any) { setErr(x.message); }
+      }}>
+        {err && <div className="alert error">{err}</div>}
+        <p className="small">The original file is not changed. Values you have already confirmed are kept; if the new reading differs, it is shown next to them as a suggestion.</p>
+        {isImage ? (
+          <fieldset className="field"><legend>Orientation</legend>
+            {[["auto", "Detect automatically"], ["90", "Rotate 90° clockwise"], ["180", "Rotate 180° (upside down)"], ["270", "Rotate 90° anticlockwise"], ["0", "As stored (no rotation)"]].map(([k, l]) => (
+              <label key={k} className="check"><input type="radio" name="rot" value={k} checked={rotate === k} onChange={() => setRotate(k)} /> {l}</label>
+            ))}
+          </fieldset>
+        ) : <p className="small muted">Pages are straightened and rotated automatically.</p>}
+        <div className="row" style={{ justifyContent: "flex-end" }}><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary">Re-run</button></div>
+      </form>
+    </Modal>
   );
 }
 
@@ -270,6 +325,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
   const [tab, setTab] = useState("details");
   const [dialog, setDialog] = useState<string>("");
   const [ocrText, setOcrText] = useState<string | null>(null);
+  const [ocrInfo, setOcrInfo] = useState<{ confidence: number | null; low_lines: number[] }>({ confidence: null, low_lines: [] });
   const [similar, setSimilar] = useState<(DocRow & { reasons: string[] })[] | null>(null);
   const load = () => api<DocDetail>(`documents/${id}`).then((d) => { setDoc(d); setError(""); }).catch((e) => setError(e.status === 404 ? "This document does not exist or you do not have access to it." : e.message));
   useEffect(() => { setDoc(null); setTab("details"); setOcrText(null); setSimilar(null); load(); }, [id]);
@@ -279,7 +335,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
     return () => clearTimeout(t);
   }, [doc]);
   useEffect(() => {
-    if (tab === "text" && ocrText === null) api(`documents/${id}/text`).then((r) => setOcrText(r.text));
+    if (tab === "text" && ocrText === null) api(`documents/${id}/text`).then((r) => { setOcrText(r.text); setOcrInfo({ confidence: r.confidence ?? null, low_lines: r.low_lines || [] }); });
     if (tab === "similar" && similar === null) api(`documents/${id}/similar`).then((r) => setSimilar(r.similar));
   }, [tab]);
   if (error) return <div className="alert error" style={{ margin: "1rem" }}>{error}</div>;
@@ -308,7 +364,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
                 {doc.folder && <button role="menuitem" onClick={() => setDialog("renew")}>Add renewed document</button>}
                 {can("download") && v && <button role="menuitem" onClick={async () => { try { await saveOffline(session!.user!.id, doc, v); toast("Saved for offline use on this device"); } catch (e: any) { toast(e.message, "error"); } setDialog(""); }}>Save for offline use</button>}
                 <button role="menuitem" onClick={() => setDialog("perms")}>Who has access</button>
-                {can("edit") && <button role="menuitem" onClick={() => api(`documents/${doc.id}/reprocess`, { method: "POST" }).then(() => { toast("Processing queued"); setDialog(""); changed(); })}>Re-run OCR / preview</button>}
+                {can("edit") && <button role="menuitem" onClick={() => setDialog("rerun")}>Re-run OCR / preview…</button>}
                 {can("archive") && !doc.archived && <button role="menuitem" onClick={() => setDialog("archive")}>Archive</button>}
               </div>
             )}
@@ -324,7 +380,8 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
       </div>
       {tab === "details" && <><Fields doc={doc} onChange={changed} /><AISuggestions docId={doc.id} onChange={changed} />{ai?.assistant && <Link className="btn small ghost" to={`/assistant?document=${doc.id}`}><Icon name="sparkle" size={16} /> Ask AI about this document</Link>}</>}
       {tab === "text" && (ocrText === null ? <Skeleton /> : ocrText ? (
-        <div><div className="row between"><span className="small muted">{v?.ocr_applied ? "Recognised locally with OCR — check important values." : "Text extracted from the file."}</span><CopyButton label="Text" getValue={() => ocrText} /></div><pre className="preview-text">{ocrText}</pre></div>
+        <OcrText text={ocrText} applied={!!v?.ocr_applied} confidence={ocrInfo.confidence} lowLines={ocrInfo.low_lines} quality={v?.ocr_quality || null}
+          onRerun={can("edit") ? () => setDialog("rerun") : undefined} />
       ) : <div className="empty">No text available for this document.</div>)}
       {tab === "versions" && (
         <table className="responsive"><thead><tr><th>Version</th><th>File</th><th>Added</th><th /></tr></thead><tbody>
@@ -355,6 +412,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
       )}
       {dialog === "edit" && <EditDialog doc={doc} onClose={() => setDialog("")} onDone={() => { setDialog(""); changed(); }} />}
       {(dialog === "version" || dialog === "renew") && <VersionDialog doc={doc} mode={dialog} onClose={() => setDialog("")} onDone={(newId) => { setDialog(""); changed(); if (newId) nav(`/documents/${newId}`); }} />}
+      {dialog === "rerun" && <RerunDialog doc={doc} onClose={() => setDialog("")} onDone={() => { toast("Processing queued"); setDialog(""); setOcrText(null); setTab("details"); changed(); }} />}
       {dialog === "share" && <ShareDialog doc={doc} onClose={() => setDialog("")} />}
       {dialog === "perms" && <PermissionsDialog target={{ kind: "documents", id: doc.id, name: doc.title }} onClose={() => { setDialog(""); changed(); }} />}
       {dialog === "archive" && (
