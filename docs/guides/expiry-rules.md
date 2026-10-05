@@ -92,11 +92,11 @@ version, those choices are used as your starting point.
 In-app, email and Telegram use the same layout:
 
 ```
-Notification from Personal Documents
+Notification from Personal Documents Management System
 Account: sam (Sam Sample)
 
 2 files imported to your account
-Imported by Alex Sample.
+Imported by Atik Ansari.
 
 Folder: Family library / Sam Sample / Education
 Date/time: 05 Oct 2026 14:31 (Asia/Riyadh)

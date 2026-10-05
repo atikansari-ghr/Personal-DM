@@ -76,8 +76,8 @@ def render_unit(snap: dict, uid: int, gid: int) -> str:
     if snap.get("version"):
         opts.append(f"vers={snap['version']}")
     return (
-        "# Managed by Personal Documents (Settings -> Storage & backup). Changes here are overwritten.\n"
-        "[Unit]\nDescription=Personal Documents NAS backup share\nAfter=network-online.target\nWants=network-online.target\n\n"
+        "# Managed by Personal Documents Management System (Settings -> Storage & backup). Changes here are overwritten.\n"
+        "[Unit]\nDescription=Personal Documents Management System NAS backup share\nAfter=network-online.target\nWants=network-online.target\n\n"
         f"[Mount]\nWhat={_escape_unit_path(what)}\nWhere={MOUNT_POINT}\nType={fstype}\nOptions={','.join(opts)}\nTimeoutSec=30\n\n"
         "[Install]\nWantedBy=multi-user.target\n"
     )

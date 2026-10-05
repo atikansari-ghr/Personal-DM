@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Personal Documents — guided installer for a Debian 13 LXC.
+# Personal Documents Management System — guided installer for a Debian 13 LXC.
 #
 # Asks for everything it needs (address, reverse proxy, GitHub access, NAS, backup time, ...) and then installs,
 # configures and checks the whole system. Safe to run again: answers are remembered (without secrets) and every
@@ -166,7 +166,7 @@ system_check() {
 # ------------------------------------------------------------------ preflight
 [ "$(id -u)" -eq 0 ] || fail "Run as root inside the container (for example: pct enter <id>, then bash easy-install.sh)."
 . /etc/os-release 2>/dev/null || true
-say "${B}Personal Documents — guided installation${N}"
+say "${B}Personal Documents Management System — guided installation${N}"
 say "Log: $( [ "$DRY" = 1 ] && echo "none   (DRY RUN: nothing will be changed)" || echo "$LOG")"
 UNPRIVILEGED=n
 if [ -r /proc/self/uid_map ] && awk 'NR==1 && $1==0 && $2!=0 {f=1} END {exit !f}' /proc/self/uid_map; then UNPRIVILEGED=y; fi
@@ -353,7 +353,7 @@ if [ "$PD_FIREWALL" = y ]; then
   if [ "$DRY" = 0 ]; then
     install -d /etc/nftables.d
     cat >/etc/nftables.d/personaldocs.nft <<EOF
-# Managed by Personal Documents easy-install.sh
+# Managed by Personal Documents Management System easy-install.sh
 table inet personaldocs {
   chain input {
     type filter hook input priority 0; policy accept;

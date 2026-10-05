@@ -26,7 +26,7 @@ await step("first-run setup wizard creates six accounts", async () => {
   await page.screenshot({ path: `${SHOTS}/01-setup-code.png` });
   await page.fill("#token", process.env.SETUP_TOKEN);
   await page.click("text=Continue");
-  const names = ["Alex Sample", "Maria Sample", "Sam Sample", "Dana Sample", "Theo Sample", "Leo Sample"];
+  const names = ["Atik Ansari", "Maria Sample", "Sam Sample", "Dana Sample", "Theo Sample", "Leo Sample"];
   for (let i = 0; i < 6; i++) await page.fill(`#n-${i}`, names[i]);
   await page.fill("#p-0", PW);
   await page.screenshot({ path: `${SHOTS}/02-setup-accounts.png`, fullPage: false });

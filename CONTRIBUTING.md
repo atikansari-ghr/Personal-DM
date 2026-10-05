@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping. Personal Documents is maintained by Atik Ansari; contributions are reviewed before merging.
+Thank you for helping. Personal Documents Management System is maintained by Atik Ansari; contributions are reviewed before merging.
 
 ## Ground rules
 

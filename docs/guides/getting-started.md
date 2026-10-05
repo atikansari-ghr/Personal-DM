@@ -1,6 +1,6 @@
 # Getting started
 
-Personal Documents is a private, self-hosted library for your family's documents: passports, visas, residence permits, ID cards, certificates, property papers, bills and more. Everything is stored on your own server.
+Personal Documents Management System is a private, self-hosted library for your family's documents: passports, visas, residence permits, ID cards, certificates, property papers, bills and more. Everything is stored on your own server.
 
 ## First steps {#first-steps}
 
@@ -36,13 +36,66 @@ Choose what it shows with **Customise** on the dashboard (or Settings → My acc
 ## Your own folders {#my-documents}
 
 At the top of the folder tree, **My Documents** with your photo (or initials) takes you straight to your own area.
-In the tree it is labelled "My Documents — <your name>"; other people's areas show their name and photo.
+In the tree it is labelled "My Documents — <your name>". It is always listed first and opened when you go to
+**Folders**. Other people's areas show their name and photo and stay closed until you open them.
+
+## Actions menus {#actions}
+
+Every document and folder has a **⋮** menu (on a computer it appears in the tree when you point at a folder). The
+menu opens on top of every panel and stays inside the screen. On a keyboard, press Enter or ↓ to open it, the
+arrow keys to move, and Escape to close it.
+
+- **Documents:** Open, Rename…, Move to…, Download, Share…, Archive…. The main administrator also sees **Delete
+  permanently…**, which asks you to type the title.
+- **Folders:** Open, New subfolder…, Rename…, Change icon…, Move to…, Share / who has access, Apply folder template,
+  Download folder (ZIP), Archive folder….
+
+Only the actions you are allowed to perform are listed. Archive and permanent delete always ask for confirmation
+and are recorded in the audit log. Archived items can be restored by the main administrator.
+
+## Folder icons {#icons}
+
+Folders directly in your area (or in Shared family) get an icon suggested from their name: Travel ✈️, Passport 🛂,
+House 🏠, Medical 🩺 and so on. Sub-folders inside them get the standard folder icon 📁, whatever their name. To
+choose a different icon, use **⋮ → Change icon…** and pick from the list. **Reset to default** brings back the
+automatic icon. A chosen icon stays with the folder when it is moved, imported, backed up or restored. Icons are
+labels only; they never change who can see a folder.
+
+## Folder views and sorting {#views}
+
+The buttons next to **Upload** switch between three views:
+
+- **List:** one line per document, with icon, title, type, size and date.
+- **Thumbnails:** page previews in a grid.
+- **Details:** a table with Name, Type, Size, Expiry, Added and Status columns. Click a column heading to sort by it;
+  click again to reverse the order.
+
+**Sort by** offers newest/oldest first, name, size, expiry date and type. The view and sort order are saved to
+your account, so your phone, tablet and computer show the same. They can also be set under **My account →
+Appearance**.
 
 ## File types {#file-types}
 
 Each document shows a small labelled icon — PDF, JPG, PNG, WEBP, IMG, TXT, DOC, XLS, PPT, ZIP, DCM or FILE. The type
 is taken from the file's actual content, not just its name: a photo renamed to `.pdf` shows as JPG/PNG, and a file
 called `.docx` that is not really a Word document shows as FILE.
+
+## Uploading from your computer by drag and drop {#drop}
+
+Drag files **or whole folders** from Windows Explorer, macOS Finder or a Linux file manager:
+
+- Drop onto the document list to upload into the open folder.
+- Drop onto a folder in the tree to upload into that folder.
+
+Dropped folders keep their structure. For example, dropping `House Documents` (with `Lease` and `Utilities/Water`
+inside) on *My Documents / House & Property* creates *House & Property / House Documents / Lease* and so on, and
+puts every file in its matching folder. Existing folders with the same name are reused, not duplicated.
+
+A progress card shows how many files are uploaded and lists every file that could not be uploaded, with the reason.
+Typical reasons are a blocked file type, a hidden system file such as `.DS_Store` or `Thumbs.db`, or a folder you are
+not allowed to create there. Nothing is skipped silently. If your browser cannot read a dropped folder's contents
+(some older browsers), the card says so; use **Import folder** instead. Paths that try to leave the drop folder
+(`..`) are refused.
 
 ## Moving documents and folders {#moving}
 

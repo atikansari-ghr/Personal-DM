@@ -112,10 +112,10 @@ def test_at13_emoji_suggestions_overrides_and_rename(family, clients):
     r = clients["son1"].post("/api/folders", {"parent": str(root.id), "name": "Travel"}, format="json")
     fid = r.json()["id"]
     assert r.json()["emoji"] == "✈️"
-    r = clients["son1"].patch(f"/api/folders/{fid}", {"emoji": "🌍"}, format="json")
-    assert r.json()["emoji"] == "🌍"
+    r = clients["son1"].patch(f"/api/folders/{fid}", {"emoji": "🧳"}, format="json")
+    assert r.json()["emoji"] == "🧳"
     r = clients["son1"].patch(f"/api/folders/{fid}", {"name": "Trips 2026"}, format="json")
-    assert r.json()["emoji"] == "🌍"  # custom emoji survives rename
+    assert r.json()["emoji"] == "🧳"  # custom emoji survives rename
     caps_before = r.json()["caps"]
     r = clients["son1"].patch(f"/api/folders/{fid}", {"emoji": ""}, format="json")
     assert r.json()["emoji"] == "✈️" and r.json()["caps"] == caps_before  # emoji never affects access

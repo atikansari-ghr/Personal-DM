@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { safeNext } from "./api";
 import { clampZoom, fitZoom, MAX_ZOOM, MIN_ZOOM, stepZoom } from "./components/DocViewer";
 import { kindFromMime } from "./components/FileTypeIcon";
+import { normaliseView, SORT_LABELS } from "./docview";
 
 const O = "https://docs.example.com";
 
@@ -38,5 +39,17 @@ describe("offline file types", () => {
     expect(kindFromMime("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")).toBe("excel");
     expect(kindFromMime("application/zip")).toBe("archive");
     expect(kindFromMime("application/octet-stream")).toBe("other");
+  });
+});
+
+describe("folder view preference", () => {
+  it("maps old and unknown values to a supported view", () => {
+    expect(normaliseView("grid")).toBe("thumbnails"); // stored by earlier versions
+    expect(normaliseView("details")).toBe("details");
+    expect(normaliseView(null)).toBe("list");
+    expect(normaliseView("carousel")).toBe("list");
+  });
+  it("labels every server sort key", () => {
+    for (const k of ["-added", "added", "name", "-name", "size", "-size", "expiry", "-expiry", "type", "-type"]) expect(SORT_LABELS[k]).toBeTruthy();
   });
 });

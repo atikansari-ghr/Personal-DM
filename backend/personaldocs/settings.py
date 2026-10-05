@@ -1,4 +1,4 @@
-"""Django settings for Personal Documents.
+"""Django settings for Personal Documents Management System.
 
 All deployment-specific values come from environment variables, normally loaded by
 systemd from /etc/personaldocs/personaldocs.env. Nothing secret lives in the repository.

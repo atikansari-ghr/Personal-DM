@@ -53,6 +53,31 @@ def suggest_emoji(name: str) -> str:
     return "📁"
 
 
+# Icons a person may choose for a folder (the same list the web app offers; free-form emoji are not accepted).
+APPROVED_ICONS = ("📁", "✈️", "🛂", "🛃", "🏠", "🎓", "🩺", "🏦", "🛡️", "🚗", "📜", "🪪", "🧾", "🖼️", "📝", "👪", "👤", "💼",
+                  "🏥", "💳", "📦", "🔑", "⚖️", "🕌", "🧳", "🏫", "📚", "🧒", "💍", "🗂️", "📅", "⭐")
+STANDARD_ICON = "📁"
+
+
+def is_top_level(parent: Folder | None) -> bool:
+    """Directly in a person's or the family's area (e.g. "My Documents / Passports"): the level with semantic icons."""
+    return parent is not None and parent.kind in (Folder.PERSONAL_ROOT, Folder.SHARED)
+
+
+def default_emoji(name: str, parent: Folder | None) -> str:
+    """Top-level semantic folders get a suggested icon; deeper user folders get the standard folder icon."""
+    if is_top_level(parent) and config.get("documents.emoji_suggestions"):
+        return suggest_emoji(name)
+    return STANDARD_ICON
+
+
+def check_icon(emoji: str) -> str:
+    emoji = (emoji or "").strip()
+    if emoji and emoji not in APPROVED_ICONS:
+        raise DomainError("Choose an icon from the list.")
+    return emoji
+
+
 def folder_path(folder: Folder) -> list[Folder]:
     chain = []
     seen = set()
@@ -81,8 +106,10 @@ def create_folder(*, actor, parent: Folder | None, name: str, owner=None, kind: 
     if group is None and parent is not None:
         group = parent.group
     custom = emoji is not None and emoji != ""
-    if not custom:
-        emoji = suggest_emoji(name) if config.get("documents.emoji_suggestions") else "📁"
+    if custom:
+        emoji = check_icon(emoji)
+    else:
+        emoji = default_emoji(name, parent)
     folder = Folder.objects.create(parent=parent, name=name, owner=owner, kind=kind, emoji=emoji,
                                    emoji_is_custom=custom, source_path=source_path, created_by=actor, group=group)
     return folder
@@ -470,7 +497,9 @@ def move_folder(*, ctx: P.AccessContext, actor, folder: Folder, new_parent: Fold
             raise DomainError(f"“{new_parent.name}” already has a folder called “{folder.name}”. Rename one of them first.")
         old_parent = folder.parent_id
         folder.parent = new_parent
-        folder.save(update_fields=["parent"])
+        if not folder.emoji_is_custom:  # a chosen icon travels with the folder; a default follows the new level
+            folder.emoji = default_emoji(folder.name, new_parent)
+        folder.save(update_fields=["parent", "emoji"])
         audit.record("folder.move", request=request, actor=actor, target=folder,
                      source=str(old_parent), destination=str(new_parent.id))
     return True

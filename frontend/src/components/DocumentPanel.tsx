@@ -7,6 +7,7 @@ import type { DocDetail, DocRow, Meta, Version } from "../types";
 import PermissionsDialog from "./PermissionsDialog";
 import { Avatar, Confirm, CopyButton, ExpiryBadge, HelpTip, Icon, Modal, Skeleton, StateBadge, useToast } from "./ui";
 import AISuggestions from "./AISuggestions";
+import Menu from "./Menu";
 import DocViewer from "./DocViewer";
 import FileTypeIcon from "./FileTypeIcon";
 import { useAiStatus } from "../ai";
@@ -221,7 +222,8 @@ function VersionDialog({ doc, mode, onClose, onDone }: { doc: DocDetail; mode: "
   );
 }
 
-function ShareDialog({ doc, onClose }: { doc: DocDetail; onClose: () => void }) {
+type Shareable = { id: string; title: string; caps: string[]; current_version?: { original_name: string } | null };
+export function ShareDialog({ doc, onClose }: { doc: Shareable; onClose: () => void }) {
   const toast = useToast();
   const [shares, setShares] = useState<any[]>([]);
   const [days, setDays] = useState(7);
@@ -355,20 +357,16 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
           {can("download") && v && <a className="btn primary" href={`/api/documents/${doc.id}/file?download=1`}><Icon name="download" /> Download</a>}
           {(can("share") || can("download")) && <button className="btn" onClick={() => setDialog("share")}><Icon name="share" /> Share</button>}
           {!full ? <Link className="btn" to={`/documents/${doc.id}`}><Icon name="external" /> Open full page</Link> : null}
-          <div style={{ position: "relative" }}>
-            <button className="btn" aria-haspopup="menu" aria-expanded={dialog === "menu"} onClick={() => setDialog(dialog === "menu" ? "" : "menu")} aria-label="More actions"><Icon name="more" /></button>
-            {dialog === "menu" && (
-              <div className="suggest" role="menu" style={{ right: 0, left: "auto", minWidth: 230 }}>
-                {can("edit") && <button role="menuitem" onClick={() => setDialog("edit")}>Edit details</button>}
-                {can("version") && <button role="menuitem" onClick={() => setDialog("version")}>Upload new version (better scan)</button>}
-                {doc.folder && <button role="menuitem" onClick={() => setDialog("renew")}>Add renewed document</button>}
-                {can("download") && v && <button role="menuitem" onClick={async () => { try { await saveOffline(session!.user!.id, doc, v); toast("Saved for offline use on this device"); } catch (e: any) { toast(e.message, "error"); } setDialog(""); }}>Save for offline use</button>}
-                <button role="menuitem" onClick={() => setDialog("perms")}>Who has access</button>
-                {can("edit") && <button role="menuitem" onClick={() => setDialog("rerun")}>Re-run OCR / preview…</button>}
-                {can("archive") && !doc.archived && <button role="menuitem" onClick={() => setDialog("archive")}>Archive</button>}
-              </div>
-            )}
-          </div>
+          <Menu label="More actions" className="btn" items={[
+            { label: "Rename / edit details…", hidden: !can("edit"), onSelect: () => setDialog("edit") },
+            { label: "Upload new version (better scan)…", hidden: !can("version"), onSelect: () => setDialog("version") },
+            { label: "Add renewed document…", hidden: !doc.folder, onSelect: () => setDialog("renew") },
+            { label: "Save for offline use", hidden: !(can("download") && v), onSelect: async () => { try { await saveOffline(session!.user!.id, doc, v!); toast("Saved for offline use on this device"); } catch (e: any) { toast(e.message, "error"); } } },
+            { label: "Who has access", onSelect: () => setDialog("perms") },
+            { label: "Re-run OCR / preview…", hidden: !can("edit"), onSelect: () => setDialog("rerun") },
+            "separator",
+            { label: "Archive…", danger: true, hidden: !can("archive") || doc.archived, onSelect: () => setDialog("archive") },
+          ]} />
         </div>
       </div>
       <Preview doc={doc} full={full} />
