@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from django.utils import timezone
 
+from . import filetypes
 from . import permissions as P
 from .models import Document, DocumentField, DocumentVersion, Folder
 from .services import mask
@@ -34,7 +35,7 @@ def expiry_status(doc: Document) -> dict | None:
 def version_json(v: DocumentVersion) -> dict:
     return {
         "id": str(v.id), "number": v.number, "original_name": v.original_name, "size": v.size, "sha256": v.sha256,
-        "mime": v.mime, "format": v.format_class, "comment": v.comment, "state": v.state, "error": v.error,
+        "mime": v.mime, "format": v.format_class, **filetypes.describe(v), "comment": v.comment, "state": v.state, "error": v.error,
         "ocr_applied": v.ocr_applied, "pdfa": v.pdfa, "page_count": v.page_count,
         "pdfa_check": {k: v.pdfa_report.get(k) for k in ("validator", "profile", "compliant", "full_validation", "failed_rules", "note")} if v.pdfa_report else None,
         "has_preview": bool(v.preview_path or v.searchable_path or v.format_class in ("pdf", "image", "text")),
@@ -50,7 +51,7 @@ def document_row(ctx: P.AccessContext, d: Document, snippet: str | None = None) 
         "type": {"id": d.doc_type_id, "name": d.doc_type.name} if d.doc_type_id else None,
         "state": d.state, "expiry_date": d.expiry_date, "issue_date": d.issue_date, "expiry": expiry_status(d),
         "created_at": d.created_at, "archived": d.archived_at is not None,
-        "size": v.size if v else None, "format": v.format_class if v else None,
+        "size": v.size if v else None, "format": v.format_class if v else None, **filetypes.describe(v),
         "has_thumbnail": bool(v and v.thumbnail_path), "version_id": str(v.id) if v else None,
         "caps": P.names(ctx.doc_caps(d)),
     }
@@ -111,4 +112,6 @@ def folder_json(ctx: P.AccessContext, f: Folder, counts: dict | None = None, pat
         "emoji_is_custom": f.emoji_is_custom, "kind": f.kind, "owner": str(f.owner_id) if f.owner_id else None,
         "inherit_permissions": f.inherit_permissions, "caps": [] if path_only else P.names(caps),
         "path_only": path_only, "count": (counts or {}).get(f.id, 0), "archived": f.archived_at is not None,
+        # Identity of a member's personal area (name + avatar) for the tree; never used for authorisation.
+        "owner_user": user_mini(f.owner) if f.kind == Folder.PERSONAL_ROOT and f.owner_id else None,
     }

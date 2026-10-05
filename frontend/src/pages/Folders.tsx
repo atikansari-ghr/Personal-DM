@@ -5,36 +5,65 @@ import DocumentPanel from "../components/DocumentPanel";
 import { PanelHandles, usePanelWidths } from "../components/PanelResizer";
 import PermissionsDialog from "../components/PermissionsDialog";
 import UploadDialog from "../components/UploadDialog";
-import { Confirm, EmojiPicker, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useToast } from "../components/ui";
+import FileTypeIcon from "../components/FileTypeIcon";
+import FolderPicker, { descendantIds, FolderIcon, folderChildren, folderLabel } from "../components/FolderPicker";
+import { Avatar, Confirm, EmojiPicker, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useToast } from "../components/ui";
 import { useSession } from "../session";
 import type { DocRow, FolderNode } from "../types";
 
-function TreeNode({ node, children, active, expanded, toggle, select, level }: {
-  node: FolderNode; children: FolderNode[]; active: string; expanded: Set<string>; toggle: (id: string) => void; select: (id: string) => void; level: number;
-}) {
+type Drag = { type: "docs"; ids: string[] } | { type: "folder"; id: string };
+type TreeProps = {
+  node: FolderNode; active: string; expanded: Set<string>; toggle: (id: string, open?: boolean) => void; select: (id: string) => void; level: number;
+  me?: string | null; dnd: Dnd;
+};
+interface Dnd {
+  drag: React.MutableRefObject<Drag | null>;
+  over: string;
+  setOver: (id: string) => void;
+  why: (target: FolderNode) => string; // "" = drop allowed
+  drop: (target: FolderNode) => void;
+  startFolder: (f: FolderNode) => boolean;
+}
+
+function TreeNode({ node, active, expanded, toggle, select, level, me, dnd }: TreeProps) {
+  const children = childrenOf.get(node.id) || [];
   const open = expanded.has(node.id);
+  const hoverTimer = useRef<number>();
+  const draggable = !node.path_only && dnd.startFolder(node);
   return (
     <li role="treeitem" aria-expanded={children.length ? open : undefined} aria-selected={active === node.id} aria-level={level}>
-      <div className={`tree-node ${active === node.id ? "active" : ""} ${node.path_only ? "path-only" : ""}`}
+      <div className={`tree-node ${active === node.id ? "active" : ""} ${node.path_only ? "path-only" : ""} ${dnd.over === node.id ? "drop-ok" : ""}`}
         onClick={() => !node.path_only && select(node.id)} tabIndex={node.path_only ? -1 : 0}
+        draggable={draggable}
+        onDragStart={(e) => { e.stopPropagation(); dnd.drag.current = { type: "folder", id: node.id }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", node.name); }}
+        onDragEnd={() => { dnd.drag.current = null; dnd.setOver(""); }}
+        onDragOver={(e) => {
+          if (!dnd.drag.current || node.path_only || dnd.why(node)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (dnd.over !== node.id) {
+            dnd.setOver(node.id);
+            window.clearTimeout(hoverTimer.current);
+            if (children.length && !open) hoverTimer.current = window.setTimeout(() => toggle(node.id, true), 700);
+          }
+        }}
+        onDragLeave={() => { window.clearTimeout(hoverTimer.current); }}
+        onDrop={(e) => { e.preventDefault(); window.clearTimeout(hoverTimer.current); dnd.setOver(""); dnd.drop(node); }}
         onKeyDown={(e) => {
           if (e.key === "Enter") select(node.id);
           if (e.key === "ArrowRight" && !open) toggle(node.id);
           if (e.key === "ArrowLeft" && open) toggle(node.id);
         }}>
         <button className="caret" tabIndex={-1} aria-label={open ? "Collapse" : "Expand"} onClick={(e) => { e.stopPropagation(); toggle(node.id); }} style={{ visibility: children.length ? "visible" : "hidden" }}>{open ? "▾" : "▸"}</button>
-        <span aria-hidden="true">{node.emoji || "📁"}</span>
-        <span>{node.name}</span>
+        <FolderIcon f={node} />
+        <span>{folderLabel(node, me)}</span>
         {node.count > 0 && <span className="count">{node.count}</span>}
       </div>
-      {open && children.length > 0 && <ul role="group">{children.map((c) => <TreeChild key={c.id} node={c} active={active} expanded={expanded} toggle={toggle} select={select} level={level + 1} />)}</ul>}
+      {open && children.length > 0 && <ul role="group">{children.map((c) => <TreeNode key={c.id} node={c} active={active} expanded={expanded} toggle={toggle} select={select} level={level + 1} me={me} dnd={dnd} />)}</ul>}
     </li>
   );
 }
 let childrenOf: Map<string | null, FolderNode[]> = new Map();
-function TreeChild(props: { node: FolderNode; active: string; expanded: Set<string>; toggle: (id: string) => void; select: (id: string) => void; level: number }) {
-  return <TreeNode {...props} children={childrenOf.get(props.node.id) || []} />;
-}
 
 export default function FoldersPage() {
   const { folderId, docId } = useParams();
@@ -59,14 +88,9 @@ export default function FoldersPage() {
   const loadFolders = () => api<{ folders: FolderNode[] }>("folders").then((r) => setFolders(r.folders));
   useEffect(() => { loadFolders(); }, []);
   const byId = useMemo(() => new Map((folders || []).map((f) => [f.id, f])), [folders]);
-  childrenOf = useMemo(() => {
-    const m = new Map<string | null, FolderNode[]>();
-    (folders || []).forEach((f) => {
-      const key = f.parent && byId.has(f.parent) ? f.parent : null;
-      m.set(key, [...(m.get(key) || []), f]);
-    });
-    return m;
-  }, [folders, byId]);
+  const me = session?.user?.id || null;
+  childrenOf = useMemo(() => folderChildren(folders || [], me), [folders, me]);
+  const myRoot = (folders || []).find((f) => f.kind === "personal_root" && f.owner === me && !f.path_only);
   const roots = childrenOf.get(null) || [];
   // default selection: first viewable folder; expand path to active
   useEffect(() => {
@@ -95,6 +119,61 @@ export default function FoldersPage() {
   const can = (c: string) => !!folder?.caps.includes(c);
   const openDoc = (id: string) => (fullPage ? nav(`/documents/${id}`) : nav(`/folders/${folderId}/${id}`));
 
+  // ---- moving (drag and drop and "Move to…" share the same checks and the same server calls)
+  const drag = useRef<Drag | null>(null);
+  const [over, setOver] = useState("");
+  const [moving, setMoving] = useState<Drag | null>(null);
+  const docsReason = (ids: string[]) => (t: FolderNode) => {
+    if (t.path_only) return "You cannot open this folder";
+    if (!t.caps.includes("upload")) return "You cannot add documents here";
+    if (docs && ids.every((id) => docs.find((d) => d.id === id)?.folder === t.id)) return "Already in this folder";
+    return "";
+  };
+  const folderReason = (id: string) => {
+    const blocked = descendantIds(folders || [], id);
+    const f = byId.get(id);
+    return (t: FolderNode) => {
+      if (t.path_only) return "You cannot open this folder";
+      if (blocked.has(t.id)) return "A folder cannot go inside itself";
+      if (f && f.parent === t.id) return "Already in this folder";
+      if (!t.caps.includes("organize")) return "You cannot organise this folder";
+      if ((childrenOf.get(t.id) || []).some((c) => f && c.name.toLowerCase() === f.name.toLowerCase())) return "A folder with the same name is already there";
+      return "";
+    };
+  };
+  const whyFor = (d: Drag | null) => (t: FolderNode) => (!d ? "Nothing to move" : d.type === "docs" ? docsReason(d.ids)(t) : folderReason(d.id)(t));
+  const moveTo = async (d: Drag, target: FolderNode) => {
+    try {
+      if (d.type === "docs") {
+        const r = await api<any>("documents/bulk", { body: { ids: d.ids, action: "move", value: target.id } });
+        const errors = (r.results || []).filter((x: any) => !x.ok).map((x: any) => x.error);
+        toast(r.failed ? `${r.succeeded} moved, ${r.failed} not moved: ${[...new Set(errors)].join("; ")}` : `${r.succeeded} moved to ${folderLabel(target, me)}`, r.failed ? "error" : "ok");
+        setSelected(new Set());
+      } else {
+        await api(`folders/${d.id}`, { method: "PATCH", body: { parent: target.id } });
+        toast(`Folder moved to ${folderLabel(target, me)}`);
+      }
+    } catch (x: any) {
+      toast(x.message, "error");
+    }
+    loadDocs();
+    loadFolders();
+  };
+  const dnd: Dnd = {
+    drag, over, setOver,
+    why: (t) => whyFor(drag.current)(t),
+    drop: (t) => { const d = drag.current; drag.current = null; if (d && !whyFor(d)(t)) moveTo(d, t); },
+    startFolder: (f) => !!f.parent && f.kind === "normal" && f.caps.includes("organize"),
+  };
+  const startDocDrag = (e: React.DragEvent, d: DocRow) => {
+    const ids = selected.has(d.id) ? [...selected] : [d.id];
+    drag.current = { type: "docs", ids };
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", ids.length > 1 ? `${ids.length} documents` : d.title);
+  };
+  const endDrag = () => { drag.current = null; setOver(""); };
+  const [rowMenu, setRowMenu] = useState("");
+
   const bulk = async (action: string, value?: string) => {
     const r = await api<any>("documents/bulk", { body: { ids: [...selected], action, value } });
     toast(`${r.succeeded} updated${r.failed ? `, ${r.failed} not permitted` : ""}`, r.failed ? "error" : "ok");
@@ -122,8 +201,15 @@ export default function FoldersPage() {
       <div className={`browser ${docId ? "has-doc" : ""} ${showTree ? "show-tree" : ""}`} style={panels.style}>
         <PanelHandles treeRef={treeRef} listRef={listRef} widths={panels.widths} save={panels.save} reset={panels.reset} />
         <section className="tree tree-pane" aria-label="Folder tree" ref={treeRef}>
-          <ul role="tree">{roots.map((r) => <TreeNode key={r.id} node={r} children={childrenOf.get(r.id) || []} active={folderId || ""} expanded={expanded} level={1}
-            toggle={(id) => setExpanded((e) => { const n = new Set(e); n.has(id) ? n.delete(id) : n.add(id); return n; })}
+          {myRoot && (
+            <Link to={`/folders/${myRoot.id}`} className={`my-area ${folderId === myRoot.id ? "active" : ""}`} onClick={() => setShowTree(false)}
+              aria-current={folderId === myRoot.id ? "page" : undefined}>
+              <Avatar user={session?.user} size="sm" />
+              <span>My Documents<small>{session?.user?.display_name}</small></span>
+            </Link>
+          )}
+          <ul role="tree" aria-label="Folders">{roots.map((r) => <TreeNode key={r.id} node={r} active={folderId || ""} expanded={expanded} level={1} me={me} dnd={dnd}
+            toggle={(id, force) => setExpanded((e) => { const n = new Set(e); (force ?? !n.has(id)) ? n.add(id) : n.delete(id); return n; })}
             select={(id) => { setShowTree(false); nav(`/folders/${id}`); }} />)}</ul>
         </section>
         <section className="list-pane" aria-label="Documents" ref={listRef}>
@@ -131,7 +217,7 @@ export default function FoldersPage() {
             <nav className="breadcrumb" aria-label="Breadcrumb">
               <button className="btn small ghost" onClick={() => setShowTree(true)} aria-label="Show folders" style={{ padding: "0 .3rem" }}>☰</button>
               {path.filter((p) => p.parent).map((p, i, arr) => (
-                <span key={p.id}>{i < arr.length - 1 ? <><Link to={`/folders/${p.id}`}>{p.emoji} {p.name}</Link> /</> : <strong style={{ color: "var(--ink)" }}>{p.emoji} {p.name}</strong>}</span>
+                <span key={p.id}>{i < arr.length - 1 ? <><Link to={`/folders/${p.id}`}>{p.emoji} {folderLabel(p, me)}</Link> /</> : <strong style={{ color: "var(--ink)" }}>{p.emoji} {folderLabel(p, me)}</strong>}</span>
               ))}
             </nav>
             {folder && (
@@ -142,6 +228,7 @@ export default function FoldersPage() {
                     {can("organize") && <button role="menuitem" onClick={() => { setName(""); setEmoji(""); setDialog("new"); }}>New subfolder</button>}
                     {can("organize") && <button role="menuitem" onClick={() => { setName(folder.name); setEmoji(folder.emoji); setDialog("rename"); }}>Rename / emoji</button>}
                     {can("organize") && <button role="menuitem" onClick={() => api<{ created: number }>(`folders/${folder.id}/apply-template`, { method: "POST" }).then((r) => { toast(r.created ? `${r.created} template folder(s) added` : "All template folders already exist"); setDialog(""); loadFolders(); }).catch((e) => toast(e.message, "error"))}>Apply folder template</button>}
+                    {dnd.startFolder(folder) && <button role="menuitem" onClick={() => { setDialog(""); setMoving({ type: "folder", id: folder.id }); }}>Move to…</button>}
                     <button role="menuitem" onClick={() => setDialog("perms")}>Who has access</button>
                     {can("download") && <a role="menuitem" className="suggest-link" style={{ display: "block", padding: ".55rem .8rem", color: "inherit", textDecoration: "none" }} href={`/api/export/download?folder=${folder.id}`}>Download folder (ZIP)</a>}
                     {can("archive") && folder.parent && <button role="menuitem" onClick={() => setDialog("archive")}>Archive folder</button>}
@@ -154,31 +241,42 @@ export default function FoldersPage() {
             <div className="row card" style={{ margin: ".5rem", padding: ".5rem" }}>
               <strong>{selected.size} selected</strong>
               <button className="btn small" onClick={() => { const t = prompt("Tag to add"); if (t) bulk("tag_add", t); }}>Add tag</button>
-              <button className="btn small" onClick={() => setDialog("move")}>Move…</button>
+              <button className="btn small" onClick={() => setMoving({ type: "docs", ids: [...selected] })}>Move to…</button>
               <button className="btn small danger" onClick={() => bulk("archive")}>Archive</button>
               <button className="btn small ghost" onClick={() => setSelected(new Set())}>Clear</button>
             </div>
           )}
           {subfolders.length > 0 && (
             <div className="row" style={{ padding: ".3rem .7rem" }}>
-              {subfolders.filter((s) => !s.path_only).map((s) => <Link key={s.id} to={`/folders/${s.id}`} className="btn small">{s.emoji} {s.name} <span className="muted">{s.count || ""}</span></Link>)}
+              {subfolders.filter((s) => !s.path_only).map((s) => <Link key={s.id} to={`/folders/${s.id}`} className={`btn small ${over === s.id ? "drop-ok" : ""}`}
+                onDragOver={(e) => { if (drag.current && !dnd.why(s)) { e.preventDefault(); setOver(s.id); } }} onDragLeave={() => setOver("")}
+                onDrop={(e) => { e.preventDefault(); setOver(""); dnd.drop(s); }}>{s.emoji} {s.name} <span className="muted">{s.count || ""}</span></Link>)}
             </div>
           )}
           {docs === null ? <div style={{ padding: "1rem" }}><Skeleton /></div> : docs.length === 0 ? (
             <div className="empty">This folder has no documents{can("upload") ? " yet — drop files with Upload." : "."}</div>
           ) : view === "list" ? docs.map((d) => (
-            <div key={d.id} className={`doc-card ${docId === d.id ? "active" : ""}`} onClick={() => openDoc(d.id)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && openDoc(d.id)} role="button" aria-current={docId === d.id}>
+            <div key={d.id} className={`doc-card ${docId === d.id ? "active" : ""}`} onClick={() => openDoc(d.id)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && e.target === e.currentTarget && openDoc(d.id)} role="button" aria-current={docId === d.id}
+              draggable={d.caps.includes("organize")} onDragStart={(e) => startDocDrag(e, d)} onDragEnd={endDrag}>
               <input type="checkbox" aria-label={`Select ${d.title}`} checked={selected.has(d.id)} onClick={(e) => e.stopPropagation()}
                 onChange={(e) => setSelected((s) => { const n = new Set(s); e.target.checked ? n.add(d.id) : n.delete(d.id); return n; })} />
-              <span className="doc-icon"><Icon name="file" size={18} /></span>
-              <div className="grow"><div style={{ fontWeight: 600 }}>{d.title}</div><div className="small muted">{(d.format || "").toUpperCase()} · {formatBytes(d.size)} · {formatDate(d.created_at)}</div></div>
+              <FileTypeIcon kind={d.file_kind} label={d.file_label} />
+              <div className="grow"><div style={{ fontWeight: 600 }}>{d.title}</div><div className="small muted">{d.file_label} · {formatBytes(d.size)} · {formatDate(d.created_at)}</div></div>
               <StateBadge state={d.state} />{d.expiry && d.expiry.level !== "ok" && <ExpiryBadge expiry={d.expiry} />}
+              <RowMenu d={d} open={rowMenu === d.id} setOpen={(o) => setRowMenu(o ? d.id : "")} openDoc={openDoc} move={() => setMoving({ type: "docs", ids: [d.id] })} />
             </div>
           )) : (
             <div className="doc-grid">{docs.map((d) => (
-              <div key={d.id} className={`doc-card ${docId === d.id ? "active" : ""}`} onClick={() => openDoc(d.id)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && openDoc(d.id)}>
-                {d.has_thumbnail ? <img className="thumb" src={`/api/documents/${d.id}/thumbnail`} alt="" loading="lazy" /> : <div className="thumb" aria-hidden="true">📄</div>}
-                <div className="small" style={{ fontWeight: 600 }}>{d.title}</div>
+              <div key={d.id} className={`doc-card ${docId === d.id ? "active" : ""}`} onClick={() => openDoc(d.id)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && e.target === e.currentTarget && openDoc(d.id)}
+                draggable={d.caps.includes("organize")} onDragStart={(e) => startDocDrag(e, d)} onDragEnd={endDrag}>
+                <div className="thumb-wrap">
+                  {d.has_thumbnail ? <img className="thumb" src={`/api/documents/${d.id}/thumbnail`} alt="" loading="lazy" draggable={false} /> : <div className="thumb" aria-hidden="true"><FileTypeIcon kind={d.file_kind} size="lg" /></div>}
+                  {d.has_thumbnail && <FileTypeIcon kind={d.file_kind} label={d.file_label} size="sm" />}
+                </div>
+                <div className="row between" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}>
+                  <div className="small" style={{ fontWeight: 600 }}>{d.title}</div>
+                  <RowMenu d={d} open={rowMenu === d.id} setOpen={(o) => setRowMenu(o ? d.id : "")} openDoc={openDoc} move={() => setMoving({ type: "docs", ids: [d.id] })} />
+                </div>
                 <ExpiryBadge expiry={d.expiry} />
               </div>
             ))}</div>
@@ -212,10 +310,10 @@ export default function FoldersPage() {
           </form>
         </Modal>
       )}
-      {dialog === "move" && (
-        <Modal title="Move documents" onClose={() => setDialog("")}>
-          <MoveForm folders={folders} onMove={(target) => { setDialog(""); bulk("move", target); }} />
-        </Modal>
+      {moving && (
+        <MoveDialog folders={folders} me={me} moving={moving} why={whyFor(moving)}
+          what={moving.type === "folder" ? `the folder “${byId.get(moving.id)?.name}” and everything in it` : moving.ids.length === 1 ? `“${docs?.find((x) => x.id === moving.ids[0])?.title || "this document"}”` : `${moving.ids.length} documents`}
+          onClose={() => setMoving(null)} onMove={(t) => { const d = moving; setMoving(null); moveTo(d, t); }} />
       )}
       {dialog === "perms" && folder && <PermissionsDialog target={{ kind: "folders", id: folder.id, name: folder.name }} onClose={() => { setDialog(""); loadFolders(); }} />}
       {dialog === "archive" && folder && (
@@ -227,17 +325,48 @@ export default function FoldersPage() {
   );
 }
 
-function MoveForm({ folders, onMove }: { folders: FolderNode[]; onMove: (id: string) => void }) {
-  const [target, setTarget] = useState("");
-  const options = folders.filter((f) => f.caps.includes("upload"));
+function RowMenu({ d, open, setOpen, openDoc, move }: { d: DocRow; open: boolean; setOpen: (o: boolean) => void; openDoc: (id: string) => void; move: () => void }) {
   return (
-    <div className="stack">
-      <select aria-label="Destination folder" value={target} onChange={(e) => setTarget(e.target.value)}>
-        <option value="">Choose destination…</option>
-        {options.map((f) => <option key={f.id} value={f.id}>{f.emoji} {f.name}</option>)}
-      </select>
-      <p className="small muted">Moving can change who can see a document (it inherits the new folder's access). Items you cannot move are reported.</p>
-      <button className="btn primary" disabled={!target} onClick={() => onMove(target)}>Move</button>
+    <div className="row-menu" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") setOpen(false); }}>
+      <button className="icon-btn" aria-label={`More actions for ${d.title}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="more" /></button>
+      {open && (
+        <div className="suggest" role="menu">
+          <button role="menuitem" onClick={() => { setOpen(false); openDoc(d.id); }}>Open</button>
+          {d.caps.includes("organize") && <button role="menuitem" onClick={() => { setOpen(false); move(); }}>Move to…</button>}
+          {d.caps.includes("download") && <a role="menuitem" className="suggest-link" style={{ display: "block", padding: ".55rem .8rem", color: "inherit", textDecoration: "none" }} href={`/api/documents/${d.id}/file?download=1`}>Download</a>}
+        </div>
+      )}
     </div>
+  );
+}
+
+function MoveDialog({ folders, me, moving, why, what, onClose, onMove }: {
+  folders: FolderNode[]; me: string | null; moving: Drag; why: (t: FolderNode) => string; what: string; onClose: () => void; onMove: (t: FolderNode) => void;
+}) {
+  const [target, setTarget] = useState("");
+  const [step, setStep] = useState<"pick" | "confirm">("pick");
+  const t = folders.find((f) => f.id === target);
+  return (
+    <Modal title="Move to…" onClose={onClose}>
+      {step === "pick" ? (
+        <div className="stack">
+          <p className="small muted">Choose where to move {what}. Folders you cannot use are greyed out with the reason.</p>
+          <FolderPicker folders={folders} value={target} onChange={setTarget} reason={why} meId={me} />
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <button className="btn" onClick={onClose}>Cancel</button>
+            <button className="btn primary" disabled={!t || !!why(t)} onClick={() => setStep("confirm")}>Next</button>
+          </div>
+        </div>
+      ) : (
+        <div className="stack">
+          <p>Move {what} to <strong>{t ? folderLabel(t, me) : ""}</strong>?</p>
+          <p className="small muted">{moving.type === "folder" ? "Sub-folders and documents keep their structure." : ""} Items that inherit access will follow the new folder's access rules. Nothing is copied or deleted; if a move is refused nothing changes.</p>
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <button className="btn" onClick={() => setStep("pick")}>Back</button>
+            <button className="btn primary" onClick={() => t && onMove(t)}>Move</button>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }

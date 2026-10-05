@@ -255,3 +255,34 @@ def users_with_view(doc) -> list:
         if AccessContext.build(u).can(doc, VIEW):
             result.append(u)
     return result
+
+
+def folder_audience(folder_id) -> dict:
+    """Everyone who reaches ``folder_id`` through rules on it or the ancestors it inherits from (the main
+    administrator, who sees everything, is left out). Keys are ("user", id), ("group", id) and ("owner", id); the
+    owner entry stands for delegations, which follow the folder owner."""
+    from .models import AccessRule, Folder
+
+    out: dict = {}
+    fields = ("id", "parent_id", "inherit_permissions", "owner_id")
+    node = Folder.objects.filter(pk=folder_id).values(*fields).first()
+    for _ in range(256):
+        if not node:
+            break
+        for r in AccessRule.objects.filter(folder_id=node["id"]).values("user_id", "group_id", "caps"):
+            key = ("user", r["user_id"]) if r["user_id"] else ("group", r["group_id"])
+            out[key] = out.get(key, 0) | r["caps"]
+        if node["owner_id"]:
+            out[("owner", node["owner_id"])] = ALL
+        if not node["inherit_permissions"] or not node["parent_id"]:
+            break
+        node = Folder.objects.filter(pk=node["parent_id"]).values(*fields).first()
+    return out
+
+
+def move_widens_access(source_folder_id, dest_folder_id) -> bool:
+    """True when inheriting from ``dest`` would give anyone a capability they do not have through ``source``."""
+    if source_folder_id == dest_folder_id:
+        return False
+    source, dest = folder_audience(source_folder_id), folder_audience(dest_folder_id)
+    return any(caps & ~source.get(key, 0) for key, caps in dest.items())
