@@ -151,3 +151,102 @@ def test_at05_interrupted_server_import_resumes_without_duplicates(family, clien
     run_jobs()
     assert Document.objects.filter(owner=family["son1"]).count() == 2  # resumed, nothing duplicated
     assert ImportSession.objects.get(pk=s["id"]).status == "done"
+
+
+def _chain(folder):
+    out = []
+    while folder:
+        out.append(folder.name)
+        folder = folder.parent
+    return list(reversed(out))
+
+
+def _upload_all(client, sid, entries):
+    for e in entries:
+        f = SimpleUploadedFile(e["path"].rsplit("/", 1)[-1], make_text_pdf(e["path"]))
+        r = client.post(f"/api/imports/{sid}/items", {"path": e["path"], "file": f}, format="multipart")
+        assert r.status_code in (200, 201), r.content
+
+
+def test_at63_at64_destination_subfolder_keeps_hierarchy_exactly_as_previewed(family, clients):
+    from apps.library import services as S
+
+    son1 = family["son1"]
+    root = personal_root(son1)
+    edu = S.create_folder(actor=son1, parent=root, name="Education")
+    S.create_folder(actor=son1, parent=edu, name="Old")  # an existing destination is reused, not duplicated
+    entries = [
+        {"path": "Old/Address Update 22July2026/letter.pdf", "size": 10},
+        {"path": "Old/Address Update 22July2026/Deep/a/b/c/form.pdf", "size": 10},
+        {"path": "Old/report.pdf", "size": 10},
+        {"path": "Old/report (copy).pdf", "size": 10},
+        {"path": "loose.pdf", "size": 10},
+        {"path": "loose2.pdf", "size": 10},
+    ]
+    c = clients["son1"]
+    s = c.post("/api/imports", {"source_type": "browser", "entries": entries}, format="json").json()
+    mapping = {
+        "Old": {"action": "user", "user": str(son1.pk), "folder": str(edu.id), "keep_top": True},
+        "(files in the top folder)": {"action": "user", "user": str(son1.pk), "folder": str(edu.id)},
+    }
+    r = c.put(f"/api/imports/{s['id']}", {"mapping": mapping}, format="json")
+    assert r.status_code == 200, r.content
+    body = r.json()
+    prev = {p["source"]: p["destination"] for p in body["preview"]}
+    assert prev["Old"] == "Family library / Sam Sample / Education / Old"
+    tree = {row["path"]: row for row in body["preview_tree"]}
+    base = "Family library / Sam Sample / Education"
+    assert tree[base]["files"] == 2 and tree[base]["exists"]
+    assert tree[f"{base} / Old"]["exists"] and tree[f"{base} / Old"]["files"] == 2
+    assert not tree[f"{base} / Old / Address Update 22July2026"]["exists"]
+    assert f"{base} / Old / Address Update 22July2026 / Deep / a / b / c" in tree  # deep trees, every level listed
+
+    assert c.post(f"/api/imports/{s['id']}/start").status_code == 200
+    _upload_all(c, s["id"], entries)
+    docs = {d.title: d for d in Document.objects.filter(owner=son1)}
+    assert _chain(docs["letter"].folder) == ["Family library", "Sam Sample", "Education", "Old", "Address Update 22July2026"]
+    assert _chain(docs["form"].folder)[-4:] == ["Deep", "a", "b", "c"]
+    assert _chain(docs["loose"].folder) == ["Family library", "Sam Sample", "Education"]
+    assert Folder.objects.filter(parent=edu, name="Old").count() == 1  # merged into the existing folder
+    # every previewed folder now exists exactly where the preview said
+    for path in tree:
+        parts = path.split(" / ")
+        node = Folder.objects.get(parent=None, name=parts[0])
+        for p in parts[1:]:
+            node = Folder.objects.get(parent=node, name=p, archived_at__isnull=True)
+
+
+def test_at63_destination_must_be_inside_the_persons_area_and_allowed(family, clients):
+    from apps.library import services as S
+
+    son1, son2 = family["son1"], family["son2"]
+    other = S.create_folder(actor=son2, parent=personal_root(son2), name="Private")
+    shared = Folder.objects.get(name="Shared family")
+    c = clients["son1"]
+    s = c.post("/api/imports", {"source_type": "browser", "entries": [{"path": "Old/x.pdf", "size": 1}]}, format="json").json()
+    # a folder outside the chosen person's area
+    r = c.put(f"/api/imports/{s['id']}", {"mapping": {"Old": {"action": "user", "user": str(son1.pk), "folder": str(shared.id)}}}, format="json")
+    assert r.status_code == 400 and "not inside" in r.json()["error"]
+    # another member's private folder (not visible to son1) is refused without revealing it
+    r = c.put(f"/api/imports/{s['id']}", {"mapping": {"Old": {"action": "folder", "folder": str(other.id), "owner": str(son1.pk)}}}, format="json")
+    assert r.status_code == 400
+    r = c.put(f"/api/imports/{s['id']}", {"mapping": {"Old": {"action": "user", "user": str(son2.pk), "folder": str(other.id)}}}, format="json")
+    assert r.status_code == 400
+    assert not Document.objects.exists()
+
+
+def test_at64_destination_removed_after_preview_fails_safely(family, clients):
+    from apps.library import services as S
+
+    son1 = family["son1"]
+    dest = S.create_folder(actor=son1, parent=personal_root(son1), name="Target")
+    c = clients["son1"]
+    s = c.post("/api/imports", {"source_type": "browser", "entries": [{"path": "Old/x.pdf", "size": 1}]}, format="json").json()
+    assert c.put(f"/api/imports/{s['id']}", {"mapping": {"Old": {"action": "user", "user": str(son1.pk), "folder": str(dest.id)}}}, format="json").status_code == 200
+    assert c.post(f"/api/imports/{s['id']}/start").status_code == 200
+    S.archive_folder(actor=family["dad"], folder=dest)
+    f = SimpleUploadedFile("x.pdf", make_text_pdf("x"))
+    r = c.post(f"/api/imports/{s['id']}/items", {"path": "Old/x.pdf", "file": f}, format="multipart")
+    assert r.json().get("status") == "failed" or r.status_code >= 400
+    assert not Document.objects.exists()  # nothing lands in an archived folder or anywhere else
+    assert ImportItem.objects.get(session_id=s["id"]).status in ("failed", "pending")

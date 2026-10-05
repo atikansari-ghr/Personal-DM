@@ -4,6 +4,7 @@ import { api, formatBytes, formatDate, formatDateTime } from "../api";
 import UploadDialog from "../components/UploadDialog";
 import { Avatar, ExpiryBadge, Icon, Skeleton, StateBadge, useAsync } from "../components/ui";
 import { useSession } from "../session";
+import FileTypeIcon from "../components/FileTypeIcon";
 import type { DocRow, User } from "../types";
 
 function greeting() {
@@ -22,8 +23,8 @@ export function DocTable({ docs, empty }: { docs: DocRow[]; empty: string }) {
           <tr key={d.id} className="clickable" tabIndex={0} onClick={() => nav(`/documents/${d.id}`)} onKeyDown={(e) => e.key === "Enter" && nav(`/documents/${d.id}`)}>
             <td>
               <div className="row" style={{ flexWrap: "nowrap" }}>
-                <span className="doc-icon"><Icon name="file" size={18} /></span>
-                <div className="grow"><div style={{ fontWeight: 600 }}>{d.title}</div><div className="muted small">{d.type?.name || d.format}</div></div>
+                <FileTypeIcon kind={d.file_kind} label={d.file_label} size="sm" />
+                <div className="grow"><div style={{ fontWeight: 600 }}>{d.title}</div><div className="muted small">{d.type?.name || d.file_label}</div></div>
                 <StateBadge state={d.state} />
               </div>
             </td>
@@ -90,7 +91,7 @@ export default function Dashboard() {
           <h2>Upcoming expiries <Link to="/search?expiring_days=90" className="small">View all ›</Link></h2>
           {data.expiring.length === 0 ? <div className="empty">Nothing expires in the next 90 days.</div> : data.expiring.map((d: DocRow) => (
             <Link key={d.id} to={`/documents/${d.id}`} className="list-item" style={{ textDecoration: "none", color: "inherit" }}>
-              <span className="doc-icon"><Icon name="file" size={18} /></span>
+              <FileTypeIcon kind={d.file_kind} label={d.file_label} size="sm" />
               <div className="grow"><div style={{ fontWeight: 600 }}>{d.owner.display_name} · {d.type?.name || d.title}</div><div className="muted small">{formatDate(d.expiry_date)}</div></div>
               <ExpiryBadge expiry={d.expiry} />
             </Link>

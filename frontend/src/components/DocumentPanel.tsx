@@ -7,6 +7,8 @@ import type { DocDetail, DocRow, Meta } from "../types";
 import PermissionsDialog from "./PermissionsDialog";
 import { Avatar, Confirm, CopyButton, ExpiryBadge, HelpTip, Icon, Modal, Skeleton, StateBadge, useToast } from "./ui";
 import AISuggestions from "./AISuggestions";
+import DocViewer from "./DocViewer";
+import FileTypeIcon from "./FileTypeIcon";
 import { useAiStatus } from "../ai";
 
 const FIELD_LABELS: Record<string, string> = {
@@ -15,23 +17,33 @@ const FIELD_LABELS: Record<string, string> = {
 };
 const DATE_KEYS = ["issue_date", "expiry_date", "date_of_birth"];
 
-function Preview({ doc }: { doc: DocDetail }) {
+const VIEWABLE_IMAGES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+function Preview({ doc, full }: { doc: DocDetail; full?: boolean }) {
   const v = doc.current_version;
   const [text, setText] = useState("");
+  const [browserViewer, setBrowserViewer] = useState(false);
   useEffect(() => {
     setText("");
+    setBrowserViewer(false);
     if (v?.format === "text") fetch(`/api/documents/${doc.id}/preview`, { credentials: "same-origin" }).then((r) => r.text()).then((t) => setText(t.slice(0, 200000)));
   }, [doc.id, v?.id, v?.format]);
   if (!v) return <div className="empty">No file.</div>;
   if (["queued", "processing"].includes(v.state)) return <div className="empty"><Icon name="refresh" /> Processing… the preview appears when OCR and conversion finish.</div>;
-  if (v.format === "image") return <img className="preview-img" src={`/api/documents/${doc.id}/file?version=${v.id}`} alt={`Preview of ${doc.title}`} />;
+  const download = doc.caps.includes("download") ? `/api/documents/${doc.id}/file?download=1&version=${v.id}` : undefined;
+  if (v.format === "image" && VIEWABLE_IMAGES.includes(v.mime))
+    return <DocViewer key={v.id} kind="image" src={`/api/documents/${doc.id}/file?version=${v.id}`} title={doc.title} downloadHref={download} compact={!full} />;
   if (v.format === "text") return <pre className="preview-text">{text}</pre>;
-  if (v.has_preview && (v.format === "pdf" || v.format === "office"))
-    return <iframe className="preview-frame" title={`Preview of ${doc.title}`} src={`/api/documents/${doc.id}/preview?version=${v.id}`} />;
+  if (v.has_preview && ["pdf", "office", "image"].includes(v.format)) {
+    const src = `/api/documents/${doc.id}/preview?version=${v.id}`;
+    if (browserViewer) return <iframe className="preview-frame" title={`Preview of ${doc.title}`} src={src} />;
+    return <DocViewer key={v.id} kind="pdf" src={src} title={doc.title} downloadHref={download} compact={!full} onUseBrowserViewer={() => setBrowserViewer(true)} />;
+  }
   return (
     <div className="empty">
-      <Icon name="file" size={40} />
+      <FileTypeIcon kind={v.file_kind} label={v.file_label} size="lg" />
       <p>{v.error || "No preview is available for this file type."}</p>
+      {download && <a className="btn" href={download}><Icon name="download" /> Download</a>}
       {v.format === "dicom" && <p className="small">DICOM studies are kept intact. Export the whole folder to open it in your medical image viewer.</p>}
     </div>
   );
@@ -303,7 +315,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
           </div>
         </div>
       </div>
-      <Preview doc={doc} />
+      <Preview doc={doc} full={full} />
       <div className="tabs" role="tablist">
         {[["details", "Details"], ["text", "Text"], ["versions", `Versions (${doc.versions.length})`], ["similar", "More like this"], ...(doc.history.length ? [["history", "History"]] : [])].map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{l}</button>
@@ -335,7 +347,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
         </tbody></table>
       )}
       {tab === "similar" && (similar === null ? <Skeleton /> : similar.length === 0 ? <div className="empty">No similar documents found.</div> : (
-        <div>{similar.map((s) => <Link key={s.id} to={`/documents/${s.id}`} className="list-item" style={{ color: "inherit", textDecoration: "none" }}><span className="doc-icon"><Icon name="file" size={18} /></span><div className="grow"><div style={{ fontWeight: 600 }}>{s.title}</div><div className="small muted">{s.owner.display_name} · {s.reasons.join(", ")}</div></div></Link>)}
+        <div>{similar.map((s) => <Link key={s.id} to={`/documents/${s.id}`} className="list-item" style={{ color: "inherit", textDecoration: "none" }}><FileTypeIcon kind={s.file_kind} label={s.file_label} size="sm" /><div className="grow"><div style={{ fontWeight: 600 }}>{s.title}</div><div className="small muted">{s.owner.display_name} · {s.reasons.join(", ")}</div></div></Link>)}
           <p className="small muted">Similarity uses shared words, type, issuer and tags — not AI.</p></div>
       ))}
       {tab === "history" && (

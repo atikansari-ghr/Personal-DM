@@ -5,6 +5,7 @@ import DocumentPanel from "../components/DocumentPanel";
 import { Avatar, Confirm, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useAsync, useToast } from "../components/ui";
 import { useSession } from "../session";
 import type { DocRow, Meta, User } from "../types";
+import FileTypeIcon from "../components/FileTypeIcon";
 import { useAiStatus } from "../ai";
 
 function Snippet({ text }: { text: string }) {
@@ -18,10 +19,10 @@ export function DocList({ docs }: { docs: DocRow[] }) {
     <div className="card" style={{ padding: 0 }}>
       {docs.map((d) => (
         <Link key={d.id} to={`/documents/${d.id}`} className="list-item" style={{ color: "inherit", textDecoration: "none", padding: ".8rem 1rem" }}>
-          <span className="doc-icon"><Icon name="file" size={18} /></span>
+          <FileTypeIcon kind={d.file_kind} label={d.file_label} size="sm" />
           <div className="grow">
             <div style={{ fontWeight: 600 }}>{d.title}</div>
-            <div className="small muted">{d.owner.display_name} · {d.type?.name || (d.format || "").toUpperCase()} · added {formatDate(d.created_at)}</div>
+            <div className="small muted">{d.owner.display_name} · {d.type?.name || d.file_label} · added {formatDate(d.created_at)}</div>
             {d.snippet && <Snippet text={d.snippet} />}
           </div>
           <StateBadge state={d.state} />

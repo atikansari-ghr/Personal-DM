@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from apps.core import audit, config, jobs
 
+from . import filetypes
 from . import permissions as P
 from . import storage
 from .models import AccessRule, Document, DocumentField, DocumentHistory, DocumentVersion, Folder, ShareLink
@@ -128,7 +129,12 @@ def detect_format(path: Path, original_name: str) -> tuple[str, str]:
     if head.startswith(b"BM") and ext == ".bmp":
         return "image", "image/bmp"
     if ext in OFFICE_EXT:
-        return "office", "application/octet-stream"
+        mime = filetypes.office_mime(path, ext, head)
+        # Content that does not match its Office extension is stored as-is but never handed to the converter.
+        return ("office", mime) if mime != "application/octet-stream" else ("other", mime)
+    archive = filetypes.archive_mime(head)
+    if archive:
+        return "other", archive
     if ext in EXEC_EXT or head.startswith(b"MZ") or head.startswith(b"\x7fELF") or head.startswith(b"#!"):
         return "other", "application/octet-stream"
     if ext in TEXT_EXT or (ext == "" and _looks_text(head)):
@@ -419,33 +425,74 @@ def _descendant_ids(folder: Folder) -> list:
     return ids
 
 
-def move_folder(*, ctx: P.AccessContext, actor, folder: Folder, new_parent: Folder) -> None:
-    if folder.parent_id is None:
-        raise DomainError("Root folders cannot be moved.")
-    if new_parent.id in _descendant_ids(folder):
-        raise DomainError("A folder cannot be moved inside itself.")
-    if not ctx.is_admin:
-        need = P.ORGANIZE
-        if not (ctx.folder_caps(folder.id) & need and ctx.folder_caps(new_parent.id) & need):
-            raise DomainError("You need organise permission on both locations.")
-        # Moving changes who inherits access; require permission management to prevent escalation.
-        if folder.inherit_permissions and not ctx.folder_caps(folder.id) & P.MANAGE:
-            raise DomainError("Moving this folder would change who can access it; permission management rights are required.")
-    if Folder.objects.filter(parent=new_parent, name=folder.name, archived_at__isnull=True).exclude(pk=folder.pk).exists():
-        raise DomainError("The destination already has a folder with this name.")
-    folder.parent = new_parent
-    folder.save(update_fields=["parent"])
+def _lock_tree() -> None:
+    """Serialise folder moves: two concurrent moves (A into B, B into A) could otherwise each pass the cycle check
+    and leave a detached loop of folders. Transaction-scoped, released on commit/rollback."""
+    from django.db import connection
+
+    if connection.vendor == "postgresql":
+        with connection.cursor() as cur:
+            cur.execute("SELECT pg_advisory_xact_lock(%s)", [0x50444D56])  # "PDMV"
 
 
-def move_document(*, ctx: P.AccessContext, actor, doc: Document, folder: Folder) -> None:
-    if not ctx.is_admin:
-        if not (ctx.doc_caps(doc) & P.ORGANIZE and ctx.folder_caps(folder.id) & P.UPLOAD):
-            raise DomainError("You need organise permission here and upload permission at the destination.")
-        if doc.inherit_permissions and not ctx.doc_caps(doc) & P.MANAGE:
-            raise DomainError("Moving this document would change who can access it; permission management rights are required.")
-    doc.folder = folder
-    doc.save(update_fields=["folder", "updated_at"])
-    _history(doc, actor, "moved", folder=str(folder.id))
+def move_folder(*, ctx: P.AccessContext, actor, folder: Folder, new_parent: Folder, request=None) -> bool:
+    """Move a folder (with everything inside) under ``new_parent``. Atomic; returns False when nothing changed."""
+    with transaction.atomic():
+        _lock_tree()
+        folder = Folder.objects.select_for_update().get(pk=folder.pk)
+        new_parent = Folder.objects.select_for_update().get(pk=new_parent.pk)
+        if folder.parent_id is None:
+            raise DomainError("Top-level folders cannot be moved.")
+        if folder.archived_at or new_parent.archived_at:
+            raise DomainError("Archived folders cannot be moved or used as a destination.")
+        if folder.parent_id == new_parent.id:
+            return False
+        if new_parent.id in _descendant_ids(folder):
+            raise DomainError("A folder cannot be moved into itself or one of its subfolders.")
+        if not ctx.is_admin:
+            need = P.ORGANIZE
+            if not (ctx.folder_caps(folder.id) & need and ctx.folder_caps(new_parent.id) & need):
+                raise DomainError("You need organise permission on both locations.")
+            # A move that would let more people in needs permission-management rights (prevents escalation);
+            # moving within an area with the same (or narrower) access does not.
+            if (folder.inherit_permissions and not ctx.folder_caps(folder.id) & P.MANAGE
+                    and P.move_widens_access(folder.parent_id, new_parent.id)):
+                raise DomainError("Moving this folder there would give other people access to it. "
+                                  "Ask someone who can manage permissions here (or the main administrator).")
+        if Folder.objects.filter(parent=new_parent, name=folder.name, archived_at__isnull=True).exclude(pk=folder.pk).exists():
+            raise DomainError(f"“{new_parent.name}” already has a folder called “{folder.name}”. Rename one of them first.")
+        old_parent = folder.parent_id
+        folder.parent = new_parent
+        folder.save(update_fields=["parent"])
+        audit.record("folder.move", request=request, actor=actor, target=folder,
+                     source=str(old_parent), destination=str(new_parent.id))
+    return True
+
+
+def move_document(*, ctx: P.AccessContext, actor, doc: Document, folder: Folder, request=None) -> bool:
+    """Move a document to ``folder``. Atomic; returns False when it is already there."""
+    with transaction.atomic():
+        doc = Document.objects.select_for_update().get(pk=doc.pk)
+        folder = Folder.objects.get(pk=folder.pk)
+        if doc.archived_at:
+            raise DomainError("Archived documents cannot be moved.")
+        if folder.archived_at:
+            raise DomainError("Documents cannot be moved into an archived folder.")
+        if doc.folder_id == folder.id:
+            return False
+        if not ctx.is_admin:
+            if not (ctx.doc_caps(doc) & P.ORGANIZE and ctx.folder_caps(folder.id) & P.UPLOAD):
+                raise DomainError("You need organise permission here and upload permission at the destination.")
+            if (doc.inherit_permissions and not ctx.doc_caps(doc) & P.MANAGE
+                    and P.move_widens_access(doc.folder_id, folder.id)):
+                raise DomainError("Moving this document there would give other people access to it. "
+                                  "Ask someone who can manage permissions here (or the main administrator).")
+        source = doc.folder_id
+        doc.folder = folder
+        doc.save(update_fields=["folder", "updated_at"])
+        _history(doc, actor, "moved", folder=str(folder.id), source=str(source))
+        audit.record("document.move", request=request, actor=actor, target=doc, source=str(source), destination=str(folder.id))
+    return True
 
 
 # ---------------------------------------------------------------- permissions administration
