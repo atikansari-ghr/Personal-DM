@@ -201,12 +201,13 @@ export function StoragePanel() {
           {!st.data.destination.ok && <div className="alert warn">{st.data.destination.error}</div>}
           <p>Last success: {st.data.status.last_success ? formatDateTime(st.data.status.last_success) : "never"} {st.data.status.last_verified === true && <span className="badge ok">Verified</span>}
             {st.data.status.last_bytes !== undefined && <span className="muted small"> · {formatBytes(st.data.status.last_bytes)} in {st.data.status.last_seconds}s</span>}</p>
-          {st.data.status.last_error && <div className="alert error">Last attempt failed: {st.data.status.last_error}</div>}
+          {st.data.status.last_error && <div className="alert error">Last attempt failed{st.data.status.last_failure ? ` (${formatDateTime(st.data.status.last_failure)})` : ""}: {st.data.status.last_error}</div>}
+          <p>Schedule: <strong>{st.data.schedule}</strong>{st.data.next_run && <> · next backup {formatDateTime(st.data.next_run)}</>} · keeps the last {st.data.keep} successful backups</p>
           <p className="small muted">Restores are done from the server console (<code>personaldocs restore</code>) so a web session can never overwrite the library. A Proxmox snapshot is a useful extra layer but is not a verified application backup.</p>
         </div>
       )}
       <NasCard onChange={st.reload} />
-      <SettingsForm keys={["backup.target", "backup.require_mount", "backup.schedule_time", "backup.keep_daily", "backup.include_keys"]} title="Backup settings" />
+      <SettingsForm keys={["backup.target", "backup.require_mount", "backup.enabled", "backup.frequency", "backup.weekday", "backup.month_day", "backup.schedule_time", "backup.keep_daily", "backup.include_keys"]} title="Backup settings" />
       <div className="card">
         <h2>Integrity check</h2>
         <p className="small muted">Looks for missing or altered originals, broken version references and orphaned files. Repairs never delete originals or regenerate keys.</p>

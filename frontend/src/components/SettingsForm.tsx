@@ -12,7 +12,16 @@ export interface SettingDef {
 
 const CHANNEL_LABELS: Record<string, string> = { in_app: "In-app", email: "Email", telegram: "Telegram" };
 const CHOICE_LABELS: Record<string, string> = { green: "Green & White", blue: "Blue & White", mono: "Black & White", three_panel: "Three-panel view", full_page: "Full-page viewer", planned: "Planned (not available)", unavailable: "Unavailable in this release", starttls: "STARTTLS", ssl: "SSL/TLS", none: "None (not recommended)", nfs: "NFS", smb: "SMB / Windows share" };
-const KEY_CHOICE_LABELS: Record<string, Record<string, string>> = { "nas.type": { none: "Already mounted (Proxmox bind mount)" } };
+const KEY_CHOICE_LABELS: Record<string, Record<string, string>> = {
+  "nas.type": { none: "Already mounted (Proxmox bind mount)" },
+  "backup.frequency": { daily: "Daily", weekly: "Weekly", monthly: "Monthly" },
+  "backup.weekday": { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" },
+};
+// Fields that only make sense for a particular value of another field (hidden otherwise, values kept).
+const SHOW_IF: Record<string, [string, any[]]> = {
+  "backup.weekday": ["backup.frequency", ["weekly"]],
+  "backup.month_day": ["backup.frequency", ["monthly"]],
+};
 
 export function helpHref(help: string) {
   const [slug, anchor] = help.split("#");
@@ -102,6 +111,12 @@ export default function SettingsForm({ section, keys, title, children }: { secti
     <section className="card">
       {title && <h2>{title}</h2>}
       {defs.map((d) => {
+        const cond = SHOW_IF[d.key];
+        if (cond) {
+          const other = defs.find((x) => x.key === cond[0]);
+          const current = cond[0] in draft ? draft[cond[0]] : other?.value;
+          if (other && !cond[1].includes(current)) return null;
+        }
         const value = d.key in draft ? draft[d.key] : d.secret ? "" : d.value;
         return (
           <div className="setting-row" key={d.key}>
