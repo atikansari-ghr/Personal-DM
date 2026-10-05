@@ -190,7 +190,11 @@ def process_version(job):
     if searchable:
         from .pdfa import validate
 
-        pdfa_report = validate(storage.resolve_derivative(searchable), timeout=min(timeout, 300))
+        try:
+            pdfa_report = validate(storage.resolve_derivative(searchable), timeout=min(timeout, 300))
+        except Exception as exc:  # validation is informational; it must never fail the document
+            pdfa_report = {"validator": "none", "compliant": False, "full_validation": False,
+                           "note": f"PDF/A validation could not run: {exc}"[:500]}
         pdfa = bool(pdfa and pdfa_report.get("compliant"))
 
     with transaction.atomic():
