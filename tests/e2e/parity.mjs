@@ -49,6 +49,8 @@ const page = await signIn(desk);
 const ids = {};
 
 await step("setup: synthetic folders and files in Sam Sample's area", async () => {
+  await api(page, "/api/settings", { method: "PUT", body: { values: { "me.theme": "green" } } }); // default look for screenshots
+  await page.reload();
   const f = (await api(page, "/api/folders")).data.folders;
   const sam = f.find((x) => x.kind === "personal_root" && x.owner_user?.display_name === "Sam Sample");
   ids.sam = sam.id;

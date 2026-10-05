@@ -54,7 +54,7 @@ CSRF_TRUSTED_ORIGINS = [PUBLIC_ORIGIN] + [
     o.strip() for o in (env("CSRF_TRUSTED_ORIGINS", "") or "").split(",") if o.strip()
 ]
 
-# Optional direct access from the home network over plain HTTP (opt-in, e.g. http://192.168.10.195:8000;
+# Optional direct access from the home network over plain HTTP (opt-in, e.g. http://192.168.1.50:8000;
 # `personaldocs local-access on`). The public HTTPS address keeps Secure cookies; see LocalAccessCookieMiddleware.
 LOCAL_ORIGINS = []
 for _o in (env("LOCAL_ORIGINS", "") or "").split(","):

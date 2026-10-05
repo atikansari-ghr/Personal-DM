@@ -80,3 +80,17 @@ Originals are write-once and always exist before their rows commit. `pg_dump` ta
 
 - **More AI providers**: add a `Provider` subclass in `apps/ai/providers.py` (list_models, chat, embed) and a choice in `AIProfile.PROVIDERS`.
 - **WhatsApp**: a new channel in `expiry.dispatch`/`deliver_outbox` and in `registry.CHANNELS`, once a provider has been chosen and verified.
+
+## Change set H/I (2026-10)
+
+- **Notifications:** an event catalogue decides, per event, whether it is critical (administrator-chosen, cannot be
+  turned off, always on the critical channels) or optional (per person, per channel). All messages use one template;
+  bulk actions are summarised. See [ADR 0009](adr/0009-notifications-moves-viewer.md).
+- **Moves:** document and folder moves are transactional and serialised; drag and drop and "Move to…" call the same
+  endpoints.
+- **Viewer:** PDF.js renders previews in the browser from the authenticated preview endpoint, with all its assets
+  served by the app.
+- **Backups:** `ops/schedule.py` computes daily/weekly/monthly occurrences; the scheduler stores the last run so
+  restarts neither skip nor repeat a slot.
+- **Preferences:** theme, layout, dashboard widgets and notification choices are per-account server settings; the
+  client refreshes them when the app returns to the foreground.

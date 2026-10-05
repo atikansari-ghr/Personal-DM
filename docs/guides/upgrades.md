@@ -12,6 +12,22 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to the public-release corrections (October 2026) {#change-set-2026-10-ui}
+
+Same commands as below — `sudo personaldocs upgrade`, then (once, if you never ran it after the security release)
+`sudo personaldocs repair`, then `sudo personaldocs doctor`. This step adds **no database migrations**; all new
+options are stored as settings. After upgrading:
+
+- **Notifications:** your earlier channel choices become the starting point of the new per-event table. Check
+  **Settings → Notifications → Critical notifications / Channels for critical notifications / Delivery problems**:
+  if email or Telegram are not configured yet, either configure them (Settings → Connections) or remove them from
+  the critical channels.
+- **Backups** keep running daily at the same time; choose weekly or monthly in Settings → Storage & backup if you
+  prefer.
+- **Dashboard:** your previous widget list is kept (sections that were always shown stay visible); use
+  **Customise** to change it.
+- **Browser cache:** the app reloads its new version automatically; if a page looks old, reload it once.
+
 ## Upgrading from the previous release (profile photos, Local AI, security, passkeys) {#change-set-2026-10}
 
 ```

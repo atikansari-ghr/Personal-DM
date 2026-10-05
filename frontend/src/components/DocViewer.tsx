@@ -69,10 +69,11 @@ export default function DocViewer({ kind, src, title, downloadHref, onUseBrowser
         if (!res.ok) throw new Error(res.status === 404 ? "The preview is not available." : `The preview could not be loaded (${res.status}).`);
         const data = await res.arrayBuffer();
         const { openPdf } = await import("../pdfjs");
-        const pdf = await openPdf(data);
-        if (cancelled) { pdf.destroy(); return; }
+        const opened = await openPdf(data);
+        if (cancelled) { opened.destroy(); return; }
         pdfRef.current?.destroy?.();
-        pdfRef.current = pdf;
+        pdfRef.current = opened;
+        const pdf = opened.doc;
         const sizes: Size[] = [];
         for (let i = 1; i <= pdf.numPages; i++) {
           const vp = (await pdf.getPage(i)).getViewport({ scale: 1 });
@@ -243,7 +244,7 @@ function PdfPage({ pdf, index, size, zoom, root, label }: { pdf: React.MutableRe
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       try {
-        const page = await pdf.current.getPage(index + 1);
+        const page = await pdf.current.doc.getPage(index + 1);
         if (cancelled) return;
         const dpr = window.devicePixelRatio || 1;
         let scale = zoom * CSS_PER_PT * dpr;

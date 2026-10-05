@@ -259,29 +259,65 @@ The owner's designated family head receives reminders.
 - **Restart needed:** no
 - **Learn more:** [expiry-rules#recipients](guides/expiry-rules.md#recipients)
 
-### Default channels (`notifications.default_channels`)
+### Default channels for expiry reminders (`notifications.default_channels`)
 
-Channels enabled for users who have not chosen their own.
+Channels used for expiry reminders by people who have not chosen their own.
 
 - **Default:** `['in_app', 'email']`
 - **Allowed values:** channel_list
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
-- **Effect of changing:** Affects users without personal preferences.
+- **Effect of changing:** Affects people without personal preferences.
 - **Restart needed:** no
 - **Learn more:** [expiry-rules#channels](guides/expiry-rules.md#channels)
 
-### Required channels (`notifications.required_channels`)
+### Required channels for expiry reminders (`notifications.required_channels`)
 
-Channels users cannot turn off. In-app is always on.
+Channels people cannot turn off for expiry reminders. In-app is always on.
 
 - **Default:** `['in_app']`
 - **Allowed values:** channel_list
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
-- **Effect of changing:** Users see these channels locked on; missing contact details are flagged.
+- **Effect of changing:** People see these channels locked on; missing contact details are flagged.
 - **Restart needed:** no
 - **Learn more:** [expiry-rules#channels](guides/expiry-rules.md#channels)
+
+### Critical notifications (`notifications.critical_events`)
+
+Events people cannot turn off. They always arrive in-app and on the critical channels below.
+
+- **Default:** `['security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.failed_logins', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'backup.failed', 'integrity.failed']`
+- **Allowed values:** security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, account.login, security.failed_logins, security.policy_exception, security.policy_change, security.auth_policy, security.health, backup.failed, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, import.finished, processing.completed, processing.failed
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Applies to the next notification; people see these locked on.
+- **Restart needed:** no
+- **Learn more:** [expiry-rules#critical](guides/expiry-rules.md#critical)
+
+### Channels for critical notifications (`notifications.critical_channels`)
+
+Every critical notification is also sent on these channels. Missing email addresses or unlinked Telegram are flagged to the person and to you, never reported as sent.
+
+- **Default:** `['in_app', 'email', 'telegram']`
+- **Allowed values:** channel_list
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Applies to the next notification.
+- **Restart needed:** no
+- **Learn more:** [expiry-rules#critical](guides/expiry-rules.md#critical)
+
+### Include names in email/Telegram (`notifications.include_names`)
+
+Show folder, document and file names in external messages (long numbers are always masked). Turn off to send only counts and a sign-in link.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [expiry-rules#templates](guides/expiry-rules.md#templates)
 
 ## Section: connections
 
@@ -680,22 +716,71 @@ Refuse to back up unless the destination is a mount point (prevents filling the 
 - **Restart needed:** no
 - **Learn more:** [backup-restore#target](guides/backup-restore.md#target)
 
-### Daily backup time (`backup.schedule_time`)
+### Automatic backups (`backup.enabled`)
 
-Local time for the automatic daily backup. Empty disables.
+Run backups automatically on the schedule below. Back up now always works.
 
-- **Default:** `'02:30'`
-- **Allowed values:** time
+- **Default:** `True`
+- **Allowed values:** bool
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
 - **Learn more:** [backup-restore#schedule](guides/backup-restore.md#schedule)
+
+### Backup frequency (`backup.frequency`)
+
+Daily, weekly (choose the day) or monthly (choose the day of the month).
+
+- **Default:** `'daily'`
+- **Allowed values:** daily, weekly, monthly
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** backup.enabled
+- **Effect of changing:** The next run is shown in Backup status.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#schedule](guides/backup-restore.md#schedule)
+
+### Backup time (`backup.schedule_time`)
+
+Local time of the automatic backup (installation timezone).
+
+- **Default:** `'02:30'`
+- **Allowed values:** time
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** backup.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#schedule](guides/backup-restore.md#schedule)
 - **Example:** 02:30
+
+### Day of the week (`backup.weekday`)
+
+Used when the frequency is weekly.
+
+- **Default:** `'sun'`
+- **Allowed values:** mon, tue, wed, thu, fri, sat, sun
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** backup.frequency
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#schedule](guides/backup-restore.md#schedule)
+
+### Day of the month (`backup.month_day`)
+
+Used when the frequency is monthly. 29–31 run on the last day of shorter months.
+
+- **Default:** `1`
+- **Allowed values:** 1–31
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** backup.frequency
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#schedule](guides/backup-restore.md#schedule)
+- **Example:** 1
 
 ### Backups to keep (`backup.keep_daily`)
 
-Number of most recent successful backups retained (proposed default, not a user decision).
+Number of most recent successful backups retained, whatever the frequency (proposed default, not a user decision).
 
 - **Default:** `14`
 - **Allowed values:** 1–365
@@ -1052,6 +1137,18 @@ Three-panel browser or full-page viewer.
 
 ## Section: my_notifications
 
+### My notifications (`me.notification_prefs`)
+
+Which optional notifications you receive, per channel.
+
+- **Default:** `{}`
+- **Allowed values:** event_matrix
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [expiry-rules#optional](guides/expiry-rules.md#optional)
+
 ### My notification channels (`me.channels`)
 
 Channels you want reminders on. Required channels stay on.
@@ -1080,12 +1177,12 @@ Also send access, import and (for administrators) backup and integrity alerts to
 
 ### Dashboard widgets (`me.dashboard_widgets`)
 
-Statistics shown on your dashboard.
+Choose what your dashboard shows and in which order. Saved to your account, so every device shows the same.
 
-- **Default:** `'documents,members,expiring,storage'`
-- **Allowed values:** str
+- **Default:** `['documents', 'members', 'expiring', 'storage', 'review', 'family', 'saved_views', 'recent', 'upcoming', 'review_queue', 'backup']`
+- **Allowed values:** documents, members, expiring, storage, review, family, saved_views, recent, upcoming, review_queue, backup
 - **Scope:** user · **Editable by:** each user
 - **Depends on:** nothing
-- **Effect of changing:** Takes effect immediately.
+- **Effect of changing:** Applies on all your devices.
 - **Restart needed:** no
 - **Learn more:** [getting-started#dashboard](guides/getting-started.md#dashboard)

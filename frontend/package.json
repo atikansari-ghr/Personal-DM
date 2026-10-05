@@ -2,6 +2,8 @@
   "name": "personaldocs-frontend",
   "private": true,
   "version": "0.1.0",
+  "author": "Atik Ansari",
+  "description": "Personal Documents — private, self-hosted family document library (web app)",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,10 +12,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "pdfjs-dist": "5.7.284",
+    "pdfjs-dist": "6.4.299",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0"
+    "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",

@@ -39,6 +39,13 @@ export function DocTable({ docs, empty }: { docs: DocRow[]; empty: string }) {
 
 const ALL_WIDGETS = ["documents", "members", "expiring", "storage", "review", "family", "saved_views", "recent", "upcoming", "review_queue", "backup"];
 const STATS = ["documents", "members", "expiring", "storage", "review"];
+const HALF = ["recent", "upcoming"];
+// i starts a pair when it is half-width and the run of consecutive half-width items before it has even length
+const pairStart = (order: string[], i: number) => {
+  let n = 0;
+  for (let j = i - 1; j >= 0 && HALF.includes(order[j]); j--) n++;
+  return n % 2 === 0 && HALF.includes(order[i + 1]);
+};
 
 export default function Dashboard() {
   const { session } = useSession();
@@ -127,7 +134,13 @@ export default function Dashboard() {
           <button className="btn primary" onClick={() => setUploading(true)}><Icon name="upload" /> Upload documents</button>
         </div>
       </div>
-      <div className="dash-grid">{order.map((k) => sections[k]())}</div>
+      <div className="dash-grid">{order.map((k, i) => {
+        // Recent documents and Upcoming expiries sit side by side when they are next to each other in the chosen
+        // order; otherwise they take the full width so the order is kept without gaps.
+        const half = HALF.includes(k) && (HALF.includes(order[i - 1]) && pairStart(order, i - 1) || HALF.includes(order[i + 1]) && pairStart(order, i));
+        const el = sections[k]();
+        return el ? <div key={k} className={half ? "" : "wide"}>{el}</div> : null;
+      })}</div>
       {uploading && <UploadDialog onClose={() => setUploading(false)} onDone={() => { setUploading(false); reload(); }} />}
     </div>
   );
