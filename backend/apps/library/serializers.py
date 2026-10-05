@@ -11,7 +11,10 @@ from .services import mask
 def user_mini(u) -> dict | None:
     if u is None:
         return None
-    return {"id": str(u.pk), "display_name": u.display_name, "initials": u.initials, "avatar_color": u.avatar_color}
+    from apps.accounts.photos import version
+
+    return {"id": str(u.pk), "display_name": u.display_name, "initials": u.initials, "avatar_color": u.avatar_color,
+            "photo_version": version(u)}
 
 
 def expiry_status(doc: Document) -> dict | None:

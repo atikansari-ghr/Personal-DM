@@ -39,6 +39,7 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   if (!res.ok) {
     const err = new ApiError(res.status, data);
     if (res.status === 403 && data?.code === "password_change_required") window.dispatchEvent(new Event("pd:password-change"));
+    if (res.status === 403 && data?.code === "two_factor_setup_required") window.dispatchEvent(new Event("pd:2fa-setup"));
     if (res.status === 401 || (res.status === 403 && /sign in/i.test(err.message))) window.dispatchEvent(new Event("pd:signed-out"));
     throw err;
   }

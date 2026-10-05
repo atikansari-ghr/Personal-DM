@@ -26,6 +26,8 @@ from apps.core import audit, config
 
 from .auth import IsActiveAuthenticated, IsMainAdmin
 from .models import GoogleIdentity, User
+from apps.security import login_audit
+
 from .views import _complete_login, recently_verified
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -127,9 +129,11 @@ def handle_callback(request, *, state: str, code: str, error: str = "") -> tuple
     flow = request.session.pop("google_oauth", None)
     if error:
         audit.record("auth.google", request=request, outcome="failure", reason="consent_denied" if error == "access_denied" else "provider_error")
+        login_audit.record(request, result="failure", method="google", reason="provider_error")
         return ("/login", {"error": "google_denied"})
     if not flow or not state or not secrets.compare_digest(flow.get("state", ""), state):
         audit.record("auth.google", request=request, outcome="failure", reason="state_mismatch")
+        login_audit.record(request, result="failure", method="google", reason="state_mismatch")
         return ("/login", {"error": "google_state"})
     if not enabled():
         return ("/login", {"error": "google_disabled"})
@@ -138,6 +142,7 @@ def handle_callback(request, *, state: str, code: str, error: str = "") -> tuple
         claims = verify_id_token(tokens.get("id_token", ""), nonce=flow["nonce"], client_id=config.get("google.client_id"))
     except GoogleError as exc:
         audit.record("auth.google", request=request, outcome="failure", reason=str(exc)[:120])
+        login_audit.record(request, result="failure", method="google", reason="token_invalid")
         return ("/login", {"error": "google_invalid"})
     issuer, subject = "https://accounts.google.com", str(claims["sub"])
     if flow["mode"] == "link":
@@ -160,10 +165,12 @@ def handle_callback(request, *, state: str, code: str, error: str = "") -> tuple
     ident = GoogleIdentity.objects.select_related("user").filter(issuer=issuer, subject=subject).first()
     if ident is None:
         audit.record("auth.google", request=request, outcome="failure", reason="unlinked_identity")
+        login_audit.record(request, result="failure", method="google", reason="unlinked_identity")
         return ("/login", {"error": "google_unlinked"})
     user = ident.user
     if not user.is_active:
         audit.record("auth.google", request=request, outcome="denied", actor=user, reason="disabled_user")
+        login_audit.record(request, result="denied", user=user, method="google", reason="disabled_account")
         return ("/login", {"error": "account_disabled"})
     ident.last_login_at = timezone.now()
     ident.save(update_fields=["last_login_at"])

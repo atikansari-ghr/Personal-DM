@@ -11,15 +11,10 @@ _FORBIDDEN_KEYS = {"password", "token", "otp", "code", "secret", "document_numbe
 
 
 def client_ip(request) -> str | None:
-    if request is None:
-        return None
-    from django.conf import settings
+    """Real client IP; forwarded headers are only trusted from PD_TRUSTED_PROXY_IPS (see security.netutil)."""
+    from apps.security.netutil import client_ip as _client_ip
 
-    remote = request.META.get("REMOTE_ADDR")
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded and remote in settings.TRUSTED_PROXY_IPS:
-        return forwarded.split(",")[0].strip() or remote
-    return remote
+    return _client_ip(request)
 
 
 def record(action: str, *, request=None, actor=None, outcome: str = "success", target=None, target_type: str = "",

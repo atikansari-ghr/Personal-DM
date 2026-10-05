@@ -1,43 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, formatDate, formatDateTime } from "../../api";
+import PasskeysCard from "../../components/Passkeys";
+import PhotoEditor from "../../components/PhotoEditor";
+import { Reauth, withReauth } from "../../components/Reauth";
 import SettingsForm from "../../components/SettingsForm";
-import { Avatar, CopyButton, Icon, Modal, Skeleton, useAsync, useToast } from "../../components/ui";
+import { Avatar, CopyButton, Icon, Skeleton, useAsync, useToast } from "../../components/ui";
 import { FolderSelect } from "../../components/UploadDialog";
 import { useSession } from "../../session";
 import type { FolderNode } from "../../types";
 import { ChangePassword } from "../Auth";
 
 const SUB: [string, string][] = [["profile", "Profile"], ["security", "Password & security"], ["linked", "Linked accounts"], ["appearance", "Appearance"], ["notifications", "Notifications"], ["email", "Email imports"]];
-
-function Reauth({ onDone, onClose }: { onDone: () => void; onClose: () => void }) {
-  const [pw, setPw] = useState("");
-  const [code, setCode] = useState("");
-  const [need, setNeed] = useState(false);
-  const [err, setErr] = useState("");
-  return (
-    <Modal title="Confirm it's you" onClose={onClose}>
-      <form className="stack" onSubmit={async (e) => {
-        e.preventDefault();
-        try { await api("auth/reauth", { body: { password: pw, code } }); onDone(); } catch (x: any) { if (x.data?.code === "totp_required") setNeed(true); setErr(x.message); }
-      }}>
-        {err && <div className="alert error">{err}</div>}
-        <div className="field"><label htmlFor="rp">Password</label><input id="rp" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} /></div>
-        {need && <div className="field"><label htmlFor="rc">Authenticator code</label><input id="rc" type="text" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value)} /></div>}
-        <button className="btn primary" disabled={!pw}>Confirm</button>
-      </form>
-    </Modal>
-  );
-}
-
-function withReauth(action: () => Promise<any>, setReauth: (f: (() => void) | null) => void, toast: (m: string, k?: any) => void) {
-  return async () => {
-    try { await action(); } catch (e: any) {
-      if (e.data?.code === "reauth_required") setReauth(() => async () => { setReauth(null); try { await action(); } catch (x: any) { toast(x.message, "error"); } });
-      else toast(e.message, "error");
-    }
-  };
-}
 
 function Profile() {
   const { session, refresh } = useSession();
@@ -60,6 +34,7 @@ function Profile() {
         <button className="btn primary">Save profile</button>
       </form>
       <div className="stack">
+        <div className="card"><h2>Profile photo</h2><PhotoEditor user={u} endpoint="me/photo" onChanged={refresh} /></div>
         <div className="card row between"><div><h3>Offline documents</h3><p className="small muted">Access saved documents without a connection.</p></div><Link className="btn" to="/offline">Manage saved files</Link></div>
         <div className="card row between"><div><h3>My activity</h3><p className="small muted">Sign-ins and actions on your account.</p></div><Link className="btn" to="/settings/account?tab=security">View</Link></div>
       </div>
@@ -81,23 +56,24 @@ function Security() {
       <div className="card"><h2>Change password</h2><ChangePassword /></div>
       <div className="stack">
         <div className="card">
-          <div className="row between"><div><h2>Authenticator app</h2><p className="small muted">Adds a 6-digit code at sign-in, including Google sign-in.</p></div>
+          <div className="row between"><div><h2>Authenticator app</h2><p className="small muted">Adds a 6-digit code at sign-in, including Google sign-in. Works with authenticator apps and password managers that support one-time codes (e.g. Bitwarden, 1Password, Apple Passwords).</p></div>
             <span className={`badge ${u.totp_enabled ? "ok" : "soon"}`}>{u.totp_enabled ? "Enabled" : "Not enabled"}</span></div>
-          {!u.totp_enabled && !setup && <button className="btn" onClick={withReauth(async () => setSetup(await api("me/totp/setup", { method: "POST" })), setReauth, toast)}>Set up</button>}
+          {!u.totp_enabled && !setup && session?.totp_allowed === false && <p className="small muted">New authenticator set-ups are turned off by the administrator.</p>}
+          {!u.totp_enabled && !setup && session?.totp_allowed !== false && <button className="btn" onClick={withReauth(async () => setSetup(await api("me/totp/setup", { method: "POST" })), setReauth, toast)}>Set up</button>}
           {setup && (
             <div className="stack">
               <p className="small">Scan this QR code with your authenticator app, or enter the key manually.</p>
               <div style={{ width: 200, background: "#fff" }} dangerouslySetInnerHTML={{ __html: setup.qr_svg.replace(/<\?xml[^>]*>/, "") }} />
               <div className="row"><code>{setup.secret}</code><CopyButton label="Key" getValue={() => setup.secret} /></div>
               <form className="row" onSubmit={async (e) => { e.preventDefault(); try { const r = await api("me/totp/enable", { body: { code } }); setCodes(r.recovery_codes); setSetup(null); refresh(); } catch (x: any) { toast(x.message, "error"); } }}>
-                <input aria-label="Code from app" type="text" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value)} style={{ maxWidth: 160 }} /><button className="btn primary">Verify & enable</button>
+                <input aria-label="Code from app" name="one-time-code" type="text" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value.replace(/[\s-]/g, ""))} style={{ maxWidth: 160 }} /><button className="btn primary">Verify & enable</button>
               </form>
             </div>
           )}
-          {u.totp_enabled && (
+          {(u.totp_enabled || (u.passkey_count || 0) > 0) && (
             <div className="row">
               <button className="btn" onClick={withReauth(async () => setCodes((await api("me/recovery-codes", { method: "POST" })).recovery_codes), setReauth, toast)}>New recovery codes</button>
-              <button className="btn danger" onClick={withReauth(async () => { await api("me/totp/disable", { method: "POST" }); toast("Authenticator removed"); refresh(); }, setReauth, toast)}>Turn off</button>
+              {u.totp_enabled && <button className="btn danger" onClick={withReauth(async () => { await api("me/totp/disable", { method: "POST" }); toast("Authenticator removed"); refresh(); }, setReauth, toast)}>Turn off</button>}
             </div>
           )}
           {codes && (
@@ -105,6 +81,7 @@ function Security() {
               <pre className="mono">{codes.join("\n")}</pre><CopyButton label="Recovery codes" getValue={() => codes.join("\n")} /></div>
           )}
         </div>
+        <PasskeysCard />
         <Sessions />
         <div className="card">
           <h2>Recent sign-in activity</h2>

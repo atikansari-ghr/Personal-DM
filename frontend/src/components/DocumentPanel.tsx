@@ -5,7 +5,9 @@ import { saveOffline } from "../offline";
 import { useSession } from "../session";
 import type { DocDetail, DocRow, Meta } from "../types";
 import PermissionsDialog from "./PermissionsDialog";
-import { Confirm, CopyButton, ExpiryBadge, HelpTip, Icon, Modal, Skeleton, StateBadge, useToast } from "./ui";
+import { Avatar, Confirm, CopyButton, ExpiryBadge, HelpTip, Icon, Modal, Skeleton, StateBadge, useToast } from "./ui";
+import AISuggestions from "./AISuggestions";
+import { useAiStatus } from "../ai";
 
 const FIELD_LABELS: Record<string, string> = {
   full_name: "Full name", document_number: "Document number", issue_date: "Issue date", expiry_date: "Expiry date", date_of_birth: "Date of birth",
@@ -69,7 +71,7 @@ function Fields({ doc, onChange }: { doc: DocDetail; onChange: () => void }) {
       )}
       <div className="kv">
         {rows.map(([k, label, val]) => (
-          <div key={k} style={{ display: "contents" }}><div className="k">{label}</div><div className="v">{val}</div><div className="c"><CopyButton label={label} getValue={() => String(val)} /></div></div>
+          <div key={k} style={{ display: "contents" }}><div className="k">{label}</div><div className="v">{k === "owner" ? <span className="row" style={{ gap: ".4rem" }}><Avatar user={doc.owner} size="sm" /> {val}</span> : val}</div><div className="c"><CopyButton label={label} getValue={() => String(val)} /></div></div>
         ))}
         {doc.fields.map((f) => (
           <div key={f.key} style={{ display: "contents" }}>
@@ -250,6 +252,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
   const { session } = useSession();
   const nav = useNavigate();
   const toast = useToast();
+  const ai = useAiStatus();
   const [doc, setDoc] = useState<DocDetail | null>(null);
   const [error, setError] = useState("");
   const [tab, setTab] = useState("details");
@@ -307,7 +310,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
         ))}
         {doc.fields.length > 0 && !doc.fields.some((f) => f.status === "proposed") && <span className="badge ok" style={{ marginLeft: "auto", alignSelf: "center" }}><Icon name="check" size={13} /> Details confirmed</span>}
       </div>
-      {tab === "details" && <Fields doc={doc} onChange={changed} />}
+      {tab === "details" && <><Fields doc={doc} onChange={changed} /><AISuggestions docId={doc.id} onChange={changed} />{ai?.assistant && <Link className="btn small ghost" to={`/assistant?document=${doc.id}`}><Icon name="sparkle" size={16} /> Ask AI about this document</Link>}</>}
       {tab === "text" && (ocrText === null ? <Skeleton /> : ocrText ? (
         <div><div className="row between"><span className="small muted">{v?.ocr_applied ? "Recognised locally with OCR — check important values." : "Text extracted from the file."}</span><CopyButton label="Text" getValue={() => ocrText} /></div><pre className="preview-text">{ocrText}</pre></div>
       ) : <div className="empty">No text available for this document.</div>)}

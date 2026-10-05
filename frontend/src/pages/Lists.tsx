@@ -5,6 +5,7 @@ import DocumentPanel from "../components/DocumentPanel";
 import { Avatar, Confirm, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useAsync, useToast } from "../components/ui";
 import { useSession } from "../session";
 import type { DocRow, Meta, User } from "../types";
+import { useAiStatus } from "../ai";
 
 function Snippet({ text }: { text: string }) {
   // highlights come back as «…» markers; render them safely as <mark>
@@ -39,7 +40,11 @@ export function SearchPage() {
   const q = params.get("q") || "";
   const filters = ["owner", "type", "tag", "state", "expiring_days", "expired"].reduce((acc, k) => ({ ...acc, [k]: params.get(k) || "" }), {} as Record<string, string>);
   const [offset, setOffset] = useState(0);
-  const { data, loading } = useAsync(() => api<{ documents: DocRow[]; total: number }>("documents", { query: { q, ...filters, offset, limit: 50 } }), [params.toString(), offset]);
+  const ai = useAiStatus();
+  const meaning = params.get("mode") === "meaning" && !!q;
+  const { data, loading, error } = useAsync(() => meaning
+    ? api<{ results: DocRow[] }>("ai/semantic", { query: { q } }).then((r) => ({ documents: r.results, total: r.results.length }))
+    : api<{ documents: DocRow[]; total: number }>("documents", { query: { q, ...filters, offset, limit: 50 } }), [params.toString(), offset]);
   useEffect(() => { api<Meta>("metadata").then(setMeta); api<{ members: User[] }>("family/members").then((r) => setMembers(r.members)); }, []);
   const set = (k: string, v: string) => { const n = new URLSearchParams(params); v ? n.set(k, v) : n.delete(k); setOffset(0); setParams(n); };
   return (
@@ -60,7 +65,9 @@ export function SearchPage() {
         <select aria-label="Expiry" value={filters.expiring_days || (filters.expired ? "expired" : "")} onChange={(e) => { const n = new URLSearchParams(params); n.delete("expired"); n.delete("expiring_days"); if (e.target.value === "expired") n.set("expired", "1"); else if (e.target.value) n.set("expiring_days", e.target.value); setParams(n); }} style={{ maxWidth: 200 }}>
           <option value="">Any expiry</option><option value="30">Expires within 30 days</option><option value="90">Expires within 90 days</option><option value="expired">Expired</option>
         </select>
+        {ai?.semantic_search && q && <label className="check" title="Use the local AI to find documents with a similar meaning (filters do not apply)"><input type="checkbox" checked={meaning} onChange={(e) => set("mode", e.target.checked ? "meaning" : "")} /> Match meaning (AI)</label>}
       </div>
+      {meaning && error && <div className="alert warn">Semantic search is unavailable ({error}). Untick “Match meaning” to use normal search.</div>}
       {loading && !data ? <Skeleton lines={6} /> : data && data.documents.length === 0 ? <div className="empty">No documents match.</div> : data && (
         <>
           <p className="muted small">{data.total} document{data.total === 1 ? "" : "s"}</p>

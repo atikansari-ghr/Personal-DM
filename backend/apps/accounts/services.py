@@ -222,12 +222,13 @@ def totp_enable(user: User, code: str) -> list[str]:
     return regenerate_recovery_codes(user)
 
 
-def totp_disable(user: User) -> None:
+def totp_disable(user: User, keep_recovery_codes: bool = False) -> None:
     user.totp_enabled = False
     user.totp_secret_enc = ""
     user.totp_pending_enc = ""
     user.save(update_fields=["totp_enabled", "totp_secret_enc", "totp_pending_enc"])
-    RecoveryCode.objects.filter(user=user).delete()
+    if not keep_recovery_codes:  # recovery codes stay while a passkey is still registered
+        RecoveryCode.objects.filter(user=user).delete()
 
 
 def regenerate_recovery_codes(user: User) -> list[str]:

@@ -72,6 +72,8 @@ if env_bool("BEHIND_PROXY", False):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     USE_X_FORWARDED_HOST = True
 TRUSTED_PROXY_IPS = [i.strip() for i in (env("TRUSTED_PROXY_IPS", "127.0.0.1") or "").split(",") if i.strip()]
+# Privacy-safe access log for Traffic analytics (GoAccess). Empty disables it.
+ACCESS_LOG = env("ACCESS_LOG", "") or ""
 
 SECURE_COOKIES = PUBLIC_ORIGIN.startswith("https://")
 SESSION_COOKIE_SECURE = SECURE_COOKIES
@@ -100,10 +102,14 @@ INSTALLED_APPS = [
     "apps.notify",
     "apps.mailimport",
     "apps.ops",
+    "apps.security",
+    "apps.ai",
 ]
 
 MIDDLEWARE = [
-    "apps.core.middleware.LocalAccessCookieMiddleware",  # outermost: adjusts the final response
+    "apps.security.traffic.AccessLogMiddleware",  # outermost: logs the final status (incl. policy denials)
+    "apps.core.middleware.LocalAccessCookieMiddleware",  # adjusts the final response
+    "apps.security.middleware.AccessPolicyMiddleware",  # country/IP policy, before sessions and authentication
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

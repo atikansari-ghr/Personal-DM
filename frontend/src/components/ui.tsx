@@ -3,6 +3,7 @@ import type { Expiry, UserMini } from "../types";
 
 // ---------------------------------------------------------------- icons (inline SVG, no external assets)
 const paths: Record<string, string> = {
+  sparkle: "M12 3l2.1 5.4L20 10l-5.9 1.6L12 17l-2.1-5.4L4 10l5.9-1.6z",
   home: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
   folder: "M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
   users: "M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8",
@@ -45,7 +46,13 @@ export function Icon({ name, size = 20, className }: { name: string; size?: numb
 
 // ---------------------------------------------------------------- avatar / badges
 export function Avatar({ user, size }: { user?: UserMini | null; size?: "sm" | "lg" }) {
+  const [failed, setFailed] = useState("");
   if (!user) return null;
+  const v = user.photo_version;
+  if (v && failed !== v) {
+    // Served only to signed-in family members; falls back to initials when not visible/available.
+    return <img className={`avatar photo ${size || ""}`} src={`/api/users/${user.id}/photo?size=${size === "lg" ? "full" : "thumb"}&v=${v}`} alt="" aria-hidden="true" onError={() => setFailed(v)} />;
+  }
   return (
     <span className={`avatar ${size || ""}`} style={{ background: user.avatar_color }} aria-hidden="true">
       {user.initials}

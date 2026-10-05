@@ -25,6 +25,12 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Telegram link and reminder
 - [ ] IMAP import idempotent across two polls
 - [ ] Google link, sign-in, unlink; unknown account refused
+- [ ] Real client IP through NPM/Pangolin shown in *Your connection* and the login audit
+- [ ] GeoIP update from MaxMind; *Test an address*; failed update keeps the previous database
+- [ ] Access policy applied with lock-out confirmation; `personaldocs access-policy off|rollback` recovers
+- [ ] Traffic analytics report generated on the LXC
+- [ ] Passkey registration and sign-in (2FA and passwordless) on at least one phone and one desktop; TOTP autofill from a password manager
+- [ ] Local AI profile test, analysis, assistant and semantic search against a LAN AI server; AI server off → core features unaffected
 
 ## Documentation
 - [ ] `VERSION` bumped; `CHANGELOG.md` updated

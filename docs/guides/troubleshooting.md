@@ -22,7 +22,13 @@
 | Backup "not on a mounted share" | Mount the NAS (`mount -a`) and check the marker file |
 | Telegram/email not delivered | Settings → Notifications → Delivery history shows the error; check the person's channel status |
 | Google errors | See [Google sign-in troubleshooting](google.md#troubleshooting) |
-| Locked out administrator | `sudo personaldocs recover-admin dad --generate` |
+| Locked out administrator | `sudo personaldocs recover-admin dad --generate` (add `--reset-2fa` if all passkeys/authenticator devices are lost) |
+| "Access not allowed" page (country/IP policy) | From an allowed place: add temporary access or a trusted IP. On the server: `sudo personaldocs access-policy off` — see [recovery](security-access.md#recovery) |
+| Everyone in the login audit has the same internal IP | Add the proxy's address to `PD_TRUSTED_PROXY_IPS` — see [real client IP](security-access.md#real-ip) |
+| "Add a passkey" missing or failing | Passkeys only work on the HTTPS address in `PD_PUBLIC_ORIGIN`, not on `http://<ip>:8000`; check `personaldocs doctor` |
+| Lost a passkey | Sign in with another passkey, the authenticator app or a recovery code; or ask the administrator to **Reset 2FA** |
+| AI suggestions or Ask AI unavailable | Settings → Local AI → **Test connection**; see [AI troubleshooting](local-ai.md#troubleshooting). Documents keep working without AI |
+| GeoIP update failed | The previous database stays in use; check the MaxMind account ID and license key ([GeoIP](security-access.md#geoip)) |
 | A family member forgot their password | Settings → Family & access → Reset password |
 | Offline files disappeared | Browsers can evict storage; use *Protect storage* or the ZIP export |
 

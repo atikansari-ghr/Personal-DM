@@ -2,7 +2,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Layout from "./components/Layout";
 import { Skeleton } from "./components/ui";
 import ArchivePage from "./pages/Archive";
-import { ChangePassword, ForgotPassword, Login, ResetPassword } from "./pages/Auth";
+import { ChangePassword, ForcedTwoFactor, ForgotPassword, Login, ResetPassword } from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import DocumentPage from "./pages/DocumentPage";
 import FoldersPage from "./pages/Folders";
@@ -16,6 +16,7 @@ import Setup from "./pages/Setup";
 import SharedPage from "./pages/Shared";
 import UploadShared from "./pages/UploadShared";
 import { useSession } from "./session";
+import AssistantPage from "./pages/Assistant";
 
 export default function App() {
   const { session, offline } = useSession();
@@ -41,6 +42,7 @@ export default function App() {
     );
   }
   if (session.user.must_change_password) return <ChangePassword forced />;
+  if (session.user.two_factor_setup_required) return <ForcedTwoFactor />;
   return (
     <Layout>
       <Routes>
@@ -58,6 +60,7 @@ export default function App() {
         <Route path="/settings/:section" element={<SettingsPage />} />
         <Route path="/imports/new" element={<ImportWizard />} />
         <Route path="/imports/:id" element={<ImportWizard />} />
+        <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/help/:slug" element={<HelpPage />} />
         <Route path="/upload-shared" element={<UploadShared />} />
