@@ -4,6 +4,7 @@ import { api } from "../api";
 import { onSignOut } from "../offline";
 import { useSession } from "../session";
 import { Avatar, Icon } from "./ui";
+import { useAiStatus } from "../ai";
 
 const NAV = [
   ["/", "home", "Overview"],
@@ -69,6 +70,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const nav = useNavigate();
   const user = session?.user;
+  const ai = useAiStatus();
 
   useEffect(() => setOpen(false), [loc.pathname]);
   useEffect(() => {
@@ -95,6 +97,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               {path === "/notifications" && unread > 0 && <span className="count" aria-label={`${unread} unread`}>{unread}</span>}
             </NavLink>
           ))}
+          {ai?.assistant && <NavLink to="/assistant" className={({ isActive }) => (isActive ? "active" : "")}><Icon name="sparkle" /> Ask AI</NavLink>}
           {views.length > 0 && <div className="side-section">Saved views</div>}
           {views.map((v) => (
             <NavLink key={v.id} to={`/search?${new URLSearchParams(v.query).toString()}&view=${v.id}`}>

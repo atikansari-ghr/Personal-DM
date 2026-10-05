@@ -24,7 +24,7 @@ SECTIONS = [
     ("general", "General"), ("documents", "Documents & Folders"), ("processing", "OCR & Processing"),
     ("notifications", "Notifications"), ("connections", "Connections"), ("authentication", "Authentication"),
     ("storage", "Storage & Backup"), ("security", "Security & Access"), ("activity", "Activity & Health"), ("appearance", "Appearance"),
-    ("my_notifications", "My notifications"), ("ai", "Future Local AI"),
+    ("my_notifications", "My notifications"), ("ai", "Local AI"),
 ]
 
 

@@ -103,6 +103,7 @@ INSTALLED_APPS = [
     "apps.mailimport",
     "apps.ops",
     "apps.security",
+    "apps.ai",
 ]
 
 MIDDLEWARE = [
