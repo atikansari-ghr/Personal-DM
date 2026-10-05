@@ -63,6 +63,12 @@ def tick() -> dict:
         ratelimit.prune()
         jobs.enqueue("integrity_check", {"checksums": False}, idempotency_key=f"integrity:{now_local.date()}")
         _mark("maintenance", now_local)
+    try:
+        from apps.security.jobs import tick as security_tick
+
+        out["security"] = security_tick(now_local, _due_daily, _mark)
+    except Exception:  # noqa: BLE001 - security housekeeping must not stop reminders/backups
+        log.exception("security maintenance failed")
     return out
 
 

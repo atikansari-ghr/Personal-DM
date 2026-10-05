@@ -1,19 +1,20 @@
 # Implementation status
 
-Last updated: 2026-10-04 · Version 0.1.0 (pre-release) · Branch `claude/wizardly-einstein-7gjfr0`
+Last updated: 2026-10-05 · Version 0.1.0 (pre-release) · Branch `claude/wizardly-einstein-7gjfr0`
 
 ## Summary
 
-Every internal build stage (1–8) is implemented: data model, settings registry, setup, accounts, permissions, delegation, authentication (password, TOTP, Google linking, console recovery), storage, versions, renewals, archive, imports, OCR/previews/extraction, search, UI/PWA/themes, offline/export, reminders over three channels, sharing, IMAP import, audit, backup/restore/integrity, native operations tooling, CI and documentation.
+Every internal build stage (1–8) is implemented, plus change set 2026-10 (profile photos, optional Local AI, login audit, real client IP, GeoIP, country/IP access policy, security alerts, traffic analytics, passkeys and authentication policy): data model, settings registry, setup, accounts, permissions, delegation, authentication (password, TOTP, Google linking, console recovery), storage, versions, renewals, archive, imports, OCR/previews/extraction, search, UI/PWA/themes, offline/export, reminders over three channels, sharing, IMAP import, audit, backup/restore/integrity, native operations tooling, CI and documentation.
 
 **Release readiness: not yet approved for family production use.** The code and its automated tests are complete for the initial scope. The remaining release gates need environments that were not available in the build container (see Blockers). Per the release rules, the first family release should wait until AT-26 (Debian 13 install/upgrade) and AT-24 (restore on a clean LXC) have been validated on the real Proxmox host.
 
 ## Completed (with evidence)
 
-- Backend: 119 automated tests passing (`docs/TEST_REPORT.md`).
+- Backend: 193 automated tests passing (incl. `test_security` 30, `test_ai` 15, `test_passkeys` 14, `test_photos` 9) (`docs/TEST_REPORT.md`).
 - Frontend: type-checked production build; 13-step browser end-to-end flow passing on desktop and mobile viewports; screenshots in `docs/screenshots/`.
 - Tooling: guided installers `scripts/proxmox-create-lxc.sh` (Proxmox host: creates the container) and `scripts/easy-install.sh` (inside the LXC: asks all parameters and installs, configures, connects the NAS, backs up and checks); `scripts/personaldocs` (install, upgrade, rollback, repair, status, doctor, backup, restore, integrity, recover-admin, setup-token, logs, manage, nas-apply), systemd units, `scripts/verify.sh`, GitHub Actions CI with prebuilt frontend release asset.
-- Documentation: 27 bundled guides (`docs/guides/`), requirements, traceability, architecture and 6 ADRs, generated settings reference, test report, release checklist, changelog.
+- New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys` (additive; applied by `personaldocs upgrade`).
+- Documentation: 30 bundled guides (new: security-access, local-ai, passkeys) (`docs/guides/`), requirements, traceability, architecture and 8 ADRs, generated settings reference, test report, release checklist, changelog.
 
 ## Blockers (external validation)
 
@@ -26,6 +27,10 @@ Every internal build stage (1–8) is implemented: data model, settings registry
 | AT-19 live IMAP | A test mailbox |
 | AT-21 live Google | A Google Cloud OAuth client and the public HTTPS origin |
 | AT-14 real devices | An Android phone and an iPhone |
+| AT-39/41 real proxy IPs | Sign-ins through the real NPM / Pangolin (Newt) with `PD_TRUSTED_PROXY_IPS` set; check *Your connection* |
+| AT-40/49 MaxMind download | A MaxMind account ID and GeoLite2 license key (download path tested only with a simulated server) |
+| AT-31..36 live AI servers | LM Studio and/or Ollama on the LAN with a text and an embedding model (tested against a fake OpenAI/Ollama server) |
+| Passkeys / TOTP autofill on real clients | iPhone, Android, Windows Hello, Bitwarden/1Password on the HTTPS origin (tested with a software WebAuthn authenticator) |
 | AT-27 resource-constrained load | Benchmark on the 2 vCPU / 4 GB LXC with realistic multi-page scans |
 
 None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT.md`.
@@ -46,6 +51,8 @@ None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT
 6. Tag `v0.1.0` once the gates pass (`docs/RELEASE_CHECKLIST.md`).
 
 ## Session log
+
+- 2026-10-05: change set 2026-10 implemented (AT-31..AT-50, passkeys) with 74 new tests; docs, traceability, settings reference and upgrade notes updated. Live validation of proxies, MaxMind, AI servers and real authenticators is listed under Blockers.
 
 - 2026-10-04: closed the previous limitations — resizable panels (mouse and keyboard, remembered per account), per-device session list with individual sign-out, optional folder templates for new members, event notifications (access granted, import finished, processing failed, backup failed, integrity problems), PDF/A-2b validation (veraPDF when installed, structural check otherwise), automated accessibility audit with a CI end-to-end job. Fixed during verification: an outbox duplicate-key insert could break an enclosing transaction (now a savepoint); changing your own password signed out the current device (now only other devices).
 

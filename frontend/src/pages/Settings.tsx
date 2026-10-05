@@ -1,14 +1,16 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useSession } from "../session";
 import AccountSettings from "./settings/Account";
 import { ActivityPanel, AuthPanel, ConnectionsPanel, DocumentsPanel, NotificationsAdmin, ProcessingPanel, StoragePanel } from "./settings/Admin";
 import FamilyPanel from "./settings/Family";
+import LocalAIPanel from "./settings/LocalAI";
+import { LoginAuditPanel, SecurityPanel, TrafficPanel } from "./settings/Security";
 import SettingsForm from "../components/SettingsForm";
 
 const ADMIN_TABS: [string, string][] = [
   ["general", "General"], ["family", "Family & access"], ["documents", "Documents & folders"], ["processing", "OCR & processing"],
   ["notifications", "Notifications"], ["connections", "Connections"], ["authentication", "Authentication"], ["storage", "Storage & backup"],
-  ["activity", "Activity & health"], ["ai", "Future local AI"],
+  ["security", "Security & access"], ["activity", "Activity & health"], ["ai", "Local AI"],
 ];
 
 export default function SettingsPage() {
@@ -33,13 +35,25 @@ export default function SettingsPage() {
       {active === "connections" && admin && <ConnectionsPanel />}
       {active === "authentication" && admin && <AuthPanel />}
       {active === "storage" && admin && <StoragePanel />}
-      {active === "activity" && admin && <ActivityPanel />}
-      {active === "ai" && admin && (
-        <div className="stack">
-          <SettingsForm section="ai" title="Future local AI" />
-          <div className="card"><p>Local AI assistance (model-assisted OCR, classification suggestions, chat with documents and semantic similarity) is planned for a later release. It will be off by default, use only a server you choose, and never fall back to cloud services. Nothing AI-related runs in this release.</p><Link to="/help/settings#future">Read the extension plan</Link></div>
-        </div>
-      )}
+      {active === "security" && admin && <SecurityPanel />}
+      {active === "activity" && admin && <ActivityTabs />}
+      {active === "ai" && admin && <LocalAIPanel />}
+    </div>
+  );
+}
+
+function ActivityTabs() {
+  const [params, setParams] = useSearchParams();
+  const view = params.get("view") || "health";
+  const views: [string, string][] = [["health", "Health & audit log"], ["logins", "Login audit"], ["traffic", "Traffic analytics"]];
+  return (
+    <div className="stack">
+      <nav className="tabs sub" aria-label="Activity views">
+        {views.map(([k, l]) => <button key={k} type="button" className={view === k ? "active" : ""} aria-current={view === k ? "page" : undefined} onClick={() => setParams(k === "health" ? {} : { view: k })}>{l}</button>)}
+      </nav>
+      {view === "health" && <ActivityPanel />}
+      {view === "logins" && <LoginAuditPanel />}
+      {view === "traffic" && <TrafficPanel />}
     </div>
   );
 }

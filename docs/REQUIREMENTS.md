@@ -107,6 +107,30 @@ Source: `MASTER_PROMPT_PERSONAL_DOCUMENTS.md` v1.0 (20 Sep 2026), the original r
 | OPS-5 | Upgrades with a pre-upgrade backup, controlled migrations, health checks and schema-aware rollback. Repair never resets data or keys. |
 | OPS-6 | CI and local verification. Lockfiles. No secrets or private data in the repository. |
 
-## Later phases (not in the initial release)
+## Change set 2026-10: profile photos, Local AI, security and passkeys
 
-Local AI providers (OCR, classification, chat, embeddings), personal WhatsApp notifications, native apps, scanning enhancement, in-browser Office editing, DICOM viewing.
+Source: `CHANGE_PROMPT_PROFILE_AI_SECURITY` (amendment to the master prompt). Acceptance tests AT-31…AT-50.
+
+| ID | Requirement |
+|---|---|
+| PROF-1 | Optional profile photo per account: upload, square crop, replace, remove; initials fallback; admin management. |
+| PROF-2 | Photos private: authenticated, visibility-checked serving; content validation; metadata/GPS stripped; bomb protection; never used for identity. |
+| AI-1 | Optional Local AI with named profiles (OpenAI-compatible, Ollama), test connection, model discovery, encrypted keys, limits, default profile. |
+| AI-2 | Privacy classes Local / LAN / External enforced per request; External needs explicit acknowledgement; no cloud fallback. |
+| AI-3 | OCR assist and smart organisation produce suggestions only; persistent changes need confirmation by a person with edit rights. |
+| AI-4 | Document assistant and semantic search enforce the same permissions as browsing; revocation is immediate; no existence leaks. |
+| AI-5 | AI outages never affect upload, OCR, search, preview, download, reminders or editing; background jobs with bounded concurrency; job visibility without content. |
+| SEC-1 | Real client IP only via trusted proxies; NPM and Pangolin documented; doctor diagnostics. |
+| SEC-2 | Application login audit (method, IP, local GeoIP country, device, correlation, flags) with admin filters and retention; no secrets. |
+| SEC-3 | Local GeoIP database with status, validated updates and fail-safe behaviour. |
+| SEC-4 | Pre-authentication country policy (off / block list / allow list), temporary travel access, trusted/blocked IPs, documented precedence, lock-out protection, console recovery. |
+| SEC-5 | Security alerts through existing channels with throttling; automatic temporary block after repeated failures. |
+| SEC-6 | Optional GoAccess traffic analytics for administrators only; installer/doctor support. |
+| PK-1 | Passkeys (WebAuthn) as second factor and optional passwordless sign-in; multiple named passkeys; rename/revoke. |
+| PK-2 | Authentication policy (allow TOTP / passkeys / passwordless, require 2FA, recent-auth window) without lock-outs. |
+| PK-3 | Recent authentication for sensitive account changes; audited admin and console recovery that reveals no secrets. |
+| PK-4 | Standards-based TOTP compatible with password managers; `autocomplete="one-time-code"`; paste allowed. |
+
+## Later phases
+
+Personal WhatsApp notifications, native apps, scanning enhancement, in-browser Office editing, DICOM viewing.

@@ -3,12 +3,14 @@ from django.http import FileResponse, Http404, HttpResponse
 from django.urls import path, re_path
 
 from apps.accounts import google
+from apps.ai import views as ai
 from apps.accounts import views as acc
 from apps.core import views as core
 from apps.library import export, views as lib, views_import as imp, views_share as share
 from apps.mailimport import views as mail
 from apps.notify import views as notify
 from apps.ops import views as ops
+from apps.security import views as sec
 
 
 def spa(request, *args, **kwargs):
@@ -41,6 +43,9 @@ api = [
     path("auth/password/forgot", acc.forgot_password),
     path("auth/password/reset", acc.reset_password),
     path("auth/reauth", acc.reauth),
+    path("auth/reauth/passkey", acc.reauth_passkey),
+    path("auth/passkey/options", acc.passkey_login_options),
+    path("auth/passkey/verify", acc.passkey_login_verify),
     path("auth/google/start", google.start),
     path("auth/google/callback", google.callback),
     path("auth/google/diagnostics", google.diagnostics),
@@ -54,6 +59,11 @@ api = [
     path("me/totp/disable", acc.totp_disable),
     path("me/recovery-codes", acc.recovery_codes),
     path("me/sessions", acc.my_sessions),
+    path("me/photo", acc.my_photo),
+    path("me/passkeys", acc.my_passkeys),
+    path("me/passkeys/<int:pk>", acc.my_passkey_detail),
+    path("me/passwordless", acc.my_passwordless),
+    path("users/<uuid:pk>/photo", acc.user_photo),
     path("me/sessions/revoke", acc.sign_out_everywhere),
     path("me/sessions/<uuid:pk>", acc.revoke_session),
     path("me/google", google.my_link),
@@ -71,6 +81,8 @@ api = [
     path("family/members/<uuid:pk>", acc.member_detail),
     path("family/members/<uuid:pk>/reset-password", acc.member_reset_password),
     path("family/members/<uuid:pk>/reset-totp", acc.member_reset_totp),
+    path("family/members/<uuid:pk>/photo", acc.member_photo),
+    path("family/members/<uuid:pk>/reset-2fa", acc.member_reset_2fa),
     path("family/groups", acc.groups),
     path("family/groups/<uuid:pk>", acc.group_detail),
     path("family/delegations", acc.delegation),
@@ -101,6 +113,18 @@ api = [
     path("documents/<uuid:pk>/similar", lib.document_similar),
     path("documents/<uuid:pk>/shares", share.document_shares),
     path("shares/<uuid:sid>", share.share_revoke),
+    path("documents/<uuid:pk>/ai/analyze", ai.document_analyze),
+    path("documents/<uuid:pk>/ai/suggestions", ai.document_suggestions),
+    path("documents/<uuid:pk>/ai/suggestions/<int:sid>", ai.suggestion_decide),
+    path("ai/status", ai.ai_status),
+    path("ai/assistant", ai.assistant),
+    path("ai/semantic", ai.semantic),
+    path("ai/profiles", ai.profiles),
+    path("ai/profiles/<int:pk>", ai.profile_detail),
+    path("ai/profiles/<int:pk>/test", ai.profile_test),
+    path("ai/profiles/<int:pk>/models", ai.profile_models),
+    path("ai/jobs", ai.ai_jobs_api),
+    path("ai/reindex", ai.reindex),
     path("search/autocomplete", lib.autocomplete),
     path("views", lib.saved_views),
     path("views/<int:pk>", lib.saved_view_detail),
@@ -136,6 +160,18 @@ api = [
     path("backup/run", ops.backup_now),
     path("backup/nas", ops.nas_api),
     path("integrity", ops.integrity_api),
+    path("admin/security/logins", sec.logins),
+    path("admin/security/policy", sec.access_policy),
+    path("admin/security/policy/rollback", sec.access_policy_rollback),
+    path("admin/security/policy/test", sec.access_policy_test),
+    path("admin/security/temporary", sec.temporary_access),
+    path("admin/security/temporary/<int:pk>", sec.temporary_access_detail),
+    path("admin/security/ip-rules", sec.ip_rules),
+    path("admin/security/ip-rules/<int:pk>", sec.ip_rule_detail),
+    path("admin/security/geoip", sec.geoip_api),
+    path("admin/security/geoip/upload", sec.geoip_upload),
+    path("admin/security/traffic", sec.traffic_api),
+    path("admin/security/traffic/report.html", sec.traffic_html),
     path("help", core.help_index),
     path("help/<str:slug>", core.help_guide),
 ]

@@ -287,6 +287,28 @@ def test_at24_restore_recovers_accounts_permissions_versions_settings_and_keys(t
     c.post(f"/api/documents/{doc.id}/versions", {"file": SimpleUploadedFile("v2.pdf", make_text_pdf("v2"))}, format="multipart")
     config.set_value("smtp.password", "synthetic-secret-value")
     config.set_value("notifications.expiry_days", [60, 7, 0])
+    # data added by the profile / AI / security change set
+    import io as _io
+
+    from PIL import Image
+
+    from apps.accounts import photos
+    from apps.accounts.models import WebAuthnCredential
+    from apps.ai.models import AIProfile
+    from apps.security.models import CountryRule, GeoPolicy, IPRule, LoginEvent
+
+    buf = _io.BytesIO()
+    Image.new("RGB", (64, 64), (10, 120, 40)).save(buf, "PNG")
+    photos.save(son1, buf.getvalue())
+    photo_file = photos.path_for(son1, thumb=False)
+    pol = GeoPolicy.get()
+    pol.enabled, pol.mode = True, "allowlist"
+    pol.save()
+    CountryRule.objects.create(country="SA", kind="allow")
+    IPRule.objects.create(cidr="198.51.100.7/32", kind="trusted", description="Office")
+    AIProfile.objects.create(name="LAN", base_url="http://127.0.0.1:1/v1", api_key_enc=crypto.encrypt("sk-synthetic"), privacy="local")
+    WebAuthnCredential.objects.create(user=son1, credential_id="synthetic-cred", public_key=b"pk", name="Phone")
+    LoginEvent.objects.create(user=son1, username="son1", result="success", method="password", ip="5.42.0.10", country="SA")
     target = tmp_path / "nas"
     target.mkdir()
     (target / backup.MARKER).touch()
@@ -304,6 +326,9 @@ def test_at24_restore_recovers_accounts_permissions_versions_settings_and_keys(t
         p.unlink()
     crypto.key_path().unlink()
     crypto.reset_cache()
+    photo_file.unlink()
+    AIProfile.objects.all().delete()
+    WebAuthnCredential.objects.all().delete()
     out = backup.restore_backup(Path(result["path"]))
     assert out["key_restored"] and out["files_restored"] == 2
     from django.db import connection
@@ -315,6 +340,10 @@ def test_at24_restore_recovers_accounts_permissions_versions_settings_and_keys(t
     assert User.objects.get(username="dad").is_main_admin
     assert config.get("notifications.expiry_days") == [60, 7, 0]
     assert config.get("smtp.password") == "synthetic-secret-value"  # decryptable with the restored key
+    assert photo_file.exists() and User.objects.get(username="son1").photo_name
+    assert GeoPolicy.get().enabled and CountryRule.objects.filter(country="SA").exists() and IPRule.objects.filter(kind="trusted").exists()
+    assert crypto.decrypt(AIProfile.objects.get(name="LAN").api_key_enc) == "sk-synthetic"
+    assert WebAuthnCredential.objects.filter(name="Phone").exists() and LoginEvent.objects.filter(country="SA").exists()
 
 
 def test_apply_settings_command_validates_and_deletes_file(db, tmp_path):

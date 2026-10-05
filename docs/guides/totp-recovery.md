@@ -6,7 +6,18 @@ Passwords need at least 10 characters and cannot be common or similar to your us
 
 ## Authenticator app (optional) {#totp}
 
-**My account → Password & security → Authenticator app → Set up**: confirm your password, scan the QR code with an authenticator app, enter the 6-digit code. You receive 10 one-time **recovery codes** — store them safely. The code is also required after Google sign-in.
+**My account → Password & security → Authenticator app → Set up**: confirm your password, scan the QR code with an authenticator app, enter the 6-digit code. You receive 10 one-time **recovery codes** — store them safely. The code is also required after Google sign-in. Instead of (or as well as) an authenticator app you can use a [passkey](passkeys.md).
+
+### Password managers and autofill {#password-managers}
+
+The codes are standard TOTP (RFC 6238, SHA-1, 6 digits, 30 seconds), so any authenticator app or password manager with
+one-time-code support works: Google/Microsoft Authenticator, Aegis, Bitwarden, 1Password, Apple Passwords / iCloud Keychain and
+others. Scan the QR code or paste the setup key shown under it.
+
+The code field is a normal text field marked `autocomplete="one-time-code"` with a numeric keyboard, so browsers and password
+managers can offer to fill it. Pasting is allowed (spaces and dashes are removed), and typing the code by hand always works too.
+The secret is stored encrypted and is never shown again after setup; to move to another app, turn the authenticator off and set it up again.
+Compatibility with specific third-party password managers is tested manually (see the test report), not by automated tests.
 
 ## Sessions {#sessions}
 
@@ -16,7 +27,7 @@ Passwords need at least 10 characters and cannot be common or similar to your us
 
 - With an email address on your profile and SMTP configured: **Forgot password?** sends a single-use link valid for 30 minutes (configurable).
 - Otherwise the main administrator sets a temporary password (Settings → Family & access → Reset password), which you must change at sign-in.
-- Lost authenticator: use a recovery code, or ask the administrator to reset 2FA.
+- Lost authenticator or passkeys: use a recovery code (or another passkey), or ask the administrator to reset two-step verification ([details](passkeys.md#recovery)).
 
 ## Main administrator lockout {#console-recovery}
 
@@ -25,6 +36,7 @@ On the server console (requires root on the LXC):
 ```
 sudo personaldocs recover-admin dad --generate            # temporary password
 sudo personaldocs recover-admin dad --generate --reset-totp
+sudo personaldocs recover-admin dad --generate --reset-2fa   # also removes all passkeys (lost devices)
 ```
 
 It works only for main administrator accounts, signs out all their sessions and is recorded in the audit log. There is no web-based backdoor.

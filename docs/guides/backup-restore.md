@@ -3,11 +3,18 @@
 
 ## What a backup contains {#contents}
 
-- A consistent PostgreSQL dump (accounts, groups, permissions, documents, versions, settings, audit log).
+- A consistent PostgreSQL dump (accounts, groups, permissions, documents, versions, settings, audit log, login audit,
+  country/IP access policy, passkey public keys, AI profiles, AI suggestions and embeddings).
+- Profile photos (the small private WebP files).
 - All originals (every version), verified against their SHA-256 checksums.
 - Previews and searchable copies (they can also be regenerated).
 - `settings.json` (readable summary) and, optionally, the encryption key for stored integration secrets.
 - `manifest.json` listing every file, size, checksum and whether the backup verified.
+
+Not included: the GeoIP database file (download or upload it again after a restore — see
+[Security & access](security-access.md#backup)). Secrets such as AI API keys and the MaxMind license key are stored encrypted in the
+database; they are only usable after a restore when the backup includes the encryption key (or you keep the key safely yourself).
+Passkeys remain valid after a restore as long as the public address (domain) stays the same.
 
 Consistency: originals are write-once and are always on disk before the database refers to them; the dump is a snapshot; files referenced by the snapshot are copied and verified; the backup folder is renamed from `.partial` only when complete. Unchanged originals are hard-linked from the previous backup to save space.
 

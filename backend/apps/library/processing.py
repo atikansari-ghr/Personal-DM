@@ -204,6 +204,11 @@ def process_version(job):
         doc = Document.objects.select_for_update(of=("self",)).select_related("owner", "doc_type").get(pk=doc.pk)
         if doc.current_version_id == version.id:
             _apply_to_document(doc, version, text, state)
+    if state != "failed" and doc.current_version_id == version.id:
+        # Optional Local AI runs afterwards as separate jobs; the document is already stored and searchable.
+        from apps.ai.jobs import after_processing
+
+        after_processing(doc)
     return {"state": state, "ocr": ocr_applied, "pages": pages}
 
 

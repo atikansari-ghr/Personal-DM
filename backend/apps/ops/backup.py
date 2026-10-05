@@ -181,6 +181,18 @@ def _do_backup(target: Path) -> dict:
                     ddst = work / "derivatives" / drel
                     ddst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(dsrc, ddst)
+    # Profile photos (small, private; referenced by accounts.User.photo_name)
+    from apps.accounts.models import User
+    from apps.accounts.photos import photo_dir
+
+    photos = 0
+    for name in User.objects.exclude(photo_name="").values_list("photo_name", flat=True):
+        for stem in (name, f"{name}-thumb"):
+            src = photo_dir() / f"{stem}.webp"
+            if src.exists():
+                (work / "profile-photos").mkdir(exist_ok=True)
+                shutil.copyfile(src, work / "profile-photos" / src.name)
+                photos += 1
     (work / "settings.json").write_text(json.dumps(config.snapshot_global(), indent=1, default=str))
     if config.get("backup.include_keys"):
         key = crypto.key_path()
@@ -188,7 +200,7 @@ def _do_backup(target: Path) -> dict:
             shutil.copyfile(key, work / "encryption.key")
             os.chmod(work / "encryption.key", 0o600)
     manifest = {"format": 1, "app_version": settings.APP_VERSION, "created_at": timezone.now().isoformat(), "installation": ident,
-                "files": files, "file_count": len(files), "bytes": total, "verified": verified,
+                "files": files, "file_count": len(files), "bytes": total, "verified": verified, "profile_photos": photos,
                 "includes_key": (work / "encryption.key").exists()}
     (work / "manifest.json").write_text(json.dumps(manifest, indent=1))
     os.replace(work, final)
@@ -248,6 +260,13 @@ def restore_backup(path: Path, *, include_key: bool = True) -> dict:
                     if sub == "originals":
                         os.chmod(out, 0o440)
                         restored += 1
+    if (path / "profile-photos").exists():
+        from apps.accounts.photos import photo_dir
+
+        photo_dir().mkdir(parents=True, exist_ok=True)
+        for f in (path / "profile-photos").glob("*.webp"):
+            shutil.copyfile(f, photo_dir() / f.name)
+            os.chmod(photo_dir() / f.name, 0o640)
     key_restored = False
     if include_key and (path / "encryption.key").exists():
         kp = crypto.key_path()
