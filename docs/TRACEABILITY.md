@@ -86,3 +86,34 @@ Status key: **Done** means implemented with automated tests passing. **Partial**
 | AT-50 | Console recovery from a misconfigured policy | `management/commands/access_policy.py`, `personaldocs access-policy` | `test_security::test_at50_*`, `test_lockout_protection_on_policy_change` | guides/security-access.md#recovery | Done |
 | PK-1..PK-n | Passkeys: 2FA and passwordless, recent-auth, policy, recovery, no secrets in records | `accounts/passkeys.py`, `Passkeys.tsx`, `Reauth.tsx`, `webauthn.ts` | `test_passkeys` (14, real WebAuthn via software authenticator) | guides/passkeys.md | Done (real browsers/password managers: Pending-env) |
 | TOTP autofill | `autocomplete="one-time-code"`, `inputmode="numeric"` on code fields | `Auth.tsx`, `Account.tsx` | e2e flow (TOTP step) | guides/totp-recovery.md#password-managers | Done (real password managers: Pending-env) |
+
+## Change set H/I (2026-10): UI, import, notifications, backup, mobile/PWA, viewer, public release
+
+Browser checks are in `tests/e2e/parity.mjs` (run by `scripts/e2e.sh`, results in `docs/parity-report.json`).
+
+| ID | Scenario (abridged) | Code | Tests | Docs | Status |
+|---|---|---|---|---|---|
+| AT-61 | Own area identified; no other trees leak | `serializers.folder_json` (`owner_user`), `FolderPicker.folderLabel`, `Folders.tsx` (`.my-area`) | `test_browser_moves::test_at61_*`; parity AT-61 | guides/getting-started.md#my-documents | Done |
+| AT-62 | File-type icons from validated content | `library/filetypes.py`, `services.detect_format`, `FileTypeIcon.tsx` | `test_browser_moves::test_at62_*`, `test_file_kind_*`; parity AT-62 (list, grid) | guides/getting-started.md#file-types | Done |
+| AT-63 | Import into an existing destination sub-folder with a safe picker | `imports.validate_mapping`, `ImportWizard.tsx` + `FolderPicker` | `test_imports::test_at63_*` (2); parity AT-63/64 | guides/folder-imports.md#destination | Done |
+| AT-64 | Hierarchy preserved exactly as previewed | `imports.preview_tree`, `_sub_parts`, `destination_for` | `test_imports::test_at63_at64_*`, `test_at64_*`; parity AT-63/64 | guides/folder-imports.md#destination | Done |
+| AT-65 | Widget selector without typed ids | `registry` `widget_list`, `WidgetListEditor.tsx`, `Dashboard.tsx` | `test_preferences::test_at65_*`; parity AT-65/66 | guides/getting-started.md#dashboard | Done |
+| AT-66 | Widget order by drag/keyboard, synced | as AT-65, `session.tsx` (refresh on foreground) | `test_preferences::test_at66_at78_*`; parity AT-65/66, AT-78 | guides/getting-started.md#dashboard | Done |
+| AT-67 | Critical events cannot be disabled; missing destinations reported | `notify/catalog.py`, `views.my_notification_preferences`, `views.delivery_problems` | `test_notification_policy::test_at67_*` (2), `test_unconfigured_*` | guides/expiry-rules.md#critical | Done |
+| AT-68 | Optional event × channel matrix per person | `catalog.preferences`, `Account.tsx` (matrix) | `test_notification_policy::test_at68_*`; parity AT-68 | guides/expiry-rules.md#optional | Done |
+| AT-69 | Templates useful and secret-free; links need sign-in | `notify/templates.py`, `events.notify`, `alerts._login_facts` | `test_notification_policy::test_at69_*` (2) | guides/expiry-rules.md#templates | Done (real email/Telegram delivery: Pending-env) |
+| AT-70 | Bulk actions consolidated | `events.documents_added`, `import_finished`, `documents_removed` | `test_notification_policy::test_at70_*` | guides/expiry-rules.md#templates | Done |
+| AT-71 | Daily/weekly/monthly backups persist, run, report | `ops/schedule.py`, scheduler `tick`, `ops/views.backup_status` | `test_backup_schedule` (3); parity AT-71 | guides/backup-restore.md#schedule | Done (real NAS: Pending-env) |
+| AT-72 | Document drag and drop | `Folders.tsx` (DnD), `services.move_document` (atomic, audited) | `test_browser_moves::test_at72_*`; parity AT-72 | guides/getting-started.md#moving | Done |
+| AT-73 | Folder drag and drop; self/descendant/denied refused | `services.move_folder` (advisory lock, cycle check), `views.folder_detail` (atomic) | `test_browser_moves::test_at73_*` (2); parity AT-73 | guides/getting-started.md#moving | Done |
+| AT-74 | Failed moves never lose/duplicate/orphan | `services.move_*` (transactions, `move_widens_access`) | `test_at74_*` (3, incl. concurrent opposite moves) | guides/getting-started.md#moving | Done |
+| AT-75 | Mobile Move To | `Folders.tsx` (`RowMenu`, `MoveDialog`) | parity AT-75 (desktop, phone portrait, landscape) | guides/mobile-pwa.md#parity | Done |
+| AT-76 | Mobile/PWA parity of major workflows | responsive CSS, `Folders.tsx`, `DocViewer.tsx` | parity AT-76/77 (22 screens × tablet, phone portrait, phone landscape) | guides/mobile-pwa.md#parity | Done (real devices/installed PWA: Pending-env) |
+| AT-77 | Responsive UX: no overflow, usable controls | `styles.css` (tablet fixes, matrix, viewer toolbar) | parity AT-76/77, AT-83; `a11y.mjs` (0 serious) | guides/mobile-pwa.md#parity | Done |
+| AT-78 | Cross-device settings | server-side preferences, `session.tsx` | `test_preferences::test_at66_at78_*`; parity AT-78 | guides/mobile-pwa.md#parity | Done |
+| AT-79 | No secrets/private data; Atik Ansari as author | `scripts/privacy_check.sh` (tree + `--history`), `.gitignore`, `frontend/package.json` | `scripts/verify.sh` hygiene step | CONTRIBUTING.md, SECURITY.md | Done (visibility change not performed: needs owner) |
+| AT-80 | README screenshots, docs links, commands, claims | `README.md`, `docs/images/screenshots/` | `privacy_check.sh` link check; parity regenerates screenshots | README.md, docs/USER_GUIDE.md, docs/ADMIN_GUIDE.md | Done |
+| AT-81 | PDF zoom and fit controls | `DocViewer.tsx`, `pdfjs.ts` (PDF.js, local assets) | parity AT-81 (zoom steps, %, fit page/width, 100%, pages, keys, resize, original unchanged) | guides/getting-started.md#viewer | Done |
+| AT-82 | Image zoom/fit, aspect ratio, scrolling | `DocViewer.tsx` | parity AT-82 (PNG, JPEG, WebP) | guides/getting-started.md#viewer | Done |
+| AT-83 | Viewer responsive/mobile | `styles.css` (`.viewer-toolbar`) | parity AT-83 (tablet, phone portrait/landscape: reachable, ≥24 px, tap zoom) | guides/getting-started.md#viewer | Done (real devices: Pending-env) |
+| AT-84 | Viewer authorisation and failure handling | unchanged `document_preview`/`document_file` checks, `DocViewer` error state | parity AT-84 (anonymous refused, damaged PDF, no external requests); `test_documents`, `test_permissions` | guides/getting-started.md#viewer | Done |

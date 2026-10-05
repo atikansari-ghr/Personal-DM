@@ -109,3 +109,15 @@ export function formatDateTime(value?: string | null): string {
   const d = new Date(value);
   return `${formatDate(value)} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
+
+/** A post-sign-in destination from ?next=: only an in-app path ("/…"), never another site ("//x", "/\\x", "https:…"). */
+export function safeNext(value: string | null | undefined, origin: string = window.location.origin): string {
+  const v = (value || "").trim();
+  if (!v.startsWith("/") || v.startsWith("//") || v.startsWith("/\\") || /[\\\u0000-\u001f]/.test(v)) return "/";
+  try {
+    const u = new URL(v, origin);
+    return u.origin === origin ? u.pathname + u.search + u.hash : "/";
+  } catch {
+    return "/";
+  }
+}

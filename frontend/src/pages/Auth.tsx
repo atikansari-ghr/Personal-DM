@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { api, ApiError } from "../api";
+import { api, ApiError, safeNext } from "../api";
 import { Icon } from "../components/ui";
 import { useSession } from "../session";
 import { getPasskey, passkeyErrorMessage, passkeysSupported } from "../webauthn";
@@ -70,7 +70,7 @@ export function Login() {
 
   const done = async () => {
     await refresh();
-    nav(params.get("next") || "/", { replace: true });
+    nav(safeNext(params.get("next")), { replace: true });
   };
   const submit = async (e: FormEvent) => {
     e.preventDefault();

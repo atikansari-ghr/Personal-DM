@@ -20,7 +20,7 @@ OCR on/off, language, concurrency, timeouts and size limits, and the processing 
 
 ## Notifications and connections {#notifications}
 
-Reminder days and time, recipients, default and required channels, message preview, delivery history; SMTP and Telegram setup with tests; WhatsApp status (planned).
+Reminder days and time, recipients, default and required channels for reminders, **critical notifications** and their channels, names in external messages, delivery problems, message preview, delivery history; SMTP and Telegram setup with tests; WhatsApp status (planned). Each person chooses optional notifications per event and channel under My account → Notifications. See [notifications](expiry-rules.md#critical).
 
 ## Authentication {#authentication}
 
@@ -28,7 +28,7 @@ Session length, reset-link lifetime, sign-in rate limit, Google sign-in with dia
 
 ## Storage & backup {#storage}
 
-Backup destination, schedule, retention, keys, *Back up now*, integrity check.
+Backup destination, schedule (daily, weekly or monthly; see [schedule](backup-restore.md#schedule)), retention, keys, *Back up now*, next run and last result, integrity check.
 
 ## Activity & health {#activity}
 

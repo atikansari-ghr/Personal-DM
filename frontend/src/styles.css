@@ -362,6 +362,7 @@ tr.clickable:hover td { background: var(--brand-softer); }
 .widget-item .btn.small { min-width: 36px; min-height: 36px; }
 .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 1.2rem; align-items: start; }
 .dash-grid > .wide { grid-column: 1 / -1; }
+.dash-grid > div > section.card, .dash-grid > div > .card { height: 100%; }
 .crit-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 .table-scroll { overflow-x: auto; }
 .matrix { width: 100%; border-collapse: collapse; }

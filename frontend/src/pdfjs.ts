@@ -6,9 +6,11 @@ import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 export type PdfDoc = Awaited<ReturnType<typeof pdfjs.getDocument>["promise"]>;
+export interface OpenPdf { doc: PdfDoc; destroy: () => void }
 
-export function openPdf(data: ArrayBuffer): Promise<PdfDoc> {
-  return pdfjs.getDocument({
+/** Open a PDF from memory. ``destroy`` frees the worker-side document (call it when the viewer goes away). */
+export async function openPdf(data: ArrayBuffer): Promise<OpenPdf> {
+  const task = pdfjs.getDocument({
     data,
     isEvalSupported: false, // the app's CSP forbids eval; never needed for rendering
     enableXfa: false,
@@ -17,5 +19,7 @@ export function openPdf(data: ArrayBuffer): Promise<PdfDoc> {
     cMapPacked: true,
     wasmUrl: `${__PDFJS_ASSETS__}wasm/`,
     iccUrl: `${__PDFJS_ASSETS__}iccs/`,
-  } as any).promise;
+  } as any);
+  const doc = await task.promise;
+  return { doc, destroy: () => { task.destroy().catch(() => undefined); } };
 }

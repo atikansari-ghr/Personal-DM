@@ -26,7 +26,7 @@ export default function HelpPage() {
             {index.data?.guides.map((g) => <li key={g.slug}><Link to={`/help/${g.slug}`}>{g.title}</Link>{g.excerpt && <div className="small muted">…{g.excerpt}…</div>}</li>)}
           </ul>
         )}
-        <p className="small muted">Version {index.data?.version}. All guides are bundled with the app.</p>
+        <p className="small muted">Personal Documents {index.data?.version} by Atik Ansari. All guides are bundled with the app.</p>
       </aside>
       <article className="card markdown">
         {!slug ? (

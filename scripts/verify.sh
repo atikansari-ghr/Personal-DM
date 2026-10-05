@@ -26,14 +26,9 @@ if command -v shellcheck >/dev/null; then shellcheck -S error scripts/personaldo
 step "Backend tests"
 $PY -m pytest -q -W ignore::UserWarning ${PYTEST_ARGS:-}
 
-step "Frontend type check and build"
-(cd frontend && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npm run build)
+step "Frontend unit tests, type check and build"
+(cd frontend && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npx vitest run && npm run build)
 
-step "Repository hygiene (no secrets or private data committed)"
-if git ls-files | grep -E '(^|/)(references/|.*\.(pgdump|dump|sqlite3|env)$|encryption\.key|secret_key|github-token)' | grep -v 'personaldocs.env.example'; then
-  echo "Private or secret files are tracked"; exit 1
-fi
-if git grep -nE '(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (RSA |OPENSSH )?PRIVATE KEY-----)' -- . ':!scripts/verify.sh' ':!scripts/personaldocs'; then
-  echo "Possible credential committed"; exit 1
-fi
+step "Repository hygiene (no secrets, private data or AI authorship; documentation links resolve)"
+scripts/privacy_check.sh
 printf '\n\033[32mAll checks passed.\033[0m\n'

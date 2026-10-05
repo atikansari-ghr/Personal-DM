@@ -10,9 +10,33 @@ Settings is not needed: open **Folders → Import folder**, then choose or drag 
 
 Each top-level folder is a mapping unit. For each one you decide:
 
-- **A person's folder** — documents become that person's and land in their personal folder, sub-folders preserved. Several source folders may map to the same person.
-- **Another folder** — for shared material (trips, house papers). Choose the destination and the owning account. The top folder's name is kept.
+- **A person's folder** — documents become that person's. By default they land at the top of the person's area;
+  click the folder button (**Top of their folder**) to pick an existing **sub-folder inside that person's area**
+  instead, for example *Sam Sample / Education*. Several source folders may map to the same person.
+- **Another folder** — for shared material (trips, house papers). Pick the destination folder in the folder picker
+  and choose the owning account.
 - **Skip**.
+
+**keep “<name>” as a folder** decides whether the source folder itself is recreated (for *Old*: `… / Education /
+Old / …`) or only its contents (`… / Education / …`). It is on by default for "Another folder" and off for "A
+person's folder" when the source folder is named after the person.
+
+### The destination only replaces the top {#destination}
+
+Choosing a destination changes **where the import starts**, nothing else. Every nested source folder is recreated
+beneath it exactly as it is — nothing is flattened. Example: `Old/Address Update 22July2026/letter.pdf` mapped to
+*Sam Sample / Parity* with *keep "Old"* ticked becomes `Family library / Sam Sample / Parity / Old / Address Update
+22July2026 / letter`.
+
+**Check & preview** shows the **final folder structure**: every folder the import will use, with the number of files
+and a badge:
+- **existing** — a folder with that name is already there; files are added next to what it contains (nothing is
+  overwritten, same-named files become separate documents)
+- **new** — the folder will be created
+
+Only folders you may upload to can be chosen, and a sub-folder must really be inside the chosen person's area; the
+server checks this again when you save and when each file is imported. If a destination is archived or your access
+is removed after the preview, the affected files fail with a clear reason and nothing is put anywhere else.
 
 Suggestions appear only when a folder name exactly matches an account's name or username, and still need confirmation. An old name such as `user3` is never guessed — you choose who it belongs to. You can only map into folders where you may upload.
 
@@ -20,7 +44,7 @@ System and sync folders (for example `.sync`, `Thumbs.db`, `@eaDir`) are shown a
 
 ## Running the import {#running}
 
-The preview shows destinations and size. Start the import; progress is tracked per file. If the browser is closed, open the import again, select the same folder, and continue — files already imported are never imported twice. Failed files can be retried. Download the CSV report for a per-file record.
+The preview shows destinations, sizes and the final folder structure. Start the import; progress is tracked per file. If the browser is closed, open the import again, select the same folder, and continue — files already imported are never imported twice. Failed files can be retried. Download the CSV report for a per-file record.
 
 ## From the server or NAS {#server}
 

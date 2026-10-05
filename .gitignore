@@ -1,5 +1,18 @@
 # Private reference material and anything that could contain real family data
 references/
+uploads/
+*.log
+logs/
+*.mmdb
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+!deployment/personaldocs.env.example
+tests/e2e/.son1
+tmpshots/
 *.sqlite3
 *.dump
 *.pgdump
