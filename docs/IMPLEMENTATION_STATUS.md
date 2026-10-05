@@ -33,7 +33,7 @@ Every internal build stage (1–8) is implemented, plus change set 2026-10 (prof
 | Passkeys / TOTP autofill on real clients | iPhone, Android, Windows Hello, Bitwarden/1Password on the HTTPS origin (tested with a software WebAuthn authenticator) |
 | AT-76/83 real devices | Installed PWA on a real Android phone and iPhone/iPad (automated checks used emulated viewports) |
 | AT-69 real delivery | SMTP and Telegram credentials to see the new templates in a real inbox/chat |
-| Public release | The owner's decision on a license and on making the repository public (not done; see Next steps) |
+| Public release | Making the repository public (owner action in GitHub settings; license chosen: MIT) |
 | AT-98/99 one-line installer for real | A fresh Debian 13 VM/LXC with systemd, and a **public** repository so the raw URL works (tested here with stubbed system commands only) |
 | AT-90/91 real desktop drag | Dragging a folder from Windows Explorer / Finder into Chrome, Edge, Firefox and Safari (tested with a synthetic DataTransfer and unit-tested folder walk) |
 | AT-27 resource-constrained load | Benchmark on the 2 vCPU / 4 GB LXC with realistic multi-page scans |
@@ -64,7 +64,7 @@ None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT
 4. Configure SMTP, Telegram and, optionally, Google. Run the live checks listed in the test report.
 5. Run `scripts/bench_processing.py` on the LXC with realistic scans. Tune `processing.heavy_concurrency` and `PD_PROCESS_MEMORY_LIMIT_MB`.
 6. Tag `v0.1.0` once the gates pass (`docs/RELEASE_CHECKLIST.md`).
-7. Public release (owner decisions): choose a license (add `LICENSE`), enable GitHub private vulnerability reporting, run `scripts/privacy_check.sh --history`, then change the repository visibility in GitHub settings.
+7. Public release (owner decisions): enable GitHub private vulnerability reporting, run `scripts/privacy_check.sh --history`, then change the repository visibility in GitHub settings.
 
 ## Session log
 

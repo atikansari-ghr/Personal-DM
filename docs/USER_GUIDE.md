@@ -1,7 +1,7 @@
 # User guide
 
 For everyone in the family. The same help is built into the app under **Help**; the linked topic guides go deeper.
-All examples use the synthetic "Sample" family.
+Examples use the demo accounts Atik Ansari, JR, AB Ansari, N Ansari, AZ Ansari and AR Ansari.
 
 ## 1. Signing in {#sign-in}
 

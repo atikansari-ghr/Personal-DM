@@ -35,7 +35,7 @@ Date: 2026-10-03, updated 2026-10-05 (change set J). Revision: the branch head a
 | `npm audit --omit=dev` | **0 vulnerabilities** after upgrading PDF.js 5.7 → 6.4.299 (high: script execution from a malicious PDF) and React Router 6 → 7.18 (open redirect) |
 | veraPDF 1.30.2 on OCRmyPDF output (`tests/test_pdfa.py`) | PDF/A-2b **compliant**; plain PDFs correctly rejected |
 
-The end-to-end flow covers: the setup wizard creating six accounts, sign-in, uploading a synthetic image-only "passport" scan, OCR, dashboard, the three-panel browser with PDF preview, confirming suggested dates (generated name "Sam Sample Passport (2016–2026)"), search, admin notification and family settings, switching to the blue theme, bundled help, and a second user on a mobile viewport (forced password change, independent green theme, no horizontal overflow, manifest checks). It also asserts there are no uncaught page errors.
+The end-to-end flow covers: the setup wizard creating six accounts, sign-in, uploading a synthetic image-only "passport" scan, OCR, dashboard, the three-panel browser with PDF preview, confirming suggested dates (generated name "AB Ansari Passport (2016–2026)"), search, admin notification and family settings, switching to the blue theme, bundled help, and a second user on a mobile viewport (forced password change, independent green theme, no horizontal overflow, manifest checks). It also asserts there are no uncaught page errors.
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 

@@ -44,7 +44,7 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Screenshots refreshed if the UI changed
 
 ## Public repository (only when the owner decides to publish)
-- [ ] License chosen and `LICENSE` added (README updated)
+- [x] License: MIT (`LICENSE`, README badge and section)
 - [ ] `scripts/privacy_check.sh --history` passes; any secret ever committed has been rotated and the history cleaned with the owner's approval
 - [ ] Screenshots in `docs/images/screenshots/` reviewed by eye: only synthetic names, documents, domains and IPs
 - [ ] README feature claims match `docs/IMPLEMENTATION_STATUS.md`; no AI assistant listed as author

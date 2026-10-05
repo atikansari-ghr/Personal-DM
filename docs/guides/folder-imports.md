@@ -12,7 +12,7 @@ Each top-level folder is a mapping unit. For each one you decide:
 
 - **A person's folder** — documents become that person's. By default they land at the top of the person's area;
   click the folder button (**Top of their folder**) to pick an existing **sub-folder inside that person's area**
-  instead, for example *Sam Sample / Education*. Several source folders may map to the same person.
+  instead, for example *AB Ansari / Education*. Several source folders may map to the same person.
 - **Another folder** — for shared material (trips, house papers). Pick the destination folder in the folder picker
   and choose the owning account.
 - **Skip**.
@@ -25,7 +25,7 @@ person's folder" when the source folder is named after the person.
 
 Choosing a destination changes **where the import starts**, nothing else. Every nested source folder is recreated
 beneath it exactly as it is — nothing is flattened. Example: `Old/Address Update 22July2026/letter.pdf` mapped to
-*Sam Sample / Parity* with *keep "Old"* ticked becomes `Family library / Sam Sample / Parity / Old / Address Update
+*AB Ansari / Parity* with *keep "Old"* ticked becomes `Family library / AB Ansari / Parity / Old / Address Update
 22July2026 / letter`.
 
 **Check & preview** shows the **final folder structure**: every folder the import will use, with the number of files

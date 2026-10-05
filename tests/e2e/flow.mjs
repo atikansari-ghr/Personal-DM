@@ -26,7 +26,7 @@ await step("first-run setup wizard creates six accounts", async () => {
   await page.screenshot({ path: `${SHOTS}/01-setup-code.png` });
   await page.fill("#token", process.env.SETUP_TOKEN);
   await page.click("text=Continue");
-  const names = ["Atik Ansari", "Maria Sample", "Sam Sample", "Dana Sample", "Theo Sample", "Leo Sample"];
+  const names = ["Atik Ansari", "JR", "AB Ansari", "N Ansari", "AZ Ansari", "AR Ansari"]; // dad, mom, son1, daughter, son2, son3
   for (let i = 0; i < 6; i++) await page.fill(`#n-${i}`, names[i]);
   await page.fill("#p-0", PW);
   await page.screenshot({ path: `${SHOTS}/02-setup-accounts.png`, fullPage: false });
@@ -51,7 +51,7 @@ await step("upload a scanned passport (synthetic) and process it", async () => {
   await page.click("button:has-text('Upload documents')");
   await page.waitForFunction(() => document.querySelectorAll("#folder-select option").length > 2);
   const opts = await page.locator("#folder-select option").allInnerTexts();
-  const samIdx = opts.findIndex((o) => o.includes("Sam Sample"));
+  const samIdx = opts.findIndex((o) => o.includes("AB Ansari"));
   await page.selectOption("#folder-select", { index: samIdx });
   await page.selectOption("#dtype", { label: "Passport" });
   await page.setInputFiles("input[type=file]:not([capture])", process.env.FIXTURE);
@@ -63,13 +63,13 @@ await step("upload a scanned passport (synthetic) and process it", async () => {
 await step("dashboard shows stats, members and recent document", async () => {
   await page.goto(BASE + "/");
   await page.waitForSelector("text=Family library");
-  await page.waitForSelector("text=Sam Sample Passport");
+  await page.waitForSelector("text=AB Ansari Passport");
   await page.screenshot({ path: `${SHOTS}/04-dashboard.png` });
 });
 
 await step("three-panel folder browser with preview and suggested details", async () => {
   await page.click("nav >> text=Folders");
-  await page.click(".tree-node:has-text('Sam Sample')");
+  await page.click(".tree-node:has-text('AB Ansari')");
   await page.click(".doc-card:has-text('Passport')");
   await page.waitForSelector(".detail-pane >> text=Details");
   await page.waitForTimeout(1500);
