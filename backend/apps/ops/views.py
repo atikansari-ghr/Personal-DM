@@ -42,7 +42,14 @@ def backup_status(request):
     except backup.BackupError as exc:
         reach = {"ok": False, "error": str(exc)}
     running = Job.objects.filter(kind="backup", status__in=[Job.QUEUED, Job.RUNNING]).exists()
-    return Response({"status": status, "destination": reach, "running": running, "target": config.get("backup.target")})
+    from apps.notify.expiry import local_now
+
+    from . import schedule
+
+    nxt = schedule.next_occurrence(local_now()) if config.get("backup.target") else None
+    return Response({"status": status, "destination": reach, "running": running, "target": config.get("backup.target"),
+                     "schedule": schedule.describe(), "next_run": nxt.isoformat() if nxt else None,
+                     "keep": config.get("backup.keep_daily")})
 
 
 @api_view(["POST"])
