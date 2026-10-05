@@ -32,7 +32,7 @@ jobs:
       - name: System packages (OCR, LibreOffice, PostgreSQL client)
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends tesseract-ocr tesseract-ocr-eng ocrmypdf ghostscript qpdf poppler-utils \
+          sudo apt-get install -y -q --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-osd ocrmypdf ghostscript qpdf poppler-utils \
             libreoffice-writer libreoffice-calc libreoffice-impress fonts-dejavu-core postgresql-client shellcheck
       - uses: actions/setup-python@v5
         with:
@@ -79,7 +79,7 @@ jobs:
       - name: System packages
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends tesseract-ocr tesseract-ocr-eng ocrmypdf ghostscript qpdf poppler-utils fonts-dejavu-core
+          sudo apt-get install -y -q --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-osd ocrmypdf ghostscript qpdf poppler-utils fonts-dejavu-core
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"

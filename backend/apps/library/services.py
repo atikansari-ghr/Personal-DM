@@ -283,6 +283,10 @@ def set_field(*, actor, doc: Document, key: str, value: str, confirm: bool = Tru
 
     key = key.strip()[:80]
     value = (value or "").strip()
+    if key == "no_expiry":
+        if value.lower() not in ("", "yes", "no"):
+            raise DomainError("Use yes or no.")
+        value = value.lower() if value.lower() == "yes" else ""
     if key in DATE_FIELDS and value:
         parsed = parse_date(value)
         if parsed is None:
@@ -330,14 +334,17 @@ def apply_confirmed_fields(doc: Document) -> None:
     old_expiry = doc.expiry_date
     doc.issue_date = d("issue_date")
     doc.expiry_date = d("expiry_date")
+    doc.no_expiry = (vals.get("no_expiry") or "").lower() in ("yes", "true", "1")
     pending = doc.fields.filter(status=DocumentField.PROPOSED).exists()
     flags = []
     if doc.issue_date and doc.expiry_date and doc.issue_date >= doc.expiry_date:
         flags.append("Issue date is not before expiry date.")
+    if doc.no_expiry and doc.expiry_date:
+        flags.append("An expiry date is set although the document is marked as not expiring.")
     doc.review_flags = flags
     if doc.state in (Document.NEEDS_REVIEW, Document.READY):
         doc.state = Document.NEEDS_REVIEW if (pending or flags) else Document.READY
-    doc.save(update_fields=["issue_date", "expiry_date", "review_flags", "state", "updated_at"])
+    doc.save(update_fields=["issue_date", "expiry_date", "no_expiry", "review_flags", "state", "updated_at"])
     refresh_title(doc)
     if old_expiry != doc.expiry_date:
         from apps.notify.expiry import on_expiry_changed

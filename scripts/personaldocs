@@ -46,7 +46,7 @@ MIN_DISK_MB=4096
 APT_PACKAGES=(
   python3 python3-venv python3-dev build-essential libpq-dev
   postgresql postgresql-client
-  tesseract-ocr tesseract-ocr-eng ocrmypdf ghostscript qpdf unpaper pngquant poppler-utils
+  tesseract-ocr tesseract-ocr-eng tesseract-ocr-osd ocrmypdf ghostscript qpdf unpaper pngquant poppler-utils
   libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui fonts-dejavu-core
   git curl ca-certificates jq util-linux rsync iproute2 nfs-common cifs-utils
 )

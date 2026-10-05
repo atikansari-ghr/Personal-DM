@@ -526,10 +526,19 @@ def document_reprocess(request, pk):
         return _err("No file to process.")
     from .models import Document as D
 
+    payload = {"version_id": str(doc.current_version_id)}
+    rotate = request.data.get("rotate") if hasattr(request, "data") else None
+    if rotate not in (None, "", "auto"):
+        try:
+            rotate = int(rotate)
+        except (TypeError, ValueError):
+            return _err("Rotation must be auto, 0, 90, 180 or 270.")
+        if rotate not in (0, 90, 180, 270):
+            return _err("Rotation must be auto, 0, 90, 180 or 270.")
+        payload["rotate"] = rotate  # manual orientation for the OCR re-run (clockwise degrees)
     D.objects.filter(pk=doc.pk).update(state=D.QUEUED)
-    jobs.enqueue("process_version", {"version_id": str(doc.current_version_id)},
-                 idempotency_key=f"process:{doc.current_version_id}:{timezone.now().timestamp()}")
-    audit.record("document.reprocess", request=request, target=doc)
+    jobs.enqueue("process_version", payload, idempotency_key=f"process:{doc.current_version_id}:{timezone.now().timestamp()}")
+    audit.record("document.reprocess", request=request, target=doc, rotate=payload.get("rotate", "auto"))
     return Response({"status": "queued"})
 
 
@@ -635,7 +644,10 @@ def document_thumbnail(request, pk):
 def document_text(request, pk):
     doc = get_doc(request, pk)
     v = _version_for(request, doc)
-    return Response({"text": v.text, "ocr_applied": v.ocr_applied, "version": v.number})
+    q = v.ocr_quality or {}
+    return Response({"text": v.text, "ocr_applied": v.ocr_applied, "version": v.number,
+                     "confidence": q.get("confidence"), "low_lines": q.get("low_lines") or [],
+                     "line_count": q.get("line_count")})
 
 
 @api_view(["GET"])
