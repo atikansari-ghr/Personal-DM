@@ -15,7 +15,7 @@ const BLANK: Profile = { name: "", enabled: true, is_default: false, provider: "
   embedding_model: "", timeout_seconds: 60, max_input_chars: 12000, max_output_tokens: 800, privacy: "lan", external_acknowledged: false, features: [] };
 const FEATURE_LABELS: Record<string, string> = { ocr_assist: "OCR assist", smart_organization: "Smart organisation", semantic_search: "Semantic search", assistant: "Document assistant" };
 const PRIVACY: [string, string, string][] = [
-  ["local", "Local only", "The AI server runs on this Personal Documents server."],
+  ["local", "Local only", "The AI server runs on this server, next to the app."],
   ["lan", "Private LAN", "Another machine on your home network (e.g. a PC with LM Studio or Ollama)."],
   ["external", "External endpoint", "A server outside your network. Selected document/OCR text WILL leave your network."],
 ];

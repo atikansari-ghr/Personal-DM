@@ -390,3 +390,33 @@ table.responsive td.row, table.responsive td > .row { flex-wrap: wrap; }
 .doc-open { all: unset; cursor: pointer; font-weight: 600; display: block; border-radius: 4px; overflow-wrap: anywhere; }
 .doc-open:focus-visible { box-shadow: var(--focus); }
 .doc-open.small { font-size: 0.875rem; }
+
+/* ---- overflow menus (portal; positioned by components/Menu.tsx) */
+.menu-pop { position: fixed; z-index: 1000; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16); padding: 0.25rem 0; overflow-y: auto; max-width: calc(100vw - 16px); }
+.menu-pop [role="menuitem"] { display: flex; align-items: center; gap: 0.5rem; width: 100%; text-align: left; border: 0; background: none;
+  padding: 0.55rem 0.9rem; font: inherit; color: inherit; cursor: pointer; text-decoration: none; min-height: 40px; }
+.menu-pop [role="menuitem"]:hover, .menu-pop [role="menuitem"]:focus-visible { background: var(--brand-softer); outline: none; }
+.menu-pop [role="menuitem"]:focus-visible { box-shadow: inset 0 0 0 2px var(--brand); }
+.menu-pop [role="menuitem"].danger { color: var(--danger-ink); }
+.menu-sep { height: 1px; background: var(--line); margin: 0.25rem 0; }
+
+/* ---- folder tree row actions, view modes, details table, external drop */
+.tree-node .node-menu { margin-left: auto; opacity: 0; }
+.tree-node:hover .node-menu, .tree-node:focus-within .node-menu, .tree-node .node-menu[aria-expanded="true"] { opacity: 1; }
+@media (hover: none) { .tree-node .node-menu { opacity: 1; } }
+.tree-node .node-menu.icon-btn { width: 28px; height: 28px; min-width: 28px; }
+.view-switch .btn { padding-left: 0.6rem; padding-right: 0.6rem; }
+.details-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.details-table th { text-align: left; font-weight: 600; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.details-table th button { border: 0; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0; display: inline-flex; gap: 0.25rem; align-items: center; }
+.details-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.details-table tr.active td { background: var(--brand-softer); }
+.details-table tr:hover td { background: var(--brand-softer); cursor: pointer; }
+.details-table .name-cell { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.details-table .name-cell .doc-open { overflow-wrap: anywhere; }
+@media (max-width: 760px) { .details-table .opt { display: none; } }
+.list-pane.drop-target { outline: 3px dashed var(--brand); outline-offset: -6px; background: var(--brand-softer); }
+.drop-hint { position: sticky; top: 0; z-index: 5; margin: 0.5rem; }
+.drop-progress { position: fixed; right: 16px; bottom: 16px; z-index: 900; width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; }
+.drop-progress ul { margin: 0.4rem 0 0; padding-left: 1.1rem; font-size: 0.86rem; }

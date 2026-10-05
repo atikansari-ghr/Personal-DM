@@ -5,7 +5,7 @@
 
 Every request passes these layers in order. Each one has a single job:
 
-Internet → Nginx Proxy Manager / Pangolin (HTTPS) → **country / IP access policy** → sign-in rate limits → Personal Documents
+Internet → Nginx Proxy Manager / Pangolin (HTTPS) → **country / IP access policy** → sign-in rate limits → Personal Documents Management System
 sign-in (password, passkey, authenticator app, Google) → per-document permissions → audit log.
 
 - The **access policy** decides *whether a network may reach the app at all*. It runs before sign-in and before any document code.

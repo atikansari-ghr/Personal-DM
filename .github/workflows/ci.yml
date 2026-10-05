@@ -48,6 +48,8 @@ jobs:
           .venv/bin/pip install -q -r backend/requirements-dev.txt
       - name: Verify
         run: PY=.venv/bin/python scripts/verify.sh
+      - name: One-line installer lifecycle (stubbed)
+        run: sudo bash tests/installer/test_personal_dm.sh
       - name: Package frontend build
         if: startsWith(github.ref, 'refs/tags/v')
         run: tar -czf frontend-dist.tar.gz -C frontend dist

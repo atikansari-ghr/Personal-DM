@@ -1,6 +1,6 @@
 # Security policy
 
-Personal Documents stores a family's most sensitive papers. Security reports are welcome and taken seriously.
+Personal Documents Management System stores a family's most sensitive papers. Security reports are welcome and taken seriously.
 
 ## Reporting a vulnerability
 

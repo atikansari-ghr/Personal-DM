@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SORT_LABELS, VIEW_LABELS } from "../docview";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { HelpTip, Icon, Skeleton, useToast } from "./ui";
@@ -15,6 +16,8 @@ const CHOICE_LABELS: Record<string, string> = { green: "Green & White", blue: "B
 const KEY_CHOICE_LABELS: Record<string, Record<string, string>> = {
   "nas.type": { none: "Already mounted (Proxmox bind mount)" },
   "backup.frequency": { daily: "Daily", weekly: "Weekly", monthly: "Monthly" },
+  "me.doc_view": VIEW_LABELS,
+  "me.doc_sort": SORT_LABELS,
   "backup.weekday": { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" },
 };
 // Fields that only make sense for a particular value of another field (hidden otherwise, values kept).

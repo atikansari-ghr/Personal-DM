@@ -72,8 +72,8 @@ Nothing is created automatically. You choose to apply the template:
 - in the setup wizard (tick *Create the suggested folders for each person*);
 - on any folder you may organise: open it and choose **Apply folder template**.
 
-Applying a template again only adds missing folders. It never removes, renames or moves existing ones, and the folders get normal emoji suggestions and inherited access.
+Applying a template again only adds missing folders. It never removes, renames or moves existing ones, and the folders get the normal icons (suggested at the top level, 📁 below) and inherited access.
 
 ## Folder emoji {#emoji}
 
-New folders get an emoji suggested from their name (Travel ✈️, Passport 🛂, Visa 🛃, House 🏠, Education 🎓, Medical 🩺, Banking 🏦, Insurance 🛡️, Vehicle 🚗, Certificates 📜, others 📁). Change it with **Rename / emoji**. Emoji are labels only; they never affect access and are not added to stored filenames.
+Folders created directly in a person's area or in Shared family get an icon suggested from their name (Travel ✈️, Passport 🛂, Visa 🛃, House 🏠, Education 🎓, Medical 🩺, Banking 🏦, Insurance 🛡️, Vehicle 🚗, Certificates 📜, others 📁). Deeper sub-folders, including imported and dropped ones, get the standard 📁 icon. Change an icon with **⋮ → Change icon…** (choose from the list) or go back to the automatic one with **Reset to default**. Icons are labels only; they never affect access and are not added to stored filenames. A chosen icon is kept through moves, backups and upgrades. When upgrading, automatically assigned icons of existing sub-folders change to 📁, while icons someone chose are kept.

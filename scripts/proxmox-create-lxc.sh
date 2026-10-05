@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Personal Documents — create the Debian 13 LXC on a Proxmox VE host and run the guided installer inside it.
+# Personal Documents Management System — create the Debian 13 LXC on a Proxmox VE host and run the guided installer inside it.
 #
 # Run on the Proxmox host as root. It asks for the container settings, downloads the Debian 13 template if
 # needed, creates and starts the container (privileged + mount=nfs;cifs when the app should mount the NAS
@@ -23,7 +23,7 @@ ask_yn() { local var=$1 q=$2 def=$3 ans; read -rp "$(printf '%s%s%s [%s]: ' "$B"
 [ "$(id -u)" -eq 0 ] || fail "Run as root on the Proxmox host."
 command -v pct >/dev/null && command -v pveam >/dev/null || { [ "$DRY" = 1 ] || fail "This must run on a Proxmox VE host (pct/pveam not found)."; }
 
-say "${B}Personal Documents — create container on Proxmox${N}$( [ "$DRY" = 1 ] && echo '  (DRY RUN)')"
+say "${B}Personal Documents Management System — create container on Proxmox${N}$( [ "$DRY" = 1 ] && echo '  (DRY RUN)')"
 NEXTID=$( (pvesh get /cluster/nextid 2>/dev/null) || echo 210)
 ask CTID "Container ID" "$NEXTID" '^[0-9]{3,9}$'
 if [ "$DRY" = 0 ] && pct status "$CTID" >/dev/null 2>&1; then fail "Container $CTID already exists."; fi

@@ -22,7 +22,7 @@ export function AuthFrame({ children }: { children: ReactNode }) {
   return (
     <div className="auth">
       <section className="auth-art" aria-hidden="true">
-        <div className="brand" style={{ fontSize: "1.5rem" }}><Icon name="shield" size={34} /> {session?.app_name || "Personal Documents"}</div>
+        <div className="brand" style={{ fontSize: "1.5rem" }}><Icon name="shield" size={34} /> {session?.app_name || "Personal Documents Management System"}</div>
         <h1>Your family documents.<br />Together.</h1>
         <p className="muted" style={{ fontSize: "1.2rem" }}>A private space for the things that matter.</p>
         <div className="folders-art">

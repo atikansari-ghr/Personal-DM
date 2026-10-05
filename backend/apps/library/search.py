@@ -10,7 +10,7 @@ import re
 from django.contrib.postgres.search import SearchHeadline, SearchQuery, SearchRank, SearchVector
 from django.db import connection
 from django.db.models import F, Q, Value
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Lower
 
 from . import permissions as P
 from .models import Document
@@ -80,13 +80,24 @@ def _filters(qs, params: dict):
     return qs
 
 
+SORTS = {  # folder browsing order (the "Sort by" menu); the same keys are stored as the me.doc_sort preference
+    "name": (Lower("title").asc(),), "-name": (Lower("title").desc(),),
+    "added": (F("created_at").asc(),), "-added": (F("created_at").desc(),),
+    "size": (F("current_version__size").asc(nulls_last=True),), "-size": (F("current_version__size").desc(nulls_last=True),),
+    "expiry": (F("expiry_date").asc(nulls_last=True),), "-expiry": (F("expiry_date").desc(nulls_last=True),),
+    "type": (F("doc_type__name").asc(nulls_last=True), Lower("title").asc()),
+    "-type": (F("doc_type__name").desc(nulls_last=True), Lower("title").asc()),
+}
+
+
 def search(ctx: P.AccessContext, q: str, params: dict | None = None, limit: int = 50, offset: int = 0):
     params = params or {}
     qs = _filters(ctx.documents(P.VIEW), params).distinct()
     q = (q or "").strip()
     if not q:
         total = qs.count()
-        return list(qs.select_related("owner", "doc_type", "folder").order_by("-created_at")[offset:offset + limit]), total, {}
+        order = SORTS.get(params.get("sort") or "-added", SORTS["-added"])
+        return list(qs.select_related("owner", "doc_type", "folder").order_by(*order, "-created_at", "id")[offset:offset + limit]), total, {}
     query = SearchQuery(q, config=CONFIG, search_type="websearch")
     prefix = _prefix_query(q)
     combined = query | prefix if prefix is not None else query

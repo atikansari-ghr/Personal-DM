@@ -51,19 +51,27 @@ See [dashboard](guides/getting-started.md#dashboard).
 
 ## 4. Folders and file types {#folders}
 
-- **My Documents** at the top of the tree is your own area. Other members' areas show their name and photo, and
-  only if you have access.
+- **My Documents** at the top of the tree is your own area, opened when you go to **Folders**. Other members'
+  areas show their name and photo, only if you have access, and stay closed until you open them.
 - Each document has a labelled icon (PDF, JPG, PNG, WEBP, TXT, DOC, XLS, PPT, ZIP, DCM, FILE) based on the real file
   content.
 - On a computer the browser has three panels: folders, documents, preview. Drag the dividers to resize them. On
   phones you go Folders → Documents → Preview, with **☰** for the tree and **← Back to folder**.
-- New folders get a suggested emoji (✈️ Travel, 🛂 Passport…). You can change it; emoji never change access.
+- Folders directly in your area get a suggested icon (✈️ Travel, 🛂 Passport…); sub-folders get 📁. Change it with
+  **⋮ → Change icon…** or **Reset to default**. Icons never change access.
+- **Views:** List, Thumbnails or Details (a sortable table), plus **Sort by**. Your choice follows you to every device.
+- **⋮ menus** on documents (Open, Rename, Move to, Download, Share, Archive) and folders (Open, New subfolder, Rename,
+  Change icon, Move to, Share / who has access, Download ZIP, Archive) list only what you may do.
 
-More: [getting started](guides/getting-started.md#my-documents), [file types](guides/getting-started.md#file-types).
+More: [getting started](guides/getting-started.md#my-documents), [actions](guides/getting-started.md#actions),
+[views](guides/getting-started.md#views), [icons](guides/getting-started.md#icons), [file types](guides/getting-started.md#file-types).
 
 ## 5. Uploading and importing {#upload}
 
 - **Upload:** choose files (or take a photo on a phone), pick the folder and optionally the document type.
+- **Drag and drop from your computer:** drop files or whole folders on the document list or on a folder in the tree.
+  Folders keep their structure below the drop target; a progress card lists anything that could not be uploaded
+  and why. See [drag and drop](guides/getting-started.md#drop).
 - **Import folder:** bring a whole folder structure in. For each top folder choose:
   - a person (optionally a sub-folder inside their area)
   - another folder
@@ -88,7 +96,11 @@ because it inherits the new folder's access. See [moving](guides/getting-started
 
 - **Viewer:** zoom − / +, the current %, **Fit page**, **Fit width**, **100%**, page arrows, **Full screen** and
   **Download**. Keys: `+` `−` `0` `W` `P`. See [viewer](guides/getting-started.md#viewer).
-- **OCR:** scans are made searchable on your server. The **Text** tab shows the recognised text.
+- **OCR:** scans and photos are straightened, turned upright and made searchable on your server. The **Text** tab
+  shows the recognised text, the **OCR confidence** and greys out unreliable lines. If the text is junk, use
+  **⋮ → Re-run OCR…** and pick a rotation. Your confirmed values are never overwritten by a re-run. A card that says
+  "No Expiry Date" is suggested as **Does not expire** instead of an invented date. See
+  [OCR quality](guides/ocr-corrections.md#quality).
 - **Details:** suggested details (issue/expiry date, number, name) only count after you **Confirm** them. Confirmed
   dates drive the document name and reminders. See [OCR and corrections](guides/ocr-corrections.md).
 - **Versions and renewals:** a better scan is a new version; a renewed passport is a new linked document. See

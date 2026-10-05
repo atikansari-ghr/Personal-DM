@@ -1,6 +1,6 @@
 # Administrator guide
 
-For whoever installs and runs Personal Documents (the **main administrator**). Each section summarises what to do
+For whoever installs and runs Personal Documents Management System (the **main administrator**). Each section summarises what to do
 and links to the detailed guide (also available in the app under **Help**). Commands run as root inside the
 container (`pct enter <id>` from the Proxmox host).
 

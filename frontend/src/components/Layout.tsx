@@ -89,7 +89,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="shell">
       <aside className={`sidebar ${open ? "open" : ""}`} aria-label="Main navigation">
-        <Link to="/" className="brand"><Icon name="shield" size={26} /> {session?.app_name || "Personal Documents"}</Link>
+        <Link to="/" className="brand"><Icon name="shield" size={26} /> {session?.app_name || "Personal Documents Management System"}</Link>
         <nav className="nav">
           {NAV.filter(([p]) => p !== "/archive" || user?.is_main_admin).map(([path, icon, label]) => (
             <NavLink key={path} to={path} end={path === "/"} className={({ isActive }) => (isActive ? "active" : "")}>

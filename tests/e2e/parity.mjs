@@ -78,8 +78,8 @@ await step("AT-61 signed-in user's own area is identified at the top of the tree
   await page.goto(BASE + "/folders");
   await page.waitForSelector(".my-area");
   const txt = await page.locator(".my-area").innerText();
-  expect(txt.includes("My Documents") && txt.includes("Alex Sample"), `my-area text: ${txt}`);
-  await page.waitForSelector(".tree-node:has-text('My Documents — Alex Sample')");
+  expect(txt.includes("My Documents") && txt.includes("Atik Ansari"), `my-area text: ${txt}`);
+  await page.waitForSelector(".tree-node:has-text('My Documents — Atik Ansari')");
   expect(await page.locator(".tree-node:has-text('Sam Sample') .avatar").count() > 0, "member areas show an avatar");
 });
 

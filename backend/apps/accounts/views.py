@@ -115,6 +115,8 @@ def session_state(request):
             "theme": config.get_user(u, "me.theme"),
             "layout": config.get_user(u, "me.layout"),
             "dashboard_widgets": registry.normalize_widgets(config.get_user(u, "me.dashboard_widgets")),
+            "doc_view": config.get_user(u, "me.doc_view"),
+            "doc_sort": config.get_user(u, "me.doc_sort"),
         }
         data["date_format"] = config.get("general.date_format")
         data["timezone"] = config.get("general.timezone")
