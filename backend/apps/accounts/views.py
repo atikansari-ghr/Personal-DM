@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from apps.core import audit, config, crypto, ratelimit
 from apps.security import login_audit
 
+from . import photos
 from . import services as S
 from .auth import IsActiveAuthenticated, IsMainAdmin
 from .models import DELEGATION_SCOPES, Delegation, FamilyGroup, GroupMembership, PasswordResetToken, SetupState, User
@@ -31,6 +32,7 @@ def user_json(u: User, *, full: bool = False) -> dict:
         "role_label": u.role_label,
         "initials": u.initials,
         "avatar_color": u.avatar_color,
+        "photo_version": photos.version(u),
         "is_main_admin": u.is_main_admin,
         "is_active": u.is_active,
         "is_head": u.headed_groups.exists(),
@@ -589,3 +591,62 @@ def delegation(request):
     except S.AccountError as exc:
         return _fail(str(exc))
     return Response(group_json(g))
+
+
+# ------------------------------------------------------------------ profile photos
+
+def _photo_crop(data) -> dict | None:
+    if not data.get("crop_size"):
+        return None
+    return {"x": data.get("crop_x", 0), "y": data.get("crop_y", 0), "size": data.get("crop_size")}
+
+
+def _photo_change(request, user: User, *, by_admin: bool):
+    action = "family.photo" if by_admin else "account.photo"
+    if request.method == "DELETE":
+        photos.clear(user)
+        audit.record(f"{action}_remove", request=request, target=user, subject_user=user)
+        return Response(user_json(user, full=True))
+    f = request.FILES.get("file")
+    if f is None:
+        return _fail("Choose an image file.")
+    if f.size > photos.MAX_BYTES:
+        return _fail("The image is larger than 5 MB.")
+    try:
+        photos.save(user, f.read(), _photo_crop(request.data))
+    except photos.PhotoError as exc:
+        return _fail(str(exc))
+    audit.record(f"{action}_update", request=request, target=user, subject_user=user)
+    return Response(user_json(user, full=True))
+
+
+@api_view(["POST", "DELETE"])
+@permission_classes([IsActiveAuthenticated])
+def my_photo(request):
+    return _photo_change(request, request.user, by_admin=False)
+
+
+@api_view(["POST", "DELETE"])
+@permission_classes([IsMainAdmin])
+def member_photo(request, pk):
+    return _photo_change(request, get_object_or_404(User, pk=pk), by_admin=True)
+
+
+@api_view(["GET"])
+@permission_classes([IsActiveAuthenticated])
+def user_photo(request, pk):
+    """Serve a profile photo to signed-in users who can see that family member."""
+    from django.http import FileResponse, Http404
+
+    target = get_object_or_404(User, pk=pk)
+    visible = _visible_member_ids(request.user)
+    if visible is not None and target.pk not in visible:
+        raise Http404  # same answer as "no photo": does not reveal whether a photo exists
+    path = photos.path_for(target, thumb=request.query_params.get("size") != "full")
+    if path is None:
+        raise Http404
+    resp = FileResponse(open(path, "rb"), content_type="image/webp")
+    resp["Cache-Control"] = "private, max-age=86400"
+    resp["X-Content-Type-Options"] = "nosniff"
+    resp["Content-Disposition"] = "inline"
+    return resp

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { Group, User } from "../types";
-import { Modal, Skeleton, useToast } from "./ui";
+import { Avatar, Modal, Skeleton, useToast } from "./ui";
 
 const ORDER = ["view", "download", "upload", "edit", "version", "organize", "archive", "share", "manage"];
 
@@ -49,7 +49,7 @@ export default function PermissionsDialog({ target, onClose }: { target: { kind:
             {data.rules.length === 0 ? <p className="muted small">No explicit rules here.</p> : (
               <table className="responsive"><thead><tr><th>Who</th><th>Capabilities</th><th /></tr></thead><tbody>
                 {data.rules.map((r: any) => (
-                  <tr key={r.id}><td>{r.user ? r.user.display_name : `Group: ${r.group.name}`}</td><td className="small">{r.caps.join(", ")}</td>
+                  <tr key={r.id}><td>{r.user ? <span className="row" style={{ gap: ".4rem" }}><Avatar user={r.user} size="sm" /> {r.user.display_name}</span> : `Group: ${r.group.name}`}</td><td className="small">{r.caps.join(", ")}</td>
                     <td><button className="btn small danger" onClick={() => save(r.user ? `user:${r.user.id}` : `group:${r.group.id}`, [])}>Remove</button></td></tr>
                 ))}
               </tbody></table>

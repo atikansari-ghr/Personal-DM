@@ -5,7 +5,7 @@ import { saveOffline } from "../offline";
 import { useSession } from "../session";
 import type { DocDetail, DocRow, Meta } from "../types";
 import PermissionsDialog from "./PermissionsDialog";
-import { Confirm, CopyButton, ExpiryBadge, HelpTip, Icon, Modal, Skeleton, StateBadge, useToast } from "./ui";
+import { Avatar, Confirm, CopyButton, ExpiryBadge, HelpTip, Icon, Modal, Skeleton, StateBadge, useToast } from "./ui";
 
 const FIELD_LABELS: Record<string, string> = {
   full_name: "Full name", document_number: "Document number", issue_date: "Issue date", expiry_date: "Expiry date", date_of_birth: "Date of birth",
@@ -69,7 +69,7 @@ function Fields({ doc, onChange }: { doc: DocDetail; onChange: () => void }) {
       )}
       <div className="kv">
         {rows.map(([k, label, val]) => (
-          <div key={k} style={{ display: "contents" }}><div className="k">{label}</div><div className="v">{val}</div><div className="c"><CopyButton label={label} getValue={() => String(val)} /></div></div>
+          <div key={k} style={{ display: "contents" }}><div className="k">{label}</div><div className="v">{k === "owner" ? <span className="row" style={{ gap: ".4rem" }}><Avatar user={doc.owner} size="sm" /> {val}</span> : val}</div><div className="c"><CopyButton label={label} getValue={() => String(val)} /></div></div>
         ))}
         {doc.fields.map((f) => (
           <div key={f.key} style={{ display: "contents" }}>

@@ -3,6 +3,7 @@ export interface UserMini {
   display_name: string;
   initials: string;
   avatar_color: string;
+  photo_version?: string | null;
 }
 export interface User extends UserMini {
   role_label: string;
