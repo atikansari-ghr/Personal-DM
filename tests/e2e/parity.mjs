@@ -90,10 +90,188 @@ await step("AT-62 file-type icons with readable labels in list and grid", async 
   const label = await page.locator(".list-pane .ftype-jpeg").first().getAttribute("aria-label");
   expect(label === "JPEG image", `label ${label}`);
   await page.screenshot({ path: `${SHOTS}/folders-file-types.png` });
-  await page.click("button[aria-label='Grid view']");
+  await page.click("button[aria-label='Thumbnails view']");
   await page.waitForSelector(".doc-grid");
   expect(await page.locator(".doc-grid .ftype").count() >= 6, "grid icons");
   await page.click("button[aria-label='List view']");
+});
+
+await step("AT-92 own library on top and expanded; other areas collapsed", async () => {
+  const fresh = await desk.newPage();
+  watch(fresh, "landing");
+  await fresh.goto(BASE + "/folders");
+  await fresh.waitForSelector(".tree-node");
+  const mine = (await api(fresh, "/api/folders")).data.folders.find((x) => x.kind === "personal_root" && x.owner_user?.display_name === "Atik Ansari");
+  await fresh.waitForURL(new RegExp(`/folders/${mine.id}`));
+  const first = await fresh.locator("[role=tree] > li >> nth=0").innerText();
+  expect(first.startsWith("My Documents — Atik Ansari") || first.includes("My Documents — Atik Ansari"), `first tree item: ${first.slice(0, 60)}`);
+  const samItem = fresh.locator("[role=tree] li[role=treeitem]:has(> .tree-node:has-text('Sam Sample'))").first();
+  expect(await samItem.getAttribute("aria-expanded") === "false", "another member's area is not expanded automatically");
+  await fresh.close();
+});
+
+await step("AT-85 overflow menus are not clipped, stay in the viewport and work with the keyboard", async () => {
+  await page.goto(`${BASE}/folders/${ids.parity}`);
+  await page.waitForSelector(".doc-card");
+  await page.click("button[aria-label='Folder actions']");
+  const menu = page.locator(".menu-pop[role=menu]");
+  await menu.waitFor();
+  const check = async () => page.evaluate(() => {
+    const m = document.querySelector(".menu-pop");
+    const r = m.getBoundingClientRect();
+    const items = [...m.querySelectorAll("[role=menuitem]")];
+    const topmost = items.every((it) => { const b = it.getBoundingClientRect(); const el = document.elementFromPoint(b.left + 8, b.top + b.height / 2); return el && it.contains(el); });
+    return { inside: r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight, topmost, n: items.length, parent: m.parentElement === document.body };
+  });
+  let c = await check();
+  expect(c.inside && c.topmost && c.parent && c.n >= 6, `folder menu ${JSON.stringify(c)}`);
+  for (const t of ["Open", "Rename…", "Change icon…", "Move to…", "Share / who has access", "Archive folder…"]) expect(await menu.locator(`[role=menuitem]:text-is('${t}')`).count() === 1, `folder menu item ${t}`);
+  await page.screenshot({ path: `${SHOTS}/folder-actions-menu.png` });
+  // one menu at a time
+  await page.click("button[aria-label='More actions for Sample policy (3 pages)']");
+  expect(await page.locator(".menu-pop").count() === 1, "opening a row menu closes the folder menu");
+  c = await check();
+  expect(c.inside && c.topmost, `row menu ${JSON.stringify(c)}`);
+  for (const t of ["Open", "Rename…", "Move to…", "Download", "Share…", "Archive…", "Delete permanently…"]) expect(await page.locator(`.menu-pop [role=menuitem]:text-is('${t}')`).count() === 1, `document menu item ${t}`);
+  // outside click closes
+  await page.mouse.click(5, 300);
+  expect(await page.locator(".menu-pop").count() === 0, "outside click closes");
+  // keyboard: open with Enter, move with arrows, Escape returns focus
+  await page.focus("button[aria-label='More actions for Sample policy (3 pages)']");
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".menu-pop");
+  expect(await page.evaluate(() => document.activeElement?.textContent) === "Open", "first item focused");
+  await page.keyboard.press("ArrowDown");
+  expect(await page.evaluate(() => document.activeElement?.textContent) === "Rename…", "arrow moves");
+  await page.keyboard.press("Escape");
+  expect(await page.locator(".menu-pop").count() === 0, "Escape closes");
+  expect(await page.evaluate(() => document.activeElement?.getAttribute("aria-label")) === "More actions for Sample policy (3 pages)", "focus returns to the trigger");
+  // a menu near the bottom edge opens upwards inside the viewport
+  await page.setViewportSize({ width: 1366, height: 520 });
+  const last = page.locator(".list-pane .doc-card").last();
+  await last.scrollIntoViewIfNeeded();
+  await last.locator("button[aria-haspopup=menu]").click();
+  c = await check();
+  expect(c.inside, `bottom menu ${JSON.stringify(c)}`);
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1366, height: 900 });
+});
+
+await step("AT-86 rename and archive a document from its menu (with confirmation)", async () => {
+  await page.goto(`${BASE}/folders/${ids.parity}`);
+  const up = await page.evaluate(async (folder) => {
+    const csrf = decodeURIComponent((document.cookie.match(/pd_csrftoken=([^;]+)/) || [])[1] || "");
+    const fd = new FormData();
+    fd.set("folder", folder);
+    fd.append("files", new File(["synthetic note to archive"], "to-archive.txt", { type: "text/plain" }));
+    const r = await fetch("/api/documents", { method: "POST", body: fd, headers: { "X-CSRFToken": csrf } });
+    return (await r.json()).documents[0];
+  }, ids.parity);
+  await page.reload();
+  await page.click(`button[aria-label='More actions for ${up.title}']`);
+  await page.click(".menu-pop [role=menuitem]:text-is('Rename…')");
+  await page.fill("#dname", "Sample note renamed");
+  await page.click(".modal button:has-text('Rename')");
+  await page.waitForSelector(".doc-card:has-text('Sample note renamed')");
+  await page.click("button[aria-label='More actions for Sample note renamed']");
+  await page.click(".menu-pop [role=menuitem]:text-is('Archive…')");
+  await page.waitForSelector(".modal:has-text('Archive document')");
+  await page.click(".modal button:has-text('Archive')");
+  await page.waitForSelector(".toast:has-text('Document archived')");
+  await page.waitForFunction(() => ![...document.querySelectorAll(".doc-card")].some((e) => e.textContent.includes("Sample note renamed")));
+  const log = (await api(page, `/api/audit?action=document.archive&target=${up.id}`)).data;
+  expect(log.total >= 1, "archive recorded in the audit log");
+});
+
+await step("AT-87/88 sub-folders get the standard icon; icon picker and reset", async () => {
+  await page.goto(`${BASE}/folders/${ids.parity}`);
+  await page.click("button[aria-label='Folder actions']");
+  await page.click(".menu-pop [role=menuitem]:text-is('New subfolder…')");
+  await page.fill("#fname", "Passport copies");
+  await page.click(".modal button:has-text('Create')");
+  await page.waitForFunction((old) => /\/folders\/[0-9a-f-]+$/.test(location.pathname) && !location.pathname.endsWith(old), ids.parity);
+  const id = page.url().split("/").pop();
+  expect(id !== ids.parity, "navigated to the new folder");
+  let f = (await api(page, `/api/folders/${id}`)).data;
+  expect(f.emoji === "📁" && !f.emoji_is_custom, `default icon ${f.emoji}`);
+  await page.click("button[aria-label='Folder actions']");
+  await page.click(".menu-pop [role=menuitem]:text-is('Change icon…')");
+  await page.click(".modal .emoji-grid button[aria-label='passport']");
+  await page.click(".modal button:has-text('Save')");
+  await page.waitForSelector(".toast:has-text('Icon changed')");
+  f = (await api(page, `/api/folders/${id}`)).data;
+  expect(f.emoji === "🛂" && f.emoji_is_custom, "custom icon");
+  await page.click("button[aria-label='Folder actions']");
+  await page.click(".menu-pop [role=menuitem]:text-is('Change icon…')");
+  await page.click(".modal button:has-text('Reset to default')");
+  await page.waitForSelector(".toast:has-text('Default icon restored')");
+  f = (await api(page, `/api/folders/${id}`)).data;
+  expect(f.emoji === "📁" && !f.emoji_is_custom, "reset to default");
+  ids.passportCopies = id;
+});
+
+await step("AT-89 list, thumbnails and details views; sorting; preference syncs", async () => {
+  try {
+  await page.goto(`${BASE}/folders/${ids.parity}`);
+  await page.click("button[aria-label='Details view']");
+  await page.waitForSelector("table.details-table");
+  await page.click("table.details-table th button:has-text('Name')");
+  await page.waitForFunction(() => document.querySelector("table.details-table th[aria-sort=ascending]"));
+  const names = await page.evaluate(() => [...document.querySelectorAll("table.details-table tbody .doc-open")].map((e) => e.textContent.toLowerCase()));
+  expect(names.join("|") === [...names].sort((a, b) => a.localeCompare(b)).join("|"), `sorted: ${names}`);
+  await page.click("table.details-table th button:has-text('Name')");
+  await page.waitForFunction(() => document.querySelector("table.details-table th[aria-sort=descending]") && document.querySelectorAll("table.details-table tbody tr").length > 2);
+  await page.screenshot({ path: `${SHOTS}/folders-details-view.png` });
+  const other = await desk.browser().newContext({ viewport: { width: 1366, height: 900 }, storageState: await desk.storageState() });
+  const op = await other.newPage();
+  await op.goto(`${BASE}/folders/${ids.parity}`);
+  await op.waitForSelector("table.details-table");
+  expect(await op.locator("table.details-table th[aria-sort=descending]").count() === 1, "view and sort followed to another session");
+  await other.close();
+  // empty and error states
+  await page.goto(`${BASE}/folders/${ids.passportCopies}`);
+  await page.waitForSelector(".empty:has-text('drag files and folders here')");
+  } finally { // later steps expect the list view
+    await api(page, "/api/settings", { method: "PUT", body: { values: { "me.doc_view": "list", "me.doc_sort": "-added" } } });
+    await page.reload();
+  }
+});
+
+await step("AT-90 files dropped from the desktop upload into the drop target", async () => {
+  await page.goto(`${BASE}/folders/${ids.passportCopies}`);
+  await page.waitForSelector(".empty");
+  await page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.items.add(new File(["synthetic dropped note one"], "dropped-one.txt", { type: "text/plain" }));
+    dt.items.add(new File(["synthetic dropped note two"], "dropped-two.txt", { type: "text/plain" }));
+    const pane = document.querySelector(".list-pane");
+    pane.dispatchEvent(new DragEvent("dragover", { dataTransfer: dt, bubbles: true, cancelable: true }));
+    pane.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+  });
+  await page.waitForSelector(".drop-progress:has-text('Upload finished')");
+  const card = await page.locator(".drop-progress").innerText();
+  expect(card.includes("2 of 2"), card);
+  await page.waitForSelector(".doc-card:has-text('dropped-one')");
+  await page.screenshot({ path: `${SHOTS}/drop-upload.png` });
+  await page.click("button[aria-label='Close upload summary']");
+});
+
+await step("AT-93/94 OCR confidence and re-run with rotation in the document panel", async () => {
+  const scan = { id: ids["Sample scan"] };
+  await page.goto(`${BASE}/documents/${scan.id}`);
+  await page.click("[role=tab]:has-text('Text')");
+  await page.waitForSelector(".preview-text");
+  const doc = (await api(page, `/api/documents/${scan.id}`)).data;
+  if (doc.current_version.ocr_applied) expect(await page.locator(".badge:has-text('OCR confidence')").count() === 1, "confidence shown");
+  await page.click("button[aria-label='More actions']");
+  await page.click(".menu-pop [role=menuitem]:has-text('Re-run OCR')");
+  await page.waitForSelector(".modal:has-text('Re-run OCR')");
+  if (doc.current_version.format === "image") {
+    await page.check(".modal input[value='180']");
+    await page.screenshot({ path: `${SHOTS}/ocr-rerun.png` });
+  }
+  await page.click(".modal button:has-text('Re-run')");
+  await page.waitForSelector(".toast:has-text('Processing queued')");
 });
 
 await step("AT-72 drag a document onto a sub-folder (chip and tree)", async () => {

@@ -13,6 +13,34 @@
  ],
  [
   "PASS",
+  "AT-92 own library on top and expanded; other areas collapsed"
+ ],
+ [
+  "PASS",
+  "AT-85 overflow menus are not clipped, stay in the viewport and work with the keyboard"
+ ],
+ [
+  "PASS",
+  "AT-86 rename and archive a document from its menu (with confirmation)"
+ ],
+ [
+  "PASS",
+  "AT-87/88 sub-folders get the standard icon; icon picker and reset"
+ ],
+ [
+  "PASS",
+  "AT-89 list, thumbnails and details views; sorting; preference syncs"
+ ],
+ [
+  "PASS",
+  "AT-90 files dropped from the desktop upload into the drop target"
+ ],
+ [
+  "PASS",
+  "AT-93/94 OCR confidence and re-run with rotation in the document panel"
+ ],
+ [
+  "PASS",
   "AT-72 drag a document onto a sub-folder (chip and tree)"
  ],
  [

@@ -156,6 +156,27 @@ Source: `CHANGE_PROMPT_PERSONAL_DOCUMENTS_PUBLIC_RELEASE` sections 21–24. Acce
 | PUB-2 | Secret/privacy audit of the tree and history; comprehensive .gitignore; safe env example; automated check. |
 | PUB-3 | Public README with sanitised screenshots, user guide, administrator guide, CONTRIBUTING, SECURITY; license decision flagged. |
 
+## Change set J (2026-10): browsing, OCR quality, one-line installer, public presentation
+
+Source: `CHANGE_PROMPT_PERSONAL_DOCUMENTS_PUBLIC_RELEASE` V3 section 25. Acceptance tests AT-85…AT-100.
+
+| ID | Requirement |
+|---|---|
+| MENU-1 | Overflow menus render above every panel, are positioned from their trigger, stay in the viewport, support keyboard, Escape and outside click, and only one is open at a time. |
+| MENU-2 | Document actions: Open, Rename, Move to, Download, Share, Archive; Permanent delete only where permitted. Folder actions: Open, Rename, Move to, Change icon, Share/permissions, Archive. Unauthorised actions hidden; destructive actions confirmed and audited. |
+| ICON-1 | Top-level semantic folders keep emoji defaults; user-created sub-folders default to the standard folder icon; icons chosen from an approved list with Reset to default; stored as metadata and preserved through move, import, backup and upgrade. |
+| VIEWS-1 | List, Thumbnail/Grid and Details views with sorting, selection, menus and empty/loading/error states; persisted per user and synchronised across devices. |
+| DROP-1 | Files and folders dragged from the desktop upload into the target; the folder hierarchy is recreated beneath the destination; paths are validated (no traversal); progress and failures are shown; nothing is discarded silently; explicit fallback when the browser cannot provide the hierarchy. |
+| TREE-1 | The signed-in user's library is at the top of the tree and expanded by default; other trees are never auto-expanded. |
+| OCR-1 | OCR preprocessing (EXIF, rotation, deskew, grayscale, contrast, threshold, denoise, upscale, PSM) is benchmarked on synthetic samples and only measured improvements are adopted. |
+| OCR-2 | OCR confidence is stored and displayed; junk stays out of metadata; OCR can be re-run with a rotation. |
+| OCR-3 | Candidate fields (number, dates, name) are extracted as suggestions; "No Expiry Date" is represented as non-expiring; confirmed values are never overwritten. |
+| PUB-4 | Public title "Personal Documents Management System" in the UI, README, package metadata, docs, installer, PWA manifest and Help; internal identifiers unchanged. |
+| PUB-5 | Public mock screenshots use the demo owner "Atik Ansari"; all other identities synthetic. |
+| PUB-6 | Atik Ansari as sole author in manual credits and metadata; Git history not falsified. |
+| INST-1 | Root `personal-DM.sh` runnable as `bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)"` for install, upgrade, repair, doctor, status, backup, restore and admin recovery (menu and commands); Debian 13 and root checks; idempotent; data preserved; backup first; fails loudly; shows logs; no secrets. |
+| PUB-7 | LinkedIn-ready README (value proposition, badges, screenshots near the top, features, architecture, one-line install, security/privacy, OCR/AI, mobile/PWA, docs, roadmap, support, author); Ko-fi support link and `.github/FUNDING.yml`; recommended topics. |
+
 ## Later phases
 
 Personal WhatsApp notifications, native apps, scanning enhancement, in-browser Office editing, DICOM viewing.

@@ -6,11 +6,40 @@
 ```
 sudo personaldocs upgrade              # newest commit of the configured branch
 sudo personaldocs upgrade --ref v0.2.0 # a specific tag
+# or with the one-line installer (also runs the health check afterwards):
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)" -- upgrade
 ```
 
 Steps: take an exclusive lock; check free disk; run a **verified application backup** (aborts if the backup fails — use `--skip-backup` only if you have one); fetch and verify the requested revision; build it in a new release directory; run migration checks; stop the worker and scheduler; apply migrations; switch the `current` symlink; restart; run health checks. The previous and new versions are printed and logged.
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
+
+## Upgrading to the browsing, OCR and installer release (Change Set J) {#change-set-j}
+
+```
+sudo personaldocs upgrade
+sudo personaldocs repair     # installs tesseract-ocr-osd (orientation detection) on older installations
+sudo personaldocs doctor
+```
+
+This release adds **three database migrations**, applied automatically by the upgrade after its verified backup:
+
+- `library.0004`: OCR quality per version and the "Does not expire" flag. Existing documents are unchanged.
+- `library.0005`: sub-folders whose icon was assigned automatically now use the standard 📁 icon. Folders directly
+  in a person's area keep their suggested icon, and icons someone chose are kept.
+- `core.0002`: if the application name is still the old default "Personal Documents", it becomes "Personal
+  Documents Management System". A name you chose is kept.
+
+After upgrading:
+
+- **Folder view:** each person's view (List, Thumbnails, Details) and sort order are now saved to their account.
+  The first time, everyone starts with List / Newest first.
+- **OCR:** new uploads use the improved pipeline. To improve an older scan, open it and use **⋮ → Re-run OCR…**.
+  Confirmed details are never overwritten.
+- **One-line installer:** from now on you can also upgrade with
+  `bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)" -- upgrade`
+  (the raw URL works only while the repository is public).
+- **Browser cache:** the app reloads its new version automatically; if a page looks old, reload it once.
 
 ## Upgrading to the public-release corrections (October 2026) {#change-set-2026-10-ui}
 
