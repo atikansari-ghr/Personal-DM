@@ -15,6 +15,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from apps.core import audit, config, crypto, ratelimit
+from apps.security import login_audit
 
 from . import services as S
 from .auth import IsActiveAuthenticated, IsMainAdmin
@@ -64,6 +65,7 @@ def _complete_login(request, user: User, method: str, remember: bool = True):
 
     sessions.start(request, user, method)
     audit.record("auth.login", request=request, actor=user, method=method, subject_user=user)
+    login_audit.record(request, result="success", user=user, method=method)
 
 
 def recently_verified(request) -> bool:
@@ -121,12 +123,15 @@ def login_view(request):
     buckets = [f"login:user:{username}", f"login:ip:{ip}"]
     if any(ratelimit.too_many(b, limit if "user" in b else limit * 3, 900) for b in buckets):
         audit.record("auth.login", request=request, outcome="denied", actor_label=username, reason="rate_limited")
+        login_audit.record(request, result="denied", username=username, method="password", reason="rate_limited")
         return _fail("Too many attempts. Please wait a few minutes and try again.", 429)
     user = authenticate(request, username=username, password=password)
     if user is None or not user.is_active:
         for b in buckets:
             ratelimit.hit(b)
         audit.record("auth.login", request=request, outcome="failure", actor_label=username)
+        login_audit.record(request, result="failure", username=username, method="password",
+                           reason="disabled_account" if user is not None else "bad_credentials")
         return _fail("Incorrect username or password.", 400)
     ratelimit.clear(buckets[0])
     if user.totp_enabled:
@@ -150,11 +155,13 @@ def totp_verify(request):
     user = User.objects.filter(pk=pending["uid"], is_active=True).first()
     bucket = f"totp:{pending['uid']}"
     if user is None or ratelimit.too_many(bucket, 6, 900):
+        login_audit.record(request, result="denied", user=user, method=f"{pending.get('method', 'password')}+totp", reason="rate_limited")
         return _fail("Too many attempts. Please wait a few minutes and try again.", 429)
     method = S.verify_second_factor(user, request.data.get("code", ""), request.data.get("recovery_code", ""))
     if not method:
         ratelimit.hit(bucket)
         audit.record("auth.totp", request=request, outcome="failure", actor=user)
+        login_audit.record(request, result="failure", user=user, method=f"{pending.get('method', 'password')}+totp", reason="bad_code")
         return _fail("That code is not valid.", 400)
     ratelimit.clear(bucket)
     _complete_login(request, user, f"{pending.get('method', 'password')}+{method}", pending.get("remember", True))
@@ -167,6 +174,7 @@ def logout_view(request):
     if request.user.is_authenticated:
         from . import sessions
 
+        login_audit.record(request, result="logout", user=request.user, method="logout")
         sessions.end(request)
         audit.record("auth.logout", request=request)
     logout(request)
