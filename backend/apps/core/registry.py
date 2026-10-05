@@ -23,7 +23,7 @@ class SettingDef:
     key: str
     label: str
     description: str
-    type: str  # bool|int|str|choice|int_list|time|secret|email|url|timezone|path|channel_list
+    type: str  # bool|int|str|choice|int_list|time|secret|email|url|timezone|path|channel_list|widget_list
     default: Any
     section: str
     scope: str = GLOBAL
@@ -67,6 +67,37 @@ class SettingDef:
 CHANNELS = ("in_app", "email", "telegram")
 THEMES = ("green", "blue", "mono")
 LAYOUTS = ("three_panel", "full_page")
+
+
+# Dashboard widgets that actually exist (id -> label), in their default order.
+WIDGETS = {
+    "documents": "Documents (count)",
+    "members": "Family members (count)",
+    "expiring": "Expiring in 90 days (count)",
+    "storage": "Storage used",
+    "review": "Needs review (count)",
+    "family": "Family library (member cards)",
+    "saved_views": "Saved views",
+    "recent": "Recent documents",
+    "upcoming": "Upcoming expiries",
+    "review_queue": "Review queue",
+    "backup": "Backup status (administrators)",
+}
+STAT_WIDGETS = ("documents", "members", "expiring", "storage", "review")
+
+
+def normalize_widgets(value) -> list[str]:
+    """Ordered, de-duplicated widget ids. Accepts the old comma-separated text, in which only the counters were
+    chosen and every other section was always shown (kept so upgrades look the same)."""
+    if isinstance(value, str):
+        chosen = [v.strip() for v in value.split(",") if v.strip() in WIDGETS]
+        chosen += ["review"] + [w for w in WIDGETS if w not in STAT_WIDGETS]
+        value = chosen
+    out: list[str] = []
+    for v in value or []:
+        if v in WIDGETS and v not in out:
+            out.append(v)
+    return out
 
 
 def _validate_thresholds(value):
@@ -401,8 +432,10 @@ SETTINGS: list[SettingDef] = [
     SettingDef("me.event_alerts", "Other alerts by email/Telegram",
                "Also send access, import and (for administrators) backup and integrity alerts to your email/Telegram channels. They always appear in the in-app feed.",
                "bool", True, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#other-alerts"),
-    SettingDef("me.dashboard_widgets", "Dashboard widgets", "Statistics shown on your dashboard.", "str",
-               "documents,members,expiring,storage", "appearance", scope=USER, editable_by=SELF, help="getting-started#dashboard"),
+    SettingDef("me.dashboard_widgets", "Dashboard widgets",
+               "Choose what your dashboard shows and in which order. Saved to your account, so every device shows the same.",
+               "widget_list", list(WIDGETS), "appearance", scope=USER, editable_by=SELF, choices=list(WIDGETS),
+               effect="Applies on all your devices.", help="getting-started#dashboard"),
 ]
 
 BY_KEY = {s.key: s for s in SETTINGS}
@@ -448,6 +481,10 @@ def coerce(defn: SettingDef, value: Any) -> Any:
         if not isinstance(value, list) or any(v not in CHANNELS for v in value):
             raise SettingError(f"Channels must be from: {', '.join(CHANNELS)}.")
         value = [c for c in CHANNELS if c in value]
+    elif t == "widget_list":
+        if not isinstance(value, (list, str)) or (isinstance(value, list) and any(v not in WIDGETS for v in value)):
+            raise SettingError(f"Widgets must be from: {', '.join(WIDGETS)}.")
+        value = normalize_widgets(value)
     elif t == "time":
         if not isinstance(value, str) or (value and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value)):
             raise SettingError("Use 24-hour HH:MM, for example 08:00.")

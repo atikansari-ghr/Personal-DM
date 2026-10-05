@@ -16,7 +16,7 @@ from rest_framework.response import Response
 
 from apps.accounts.auth import IsActiveAuthenticated, IsMainAdmin
 
-from . import audit, config, jobs
+from . import audit, config, jobs, registry
 from .models import AuditEvent, Job
 from .registry import BY_KEY, GLOBAL, SETTINGS, USER, SettingError
 
@@ -34,7 +34,11 @@ def _setting_json(defn, user):
         configured = config.is_set(defn.key) if defn.secret else None
     else:
         value, configured = config.get_user(user, defn.key), None
-    return {**defn.public(), "value": value, "configured": configured, "can_edit": config.can_edit(user, defn.key)}
+    extra = {}
+    if defn.type == "widget_list":
+        value = registry.normalize_widgets(value)
+        extra["choice_labels"] = registry.WIDGETS
+    return {**defn.public(), **extra, "value": value, "configured": configured, "can_edit": config.can_edit(user, defn.key)}
 
 
 @api_view(["GET", "PUT"])
