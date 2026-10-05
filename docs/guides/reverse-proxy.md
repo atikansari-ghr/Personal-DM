@@ -11,8 +11,11 @@ In `/etc/personaldocs/personaldocs.env`:
 PD_PUBLIC_ORIGIN=https://docs.example.com
 PD_ALLOWED_HOSTS=docs.example.com
 PD_BEHIND_PROXY=1
-PD_TRUSTED_PROXY_IPS=10.0.0.5        # the proxy's address, for client IPs in the audit log
+PD_TRUSTED_PROXY_IPS=10.0.0.5        # the proxy's address (or CIDR), for real client IPs
 ```
+
+The real client IP drives the login audit, GeoIP, the country/IP access policy and traffic analytics. Only connections from
+`PD_TRUSTED_PROXY_IPS` may set `X-Forwarded-For`; see [Security & access](security-access.md#real-ip).
 
 Then `systemctl restart personaldocs-web`.
 

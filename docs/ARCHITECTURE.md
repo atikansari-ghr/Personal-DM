@@ -2,6 +2,8 @@
 
 ```
             HTTPS (NPM / Pangolin)
+                     │   real client IP via X-Forwarded-For (trusted proxies only)
+                     │   country/IP access policy, before sign-in
                      │
         ┌────────────▼─────────────┐    Debian 13 LXC (2 vCPU / 4 GB / 50 GB)
         │ personaldocs-web         │    gunicorn + Django 5.2 (API + SPA + /s/ share pages)
@@ -29,11 +31,18 @@
 - **Durable jobs.** A PostgreSQL table with `SELECT … FOR UPDATE SKIP LOCKED`, leases, exponential backoff, idempotency keys and a global limit on heavy jobs. Handlers re-check state and permissions when they run. See [ADR-0002](adr/0002-job-queue.md).
 - **Single settings registry.** `apps/core/registry.py` drives validation, permissions, UI help and `SETTINGS_REFERENCE.md`. Secrets are Fernet-encrypted with a key stored outside the database.
 - **Suggestions never act alone.** OCR and parsing produce *proposed* values. Only values a person has confirmed can change names or reminders.
-- **Honest integrations.** Unconfigured channels show actionable issues and are recorded as skipped, never as sent. WhatsApp and AI are labelled as later phases.
+- **Honest integrations.** Unconfigured channels show actionable issues and are recorded as skipped, never as sent. WhatsApp is labelled as a later phase.
+- **Separated security responsibilities.** The access policy (country/IP) decides whether a network may reach the app; the login audit records who authenticated; GoAccess only observes traffic; Local AI only works after authorisation has fixed which documents the person may open. See [ADR-0007](adr/0007-security-access.md).
+- **AI is optional and advisory.** AI output becomes `AISuggestion` rows that a person must accept; retrieval starts from `AccessContext.documents()`. There is no cloud fallback. See [ADR-0008](adr/0008-local-ai.md).
 
 ## Request flow
 
-The SPA (React/TS, built by Vite into `frontend/dist`) is served by WhiteNoise. API calls use the session cookie plus `X-CSRFToken`. `AccountStateMiddleware` ends sessions for disabled accounts and after a session-epoch bump (password reset, console recovery, "sign out everywhere"). `IsActiveAuthenticated` blocks the whole API, apart from password change, while a temporary password is pending.
+Middleware order: `AccessLogMiddleware` (privacy-safe access log) → `LocalAccessCookieMiddleware` → `AccessPolicyMiddleware`
+(refuses blocked networks before sessions, CSRF and authentication) → Django security, sessions, CSRF, authentication →
+`AccountStateMiddleware`. The SPA (React/TS, built by Vite into `frontend/dist`) is served by WhiteNoise. API calls use the session cookie plus `X-CSRFToken`. `AccountStateMiddleware` ends sessions for disabled accounts and after a session-epoch bump (password reset, console recovery, "sign out everywhere"). `IsActiveAuthenticated` blocks the whole API, apart from password change, while a temporary password is pending, and
+(when the policy requires two-step verification) apart from the passkey/authenticator setup views until one is configured.
+Sign-in: password → optional second step (TOTP, passkey via WebAuthn, recovery code) → session; optional passwordless passkey
+sign-in. Every outcome is written to `LoginEvent`.
 
 ## Processing pipeline
 
@@ -47,6 +56,7 @@ The SPA (React/TS, built by Vite into `frontend/dist`) is served by WhiteNoise. 
 6. DICOM and other formats: store the file and mark it *unsupported* (no preview).
 7. Propose fields (labels and MRZ). Confirmed fields are never overwritten; a differing new scan is flagged instead.
 8. Update the search vector: title (A), metadata and fields excluding the document number (B), content (C).
+9. If Local AI is enabled: queue `ai_task` jobs (analysis → suggestions; embeddings) **after** the document is stored and searchable.
 
 All tools run through `sandbox.run`: their own session, an address-space limit, a CPU-time limit, a timeout, a scrubbed environment and a private working directory.
 
@@ -64,9 +74,9 @@ Originals are write-once and always exist before their rows commit. `pg_dump` ta
 |---|---|---|
 | `/opt/personaldocs/releases/<ver>-<sha>` | root:personaldocs, read-only | code, `.venv`, `frontend/dist` |
 | `/etc/personaldocs` | root:personaldocs 0750 | env file, `secret_key`, `encryption.key` (0600 personaldocs), `github-token` (0600 root) |
-| `/var/lib/personaldocs` | personaldocs 0750 | storage, staging, tmp, quarantine, pre-upgrade DB snapshots, status files |
+| `/var/lib/personaldocs` | personaldocs 0750 | storage, staging, tmp, quarantine, pre-upgrade DB snapshots, status files, `profile-photos/`, `geoip/`, `logs/access.log`, `goaccess/` |
 
 ## Extension points (later phases)
 
-- **Local AI**: a provider interface beside `extraction.extract` and `search.more_like_this`, configured through new registry settings (`ai.*`). It is off by default and only talks to an endpoint the administrator chooses. Results stay proposals; retrieval is filtered by `AccessContext`, and document text is treated as untrusted input.
+- **More AI providers**: add a `Provider` subclass in `apps/ai/providers.py` (list_models, chat, embed) and a choice in `AIProfile.PROVIDERS`.
 - **WhatsApp**: a new channel in `expiry.dispatch`/`deliver_outbox` and in `registry.CHANNELS`, once a provider has been chosen and verified.

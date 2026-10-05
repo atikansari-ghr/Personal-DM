@@ -40,4 +40,14 @@ Passwords and tokens are stored encrypted and never displayed again. Leave a sec
 
 ## Future features {#future}
 
-**Local AI** (model-assisted OCR, classification suggestions, chat with documents, semantic similarity) is planned for a later release. It will be disabled by default, use only a server you choose (on the same LXC or another local machine), never fall back to cloud services, respect document permissions and treat document text as untrusted input. A curated model list with hardware needs and measured accuracy will be provided then. **WhatsApp** notifications are also planned; no provider is integrated yet.
+**WhatsApp** notifications are planned; no provider is integrated yet. Local AI, which used to be listed here, is now available:
+see [Local AI](local-ai.md).
+
+## Security & access {#security}
+
+Login audit retention, failed-sign-in protection, GeoIP (MaxMind) credentials, traffic analytics and security alerts, plus the
+country/IP access policy. See [Security & access](security-access.md).
+
+## Local AI {#local-ai}
+
+AI server profiles and feature switches (OCR assist, smart organisation, semantic search, document assistant). See [Local AI](local-ai.md).

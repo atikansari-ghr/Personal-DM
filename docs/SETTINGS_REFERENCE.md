@@ -458,6 +458,66 @@ Failed attempts per account/IP within 15 minutes before further attempts are ref
 - **Restart needed:** no
 - **Learn more:** [totp-recovery#sessions](guides/totp-recovery.md#sessions)
 
+### Allow authenticator apps (TOTP) (`auth.allow_totp`)
+
+People may set up a standard authenticator app or password manager for one-time codes.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Turning it off only stops new set-ups; people who already use one keep it, so nobody is locked out.
+- **Restart needed:** no
+- **Learn more:** [totp-recovery#totp](guides/totp-recovery.md#totp)
+
+### Allow passkeys (`auth.allow_passkeys`)
+
+People may register passkeys (phone, computer, password manager or security key) as a second step after the password.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Turning it off only stops new registrations; existing passkeys keep working until removed.
+- **Restart needed:** no
+- **Learn more:** [passkeys#enable](guides/passkeys.md#enable)
+
+### Allow passwordless passkey sign-in (`auth.allow_passwordless`)
+
+People who turn it on for their own account can sign in with a passkey alone (the passkey verifies them with fingerprint, face or PIN).
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** auth.allow_passkeys
+- **Effect of changing:** Turning it off stops passwordless sign-in immediately; everyone can still use their password.
+- **Restart needed:** no
+- **Learn more:** [passkeys#passwordless](guides/passkeys.md#passwordless)
+
+### Require two-step verification (`auth.require_2fa`)
+
+Who must use a second step (passkey or authenticator app). People without one are asked to set it up right after signing in.
+
+- **Default:** `'none'`
+- **Allowed values:** none, admins, all
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Nobody is locked out: they sign in with their password and are then guided to set up a passkey or authenticator app.
+- **Restart needed:** no
+- **Learn more:** [passkeys#policy](guides/passkeys.md#policy)
+
+### Re-confirmation window (minutes) (`auth.recent_auth_minutes`)
+
+How long after confirming it's you (password or passkey) sensitive changes are allowed: passkeys, authenticator app, recovery codes, passwordless.
+
+- **Default:** `10`
+- **Allowed values:** 2–60
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [passkeys#recent-auth](guides/passkeys.md#recent-auth)
+
 ### Google sign-in enabled (`google.enabled`)
 
 Allow linked Google accounts to sign in. Disabled until client ID and secret are configured.
@@ -671,19 +731,298 @@ Audit events older than this are deleted. 0 keeps forever.
 - **Restart needed:** no
 - **Learn more:** [settings#activity](guides/settings.md#activity)
 
-## Section: ai
+## Section: security
 
-### Local AI (`ai.status`)
+### Login audit retention (days) (`security.login_audit_retention_days`)
 
-Local AI assistance is planned for a later release and is disabled.
+Sign-in records older than this are deleted by the nightly maintenance. 0 keeps them forever.
 
-- **Default:** `'unavailable'`
-- **Allowed values:** unavailable
+- **Default:** `365`
+- **Allowed values:** 0–3650
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
-- **Effect of changing:** No AI features run.
+- **Effect of changing:** Applies at the next nightly maintenance run.
 - **Restart needed:** no
-- **Learn more:** [settings#future](guides/settings.md#future)
+- **Learn more:** [security-access#login-audit](guides/security-access.md#login-audit)
+
+### Failed sign-ins before automatic block (`security.escalation_failures`)
+
+Failed sign-ins from one public address within an hour that add a temporary automatic block (0 disables). LAN addresses are never blocked.
+
+- **Default:** `20`
+- **Allowed values:** 0–1000
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#login-protection](guides/security-access.md#login-protection)
+
+### Automatic block duration (minutes) (`security.escalation_minutes`)
+
+How long an address stays blocked after too many failed sign-ins.
+
+- **Default:** `60`
+- **Allowed values:** 5–10080
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#login-protection](guides/security-access.md#login-protection)
+
+### MaxMind account ID (`geoip.account_id`)
+
+Free GeoLite2 account used to download the country database.
+
+- **Default:** `''`
+- **Allowed values:** –20
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#geoip](guides/security-access.md#geoip)
+- **Example:** 123456
+
+### MaxMind license key (`geoip.license_key`)
+
+Stored encrypted and never shown again. Sent only to MaxMind when downloading.
+
+- **Default:** (secret, not shown)
+- **Allowed values:** secret
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#geoip](guides/security-access.md#geoip)
+
+### GeoIP database edition (`geoip.edition`)
+
+Country is enough for access control; City adds approximate cities to reports.
+
+- **Default:** `'GeoLite2-Country'`
+- **Allowed values:** GeoLite2-Country, GeoLite2-City
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#geoip](guides/security-access.md#geoip)
+
+### Update GeoIP weekly (`geoip.auto_update`)
+
+Download a fresh database every Wednesday night when credentials are set. A failed update keeps the current database.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** geoip.license_key
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#geoip](guides/security-access.md#geoip)
+
+### Traffic analytics (GoAccess) (`goaccess.enabled`)
+
+Build hourly traffic reports from the access log for Activity & health → Traffic analytics. Uses GoAccess when installed, otherwise a built-in summary.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Reports refresh hourly; nothing is exposed publicly.
+- **Restart needed:** no
+- **Learn more:** [security-access#goaccess](guides/security-access.md#goaccess)
+
+### Alert: repeated failed sign-ins (`alerts.failed_logins`)
+
+Notify administrators about repeated failures and automatic blocks.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#alerts](guides/security-access.md#alerts)
+
+### Alert: sign-in from a new country (`alerts.new_country`)
+
+Notify the person and administrators when an account signs in from a country it never used before.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#alerts](guides/security-access.md#alerts)
+
+### Alert: sign-in from a new address (`alerts.new_ip`)
+
+Notify the person and administrators about sign-ins from a new IP address (can be frequent on mobile networks).
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#alerts](guides/security-access.md#alerts)
+
+### Alert: sign-in via temporary access (`alerts.policy_exception`)
+
+Notify administrators when a sign-in was only possible because of a temporary travel exception.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#alerts](guides/security-access.md#alerts)
+
+### Alert: access policy changes (`alerts.policy_changes`)
+
+Notify administrators when the country policy, trusted/blocked IPs or temporary access change or expire.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#alerts](guides/security-access.md#alerts)
+
+### Alert: GeoIP/GoAccess problems (`alerts.health`)
+
+Notify administrators when a GeoIP update or traffic report fails.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#alerts](guides/security-access.md#alerts)
+
+### Alert: account security changes (`alerts.account_security`)
+
+Notify the person (and administrators for admin actions) about passkeys, authenticator app, recovery codes and passwordless sign-in changes.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-access#alerts](guides/security-access.md#alerts)
+
+## Section: ai
+
+### Local AI enabled (`ai.enabled`)
+
+Master switch for all AI features. Off by default; uploads, OCR, search and reminders never depend on it.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Turning it off stops new AI jobs immediately; existing suggestions stay until reviewed.
+- **Restart needed:** no
+- **Learn more:** [local-ai#enable](guides/local-ai.md#enable)
+
+### OCR assist (`ai.ocr_assist`)
+
+After OCR, ask the AI to suggest title, dates and document number for review.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** ai.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#ocr-assist](guides/local-ai.md#ocr-assist)
+
+### Smart organisation (`ai.smart_organization`)
+
+Suggest document type, issuer, tags and folder for review.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** ai.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#smart-organization](guides/local-ai.md#smart-organization)
+
+### Semantic search (`ai.semantic_search`)
+
+Create embeddings of document text so searches can match meaning, not only words.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** ai.enabled
+- **Effect of changing:** Use 'Rebuild semantic index' after enabling it.
+- **Restart needed:** no
+- **Learn more:** [local-ai#semantic-search](guides/local-ai.md#semantic-search)
+
+### Document assistant (`ai.assistant`)
+
+Answer questions using only documents the asking person may open.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** ai.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#assistant](guides/local-ai.md#assistant)
+
+### Who may use AI (`ai.allowed_users`)
+
+Everyone (each person only on their own permitted documents) or administrators only.
+
+- **Default:** `'everyone'`
+- **Allowed values:** everyone, admins
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#permissions](guides/local-ai.md#permissions)
+
+### Analyse new uploads automatically (`ai.auto_analyze`)
+
+Queue OCR assist / smart organisation / embeddings after each upload is processed.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** ai.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#ocr-assist](guides/local-ai.md#ocr-assist)
+
+### Parallel AI jobs (`ai.max_parallel`)
+
+AI jobs running at the same time. Keep 1 on a 2-CPU container so documents are never delayed.
+
+- **Default:** `1`
+- **Allowed values:** 1–4
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#resources](guides/local-ai.md#resources)
+
+### AI diagnostic logging (`ai.debug_logging`)
+
+Log request and response sizes (never their content) for troubleshooting.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#troubleshooting](guides/local-ai.md#troubleshooting)
 
 ## Section: appearance
 

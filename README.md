@@ -16,11 +16,14 @@ A private, self-hosted document library for a family and extended relatives: pas
 - **Reminders**: 90/60/30/7/0-day expiry schedule over in-app, SMTP email and Telegram, with deduplicated recipients and idempotent delivery. Messages carry minimal content.
 - **Sharing**: expiring, password-protected public links pinned to one version, plus native device sharing.
 - **Mobile**: installable PWA, camera/file upload, opt-in offline copies partitioned per account, and streaming ZIP exports with checksums.
-- **Sign-in**: local passwords, optional TOTP with recovery codes, optional linked Google sign-in (OIDC + PKCE, no auto-registration), and audited console recovery for the main administrator.
+- **Sign-in**: local passwords, optional TOTP (password-manager friendly) with recovery codes, passkeys as a second step or passwordless sign-in, an optional "require two-step verification" policy, optional linked Google sign-in (OIDC + PKCE, no auto-registration), and audited console recovery for the main administrator.
+- **Security & access**: login audit with real client IPs behind NPM/Pangolin, local GeoIP, country allow/block lists with temporary travel access, trusted/blocked IPs, lock-out protection and console recovery, security alerts, and privacy-safe traffic analytics (GoAccess).
+- **Local AI (optional, off by default)**: OCR assist, smart organisation suggestions, a document assistant and semantic search using your own LM Studio/Ollama server. Permission-filtered, suggestions only, no cloud fallback.
+- **Profile photos**: optional cropped photos shown across the app.
 - **Operations**: application-level NAS backups with verification, console restore, integrity checker, audit log, health page, and a single `personaldocs` command for install/upgrade/rollback/repair.
 - **Themes and help**: Green & White, Blue & White and Black & White themes per account. All help is bundled inside the app.
 
-Later phases (not in this release): local AI assistance and personal WhatsApp notifications. See [Settings → Future features](docs/guides/settings.md#future).
+Later phases (not in this release): personal WhatsApp notifications. See [Settings → Future features](docs/guides/settings.md#future).
 
 ## Production quick start (Debian 13 LXC)
 

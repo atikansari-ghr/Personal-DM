@@ -60,3 +60,29 @@ Status key: **Done** means implemented with automated tests passing. **Partial**
 | Event notifications | `notify/events.py` (access, import, processing, backup, integrity) | `test_events` (6) | guides/expiry-rules.md#other-alerts | Done |
 | PDF/A validation | `library/pdfa.py`, `pdfa_check` command, `--with-verapdf` | `test_pdfa` (4) | guides/ocr-corrections.md#pdfa | Done |
 | Accessibility audit | `tests/e2e/a11y.mjs`, `scripts/e2e.sh`, CI `e2e` job | — | guides/testing.md | Done |
+
+## Change set 2026-10: profile photos, Local AI, security & access, passkeys
+
+| ID | Scenario (abridged) | Code | Tests | Docs | Status |
+|---|---|---|---|---|---|
+| AT-31 | AI profile configured, tested, models discovered; privacy class enforced | `ai/providers.py` (`classify_endpoint`, `check_privacy`), `ai/views.py` | `test_ai::test_at31_*` (fake local server) | guides/local-ai.md#profiles, #privacy | Done (live LM Studio/Ollama: Pending-env) |
+| AT-32/33 | OCR assist and smart organisation suggest; nothing changes until accepted | `ai/service.analyze_document`, `ai/service.accept`, `AISuggestions.tsx` | `test_ai::test_at32_at33_*` | guides/local-ai.md#ocr-assist, #smart-organization | Done |
+| AT-34 | Assistant and semantic search only use permitted documents | `ai/service.retrieve`, `semantic_search`, `ask` (start from `ctx.documents()`) | `test_ai::test_at34_*` (records prompts) | guides/local-ai.md#permissions | Done |
+| AT-35 | Revoking access revokes AI retrieval immediately | as AT-34 | `test_ai::test_at35_*` | guides/local-ai.md#permissions | Done |
+| AT-36 | AI outage does not break uploads, OCR, search or reminders | `ai/jobs.py` (`RetryLater`/`PermanentFailure`, after commit) | `test_ai::test_at36_*` | guides/local-ai.md#overview | Done |
+| AT-37 | Profile photo upload, crop, replace, remove | `accounts/photos.py`, `PhotoEditor.tsx` | `test_photos::test_at37_*` | guides/getting-started.md#profile-photo | Done |
+| AT-38 | Photo requires authentication and visibility | `accounts/views.py` photo views | `test_photos::test_at38_*` | guides/getting-started.md#profile-photo | Done |
+| AT-39 | Login events record real client IP through the trusted proxy | `security/netutil.py`, `security/login_audit.py` | `test_security::test_at39_*` | guides/security-access.md#real-ip | Done (real NPM/Pangolin: Pending-env) |
+| AT-40 | Local GeoIP lookup; no external lookups | `security/geoip.py` | `test_security::test_at40_*`, `test_geoip_update_installs_valid_download` | guides/security-access.md#geoip | Done (real MaxMind download: Pending-env) |
+| AT-41 | Untrusted clients cannot spoof X-Forwarded-For | `netutil.client_ip` | `test_security::test_at41_*`, `test_client_ip_trusted_proxy_rightmost_untrusted` | guides/security-access.md#real-ip | Done |
+| AT-42 | Allow list: only Saudi Arabia and India | `security/policy.py`, `AccessPolicyMiddleware` | `test_security::test_at42_*`, `test_block_list_and_unknown_locations` | guides/security-access.md#example-sa-in | Done |
+| AT-43 | Denied before authentication code runs | `AccessPolicyMiddleware` (before sessions/auth) | `test_security::test_at43_*` | guides/security-access.md#overview | Done |
+| AT-44 | IP rule precedence (blocked > trusted > country) | `policy.evaluate` | `test_security::test_at44_*`, `test_emergency_environment_switch` | guides/security-access.md#precedence | Done |
+| AT-45 | Temporary country access window, flagged sign-ins | `TemporaryCountryAccess`, `jobs.expire_temporary_access` | `test_security::test_at45_*`, `test_temporary_access_sign_in_is_flagged` | guides/security-access.md#temporary | Done |
+| AT-46 | Admin filters login audit; members cannot | `security/views.logins`, `LoginAuditPanel` | `test_security::test_at46_*` | guides/security-access.md#login-audit | Done |
+| AT-47 | Traffic analytics admin-only; privacy-safe log; GoAccess or built-in summary | `security/traffic.py`, `jobs.goaccess_report` | `test_security::test_at47_*`, `test_access_log_is_privacy_safe`, `test_goaccess_report_parsed`, `test_builtin_summary_without_goaccess` | guides/security-access.md#goaccess | Done |
+| AT-48 | Security alerts: escalation, new country, policy changes, throttled and secret-free | `security/alerts.py` | `test_failed_login_escalation_blocks_and_alerts`, `test_alerts_are_throttled_and_secret_free`, `test_new_country_alert`, `test_policy_change_alerts_and_audit` | guides/security-access.md#alerts | Done |
+| AT-49 | Failed GeoIP update keeps the old database and policy | `geoip.install_file` (validate, then atomic replace) | `test_security::test_at49_*` | guides/security-access.md#geoip | Done |
+| AT-50 | Console recovery from a misconfigured policy | `management/commands/access_policy.py`, `personaldocs access-policy` | `test_security::test_at50_*`, `test_lockout_protection_on_policy_change` | guides/security-access.md#recovery | Done |
+| PK-1..PK-n | Passkeys: 2FA and passwordless, recent-auth, policy, recovery, no secrets in records | `accounts/passkeys.py`, `Passkeys.tsx`, `Reauth.tsx`, `webauthn.ts` | `test_passkeys` (14, real WebAuthn via software authenticator) | guides/passkeys.md | Done (real browsers/password managers: Pending-env) |
+| TOTP autofill | `autocomplete="one-time-code"`, `inputmode="numeric"` on code fields | `Auth.tsx`, `Account.tsx` | e2e flow (TOTP step) | guides/totp-recovery.md#password-managers | Done (real password managers: Pending-env) |
