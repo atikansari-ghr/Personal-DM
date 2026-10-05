@@ -28,7 +28,45 @@
 5. Installs systemd units `personaldocs-web` (gunicorn), `personaldocs-worker` and `personaldocs-scheduler`, then starts them and runs a health check.
 6. Prints a one-time setup code.
 
-## Guided installation (recommended) {#guided}
+## One-line install (recommended) {#one-line}
+
+On a fresh Debian 13 machine or container, as root:
+
+```
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)"
+```
+
+`personal-DM.sh` checks that the system is Debian 13 with systemd and that you are root, and refuses to continue
+otherwise. It installs `git`, `curl` and `ca-certificates` if missing and downloads the source to
+`/root/personaldocs-src`. It then starts the guided installer described below. On an installed system the same
+command opens a menu:
+
+| Menu / command | What it does |
+|---|---|
+| `install` | Fresh install, or re-run the guided installer (safe: answers remembered, finished steps skipped) |
+| `upgrade` | `personaldocs upgrade` (verified backup first, automatic rollback on failure), then `personaldocs doctor` |
+| `repair` | Reinstall services, permissions and installer steps; data and keys are kept |
+| `doctor` / `status` | Health checks / services and version |
+| `backup` | Application backup to the configured destination now |
+| `restore DIR` | Verify the backup, then restore it after you type RESTORE |
+| `recover-admin USER` | One-time password (and optional 2FA reset) for an administrator, shown on the console only |
+
+For unattended use, add the command after `--`, for example:
+
+```
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)" -- upgrade --yes
+```
+
+Options: `--ref TAG` installs or upgrades to a specific tag or branch, `--dry-run` shows what would happen without
+changing anything, and `--yes` avoids questions where possible. The script's own log is
+`/var/log/personaldocs/personal-DM.log`. Secrets are never written to it. If a step fails, the script stops,
+names the log and changes nothing further.
+
+If the repository is private, the raw URL needs authentication and the one-liner does not work. Clone the repository
+with a token instead (below) and run `bash personal-DM.sh` from the checkout; it asks for a read-only token if it
+needs one and stores it in `/etc/personaldocs/github-token` (root only).
+
+## Guided installation {#guided}
 
 Run everything **inside the Debian 13 container**, as root (Proxmox: `pct enter <id>` or the container console).
 

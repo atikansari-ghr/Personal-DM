@@ -4,6 +4,20 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-05) — browsing, OCR quality, one-line installer (Change Set J)
+- ⋮ menus that open on top of every panel and stay on screen (keyboard, Escape, outside click), with Rename, Share, Archive and (administrator) Delete permanently for documents, and Rename, Change icon, Share and Archive for folders.
+- Folder icons: sub-folders default to 📁; icons chosen from a list with **Reset to default**; chosen icons survive moves and upgrades.
+- List, Thumbnails and Details views with sorting, saved per account and synchronised across devices.
+- Drag files and whole folders from the desktop: the folder structure is recreated below the drop target, with a progress card and a per-file report.
+- Your own library is listed first and opened; other areas stay closed.
+- OCR: measured preprocessing (orientation, deskew, contrast, upscale, denoise), confidence per document with unreliable lines greyed out, **Re-run OCR** with a chosen rotation, card layouts ("Badge No | Expiry Date") and "No Expiry Date" understood; mean accuracy on the synthetic benchmark 0.58 → 0.97 (`docs/OCR_BENCHMARK.md`).
+- Public title "Personal Documents Management System"; one-line installer `personal-DM.sh`; LinkedIn-ready README; Ko-fi support link.
+
+### Fixed (2026-10-05) — Change Set J
+- Folder and row menus were clipped by the breadcrumb bar and scrolling panels.
+- Sub-folders got name-based emoji (e.g. 🏠 deep inside a folder) instead of a folder icon.
+- Phone photos stored sideways and upside-down scans produced junk OCR text; "12-31-2030" (month first) was not recognised; "Badge No  Expiry Date" header/value layouts were not read.
+
 ### Added (2026-10-05) — UI, import, notifications, backups, mobile, viewer, public release
 - "My Documents — <name>" with avatar at the top of the folder tree; avatars for every member's area.
 - File-type icons (PDF, JPG, PNG, WEBP, TXT, DOC, XLS, PPT, ZIP, DCM, FILE) from validated content.

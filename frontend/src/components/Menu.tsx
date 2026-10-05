@@ -57,9 +57,10 @@ export default function Menu({ label, items, className = "icon-btn", trigger, mi
     setPos({ top: Math.max(pad, top), left, maxHeight });
   }, [open]);
 
+  // focus the first item once the menu is positioned (a hidden element cannot take focus)
+  useEffect(() => { if (open && pos) menu.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus(); }, [open, !!pos]);
   useEffect(() => {
     if (!open) return;
-    menu.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
     const outside = (e: MouseEvent | TouchEvent) => {
       const t = e.target as Node;
       if (!menu.current?.contains(t) && !btn.current?.contains(t)) close(false);

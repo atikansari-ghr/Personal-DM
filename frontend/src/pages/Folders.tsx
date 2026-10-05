@@ -246,7 +246,7 @@ export default function FoldersPage() {
   const folderMenu = (f: FolderNode): MenuItem[] => {
     const c = (x: string) => f.caps.includes(x);
     return [
-      { label: "Open", hidden: f.id === folderId, onSelect: () => { setShowTree(false); nav(`/folders/${f.id}`); } },
+      { label: "Open", onSelect: () => { setShowTree(false); nav(`/folders/${f.id}`); } },
       { label: "New subfolder…", hidden: !c("organize"), onSelect: () => { setName(""); setEmoji(""); setFdlg({ kind: "new", f }); } },
       { label: "Rename…", hidden: !c("organize") || f.kind !== "normal", onSelect: () => { setName(f.name); setFdlg({ kind: "rename", f }); } },
       { label: "Change icon…", hidden: !c("organize") || f.kind !== "normal", onSelect: () => { setEmoji(f.emoji_is_custom ? f.emoji : ""); setFdlg({ kind: "icon", f }); } },
