@@ -102,6 +102,7 @@ export default function FoldersPage() {
     }
     const exp = new Set(expanded);
     roots.forEach((r) => exp.add(r.id));
+    exp.add(folderId);
     let n = byId.get(folderId);
     while (n?.parent) { exp.add(n.parent); n = byId.get(n.parent); }
     setExpanded(exp);
@@ -256,25 +257,25 @@ export default function FoldersPage() {
           {docs === null ? <div style={{ padding: "1rem" }}><Skeleton /></div> : docs.length === 0 ? (
             <div className="empty">This folder has no documents{can("upload") ? " yet — drop files with Upload." : "."}</div>
           ) : view === "list" ? docs.map((d) => (
-            <div key={d.id} className={`doc-card ${docId === d.id ? "active" : ""}`} onClick={() => openDoc(d.id)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && e.target === e.currentTarget && openDoc(d.id)} role="button" aria-current={docId === d.id}
+            <div key={d.id} className={`doc-card ${docId === d.id ? "active" : ""}`} onClick={() => openDoc(d.id)}
               draggable={d.caps.includes("organize")} onDragStart={(e) => startDocDrag(e, d)} onDragEnd={endDrag}>
               <input type="checkbox" aria-label={`Select ${d.title}`} checked={selected.has(d.id)} onClick={(e) => e.stopPropagation()}
                 onChange={(e) => setSelected((s) => { const n = new Set(s); e.target.checked ? n.add(d.id) : n.delete(d.id); return n; })} />
               <FileTypeIcon kind={d.file_kind} label={d.file_label} />
-              <div className="grow"><div style={{ fontWeight: 600 }}>{d.title}</div><div className="small muted">{d.file_label} · {formatBytes(d.size)} · {formatDate(d.created_at)}</div></div>
+              <div className="grow"><button type="button" className="doc-open" aria-current={docId === d.id ? "true" : undefined} onClick={(e) => { e.stopPropagation(); openDoc(d.id); }}>{d.title}</button><div className="small muted">{d.file_label} · {formatBytes(d.size)} · {formatDate(d.created_at)}</div></div>
               <StateBadge state={d.state} />{d.expiry && d.expiry.level !== "ok" && <ExpiryBadge expiry={d.expiry} />}
               <RowMenu d={d} open={rowMenu === d.id} setOpen={(o) => setRowMenu(o ? d.id : "")} openDoc={openDoc} move={() => setMoving({ type: "docs", ids: [d.id] })} />
             </div>
           )) : (
             <div className="doc-grid">{docs.map((d) => (
-              <div key={d.id} className={`doc-card ${docId === d.id ? "active" : ""}`} onClick={() => openDoc(d.id)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && e.target === e.currentTarget && openDoc(d.id)}
+              <div key={d.id} className={`doc-card ${docId === d.id ? "active" : ""}`} onClick={() => openDoc(d.id)}
                 draggable={d.caps.includes("organize")} onDragStart={(e) => startDocDrag(e, d)} onDragEnd={endDrag}>
                 <div className="thumb-wrap">
                   {d.has_thumbnail ? <img className="thumb" src={`/api/documents/${d.id}/thumbnail`} alt="" loading="lazy" draggable={false} /> : <div className="thumb" aria-hidden="true"><FileTypeIcon kind={d.file_kind} size="lg" /></div>}
                   {d.has_thumbnail && <FileTypeIcon kind={d.file_kind} label={d.file_label} size="sm" />}
                 </div>
                 <div className="row between" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}>
-                  <div className="small" style={{ fontWeight: 600 }}>{d.title}</div>
+                  <button type="button" className="doc-open small" aria-current={docId === d.id ? "true" : undefined} onClick={(e) => { e.stopPropagation(); openDoc(d.id); }}>{d.title}</button>
                   <RowMenu d={d} open={rowMenu === d.id} setOpen={(o) => setRowMenu(o ? d.id : "")} openDoc={openDoc} move={() => setMoving({ type: "docs", ids: [d.id] })} />
                 </div>
                 <ExpiryBadge expiry={d.expiry} />
@@ -311,7 +312,7 @@ export default function FoldersPage() {
         </Modal>
       )}
       {moving && (
-        <MoveDialog folders={folders} me={me} moving={moving} why={whyFor(moving)}
+        <MoveDialog folders={folders} me={me} moving={moving} why={whyFor(moving)} near={moving.type === "folder" ? byId.get(moving.id)?.parent : folderId}
           what={moving.type === "folder" ? `the folder “${byId.get(moving.id)?.name}” and everything in it` : moving.ids.length === 1 ? `“${docs?.find((x) => x.id === moving.ids[0])?.title || "this document"}”` : `${moving.ids.length} documents`}
           onClose={() => setMoving(null)} onMove={(t) => { const d = moving; setMoving(null); moveTo(d, t); }} />
       )}
@@ -340,8 +341,9 @@ function RowMenu({ d, open, setOpen, openDoc, move }: { d: DocRow; open: boolean
   );
 }
 
-function MoveDialog({ folders, me, moving, why, what, onClose, onMove }: {
+function MoveDialog({ folders, me, moving, why, what, onClose, onMove, near }: {
   folders: FolderNode[]; me: string | null; moving: Drag; why: (t: FolderNode) => string; what: string; onClose: () => void; onMove: (t: FolderNode) => void;
+  near?: string | null;
 }) {
   const [target, setTarget] = useState("");
   const [step, setStep] = useState<"pick" | "confirm">("pick");
@@ -351,7 +353,7 @@ function MoveDialog({ folders, me, moving, why, what, onClose, onMove }: {
       {step === "pick" ? (
         <div className="stack">
           <p className="small muted">Choose where to move {what}. Folders you cannot use are greyed out with the reason.</p>
-          <FolderPicker folders={folders} value={target} onChange={setTarget} reason={why} meId={me} />
+          <FolderPicker folders={folders} value={target} onChange={setTarget} reason={why} meId={me} near={near} />
           <div className="row" style={{ justifyContent: "flex-end" }}>
             <button className="btn" onClick={onClose}>Cancel</button>
             <button className="btn primary" disabled={!t || !!why(t)} onClick={() => setStep("confirm")}>Next</button>

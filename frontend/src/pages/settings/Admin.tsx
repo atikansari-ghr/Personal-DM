@@ -66,6 +66,9 @@ function DeliveryProblems() {
   return (
     <div className="card">
       <h2>Delivery problems</h2>
+      {data.unconfigured.length > 0 && (
+        <div className="alert warn">Critical notifications are set to use {data.unconfigured.map((u: any) => u.channel === "email" ? "Email" : "Telegram").join(" and ")}, which {data.unconfigured.length > 1 ? "are" : "is"} not configured yet (Settings → Connections). Until then they are recorded as skipped and only delivered in-app — or remove the channel from “Channels for critical notifications”.</div>
+      )}
       {data.people.length === 0 ? <p className="muted">Every active person can receive the required notifications.</p> : (
         <>
           <p className="small muted">These people would miss required (critical or reminder) notifications on some channels. Messages for them are recorded as “skipped” with the reason — never as sent.</p>
