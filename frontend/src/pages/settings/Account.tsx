@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, formatDate, formatDateTime } from "../../api";
+import PhotoEditor from "../../components/PhotoEditor";
 import SettingsForm from "../../components/SettingsForm";
 import { Avatar, CopyButton, Icon, Modal, Skeleton, useAsync, useToast } from "../../components/ui";
 import { FolderSelect } from "../../components/UploadDialog";
@@ -60,6 +61,7 @@ function Profile() {
         <button className="btn primary">Save profile</button>
       </form>
       <div className="stack">
+        <div className="card"><h2>Profile photo</h2><PhotoEditor user={u} endpoint="me/photo" onChanged={refresh} /></div>
         <div className="card row between"><div><h3>Offline documents</h3><p className="small muted">Access saved documents without a connection.</p></div><Link className="btn" to="/offline">Manage saved files</Link></div>
         <div className="card row between"><div><h3>My activity</h3><p className="small muted">Sign-ins and actions on your account.</p></div><Link className="btn" to="/settings/account?tab=security">View</Link></div>
       </div>

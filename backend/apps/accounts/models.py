@@ -23,6 +23,8 @@ class User(AbstractUser):
     totp_enabled = models.BooleanField(default=False)
     totp_pending_enc = models.TextField(blank=True)
     avatar_color = models.CharField(max_length=9, default=AVATAR_COLORS[0])
+    photo_name = models.CharField(max_length=40, blank=True, help_text="Random file stem in <data>/profile-photos (private)")
+    photo_updated_at = models.DateTimeField(null=True, blank=True)
     sort_order = models.IntegerField(default=100)
     reminder_group = models.ForeignKey("FamilyGroup", null=True, blank=True, on_delete=models.SET_NULL,
                                        related_name="reminder_members",

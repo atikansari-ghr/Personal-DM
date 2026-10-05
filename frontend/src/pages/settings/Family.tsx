@@ -3,6 +3,7 @@ import { api, formatDateTime } from "../../api";
 import { Avatar, HelpTip, Modal, Skeleton, useAsync, useToast } from "../../components/ui";
 import { useSession } from "../../session";
 import type { Group, User } from "../../types";
+import PhotoEditor from "../../components/PhotoEditor";
 
 const SCOPE_LABELS: Record<string, string> = {
   documents: "Manage documents of group members",
@@ -22,6 +23,8 @@ function MemberDialog({ member, groups, onClose, onDone }: { member?: User; grou
       {temp ? (
         <div className="stack"><div className="alert warn"><strong>Temporary password (shown once):</strong> <code>{temp}</code><br />Give it to the person privately; they must change it at first sign-in.</div><button className="btn primary" onClick={onDone}>Done</button></div>
       ) : (
+        <>
+        {member && <div className="card" style={{ marginBottom: ".8rem" }}><h3>Profile photo</h3><PhotoEditor user={member} endpoint={`family/members/${member.id}/photo`} onChanged={onDone} /></div>}
         <form className="stack" onSubmit={async (e) => {
           e.preventDefault();
           try {
@@ -38,6 +41,7 @@ function MemberDialog({ member, groups, onClose, onDone }: { member?: User; grou
           <p className="small muted">Every person whose documents are managed gets their own account, even if they never sign in. A personal folder is created for them, visible only to them and the main administrator.</p>
           <button className="btn primary">{member ? "Save" : "Add member"}</button>
         </form>
+        </>
       )}
     </Modal>
   );

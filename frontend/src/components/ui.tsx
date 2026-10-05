@@ -45,7 +45,13 @@ export function Icon({ name, size = 20, className }: { name: string; size?: numb
 
 // ---------------------------------------------------------------- avatar / badges
 export function Avatar({ user, size }: { user?: UserMini | null; size?: "sm" | "lg" }) {
+  const [failed, setFailed] = useState("");
   if (!user) return null;
+  const v = user.photo_version;
+  if (v && failed !== v) {
+    // Served only to signed-in family members; falls back to initials when not visible/available.
+    return <img className={`avatar photo ${size || ""}`} src={`/api/users/${user.id}/photo?size=${size === "lg" ? "full" : "thumb"}&v=${v}`} alt="" aria-hidden="true" onError={() => setFailed(v)} />;
+  }
   return (
     <span className={`avatar ${size || ""}`} style={{ background: user.avatar_color }} aria-hidden="true">
       {user.initials}
