@@ -12,6 +12,8 @@
 #   personaldocs setup-token
 #   personaldocs check-access                   (why the app is not reachable through the reverse proxy)
 #   personaldocs local-access on|off|status     (also open the app at http://<container-ip>:<port> on the home network)
+#   personaldocs access-policy status|off|rollback|trust-ip IP [--hours N]|unblock-ip IP|clear-automatic
+#                                               (recover from a country/IP policy that locks you out)
 #   personaldocs manage <django command> [...]
 #
 # Credentials for the private repository are read from /etc/personaldocs/github-token (fine-grained, read-only
@@ -132,6 +134,31 @@ preflight() {
     die "port $port is already in use by another program (choose another with --bind)"
   fi
   c_ok "preflight OK (RAM ${ram} MB, free disk ${disk} MB)"
+}
+
+install_optional_packages() { # never fatal: the app works without them
+  log "optional packages (GoAccess traffic analytics)"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get install -y -q --no-install-recommends goaccess >/dev/null 2>&1 || c_warn "GoAccess could not be installed; traffic analytics will use the built-in summary."
+}
+
+ensure_access_log() { # privacy-safe access log for traffic analytics + weekly rotation
+  install -d -m 0750 -o $APP -g $APP "$DATA_DIR/logs"
+  grep -q '^PD_ACCESS_LOG=' "$ENV_FILE" || echo "PD_ACCESS_LOG=$DATA_DIR/logs/access.log" >>"$ENV_FILE"
+  if [ -d /etc/logrotate.d ]; then
+    cat >/etc/logrotate.d/personaldocs <<EOF
+$DATA_DIR/logs/*.log {
+  weekly
+  rotate 8
+  compress
+  delaycompress
+  missingok
+  notifempty
+  create 0640 $APP $APP
+  su $APP $APP
+}
+EOF
+  fi
 }
 
 install_packages() {
@@ -426,8 +453,10 @@ cmd_install() {
   preflight
   [ "${OPT_BUILD_FRONTEND:-0}" = 1 ] && NEED_NODE=1
   install_packages
+  install_optional_packages
   ensure_user_dirs
   ensure_config
+  ensure_access_log
   ensure_database
   [ "${OPT_VERAPDF:-0}" = 1 ] && install_verapdf
   if [ -z "${PD_REPO_URL:-}" ] && [ -z "${OPT_REPO:-}" ]; then
@@ -475,6 +504,8 @@ cmd_upgrade() {
   local disk; disk=$(df -Pm "$DATA_DIR" | awk 'NR==2 {print $4}')
   [ "$disk" -ge 2048 ] || die "less than 2 GB free; free space before upgrading"
   fix_tool_permissions
+  install_optional_packages
+  ensure_access_log
   fetch_source
   new=$(build_release | tail -1)
   if [ "$new" = "$old" ]; then c_ok "Already at $(basename "$new")."; return; fi
@@ -530,8 +561,10 @@ cmd_repair() {
   log "=== repair started"
   echo "Diagnosis before repair:"; cmd_doctor_inner || true
   install_packages
+  install_optional_packages
   ensure_user_dirs
   ensure_config
+  ensure_access_log
   ensure_database
   [ -L "$CURRENT" ] || die "no active release; run personaldocs install"
   ensure_key "$(readlink -f "$CURRENT")"
@@ -579,6 +612,10 @@ cmd_local_access() { # local-access on|off|status — opt-in plain-HTTP access f
       if [ -n "${PD_LOCAL_ORIGINS:-}" ]; then echo "Home-network access: on ($PD_LOCAL_ORIGINS)"; else echo "Home-network access: off (enable with: personaldocs local-access on)"; fi ;;
     *) die "usage: personaldocs local-access on|off|status" ;;
   esac
+}
+
+policy_note() { # policy changes take effect within 15 s (per-process cache); restart to apply at once
+  systemctl restart personaldocs-web >/dev/null 2>&1 || true
 }
 
 cmd_check_access() { # explain, step by step, why the app is (not) reachable through the reverse proxy
@@ -704,6 +741,7 @@ case "$CMD" in
   setup-token) need_root; load_env; manage setup_token;;
   check-access) need_root; cmd_check_access || exit 1;;
   local-access) cmd_local_access "${ARGS[@]}";;
+  access-policy) need_root; load_env; manage access_policy "${ARGS[@]}"; policy_note;;
   logs) journalctl -f -u "personaldocs-${ARGS[0]:-web}";;
   manage) need_root; load_env; manage "${ARGS[@]}";;
   help|-h|--help) usage;;
