@@ -31,6 +31,11 @@
 | GeoIP update failed | The previous database stays in use; check the MaxMind account ID and license key ([GeoIP](security-access.md#geoip)) |
 | A family member forgot their password | Settings → Family & access → Reset password |
 | Offline files disappeared | Browsers can evict storage; use *Protect storage* or the ZIP export |
+| A move is refused | The message says why: no permission at the destination, a folder into its own sub-folder, a same-named folder already there, an archived destination, or the move would give more people access (needs "manage permissions"). Nothing was changed. |
+| Drag and drop does nothing on a phone | Use the ⋮ menu → **Move to…**; touch screens do not support dragging files |
+| PDF does not display in the viewer | The viewer offers **Download** and, for PDFs, **Use the browser's PDF viewer**. Re-run OCR / preview from the document menu |
+| Red "Some required notifications cannot reach you" | Add an email address under Profile or link Telegram; the administrator decides which channels are required |
+| Weekly/monthly backup did not run | Check *Automatic backups* is on and the NAS is mounted; the Backup status card shows the next run and the last error |
 
 ## Reporting a bug {#report}
 

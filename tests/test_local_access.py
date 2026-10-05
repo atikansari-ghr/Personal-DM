@@ -10,13 +10,13 @@ from rest_framework.test import APIClient
 
 from conftest import PASSWORD
 
-LAN = "192.168.10.195:8000"
+LAN = "192.168.1.50:8000"
 
 
 @pytest.fixture
 def lan_settings(settings):
     settings.SESSION_COOKIE_SECURE = settings.CSRF_COOKIE_SECURE = True  # as with an https:// public origin
-    settings.ALLOWED_HOSTS = ["docs.example.com", "192.168.10.195", "testserver"]
+    settings.ALLOWED_HOSTS = ["docs.example.com", "192.168.1.50", "testserver"]
     settings.CSRF_TRUSTED_ORIGINS = ["https://docs.example.com", f"http://{LAN}"]
     settings.LOCAL_HOSTS = {LAN}
     return settings
@@ -43,8 +43,8 @@ def test_public_https_address_keeps_secure_cookies(family, lan_settings):
 
 
 def test_other_hosts_are_not_relaxed(family, lan_settings):
-    lan_settings.ALLOWED_HOSTS.append("192.168.10.196")
-    _, r = _login("192.168.10.196:8000")
+    lan_settings.ALLOWED_HOSTS.append("192.168.1.51")
+    _, r = _login("192.168.1.51:8000")
     assert r.cookies["pd_session"]["secure"] is True
 
 
@@ -52,11 +52,11 @@ def test_setting_parses_origins_and_ignores_junk():
     backend = Path(__file__).resolve().parents[1] / "backend"
     env = {**os.environ, "PD_TESTING": "1", "PD_ALLOWED_HOSTS": "docs.example.com",
            "PD_PUBLIC_ORIGIN": "https://docs.example.com",
-           "PD_LOCAL_ORIGINS": "http://192.168.10.195:8000/, not-a-url, ftp://x"}
+           "PD_LOCAL_ORIGINS": "http://192.168.1.50:8000/, not-a-url, ftp://x"}
     code = ("import json, personaldocs.settings as s; "
             "print(json.dumps([s.ALLOWED_HOSTS, s.CSRF_TRUSTED_ORIGINS, sorted(s.LOCAL_HOSTS), s.SESSION_COOKIE_SECURE]))")
     out = subprocess.run([sys.executable, "-c", code], cwd=backend, env=env, capture_output=True, text=True, check=True)
     hosts, csrf, local, secure = json.loads(out.stdout.strip().splitlines()[-1])
-    assert hosts == ["docs.example.com", "192.168.10.195"]
-    assert csrf == ["https://docs.example.com", "http://192.168.10.195:8000"]
+    assert hosts == ["docs.example.com", "192.168.1.50"]
+    assert csrf == ["https://docs.example.com", "http://192.168.1.50:8000"]
     assert local == [LAN] and secure is True

@@ -16,7 +16,7 @@ from rest_framework.response import Response
 
 from apps.accounts.auth import IsActiveAuthenticated, IsMainAdmin
 
-from . import audit, config, jobs
+from . import audit, config, jobs, registry
 from .models import AuditEvent, Job
 from .registry import BY_KEY, GLOBAL, SETTINGS, USER, SettingError
 
@@ -34,7 +34,13 @@ def _setting_json(defn, user):
         configured = config.is_set(defn.key) if defn.secret else None
     else:
         value, configured = config.get_user(user, defn.key), None
-    return {**defn.public(), "value": value, "configured": configured, "can_edit": config.can_edit(user, defn.key)}
+    extra = {}
+    if defn.type == "widget_list":
+        value = registry.normalize_widgets(value)
+        extra["choice_labels"] = registry.WIDGETS
+    elif defn.type == "event_list":
+        extra["choice_labels"] = {k: e.label for k, e in registry.NOTIFY_EVENTS.items()}
+    return {**defn.public(), **extra, "value": value, "configured": configured, "can_edit": config.can_edit(user, defn.key)}
 
 
 @api_view(["GET", "PUT"])
@@ -58,6 +64,14 @@ def settings_api(request):
                 errors[key] = str(exc)
         if changed:
             audit.record("settings.update", request=request, keys=changed)
+            policy = [k for k in changed if k.startswith(("auth.", "security.")) or k.startswith("notifications.critical")]
+            if policy:
+                from apps.security import alerts
+
+                labels = ", ".join(BY_KEY[k].label for k in policy)
+                alerts.admin_event("alerts.auth_policy", "Authentication / security policy changed",
+                                   f"{user.display_name} changed: {labels}.", key=f"authpolicy:{timezone.now():%Y%m%d%H%M%S%f}",
+                                   link="/settings/authentication")
         if errors:
             return Response({"error": "Some settings were not saved.", "fields": errors, "saved": changed}, status=400)
     visible = [s for s in SETTINGS if s.scope == USER or user.is_main_admin or s.section in ("general",)]

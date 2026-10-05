@@ -131,6 +131,31 @@ Source: `CHANGE_PROMPT_PROFILE_AI_SECURITY` (amendment to the master prompt). Ac
 | PK-3 | Recent authentication for sensitive account changes; audited admin and console recovery that reveals no secrets. |
 | PK-4 | Standards-based TOTP compatible with password managers; `autocomplete="one-time-code"`; paste allowed. |
 
+## Change set H/I (2026-10): UI, import, notifications, backup, mobile/PWA, viewer, public release
+
+Source: `CHANGE_PROMPT_PERSONAL_DOCUMENTS_PUBLIC_RELEASE` sections 21–24. Acceptance tests AT-61…AT-84.
+
+| ID | Requirement |
+|---|---|
+| UIX-1 | The signed-in person's own area is shown as "My Documents — <name>" with avatar at the top of the tree; no other trees leak. |
+| UIX-2 | File-type icons with readable labels derived from validated content (PDF, JPG, PNG/WebP/images, TXT, DOC, XLS, PPT, ZIP, DICOM, other). |
+| UIX-3 | Dashboard widgets chosen with checkboxes and ordered by drag and drop or keyboard/touch buttons; per-account, synchronised across devices. |
+| IMP-1 | Import mapping can choose an authorised destination folder/sub-folder through a folder picker; the preview shows the exact final hierarchy. |
+| IMP-2 | The destination replaces only the import root; nested source folders are preserved; existing folders are reused, nothing is overwritten. |
+| NOTE-1 | Critical notifications cannot be disabled by members; the administrator chooses critical events and channels; missing destinations are flagged, never reported as sent. |
+| NOTE-2 | Optional notifications chosen per event and per channel by each person; preferences cannot override critical events or required channels. |
+| NOTE-3 | Consistent detailed templates (site, account, event, date/time, folder/files, device, IP, country, method, link) without secrets; bulk actions consolidated. |
+| BAK-1 | Daily, weekly (day + time) and monthly (day of month + time) backup schedules; status, next run, retention independent of frequency; short-month rule. |
+| MOV-1 | Reliable drag and drop for documents and folders with server-side validation; atomic moves; self/descendant/denied/conflicting moves refused without data loss. |
+| MOV-2 | "Move to…" with a folder picker on every device, using the same server checks. |
+| MOB-1 | Functional parity of all major workflows on tablet, phone portrait/landscape and PWA; no unintended overflow; accessible controls. |
+| MOB-2 | Account-level preferences synchronise across devices; device-local exceptions documented. |
+| VIEW-1 | Full-page (and panel) viewer with zoom in/out, percentage, fit page, fit width, 100 %, full screen, page navigation and keyboard shortcuts for PDF and images. |
+| VIEW-2 | Viewer keeps authorisation, never uses external viewers, fails safely on damaged files with Download available. |
+| PUB-1 | Public authorship: Atik Ansari as sole author/maintainer; no AI assistant as author; Git history not rewritten. |
+| PUB-2 | Secret/privacy audit of the tree and history; comprehensive .gitignore; safe env example; automated check. |
+| PUB-3 | Public README with sanitised screenshots, user guide, administrator guide, CONTRIBUTING, SECURITY; license decision flagged. |
+
 ## Later phases
 
 Personal WhatsApp notifications, native apps, scanning enhancement, in-browser Office editing, DICOM viewing.

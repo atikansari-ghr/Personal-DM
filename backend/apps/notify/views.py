@@ -141,9 +141,11 @@ def template_preview(request):
         doc_type_id = 1
         expiry_date = expiry.local_today() + timezone.timedelta(days=30)
 
-    subject, body, _ = expiry.expiry_message(_D(), 30)
-    return Response({"subject": subject, "body": body,
-                     "note": "Messages never include document numbers or attachments; the link requires sign-in and permission."})
+    subject, body, _ = expiry.expiry_message(_D(), 30, user=request.user)
+    from . import templates
+
+    return Response({"subject": templates.subject(subject), "body": body,
+                     "note": "Messages never include document numbers, codes, passwords or attachments; long numbers in names are masked and the link requires sign-in and permission."})
 
 
 @api_view(["POST"])
@@ -153,3 +155,73 @@ def run_reminders_now(request):
     result.update(expiry.deliver_outbox())
     audit.record("notifications.run_now", request=request, **{k: v for k, v in result.items() if k != "date"})
     return Response(result)
+
+
+CHANNEL_LABELS = {"in_app": "In-app", "email": "Email", "telegram": "Telegram"}
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsActiveAuthenticated])
+def my_notification_preferences(request):
+    """Critical events (locked on) and the optional event x channel matrix for the signed-in person."""
+    from . import catalog
+
+    user = request.user
+    if request.method == "PUT":
+        wanted = request.data.get("preferences") or {}
+        if not isinstance(wanted, dict):
+            return Response({"error": "Send preferences as {event: [channels]}."}, status=400)
+        current = config.get_user(user, "me.notification_prefs") or {}
+        merged = {**current}
+        for key, chans in wanted.items():
+            if key not in catalog.EVENTS or not catalog.applies_to(user, key):
+                return Response({"error": f"Unknown notification: {key}."}, status=400)
+            locked = set(catalog.locked_channels(key))
+            if locked - set(chans or []):
+                missing = ", ".join(CHANNEL_LABELS[c] for c in catalog.CHANNELS if c in locked - set(chans or []))
+                return Response({"error": f"“{catalog.LABELS[key]}” is required on {missing} by the administrator."}, status=400)
+            merged[key] = chans
+        try:
+            config.set_user(user, "me.notification_prefs", merged)
+        except Exception as exc:  # noqa: BLE001 - SettingError
+            return Response({"error": str(exc)}, status=400)
+        audit.record("account.notification_preferences", request=request, events=sorted(wanted))
+    prefs = catalog.preferences(user)
+    channels = []
+    for ch in catalog.CHANNELS:
+        globally = ch == "in_app" or (config.get("smtp.enabled") if ch == "email" else config.get("telegram.enabled"))
+        channels.append({"channel": ch, "label": CHANNEL_LABELS[ch], "configured": bool(globally),
+                         "issue": catalog.channel_issue(user, ch)})
+    events = []
+    for key, ev in catalog.EVENTS.items():
+        if not catalog.applies_to(user, key):
+            continue
+        events.append({"key": key, "label": ev.label, "description": ev.description, "group": ev.group,
+                       "critical": catalog.is_critical(key), "locked": catalog.locked_channels(key),
+                       "channels": catalog.channels_for(user, key), "chosen": prefs.get(key, [])})
+    link = TelegramLink.objects.filter(user=user).first()
+    return Response({"events": events, "channels": channels, "problems": catalog.delivery_problems(user),
+                     "telegram": {"linked": bool(link), "username": link.username if link else None,
+                                  "bot": config.get("telegram.bot_username")}})
+
+
+@api_view(["GET"])
+@permission_classes([IsMainAdmin])
+def delivery_problems(request):
+    """People who would miss administrator-required notifications (missing email, Telegram not linked …)."""
+    from apps.accounts.models import User
+
+    from . import catalog
+
+    required = set()
+    for key in catalog.EVENTS:
+        required |= set(catalog.locked_channels(key))
+    unconfigured = [{"channel": ch, "issue": catalog.channel_issue(request.user, ch)}
+                    for ch in catalog.CHANNELS if ch in required and not catalog.channel_configured(ch)]
+    out = []
+    for u in User.objects.filter(is_active=True).order_by("display_name"):
+        problems = catalog.delivery_problems(u, include_unconfigured=False)
+        if problems:
+            out.append({"user": u.display_name, "username": u.username, "problems": problems})
+    skipped = OutboxMessage.objects.filter(status=OutboxMessage.SKIPPED).exclude(channel="in_app").count()
+    return Response({"unconfigured": unconfigured, "people": out, "skipped_messages": skipped})

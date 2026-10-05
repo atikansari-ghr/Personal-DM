@@ -91,7 +91,7 @@ jobs:
           python -m venv .venv && .venv/bin/pip install -q -r backend/requirements-dev.txt
           (cd frontend && npm ci && npm run build)
           (cd tests/e2e && npm ci && npx playwright install --with-deps chromium)
-      - name: Browser flow and accessibility audit
+      - name: Browser flow, accessibility audit and desktop/tablet/phone parity
         run: scripts/e2e.sh
       - uses: actions/upload-artifact@v4
         if: always()
@@ -99,7 +99,9 @@ jobs:
           name: e2e-screenshots
           path: |
             docs/screenshots/
+            docs/images/screenshots/
             docs/a11y-report.json
+            docs/parity-report.json
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

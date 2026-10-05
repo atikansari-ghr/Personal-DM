@@ -172,9 +172,18 @@ def validate_mapping(session: ImportSession, mapping: dict, actor) -> dict:
             if u is None:
                 raise S.DomainError(f"Choose a valid owner for '{top}'.")
             root = Folder.objects.filter(owner=u, kind=Folder.PERSONAL_ROOT, archived_at__isnull=True).first()
-            if root is None or not ctx.folder_caps(root.id) & P.UPLOAD:
-                raise S.DomainError(f"You cannot upload into {u.display_name}'s folder.")
-            clean[top] = {"action": "user", "user": str(u.pk), "status": "confirmed"}
+            if root is None:
+                raise S.DomainError(f"{u.display_name} has no personal folder.")
+            dest = root
+            if m.get("folder") and str(m["folder"]) != str(root.pk):
+                dest = Folder.objects.filter(pk=m["folder"], archived_at__isnull=True).first()
+                # the chosen sub-folder must really be inside this person's area (not just any folder)
+                if dest is None or root not in S.folder_path(dest) or not ctx.folder_caps(dest.id) & P.VIEW:
+                    raise S.DomainError(f"The sub-folder chosen for '{top}' is not inside {u.display_name}'s folder.")
+            if not ctx.folder_caps(dest.id) & P.UPLOAD:
+                raise S.DomainError(f"You cannot upload into the folder chosen for '{top}'.")
+            clean[top] = {"action": "user", "user": str(u.pk), "folder": str(dest.pk) if dest.pk != root.pk else None,
+                          "keep_top": bool(m.get("keep_top", False)) and top != ROOT_FILES, "status": "confirmed"}
         elif action == "folder":
             f = Folder.objects.filter(pk=m.get("folder"), archived_at__isnull=True).first()
             if f is None or not ctx.folder_caps(f.id) & P.UPLOAD:
@@ -182,8 +191,8 @@ def validate_mapping(session: ImportSession, mapping: dict, actor) -> dict:
             owner = User.objects.filter(pk=m.get("owner"), is_active=True).first() if m.get("owner") else f.owner
             if owner is None:
                 raise S.DomainError(f"Choose who owns the documents in '{top}' (documents always belong to an account).")
-            clean[top] = {"action": "folder", "folder": str(f.pk), "owner": str(owner.pk), "keep_top": bool(m.get("keep_top", True)),
-                          "status": "confirmed"}
+            clean[top] = {"action": "folder", "folder": str(f.pk), "owner": str(owner.pk),
+                          "keep_top": bool(m.get("keep_top", True)) and top != ROOT_FILES, "status": "confirmed"}
         elif action == "skip":
             clean[top] = {"action": "skip", "status": "confirmed"}
         else:
@@ -196,21 +205,82 @@ def validate_mapping(session: ImportSession, mapping: dict, actor) -> dict:
     return clean
 
 
+def _base_folder(m: dict) -> Folder | None:
+    if m.get("action") == "user":
+        if m.get("folder"):
+            return Folder.objects.filter(pk=m["folder"]).first()
+        return Folder.objects.filter(owner_id=m["user"], kind=Folder.PERSONAL_ROOT, archived_at__isnull=True).first()
+    if m.get("action") == "folder":
+        return Folder.objects.filter(pk=m["folder"]).first()
+    return None
+
+
+def _sub_parts(m: dict, rel: str) -> list[str]:
+    """Folders below the destination for one source file: the selected destination replaces only the import root,
+    every nested source folder is kept (the top folder itself too when ``keep_top`` is set)."""
+    top = top_level(rel)
+    sub = rel.split("/")[1:-1] if top != ROOT_FILES else []
+    if m.get("keep_top") and top != ROOT_FILES:
+        sub = [top] + sub
+    return [storage.safe_component(p, 200) for p in sub]
+
+
 def preview(session: ImportSession) -> list[dict]:
     out = []
-    users = {str(u.pk): u for u in User.objects.all()}
     for top, m in session.mapping.items():
         info = session.scan.get("tops", {}).get(top, {})
+        base = _base_folder(m)
         dest = None
-        if m.get("action") == "user":
-            u = users.get(m["user"])
-            dest = f"{u.display_name} /" if u else None
-        elif m.get("action") == "folder":
-            f = Folder.objects.filter(pk=m["folder"]).first()
-            dest = (" / ".join(x.name for x in S.folder_path(f)) + (f" / {top}" if m.get("keep_top") and top != ROOT_FILES else "")) if f else None
+        if base is not None:
+            dest = " / ".join(x.name for x in S.folder_path(base))
+            if m.get("keep_top") and top != ROOT_FILES:
+                dest += f" / {storage.safe_component(top, 200)}"
         out.append({"source": top, "action": m.get("action"), "destination": dest, "files": info.get("files", 0),
                     "bytes": info.get("bytes", 0), "excluded": info.get("excluded", 0), "status": m.get("status")})
     return out
+
+
+def preview_tree(session: ImportSession, limit: int = 3000) -> list[dict]:
+    """The exact folders the import will use, with file counts and whether each already exists (files are then
+    added next to what is there — nothing is overwritten) or will be created."""
+    counts: dict[tuple, int] = {}
+    bases: dict[str, Folder | None] = {}
+    for rel, excluded in ImportItem.objects.filter(session=session).exclude(status="done").values_list("relative_path", "excluded_reason").iterator():
+        top = top_level(rel)
+        m = session.mapping.get(top) or {}
+        if m.get("action") in (None, "skip") or (excluded and not m.get("include_excluded")):
+            continue
+        if top not in bases:
+            bases[top] = _base_folder(m)
+        base = bases[top]
+        if base is None:
+            continue
+        key = (str(base.pk), *_sub_parts(m, rel))
+        counts[key] = counts.get(key, 0) + 1
+    # every intermediate folder appears too, even when it holds no files directly
+    keys = set(counts)
+    for k in list(counts):
+        for i in range(1, len(k)):
+            keys.add(k[:i])
+    names = {str(b.pk): " / ".join(x.name for x in S.folder_path(b)) for b in bases.values() if b is not None}
+    exists: dict[tuple, str | None] = {}
+
+    def existing_id(key: tuple) -> str | None:
+        if key in exists:
+            return exists[key]
+        if len(key) == 1:
+            exists[key] = key[0]
+        else:
+            parent = existing_id(key[:-1])
+            child = Folder.objects.filter(parent_id=parent, name=key[-1], archived_at__isnull=True).values_list("id", flat=True).first() if parent else None
+            exists[key] = str(child) if child else None
+        return exists[key]
+
+    rows = []
+    for key in sorted(keys, key=lambda k: (names.get(k[0], ""), [p.lower() for p in k[1:]]))[:limit]:
+        rows.append({"path": " / ".join([names.get(key[0], "?"), *key[1:]]), "depth": len(key) - 1, "files": counts.get(key, 0),
+                     "exists": existing_id(key) is not None})
+    return rows
 
 
 def capacity_warning(session: ImportSession) -> str | None:
@@ -222,24 +292,19 @@ def capacity_warning(session: ImportSession) -> str | None:
 
 
 def destination_for(session: ImportSession, rel: str):
-    """Return (folder, owner) for an item, creating sub-folders that mirror the source path."""
-    top = top_level(rel)
-    m = session.mapping.get(top) or {}
-    parts = rel.split("/")
-    sub = parts[1:-1] if top != ROOT_FILES else []
+    """Return (folder, owner) for an item, creating sub-folders that mirror the source path below the destination."""
+    m = session.mapping.get(top_level(rel)) or {}
     if m.get("action") == "user":
         owner = User.objects.get(pk=m["user"])
-        base = Folder.objects.get(owner=owner, kind=Folder.PERSONAL_ROOT, archived_at__isnull=True)
     elif m.get("action") == "folder":
-        base = Folder.objects.get(pk=m["folder"])
         owner = User.objects.get(pk=m["owner"])
-        if m.get("keep_top") and top != ROOT_FILES:
-            sub = [top] + sub
     else:
         return None, None
-    folder = S.get_or_create_folder_path(actor=session.created_by, root=base, parts=sub, source_prefix=session.source_root or "")
-    if folder.owner_id is None:
-        pass
+    base = _base_folder(m)
+    if base is None or base.archived_at:
+        raise S.DomainError("The destination folder no longer exists.")
+    folder = S.get_or_create_folder_path(actor=session.created_by, root=base, parts=_sub_parts(m, rel),
+                                         source_prefix=session.source_root or "")
     return folder, owner
 
 

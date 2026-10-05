@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { safeNext } from "./api";
 import Layout from "./components/Layout";
 import { Skeleton } from "./components/ui";
 import ArchivePage from "./pages/Archive";
@@ -64,7 +65,7 @@ export default function App() {
         <Route path="/help" element={<HelpPage />} />
         <Route path="/help/:slug" element={<HelpPage />} />
         <Route path="/upload-shared" element={<UploadShared />} />
-        <Route path="/login" element={<Navigate to={new URLSearchParams(loc.search).get("next") || "/"} replace />} />
+        <Route path="/login" element={<Navigate to={safeNext(new URLSearchParams(loc.search).get("next"))} replace />} />
         <Route path="/setup" element={<Navigate to="/" replace />} />
         <Route path="*" element={<div className="empty"><h1>Page not found</h1></div>} />
       </Routes>

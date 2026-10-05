@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, formatBytes, upload } from "../api";
-import { folderLabel } from "../components/UploadDialog";
-import { Icon, Skeleton, useToast } from "../components/ui";
+import FolderPicker, { descendantIds, folderLabel as nodeLabel } from "../components/FolderPicker";
+import { Icon, Modal, Skeleton, useToast } from "../components/ui";
 import { useSession } from "../session";
 import type { FolderNode, User } from "../types";
 
@@ -38,6 +38,15 @@ export default function ImportWizard() {
   const [progress, setProgress] = useState({ done: 0, total: 0, failed: 0 });
   const [error, setError] = useState("");
   const dirInput = useRef<HTMLInputElement>(null);
+  const [picking, setPicking] = useState<string | null>(null); // source folder whose destination is being chosen
+  const me = session?.user?.id || null;
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const pathOf = (id?: string | null) => {
+    const out: string[] = [];
+    for (let n = id ? byId.get(id) : undefined; n; n = n.parent ? byId.get(n.parent) : undefined) out.unshift(nodeLabel(n, me));
+    return out.join(" / ");
+  };
+  const rootOf = (userId?: string) => folders.find((f) => f.kind === "personal_root" && f.owner === userId);
 
   const load = () => id && api(`imports/${id}`).then((s) => { setSess(s); setMapping(s.mapping); });
   useEffect(() => { load(); }, [id]);
@@ -172,19 +181,29 @@ export default function ImportWizard() {
                       <option value="">Decide…</option><option value="user">A person's folder</option><option value="folder">Another folder (shared)</option><option value="skip">Skip</option>
                     </select>
                     {m.action === "user" && (
-                      <select aria-label={`Person for ${top}`} disabled={!editable} value={m.user || ""} onChange={(e) => set({ user: e.target.value })} style={{ maxWidth: 220 }}>
-                        <option value="">Choose person…</option>{members.map((u) => <option key={u.id} value={u.id}>{u.display_name}</option>)}
-                      </select>
+                      <>
+                        <select aria-label={`Person for ${top}`} disabled={!editable} value={m.user || ""} onChange={(e) => set({ user: e.target.value, folder: null })} style={{ maxWidth: 220 }}>
+                          <option value="">Choose person…</option>{members.map((u) => <option key={u.id} value={u.id}>{u.display_name}</option>)}
+                        </select>
+                        {m.user && (
+                          <button type="button" className="btn small" disabled={!editable} onClick={() => setPicking(top)} aria-label={`Destination sub-folder for ${top}`}>
+                            <Icon name="folder" size={16} /> {m.folder ? pathOf(m.folder) : "Top of their folder"}
+                          </button>
+                        )}
+                      </>
                     )}
                     {m.action === "folder" && (
                       <>
-                        <select aria-label={`Folder for ${top}`} disabled={!editable} value={m.folder || ""} onChange={(e) => set({ folder: e.target.value, keep_top: m.keep_top ?? true })} style={{ maxWidth: 260 }}>
-                          <option value="">Choose folder…</option>{folders.filter((f) => f.caps.includes("upload")).map((f) => <option key={f.id} value={f.id}>{folderLabel(folders, f.id)}</option>)}
-                        </select>
+                        <button type="button" className="btn small" disabled={!editable} onClick={() => setPicking(top)} aria-label={`Destination folder for ${top}`}>
+                          <Icon name="folder" size={16} /> {m.folder ? pathOf(m.folder) : "Choose folder…"}
+                        </button>
                         <select aria-label={`Owner for ${top}`} disabled={!editable} value={m.owner || ""} onChange={(e) => set({ owner: e.target.value })} style={{ maxWidth: 200 }}>
                           <option value="">Owner…</option>{members.map((u) => <option key={u.id} value={u.id}>{u.display_name}</option>)}
                         </select>
                       </>
+                    )}
+                    {(m.action === "user" || m.action === "folder") && top !== ROOT_FILES && (
+                      <label className="check small"><input type="checkbox" disabled={!editable} checked={m.keep_top ?? m.action === "folder"} onChange={(e) => set({ keep_top: e.target.checked })} /> keep “{top}” as a folder</label>
                     )}
                     {info.excluded > 0 && m.action && m.action !== "skip" && <label className="check small"><input type="checkbox" disabled={!editable} checked={!!m.include_excluded} onChange={(e) => set({ include_excluded: e.target.checked })} /> include excluded items</label>}
                   </div>
@@ -201,8 +220,20 @@ export default function ImportWizard() {
           <table className="responsive"><thead><tr><th>Source</th><th>Goes to</th><th>Files</th></tr></thead><tbody>
             {sess.preview.map((p: any) => <tr key={p.source}><td>{p.source}</td><td>{p.action === "skip" ? <span className="muted">Skipped</span> : p.destination}</td><td>{p.files} · {formatBytes(p.bytes)}</td></tr>)}
           </tbody></table>
-          <p className="small muted">Sub-folders are recreated as they are, with suggested emoji. Imported documents are only visible to their owner (and the main administrator) unless you grant access.</p>
-          <details><summary>Folder structure ({sess.tree.length} folders)</summary><pre className="preview-text small">{sess.tree.join("\n")}</pre></details>
+          <p className="small muted">The destination you choose replaces only the top of the import; every sub-folder inside it is recreated as it is. Existing folders with the same name are reused and files are added next to what is there — nothing is overwritten. Imported documents are only visible to their owner (and the main administrator) unless you grant access.</p>
+          {sess.preview_tree?.length > 0 ? (
+            <details open><summary>Final folder structure ({sess.preview_tree.length} folders)</summary>
+              <ul className="import-tree" aria-label="Final folder structure">
+                {sess.preview_tree.map((r: any) => (
+                  <li key={r.path} style={{ paddingLeft: `${r.depth * 1.1}rem` }}>
+                    <span aria-hidden="true">📁</span> {r.depth ? r.path.split(" / ").pop() : r.path}
+                    {" "}<span className={`badge ${r.exists ? "" : "ok"}`}>{r.exists ? "existing" : "new"}</span>
+                    {r.files > 0 && <span className="small muted"> · {r.files} file{r.files === 1 ? "" : "s"}</span>}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : <details><summary>Source folder structure ({sess.tree.length} folders)</summary><pre className="preview-text small">{sess.tree.join("\n")}</pre></details>}
         </div>
       )}
       <div className="card">
@@ -221,6 +252,20 @@ export default function ImportWizard() {
           {sess.status.startsWith("done") && <button className="btn primary" onClick={() => nav("/folders")}>Open folders</button>}
         </div>
       </div>
+      {picking && (() => {
+        const m = mapping[picking] || {};
+        const root = m.action === "user" ? rootOf(m.user) : undefined;
+        const inside = root ? descendantIds(folders, root.id) : null;
+        return (
+          <Modal title={`Destination for “${picking === ROOT_FILES ? "Loose files" : picking}”`} onClose={() => setPicking(null)}>
+            <FolderPicker folders={folders} meId={me} value={m.folder || root?.id || ""}
+              reason={(f) => (inside && !inside.has(f.id) ? "Not in this person's folder" : !f.caps.includes("upload") ? "You cannot add documents here" : "")}
+              onChange={(id) => { setMapping({ ...mapping, [picking]: { ...m, folder: root && id === root.id ? null : id, status: "proposed" } }); }} />
+            {m.action === "user" && !root && <p className="small muted">You cannot see this person's folder, so only its top level can be used.</p>}
+            <div className="row" style={{ justifyContent: "flex-end", marginTop: ".6rem" }}><button className="btn primary" onClick={() => setPicking(null)}>Done</button></div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }

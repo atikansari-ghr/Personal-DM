@@ -60,15 +60,38 @@ export function ProcessingPanel() {
   return <div className="stack"><SettingsForm section="processing" title="OCR & processing" /><JobsCard /></div>;
 }
 
+function DeliveryProblems() {
+  const { data } = useAsync(() => api<any>("notifications/problems"), []);
+  if (!data) return null;
+  return (
+    <div className="card">
+      <h2>Delivery problems</h2>
+      {data.unconfigured.length > 0 && (
+        <div className="alert warn">Critical notifications are set to use {data.unconfigured.map((u: any) => u.channel === "email" ? "Email" : "Telegram").join(" and ")}, which {data.unconfigured.length > 1 ? "are" : "is"} not configured yet (Settings → Connections). Until then they are recorded as skipped and only delivered in-app — or remove the channel from “Channels for critical notifications”.</div>
+      )}
+      {data.people.length === 0 ? <p className="muted">Every active person can receive the required notifications.</p> : (
+        <>
+          <p className="small muted">These people would miss required (critical or reminder) notifications on some channels. Messages for them are recorded as “skipped” with the reason — never as sent.</p>
+          <table className="responsive"><thead><tr><th>Person</th><th>Problem</th></tr></thead><tbody>
+            {data.people.map((p: any) => <tr key={p.username}><td>{p.user}</td><td>{p.problems.map((x: any) => <div key={x.channel} className="small">{x.channel}: {x.issue}</div>)}</td></tr>)}
+          </tbody></table>
+        </>
+      )}
+      {data.skipped_messages > 0 && <p className="small muted">{data.skipped_messages} external message(s) were skipped in total; see Delivery history.</p>}
+    </div>
+  );
+}
+
 export function NotificationsAdmin() {
   const toast = useToast();
   const preview = useAsync(() => api<any>("notifications/preview"), []);
   const hist = useAsync(() => api<{ deliveries: any[] }>("notifications/deliveries"), []);
   return (
     <div className="stack">
-      <SettingsForm section="notifications" title="Expiry reminders">
-        <div className="alert small">Reminders go to the document owner and the head of their reminder group (plus delegates with “receive reminders”), once per threshold, and stop after the expiry day. Only confirmed expiry dates count.</div>
+      <SettingsForm section="notifications" title="Notification policy">
+        <div className="alert small">Expiry reminders go to the document owner and the head of their reminder group (plus delegates with “receive reminders”), once per threshold, and stop after the expiry day. Only confirmed expiry dates count. Critical notifications cannot be turned off by family members; everything else is chosen by each person under My account → Notifications.</div>
       </SettingsForm>
+      <DeliveryProblems />
       <div className="grid two-col">
         <div className="card">
           <h2>Message preview</h2>
@@ -181,12 +204,13 @@ export function StoragePanel() {
           {!st.data.destination.ok && <div className="alert warn">{st.data.destination.error}</div>}
           <p>Last success: {st.data.status.last_success ? formatDateTime(st.data.status.last_success) : "never"} {st.data.status.last_verified === true && <span className="badge ok">Verified</span>}
             {st.data.status.last_bytes !== undefined && <span className="muted small"> · {formatBytes(st.data.status.last_bytes)} in {st.data.status.last_seconds}s</span>}</p>
-          {st.data.status.last_error && <div className="alert error">Last attempt failed: {st.data.status.last_error}</div>}
+          {st.data.status.last_error && <div className="alert error">Last attempt failed{st.data.status.last_failure ? ` (${formatDateTime(st.data.status.last_failure)})` : ""}: {st.data.status.last_error}</div>}
+          <p>Schedule: <strong>{st.data.schedule}</strong>{st.data.next_run && <> · next backup {formatDateTime(st.data.next_run)}</>} · keeps the last {st.data.keep} successful backups</p>
           <p className="small muted">Restores are done from the server console (<code>personaldocs restore</code>) so a web session can never overwrite the library. A Proxmox snapshot is a useful extra layer but is not a verified application backup.</p>
         </div>
       )}
       <NasCard onChange={st.reload} />
-      <SettingsForm keys={["backup.target", "backup.require_mount", "backup.schedule_time", "backup.keep_daily", "backup.include_keys"]} title="Backup settings" />
+      <SettingsForm keys={["backup.target", "backup.require_mount", "backup.enabled", "backup.frequency", "backup.weekday", "backup.month_day", "backup.schedule_time", "backup.keep_daily", "backup.include_keys"]} title="Backup settings" />
       <div className="card">
         <h2>Integrity check</h2>
         <p className="small muted">Looks for missing or altered originals, broken version references and orphaned files. Repairs never delete originals or regenerate keys.</p>

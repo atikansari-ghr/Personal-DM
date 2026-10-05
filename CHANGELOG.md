@@ -4,6 +4,25 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-05) — UI, import, notifications, backups, mobile, viewer, public release
+- "My Documents — <name>" with avatar at the top of the folder tree; avatars for every member's area.
+- File-type icons (PDF, JPG, PNG, WEBP, TXT, DOC, XLS, PPT, ZIP, DCM, FILE) from validated content.
+- Drag and drop of documents and folders, and **Move to…** with a folder picker on every device.
+- Built-in viewer (PDF.js, local): zoom 25–400 %, fit page, fit width, 100 %, pages, full screen, keyboard shortcuts.
+- Import: choose a destination sub-folder (or any permitted folder), keep the top folder or not, and preview the exact final hierarchy (new/existing).
+- Dashboard widgets chosen with checkboxes and ordered by drag or ↑/↓; synced per account.
+- Critical notifications (administrator-chosen, cannot be turned off, missing destinations flagged) and optional notifications per event and channel; one detailed template; bulk summaries; archive vs permanent deletion messages; optional "every sign-in" information.
+- Backups daily, weekly or monthly with next-run status and catch-up.
+- `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, `SECURITY.md`, `CONTRIBUTING.md`, public README with screenshots; `scripts/privacy_check.sh`; frontend unit tests; tablet/phone parity checks.
+
+### Fixed (2026-10-05)
+- Members could not move their own documents between their own folders (now allowed when nobody gains access).
+- Two opposite folder moves at the same time could detach folders; moves into archived folders were possible; a refused move could still apply a rename sent with it.
+- Dropping a file outside an upload area opened it in the browser and left the app.
+- Malformed list filters (`folder=undefined`) caused a server error.
+- Horizontal scrolling on family settings and help at tablet widths.
+- Security: `?next=` after sign-in only accepts in-app paths; PDF.js 6.4.299 (GHSA-hq66-cqwq-w95j) and React Router 7.18 (GHSA-wrjc-x8rr-h8h6).
+
 ### Added (2026-10-05) — profile photos, Local AI, security & access, passkeys
 - Profile photos with crop/zoom, shown in the header, family list, permissions and document history.
 - Optional Local AI (off by default): AI profiles for OpenAI-compatible servers (LM Studio, llama.cpp, vLLM) and Ollama, privacy classes (local/LAN/external) checked before every request, OCR assist and smart organisation as reviewable suggestions, document assistant with citations, semantic search, AI job list. Permission-filtered retrieval; no cloud fallback.

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, formatBytes, formatDateTime } from "../api";
 import { Icon, useToast } from "../components/ui";
 import { keepAfterSignOut, listOffline, offlineSupported, openOffline, removeOffline, requestPersistence, revalidate, setKeepAfterSignOut, storageInfo, type OfflineItem } from "../offline";
+import FileTypeIcon, { kindFromMime } from "../components/FileTypeIcon";
 import { useSession } from "../session";
 
 export default function OfflinePage() {
@@ -40,7 +41,7 @@ export default function OfflinePage() {
         <h2>Saved files</h2>
         {items.length === 0 ? <p className="muted">Nothing saved yet. Open a document and choose “Save for offline use”.</p> : items.map((it) => (
           <div key={it.documentId} className="list-item">
-            <span className="doc-icon"><Icon name="file" size={18} /></span>
+            <FileTypeIcon kind={kindFromMime(it.mime, it.name)} size="sm" />
             <div className="grow"><div style={{ fontWeight: 600 }}>{it.title}</div><div className="small muted">{it.name} · {formatBytes(it.size)} · saved {formatDateTime(it.savedAt)}</div></div>
             {it.stale && <span className="badge soon">Newer version online</span>}
             <button className="btn small" onClick={() => open(it)}>Open</button>

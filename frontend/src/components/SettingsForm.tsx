@@ -2,16 +2,26 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { HelpTip, Icon, Skeleton, useToast } from "./ui";
+import WidgetListEditor from "./WidgetListEditor";
 
 export interface SettingDef {
   key: string; label: string; description: string; type: string; default: any; section: string; scope: string; editable_by: string;
   choices: string[]; min: number | null; max: number | null; depends_on: string[]; effect: string; restart: boolean; help: string;
-  example: string; secret: boolean; value: any; configured: boolean | null; can_edit: boolean;
+  example: string; secret: boolean; value: any; configured: boolean | null; can_edit: boolean; choice_labels?: Record<string, string>;
 }
 
 const CHANNEL_LABELS: Record<string, string> = { in_app: "In-app", email: "Email", telegram: "Telegram" };
 const CHOICE_LABELS: Record<string, string> = { green: "Green & White", blue: "Blue & White", mono: "Black & White", three_panel: "Three-panel view", full_page: "Full-page viewer", planned: "Planned (not available)", unavailable: "Unavailable in this release", starttls: "STARTTLS", ssl: "SSL/TLS", none: "None (not recommended)", nfs: "NFS", smb: "SMB / Windows share" };
-const KEY_CHOICE_LABELS: Record<string, Record<string, string>> = { "nas.type": { none: "Already mounted (Proxmox bind mount)" } };
+const KEY_CHOICE_LABELS: Record<string, Record<string, string>> = {
+  "nas.type": { none: "Already mounted (Proxmox bind mount)" },
+  "backup.frequency": { daily: "Daily", weekly: "Weekly", monthly: "Monthly" },
+  "backup.weekday": { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" },
+};
+// Fields that only make sense for a particular value of another field (hidden otherwise, values kept).
+const SHOW_IF: Record<string, [string, any[]]> = {
+  "backup.weekday": ["backup.frequency", ["weekly"]],
+  "backup.month_day": ["backup.frequency", ["monthly"]],
+};
 
 export function helpHref(help: string) {
   const [slug, anchor] = help.split("#");
@@ -51,6 +61,17 @@ function Input({ def, value, onChange }: { def: SettingDef; value: any; onChange
       const cur: string[] = Array.isArray(value) ? value : [];
       return <div className="row">{Object.entries(CHANNEL_LABELS).map(([k, l]) => <label key={k} className="check"><input type="checkbox" disabled={disabled} checked={cur.includes(k)} onChange={(e) => onChange(e.target.checked ? [...cur, k] : cur.filter((x) => x !== k))} /> {l}</label>)}</div>;
     }
+    case "event_list": {
+      const cur: string[] = Array.isArray(value) ? value : [];
+      const labels = def.choice_labels || {};
+      return (
+        <fieldset className="event-list" aria-label={def.label} disabled={disabled}>
+          {def.choices.map((k) => <label key={k} className="check"><input type="checkbox" checked={cur.includes(k)} onChange={(e) => onChange(e.target.checked ? [...cur, k] : cur.filter((x) => x !== k))} /> {labels[k] || k}</label>)}
+        </fieldset>
+      );
+    }
+    case "widget_list":
+      return <WidgetListEditor value={Array.isArray(value) ? value : []} choices={def.choices} labels={def.choice_labels || {}} disabled={disabled} onChange={onChange} />;
     default:
       return def.key === "documents.import_roots" || def.key === "documents.member_template"
         ? <textarea id={id} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)} placeholder={def.example} rows={def.key === "documents.member_template" ? 8 : 3} />
@@ -90,6 +111,12 @@ export default function SettingsForm({ section, keys, title, children }: { secti
     <section className="card">
       {title && <h2>{title}</h2>}
       {defs.map((d) => {
+        const cond = SHOW_IF[d.key];
+        if (cond) {
+          const other = defs.find((x) => x.key === cond[0]);
+          const current = cond[0] in draft ? draft[cond[0]] : other?.value;
+          if (other && !cond[1].includes(current)) return null;
+        }
         const value = d.key in draft ? draft[d.key] : d.secret ? "" : d.value;
         return (
           <div className="setting-row" key={d.key}>
@@ -107,7 +134,7 @@ export default function SettingsForm({ section, keys, title, children }: { secti
             <div>
               <Input def={d} value={value} onChange={(v) => setDraft({ ...draft, [d.key]: v })} />
               {errors[d.key] && <div className="error-text small" role="alert">{errors[d.key]}</div>}
-              {d.type !== "secret" && d.key !== "documents.member_template" && d.default !== null && d.default !== undefined && <div className="small muted">Default: {Array.isArray(d.default) ? d.default.join(", ") || "none" : String(KEY_CHOICE_LABELS[d.key]?.[d.default] || CHOICE_LABELS[d.default] || d.default) || "empty"}</div>}
+              {d.type !== "secret" && d.key !== "documents.member_template" && d.default !== null && d.default !== undefined && <div className="small muted">Default: {d.type === "widget_list" ? "all widgets" : d.type === "event_list" ? `${(d.default || []).length} security, backup and integrity events` : Array.isArray(d.default) ? d.default.join(", ") || "none" : String(KEY_CHOICE_LABELS[d.key]?.[d.default] || CHOICE_LABELS[d.default] || d.default) || "empty"}</div>}
             </div>
           </div>
         );

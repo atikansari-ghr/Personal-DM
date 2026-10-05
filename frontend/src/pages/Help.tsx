@@ -17,7 +17,7 @@ export default function HelpPage() {
     if (guide && loc.hash) document.getElementById(loc.hash.slice(1))?.scrollIntoView();
   }, [guide, loc.hash]);
   return (
-    <div className="grid" style={{ gridTemplateColumns: "minmax(220px, 300px) 1fr", alignItems: "start" }}>
+    <div className="grid help-layout">
       <aside className="card">
         <h2>Help & guides</h2>
         <input type="search" aria-label="Search help" placeholder="Search help" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -26,7 +26,7 @@ export default function HelpPage() {
             {index.data?.guides.map((g) => <li key={g.slug}><Link to={`/help/${g.slug}`}>{g.title}</Link>{g.excerpt && <div className="small muted">…{g.excerpt}…</div>}</li>)}
           </ul>
         )}
-        <p className="small muted">Version {index.data?.version}. All guides are bundled with the app.</p>
+        <p className="small muted">Personal Documents {index.data?.version} by Atik Ansari. All guides are bundled with the app.</p>
       </aside>
       <article className="card markdown">
         {!slug ? (

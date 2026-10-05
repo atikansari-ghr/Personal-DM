@@ -242,6 +242,10 @@ def _apply_to_document(doc: Document, version: DocumentVersion, text: str, versi
         doc.state = Document.NEEDS_REVIEW if has_proposed else Document.UNSUPPORTED
     else:
         doc.state = Document.NEEDS_REVIEW if (has_proposed or doc.review_flags) else Document.READY
+        if version_state == "ready":
+            from apps.notify import events
+
+            transaction.on_commit(lambda: events.processing_completed(version))
     doc.save(update_fields=["content_text", "state", "updated_at"])
     update_search_vector(doc)
 

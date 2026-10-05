@@ -10,6 +10,9 @@ import zoneinfo
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from apps.notify.event_defs import DEFAULT_CRITICAL
+from apps.notify.event_defs import EVENTS as NOTIFY_EVENTS
+
 GLOBAL, USER = "global", "user"
 MAIN_ADMIN, SELF = "main_admin", "self"
 
@@ -23,7 +26,7 @@ class SettingDef:
     key: str
     label: str
     description: str
-    type: str  # bool|int|str|choice|int_list|time|secret|email|url|timezone|path|channel_list
+    type: str  # bool|int|str|choice|int_list|time|secret|email|url|timezone|path|channel_list|widget_list|event_list|event_matrix
     default: Any
     section: str
     scope: str = GLOBAL
@@ -67,6 +70,37 @@ class SettingDef:
 CHANNELS = ("in_app", "email", "telegram")
 THEMES = ("green", "blue", "mono")
 LAYOUTS = ("three_panel", "full_page")
+
+
+# Dashboard widgets that actually exist (id -> label), in their default order.
+WIDGETS = {
+    "documents": "Documents (count)",
+    "members": "Family members (count)",
+    "expiring": "Expiring in 90 days (count)",
+    "storage": "Storage used",
+    "review": "Needs review (count)",
+    "family": "Family library (member cards)",
+    "saved_views": "Saved views",
+    "recent": "Recent documents",
+    "upcoming": "Upcoming expiries",
+    "review_queue": "Review queue",
+    "backup": "Backup status (administrators)",
+}
+STAT_WIDGETS = ("documents", "members", "expiring", "storage", "review")
+
+
+def normalize_widgets(value) -> list[str]:
+    """Ordered, de-duplicated widget ids. Accepts the old comma-separated text, in which only the counters were
+    chosen and every other section was always shown (kept so upgrades look the same)."""
+    if isinstance(value, str):
+        chosen = [v.strip() for v in value.split(",") if v.strip() in WIDGETS]
+        chosen += ["review"] + [w for w in WIDGETS if w not in STAT_WIDGETS]
+        value = chosen
+    out: list[str] = []
+    for v in value or []:
+        if v in WIDGETS and v not in out:
+            out.append(v)
+    return out
 
 
 def _validate_thresholds(value):
@@ -224,13 +258,24 @@ SETTINGS: list[SettingDef] = [
                "bool", True, "notifications", effect="Disabling stops owner reminders.", help="expiry-rules#recipients"),
     SettingDef("notifications.notify_head", "Notify head of family", "The owner's designated family head receives reminders.",
                "bool", True, "notifications", effect="Disabling stops head reminders.", help="expiry-rules#recipients"),
-    SettingDef("notifications.default_channels", "Default channels",
-               "Channels enabled for users who have not chosen their own.", "channel_list", ["in_app", "email"],
-               "notifications", effect="Affects users without personal preferences.", help="expiry-rules#channels"),
-    SettingDef("notifications.required_channels", "Required channels",
-               "Channels users cannot turn off. In-app is always on.", "channel_list", ["in_app"], "notifications",
-               effect="Users see these channels locked on; missing contact details are flagged.",
+    SettingDef("notifications.default_channels", "Default channels for expiry reminders",
+               "Channels used for expiry reminders by people who have not chosen their own.", "channel_list", ["in_app", "email"],
+               "notifications", effect="Affects people without personal preferences.", help="expiry-rules#channels"),
+    SettingDef("notifications.required_channels", "Required channels for expiry reminders",
+               "Channels people cannot turn off for expiry reminders. In-app is always on.", "channel_list", ["in_app"], "notifications",
+               effect="People see these channels locked on; missing contact details are flagged.",
                help="expiry-rules#channels"),
+    SettingDef("notifications.critical_events", "Critical notifications",
+               "Events people cannot turn off. They always arrive in-app and on the critical channels below.",
+               "event_list", list(DEFAULT_CRITICAL), "notifications", choices=list(NOTIFY_EVENTS),
+               effect="Applies to the next notification; people see these locked on.", help="expiry-rules#critical"),
+    SettingDef("notifications.critical_channels", "Channels for critical notifications",
+               "Every critical notification is also sent on these channels. Missing email addresses or unlinked Telegram are flagged to the person and to you, never reported as sent.",
+               "channel_list", ["in_app", "email", "telegram"], "notifications",
+               effect="Applies to the next notification.", help="expiry-rules#critical"),
+    SettingDef("notifications.include_names", "Include names in email/Telegram",
+               "Show folder, document and file names in external messages (long numbers are always masked). Turn off to send only counts and a sign-in link.",
+               "bool", True, "notifications", help="expiry-rules#templates"),
     # ---- Connections
     SettingDef("smtp.enabled", "Email (SMTP) enabled", "Send notification and password-reset email.", "bool", False,
                "connections", depends_on=("smtp.host", "smtp.from_address"),
@@ -321,9 +366,18 @@ SETTINGS: list[SettingDef] = [
     SettingDef("backup.require_mount", "Require mounted destination",
                "Refuse to back up unless the destination is a mount point (prevents filling the local disk).",
                "bool", True, "storage", help="backup-restore#target"),
-    SettingDef("backup.schedule_time", "Daily backup time", "Local time for the automatic daily backup. Empty disables.",
-               "time", "02:30", "storage", help="backup-restore#schedule", example="02:30"),
-    SettingDef("backup.keep_daily", "Backups to keep", "Number of most recent successful backups retained (proposed default, not a user decision).",
+    SettingDef("backup.enabled", "Automatic backups", "Run backups automatically on the schedule below. Back up now always works.",
+               "bool", True, "storage", help="backup-restore#schedule"),
+    SettingDef("backup.frequency", "Backup frequency", "Daily, weekly (choose the day) or monthly (choose the day of the month).",
+               "choice", "daily", "storage", choices=("daily", "weekly", "monthly"), depends_on=("backup.enabled",),
+               effect="The next run is shown in Backup status.", help="backup-restore#schedule"),
+    SettingDef("backup.schedule_time", "Backup time", "Local time of the automatic backup (installation timezone).",
+               "time", "02:30", "storage", depends_on=("backup.enabled",), help="backup-restore#schedule", example="02:30"),
+    SettingDef("backup.weekday", "Day of the week", "Used when the frequency is weekly.", "choice", "sun", "storage",
+               choices=("mon", "tue", "wed", "thu", "fri", "sat", "sun"), depends_on=("backup.frequency",), help="backup-restore#schedule"),
+    SettingDef("backup.month_day", "Day of the month", "Used when the frequency is monthly. 29–31 run on the last day of shorter months.",
+               "int", 1, "storage", min=1, max=31, depends_on=("backup.frequency",), help="backup-restore#schedule", example="1"),
+    SettingDef("backup.keep_daily", "Backups to keep", "Number of most recent successful backups retained, whatever the frequency (proposed default, not a user decision).",
                "int", 14, "storage", min=1, max=365, effect="Older backups beyond this count are pruned; the newest verified backup is never pruned.",
                help="backup-restore#retention"),
     SettingDef("backup.include_keys", "Include encryption key in backup",
@@ -396,13 +450,17 @@ SETTINGS: list[SettingDef] = [
                help="themes#choose"),
     SettingDef("me.layout", "Default document layout", "Three-panel browser or full-page viewer.", "choice",
                "three_panel", "appearance", scope=USER, editable_by=SELF, choices=LAYOUTS, help="themes#layout"),
+    SettingDef("me.notification_prefs", "My notifications", "Which optional notifications you receive, per channel.",
+               "event_matrix", {}, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#optional"),
     SettingDef("me.channels", "My notification channels", "Channels you want reminders on. Required channels stay on.",
                "channel_list", None, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#channels"),
     SettingDef("me.event_alerts", "Other alerts by email/Telegram",
                "Also send access, import and (for administrators) backup and integrity alerts to your email/Telegram channels. They always appear in the in-app feed.",
                "bool", True, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#other-alerts"),
-    SettingDef("me.dashboard_widgets", "Dashboard widgets", "Statistics shown on your dashboard.", "str",
-               "documents,members,expiring,storage", "appearance", scope=USER, editable_by=SELF, help="getting-started#dashboard"),
+    SettingDef("me.dashboard_widgets", "Dashboard widgets",
+               "Choose what your dashboard shows and in which order. Saved to your account, so every device shows the same.",
+               "widget_list", list(WIDGETS), "appearance", scope=USER, editable_by=SELF, choices=list(WIDGETS),
+               effect="Applies on all your devices.", help="getting-started#dashboard"),
 ]
 
 BY_KEY = {s.key: s for s in SETTINGS}
@@ -448,6 +506,18 @@ def coerce(defn: SettingDef, value: Any) -> Any:
         if not isinstance(value, list) or any(v not in CHANNELS for v in value):
             raise SettingError(f"Channels must be from: {', '.join(CHANNELS)}.")
         value = [c for c in CHANNELS if c in value]
+    elif t == "event_list":
+        if not isinstance(value, list) or any(v not in NOTIFY_EVENTS for v in value):
+            raise SettingError("Unknown notification event.")
+        value = [k for k in NOTIFY_EVENTS if k in value]
+    elif t == "event_matrix":
+        from apps.notify.catalog import coerce_prefs
+
+        value = coerce_prefs(value)
+    elif t == "widget_list":
+        if not isinstance(value, (list, str)) or (isinstance(value, list) and any(v not in WIDGETS for v in value)):
+            raise SettingError(f"Widgets must be from: {', '.join(WIDGETS)}.")
+        value = normalize_widgets(value)
     elif t == "time":
         if not isinstance(value, str) or (value and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value)):
             raise SettingError("Use 24-hour HH:MM, for example 08:00.")

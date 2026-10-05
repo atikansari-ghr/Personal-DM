@@ -26,6 +26,12 @@ const PAGES = [
   ["settings-family", "/settings/family", true],
   ["settings-storage", "/settings/storage", true],
   ["help", "/help/getting-started", true],
+  ["my-notifications", "/settings/account?tab=notifications", true],
+  ["appearance-widgets", "/settings/account?tab=appearance", true],
+  ["access-security", "/settings/security", true],
+  ["local-ai", "/settings/ai", true],
+  ["login-audit", "/settings/activity?view=logins", true],
+  ["import", "/imports/new", true],
 ];
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
@@ -83,6 +89,23 @@ for (const theme of THEMES) {
       await page.waitForSelector("[role=dialog]");
       await audit(page, `${theme}/share-dialog`);
       await page.keyboard.press("Escape");
+    }
+    // full-page document viewer and the "Move to…" folder picker
+    const first = await page.evaluate(async () => (await (await fetch("/api/documents?limit=1")).json()).documents[0]);
+    if (first) {
+      await page.goto(`${BASE}/documents/${first.id}`);
+      await page.waitForSelector(".viewer, .viewer-error, .empty");
+      await page.waitForTimeout(800);
+      await audit(page, `${theme}/document-viewer`);
+      await page.goto(`${BASE}/folders/${first.folder}`);
+      await page.click(`button[aria-label='More actions for ${first.title}']`);
+      const move = page.locator("[role=menuitem]:has-text('Move to…')");
+      if (await move.count()) {
+        await move.click();
+        await page.waitForSelector(".folder-picker");
+        await audit(page, `${theme}/move-to-dialog`);
+        await page.keyboard.press("Escape");
+      }
     }
     // keyboard resizing of the folder tree
     const handle = page.locator(".panel-handle").first();
