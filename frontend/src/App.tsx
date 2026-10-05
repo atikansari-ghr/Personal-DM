@@ -2,7 +2,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Layout from "./components/Layout";
 import { Skeleton } from "./components/ui";
 import ArchivePage from "./pages/Archive";
-import { ChangePassword, ForgotPassword, Login, ResetPassword } from "./pages/Auth";
+import { ChangePassword, ForcedTwoFactor, ForgotPassword, Login, ResetPassword } from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import DocumentPage from "./pages/DocumentPage";
 import FoldersPage from "./pages/Folders";
@@ -42,6 +42,7 @@ export default function App() {
     );
   }
   if (session.user.must_change_password) return <ChangePassword forced />;
+  if (session.user.two_factor_setup_required) return <ForcedTwoFactor />;
   return (
     <Layout>
       <Routes>

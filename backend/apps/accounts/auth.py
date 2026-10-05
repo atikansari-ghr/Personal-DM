@@ -16,6 +16,12 @@ class IsActiveAuthenticated(BasePermission):
             return False
         if user.must_change_password and not getattr(view, "allow_password_change_pending", False):
             raise PermissionDenied({"detail": "You must set a new password before continuing.", "code": "password_change_required"})
+        if not getattr(view, "allow_2fa_setup_pending", False):
+            from .passkeys import has_second_factor, requires_2fa
+
+            if requires_2fa(user) and not has_second_factor(user):
+                raise PermissionDenied({"detail": "Set up two-step verification (passkey or authenticator app) to continue.",
+                                        "code": "two_factor_setup_required"})
         return True
 
 

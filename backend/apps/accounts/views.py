@@ -17,12 +17,16 @@ from rest_framework.response import Response
 from apps.core import audit, config, crypto, ratelimit
 from apps.security import login_audit
 
+from . import passkeys as PK
 from . import photos
 from . import services as S
 from .auth import IsActiveAuthenticated, IsMainAdmin
-from .models import DELEGATION_SCOPES, Delegation, FamilyGroup, GroupMembership, PasswordResetToken, SetupState, User
+from .models import (DELEGATION_SCOPES, Delegation, FamilyGroup, GroupMembership, PasswordResetToken, SetupState, User,
+                     WebAuthnCredential)
 
-REAUTH_WINDOW = timedelta(minutes=10)
+
+def reauth_window() -> timedelta:
+    return timedelta(minutes=int(config.get("auth.recent_auth_minutes")))
 
 
 def user_json(u: User, *, full: bool = False) -> dict:
@@ -44,6 +48,9 @@ def user_json(u: User, *, full: bool = False) -> dict:
             "email": u.email,
             "must_change_password": u.must_change_password,
             "totp_enabled": u.totp_enabled,
+            "passkey_count": PK.active(u).count(),
+            "passwordless_enabled": u.passwordless_enabled,
+            "two_factor_setup_required": PK.requires_2fa(u) and not PK.has_second_factor(u),
             "last_login": u.last_login,
             "reminder_group": str(u.reminder_group_id) if u.reminder_group_id else None,
             "groups": [str(g) for g in u.memberships.values_list("group_id", flat=True)],
@@ -77,7 +84,7 @@ def recently_verified(request) -> bool:
     try:
         from datetime import datetime
 
-        return timezone.now() - datetime.fromisoformat(at) < REAUTH_WINDOW
+        return timezone.now() - datetime.fromisoformat(at) < reauth_window()
     except ValueError:
         return False
 
@@ -96,6 +103,10 @@ def session_state(request):
         "version": settings.APP_VERSION,
         "google_enabled": bool(config.get("google.enabled")),
         "pending_2fa": bool(request.session.get("pending_2fa")),
+        "pending_methods": (request.session.get("pending_2fa") or {}).get("methods", []),
+        "passkeys_enabled": bool(config.get("auth.allow_passkeys")),
+        "passwordless_enabled": bool(config.get("auth.allow_passkeys") and config.get("auth.allow_passwordless")),
+        "totp_allowed": bool(config.get("auth.allow_totp")),
         "user": None,
     }
     if u.is_authenticated and u.is_active:
@@ -136,9 +147,11 @@ def login_view(request):
                            reason="disabled_account" if user is not None else "bad_credentials")
         return _fail("Incorrect username or password.", 400)
     ratelimit.clear(buckets[0])
-    if user.totp_enabled:
-        request.session["pending_2fa"] = {"uid": str(user.pk), "at": timezone.now().isoformat(), "remember": remember, "method": "password"}
-        return Response({"status": "totp_required"})
+    if PK.has_second_factor(user):
+        methods = PK.methods_for(user)
+        request.session["pending_2fa"] = {"uid": str(user.pk), "at": timezone.now().isoformat(), "remember": remember,
+                                          "method": "password", "methods": methods}
+        return Response({"status": "totp_required" if user.totp_enabled else "second_factor_required", "methods": methods})
     _complete_login(request, user, "password", remember)
     return Response({"status": "ok", "must_change_password": user.must_change_password})
 
@@ -318,6 +331,8 @@ def me(request):
 @api_view(["POST"])
 @permission_classes([IsActiveAuthenticated])
 def totp_setup(request):
+    if not config.get("auth.allow_totp"):
+        return _fail("Authenticator apps are turned off by the administrator.", 403)
     if not recently_verified(request):
         return _fail("Please confirm your password first.", 403, code="reauth_required")
     return Response(S.totp_begin(request.user))
@@ -331,6 +346,9 @@ def totp_enable(request):
     except S.AccountError as exc:
         return _fail(str(exc))
     audit.record("account.totp_enable", request=request)
+    from apps.security import alerts
+
+    alerts.account_security(request.user, "Authenticator app turned on")
     return Response({"recovery_codes": codes})
 
 
@@ -339,20 +357,30 @@ def totp_enable(request):
 def totp_disable(request):
     if not recently_verified(request):
         return _fail("Please confirm your password first.", 403, code="reauth_required")
-    S.totp_disable(request.user)
+    user = request.user
+    has_passkey = PK.active(user).exists()
+    if PK.requires_2fa(user) and not has_passkey:
+        return _fail("Two-step verification is required for your account: add a passkey before turning off the authenticator app.")
+    S.totp_disable(user, keep_recovery_codes=has_passkey)
     audit.record("account.totp_disable", request=request)
+    from apps.security import alerts
+
+    alerts.account_security(user, "Authenticator app turned off")
     return Response({"status": "ok"})
 
 
 @api_view(["POST"])
 @permission_classes([IsActiveAuthenticated])
 def recovery_codes(request):
-    if not request.user.totp_enabled:
-        return _fail("Enable the authenticator app first.")
+    if not PK.has_second_factor(request.user):
+        return _fail("Turn on an authenticator app or add a passkey first.")
     if not recently_verified(request):
         return _fail("Please confirm your password first.", 403, code="reauth_required")
     codes = S.regenerate_recovery_codes(request.user)
     audit.record("account.recovery_codes", request=request)
+    from apps.security import alerts
+
+    alerts.account_security(request.user, "Recovery codes regenerated")
     return Response({"recovery_codes": codes})
 
 
@@ -503,10 +531,13 @@ def member_reset_password(request, pk):
 @permission_classes([IsMainAdmin])
 def member_reset_totp(request, pk):
     u = get_object_or_404(User, pk=pk)
-    S.totp_disable(u)
+    S.totp_disable(u, keep_recovery_codes=PK.active(u).exists())
     u.session_epoch += 1
     u.save(update_fields=["session_epoch"])
     audit.record("family.totp_reset_by_admin", request=request, target=u, subject_user=u)
+    from apps.security import alerts
+
+    alerts.account_security(u, "Authenticator app was reset", actor=request.user)
     return Response({"status": "ok"})
 
 
@@ -650,3 +681,207 @@ def user_photo(request, pk):
     resp["X-Content-Type-Options"] = "nosniff"
     resp["Content-Disposition"] = "inline"
     return resp
+
+
+
+# ------------------------------------------------------------------ passkeys (WebAuthn)
+
+def _pending_user(request):
+    from datetime import datetime
+
+    pending = request.session.get("pending_2fa")
+    if not pending:
+        return None, None
+    if timezone.now() - datetime.fromisoformat(pending["at"]) > timedelta(minutes=5):
+        request.session.pop("pending_2fa", None)
+        return None, None
+    return User.objects.filter(pk=pending["uid"], is_active=True).first(), pending
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def passkey_login_options(request):
+    purpose = request.data.get("purpose", "2fa")
+    if purpose == "passwordless":
+        if not (config.get("auth.allow_passkeys") and config.get("auth.allow_passwordless")):
+            return _fail("Passwordless sign-in is not enabled.", 403)
+        return Response(PK.authentication_options(request.session, user=None, purpose="passwordless"))
+    user, _pending = _pending_user(request)
+    if user is None:
+        return _fail("Sign in with your password first.", 400)
+    try:
+        return Response(PK.authentication_options(request.session, user=user, purpose="2fa"))
+    except PK.PasskeyError as exc:
+        return _fail(str(exc))
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def passkey_login_verify(request):
+    purpose = request.data.get("purpose", "2fa")
+    credential = request.data.get("credential") or {}
+    ip = audit.client_ip(request) or "unknown"
+    if ratelimit.too_many(f"passkey:ip:{ip}", int(config.get("auth.login_rate_limit")) * 3, 900):
+        login_audit.record(request, result="denied", method="passkey", reason="rate_limited")
+        return _fail("Too many attempts. Please wait a few minutes and try again.", 429)
+    if purpose == "passwordless":
+        if not (config.get("auth.allow_passkeys") and config.get("auth.allow_passwordless")):
+            return _fail("Passwordless sign-in is not enabled.", 403)
+        try:
+            row = PK.authenticate(request.session, credential, purpose="passwordless")
+        except PK.PasskeyError as exc:
+            ratelimit.hit(f"passkey:ip:{ip}")
+            login_audit.record(request, result="failure", method="passkey", reason="passkey_invalid")
+            return _fail(str(exc))
+        user = row.user
+        if not user.is_active or not user.passwordless_enabled:
+            login_audit.record(request, result="denied", user=user, method="passkey", reason="passwordless_off")
+            return _fail("Passwordless sign-in is not turned on for this account. Sign in with your password.", 403)
+        _complete_login(request, user, "passkey", True)
+        return Response({"status": "ok", "must_change_password": user.must_change_password})
+    user, pending = _pending_user(request)
+    if user is None:
+        return _fail("Sign in with your password first.", 400)
+    try:
+        PK.authenticate(request.session, credential, purpose="2fa", user=user)
+    except PK.PasskeyError as exc:
+        ratelimit.hit(f"passkey:ip:{ip}")
+        login_audit.record(request, result="failure", user=user, method=f"{pending.get('method', 'password')}+passkey", reason="passkey_invalid")
+        return _fail(str(exc))
+    _complete_login(request, user, f"{pending.get('method', 'password')}+passkey", pending.get("remember", True))
+    return Response({"status": "ok", "must_change_password": user.must_change_password})
+
+
+@api_view(["POST"])
+@permission_classes([IsActiveAuthenticated])
+def reauth_passkey(request):
+    """Recent authentication with a passkey: step 'options' then 'verify'."""
+    if request.data.get("step") == "options":
+        try:
+            return Response(PK.authentication_options(request.session, user=request.user, purpose="reauth"))
+        except PK.PasskeyError as exc:
+            return _fail(str(exc))
+    try:
+        PK.authenticate(request.session, request.data.get("credential") or {}, purpose="reauth", user=request.user)
+    except PK.PasskeyError as exc:
+        return _fail(str(exc))
+    request.session["reauth_at"] = timezone.now().isoformat()
+    audit.record("auth.reauth", request=request, method="passkey")
+    return Response({"status": "ok"})
+
+
+reauth_passkey.cls.allow_2fa_setup_pending = True
+
+
+def passkey_json(c: WebAuthnCredential) -> dict:
+    return {"id": c.pk, "name": c.name, "created_at": c.created_at, "last_used_at": c.last_used_at, "transports": c.transports,
+            "synced": c.device_type == "multi_device" or c.backed_up, "passwordless_capable": c.discoverable}
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsActiveAuthenticated])
+def my_passkeys(request):
+    user = request.user
+    if request.method == "GET":
+        return Response({"passkeys": [passkey_json(c) for c in PK.active(user)], "rp_id": PK.rp_id(),
+                         "allowed": bool(config.get("auth.allow_passkeys")), "passwordless_allowed": bool(config.get("auth.allow_passwordless")),
+                         "passwordless_enabled": user.passwordless_enabled})
+    if not config.get("auth.allow_passkeys"):
+        return _fail("Passkeys are turned off by the administrator.", 403)
+    if not recently_verified(request):
+        return _fail("Please confirm it's you first.", 403, code="reauth_required")
+    if request.data.get("step") == "options":
+        return Response(PK.registration_options(request.session, user))
+    try:
+        row = PK.register(request.session, user, request.data.get("credential") or {}, request.data.get("name") or "")
+    except PK.PasskeyError as exc:
+        audit.record("account.passkey_register", request=request, outcome="failure")
+        return _fail(str(exc))
+    codes = None
+    if not user.recovery_codes.filter(used_at__isnull=True).exists():
+        codes = S.regenerate_recovery_codes(user)
+    audit.record("account.passkey_register", request=request, target=row, name=row.name)
+    from apps.security import alerts
+
+    alerts.account_security(user, f"New passkey “{row.name}” registered")
+    return Response({"passkey": passkey_json(row), "recovery_codes": codes}, status=201)
+
+
+my_passkeys.cls.allow_2fa_setup_pending = True
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsActiveAuthenticated])
+def my_passkey_detail(request, pk):
+    from apps.security import alerts
+
+    user = request.user
+    row = get_object_or_404(WebAuthnCredential, pk=pk, user=user, revoked_at__isnull=True)
+    if request.method == "PATCH":
+        name = (request.data.get("name") or "").strip()[:80]
+        if not name:
+            return _fail("Enter a name.")
+        row.name = name
+        row.save(update_fields=["name"])
+        audit.record("account.passkey_rename", request=request, target=row, name=name)
+        return Response(passkey_json(row))
+    if not recently_verified(request):
+        return _fail("Please confirm it's you first.", 403, code="reauth_required")
+    remaining = PK.active(user).exclude(pk=row.pk).exists() or user.totp_enabled
+    if PK.requires_2fa(user) and not remaining:
+        return _fail("Two-step verification is required for your account: add another passkey or an authenticator app before removing this one.")
+    row.revoked_at = timezone.now()
+    row.save(update_fields=["revoked_at"])
+    if not PK.active(user).filter(discoverable=True).exists() and user.passwordless_enabled:
+        user.passwordless_enabled = False
+        user.save(update_fields=["passwordless_enabled"])
+    if not remaining:
+        from .models import RecoveryCode
+
+        RecoveryCode.objects.filter(user=user).delete()
+    audit.record("account.passkey_revoke", request=request, target=row, name=row.name)
+    alerts.account_security(user, f"Passkey “{row.name}” removed")
+    return Response(status=204)
+
+
+@api_view(["POST"])
+@permission_classes([IsActiveAuthenticated])
+def my_passwordless(request):
+    from apps.security import alerts
+
+    user = request.user
+    enabled = bool(request.data.get("enabled"))
+    if not recently_verified(request):
+        return _fail("Please confirm it's you first.", 403, code="reauth_required")
+    if enabled:
+        if not (config.get("auth.allow_passkeys") and config.get("auth.allow_passwordless")):
+            return _fail("Passwordless sign-in is not allowed in this installation.", 403)
+        if not PK.active(user).filter(discoverable=True).exists():
+            return _fail("Register a passkey that supports passwordless sign-in first (most phones and computers do).")
+    user.passwordless_enabled = enabled
+    user.save(update_fields=["passwordless_enabled"])
+    audit.record("account.passwordless", request=request, enabled=enabled)
+    alerts.account_security(user, "Passwordless sign-in " + ("turned on" if enabled else "turned off"))
+    return Response({"passwordless_enabled": enabled})
+
+
+@api_view(["POST"])
+@permission_classes([IsMainAdmin])
+def member_reset_2fa(request, pk):
+    """Administrator-assisted recovery: removes authenticator app, passkeys and recovery codes; signs the person out."""
+    from apps.security import alerts
+
+    u = get_object_or_404(User, pk=pk)
+    S.totp_disable(u)
+    n = PK.active(u).update(revoked_at=timezone.now())
+    u.passwordless_enabled = False
+    u.session_epoch += 1
+    u.save(update_fields=["passwordless_enabled", "session_epoch"])
+    audit.record("family.two_factor_reset_by_admin", request=request, target=u, subject_user=u, passkeys_revoked=n)
+    alerts.account_security(u, "Two-step verification was reset", actor=request.user)
+    return Response({"status": "ok", "passkeys_revoked": n})
+
+
+# Views reachable while a required two-step verification setup is still pending.
+for _view in (me, totp_setup, totp_enable, recovery_codes, reauth, change_password, my_sessions):
+    _view.cls.allow_2fa_setup_pending = True
