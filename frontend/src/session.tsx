@@ -64,9 +64,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     window.addEventListener("pd:signed-out", out);
     window.addEventListener("online", out);
     window.addEventListener("pd:settings-saved", out);
+    window.addEventListener("pd:2fa-setup", out);
     return () => {
       window.removeEventListener("pd:settings-saved", out);
       window.removeEventListener("pd:signed-out", out);
+      window.removeEventListener("pd:2fa-setup", out);
       window.removeEventListener("online", out);
     };
   }, [refresh]);

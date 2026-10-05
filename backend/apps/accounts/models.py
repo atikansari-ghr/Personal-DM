@@ -30,6 +30,7 @@ class User(AbstractUser):
                                        related_name="reminder_members",
                                        help_text="Group whose head receives this person's expiry reminders")
     session_epoch = models.IntegerField(default=0, help_text="Incremented to invalidate all sessions")
+    passwordless_enabled = models.BooleanField(default=False, help_text="Person opted in to passwordless passkey sign-in")
 
     class Meta:
         ordering = ["sort_order", "display_name"]
@@ -148,3 +149,24 @@ class UserSession(models.Model):
     @property
     def active(self) -> bool:
         return self.revoked_at is None and self.ended_at is None
+
+
+class WebAuthnCredential(models.Model):
+    """A registered passkey / security key. Only the public key and verifier state are stored, never private keys."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="passkeys")
+    credential_id = models.CharField(max_length=1400, unique=True, help_text="base64url credential id")
+    public_key = models.BinaryField()
+    sign_count = models.BigIntegerField(default=0)
+    transports = models.JSONField(default=list, blank=True)
+    aaguid = models.CharField(max_length=40, blank=True)
+    device_type = models.CharField(max_length=20, blank=True)  # single_device | multi_device (synced)
+    backed_up = models.BooleanField(default=False)
+    discoverable = models.BooleanField(default=False, help_text="Resident key: usable for passwordless sign-in")
+    name = models.CharField(max_length=80)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]

@@ -1,8 +1,11 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { Icon } from "../components/ui";
 import { useSession } from "../session";
+import { getPasskey, passkeyErrorMessage, passkeysSupported } from "../webauthn";
+import PasskeysCard from "../components/Passkeys";
+import { Reauth } from "../components/Reauth";
 
 const GOOGLE_ERRORS: Record<string, string> = {
   google_disabled: "Google sign-in is not enabled.",
@@ -47,6 +50,23 @@ export function Login() {
   const [useRecovery, setUseRecovery] = useState(false);
   const [error, setError] = useState(GOOGLE_ERRORS[params.get("error") || ""] || "");
   const [busy, setBusy] = useState(false);
+  const [methods, setMethods] = useState<string[]>(session?.pending_methods || ["totp", "recovery"]);
+  const canPasskey = passkeysSupported();
+
+  const passkey = async (purpose: "2fa" | "passwordless") => {
+    setBusy(true);
+    setError("");
+    try {
+      const options = await api("auth/passkey/options", { body: { purpose } });
+      const credential = await getPasskey(options);
+      await api("auth/passkey/verify", { body: { purpose, credential } });
+      await done();
+    } catch (err: any) {
+      setError(err instanceof ApiError ? err.message : passkeyErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const done = async () => {
     await refresh();
@@ -58,11 +78,16 @@ export function Login() {
     setError("");
     try {
       if (step === "password") {
-        const r = await api<{ status: string }>("auth/login", { body: { username, password, remember } });
-        if (r.status === "totp_required") setStep("totp");
-        else await done();
+        const r = await api<{ status: string; methods?: string[] }>("auth/login", { body: { username, password, remember } });
+        if (r.status === "totp_required" || r.status === "second_factor_required") {
+          const m = r.methods || ["totp"];
+          setMethods(m);
+          setUseRecovery(!m.includes("totp") && !m.includes("passkey") && m.includes("recovery"));
+          setStep("totp");
+        } else await done();
       } else {
-        await api("auth/totp", { body: useRecovery ? { recovery_code: code } : { code } });
+        // Codes may be pasted with spaces or dashes (password managers, authenticator apps).
+        await api("auth/totp", { body: useRecovery ? { recovery_code: code.trim() } : { code: code.replace(/[\s-]/g, "") } });
         await done();
       }
     } catch (err: any) {
@@ -76,7 +101,7 @@ export function Login() {
       <form onSubmit={submit} noValidate>
         <h1 style={{ fontSize: "2.3rem" }}>{step === "password" ? "Welcome back" : "Verification"}</h1>
         <p className="muted" style={{ marginBottom: "1.5rem" }}>
-          {step === "password" ? "Sign in to your family document library" : useRecovery ? "Enter one of your recovery codes." : "Enter the 6-digit code from your authenticator app."}
+          {step === "password" ? "Sign in to your family document library" : useRecovery ? "Enter one of your recovery codes." : methods.includes("totp") ? "Enter the 6-digit code from your authenticator app or password manager." : "Confirm with your passkey."}
         </p>
         {error && <div className="alert error" role="alert">{error}</div>}
         {step === "password" ? (
@@ -102,17 +127,29 @@ export function Login() {
             {session?.google_enabled && (
               <a className="btn" style={{ width: "100%", marginTop: "0.7rem" }} href="/api/auth/google/start?mode=login">Sign in with Google</a>
             )}
+            {session?.passwordless_enabled && canPasskey && (
+              <button type="button" className="btn" style={{ width: "100%", marginTop: "0.7rem" }} disabled={busy} onClick={() => passkey("passwordless")}><Icon name="lock" /> Sign in with a passkey</button>
+            )}
             <p className="muted small" style={{ textAlign: "center", marginTop: "1rem" }}>Two-factor verification follows if enabled.</p>
           </>
         ) : (
           <>
-            <div className="field">
-              <label htmlFor="code">{useRecovery ? "Recovery code" : "Authentication code"}</label>
-              <input id="code" type="text" inputMode={useRecovery ? "text" : "numeric"} autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} autoFocus />
-            </div>
-            <button className="btn primary" style={{ width: "100%" }} disabled={busy || !code}>Verify</button>
+            {methods.includes("passkey") && !useRecovery && (
+              <button type="button" className="btn primary" style={{ width: "100%", marginBottom: "0.8rem" }} disabled={busy || !canPasskey} onClick={() => passkey("2fa")}><Icon name="lock" /> Use a passkey</button>
+            )}
+            {methods.includes("passkey") && !canPasskey && <p className="small muted">Passkeys need the secure HTTPS address of this app.</p>}
+            {(methods.includes("totp") || useRecovery) && (
+              <>
+                <div className="field">
+                  <label htmlFor="code">{useRecovery ? "Recovery code" : "Authentication code"}</label>
+                  <input id="code" name={useRecovery ? "recovery-code" : "one-time-code"} type="text" inputMode={useRecovery ? "text" : "numeric"}
+                    autoComplete="one-time-code" autoCapitalize="none" spellCheck={false} value={code} onChange={(e) => setCode(e.target.value)} autoFocus={!methods.includes("passkey")} />
+                </div>
+                <button className="btn primary" style={{ width: "100%" }} disabled={busy || !code}>Verify</button>
+              </>
+            )}
             <div className="row between" style={{ marginTop: "0.8rem" }}>
-              <button type="button" className="btn ghost small" onClick={() => setUseRecovery(!useRecovery)}>{useRecovery ? "Use authenticator code" : "Use a recovery code"}</button>
+              {(methods.includes("recovery") || methods.includes("totp")) && <button type="button" className="btn ghost small" onClick={() => { setUseRecovery(!useRecovery); setCode(""); }}>{useRecovery ? (methods.includes("totp") ? "Use authenticator code" : "Use a passkey") : "Use a recovery code"}</button>}
               <button type="button" className="btn ghost small" onClick={() => { setStep("password"); setCode(""); }}>Start over</button>
             </div>
           </>
@@ -191,4 +228,54 @@ export function ChangePassword({ forced }: { forced?: boolean }) {
     </form>
   );
   return forced ? <AuthFrame>{body}</AuthFrame> : body;
+}
+
+
+/** Shown when the administrator requires two-step verification and this account has none yet. */
+export function ForcedTwoFactor() {
+  const { session, refresh } = useSession();
+  const [setup, setSetup] = useState<{ secret: string; qr_svg: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [codes, setCodes] = useState<string[] | null>(null);
+  const [err, setErr] = useState("");
+  const [reauth, setReauth] = useState<(() => void) | null>(null);
+  const startTotp = async () => {
+    setErr("");
+    try { setSetup(await api("me/totp/setup", { method: "POST" })); }
+    catch (e: any) { if (e.data?.code === "reauth_required") setReauth(() => async () => { setReauth(null); startTotp(); }); else setErr(e.message); }
+  };
+  return (
+    <AuthFrame>
+      <div className="stack">
+        <h1>Set up two-step verification</h1>
+        <p className="muted">Your family administrator requires a second step at sign-in. Choose a passkey (fingerprint, face or PIN on your device) or an authenticator app. Your password stays the same.</p>
+        {err && <div className="alert error" role="alert">{err}</div>}
+        {codes ? (
+          <div className="alert warn"><strong>Recovery codes — shown once.</strong> Store them safely; each works one time.<pre className="mono">{codes.join("\n")}</pre>
+            <button className="btn primary" onClick={() => refresh()}>Continue</button></div>
+        ) : (
+          <>
+            <PasskeysCard />
+            {session?.totp_allowed !== false && (
+              <div className="card">
+                <h2>Authenticator app</h2>
+                {!setup ? <button className="btn" onClick={startTotp}>Set up an authenticator app</button> : (
+                  <form className="stack" onSubmit={async (e) => { e.preventDefault(); try { const r = await api("me/totp/enable", { body: { code: code.replace(/[\s-]/g, "") } }); setCodes(r.recovery_codes); } catch (x: any) { setErr(x.message); } }}>
+                    <div style={{ width: 200, background: "#fff" }} dangerouslySetInnerHTML={{ __html: setup.qr_svg.replace(/<\?xml[^>]*>/, "") }} />
+                    <code>{setup.secret}</code>
+                    <label htmlFor="ft-code">Code from the app</label>
+                    <input id="ft-code" name="one-time-code" type="text" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} style={{ maxWidth: 180 }} />
+                    <button className="btn primary" disabled={!code}>Verify & enable</button>
+                  </form>
+                )}
+              </div>
+            )}
+            <button className="btn primary" onClick={() => refresh()}>I have set it up — continue</button>
+          </>
+        )}
+        <button className="btn ghost" onClick={() => api("auth/logout", { method: "POST" }).then(() => refresh())}>Sign out</button>
+      </div>
+      {reauth && <Reauth onClose={() => setReauth(null)} onDone={reauth} />}
+    </AuthFrame>
+  );
 }

@@ -70,12 +70,12 @@ export default function FamilyPanel() {
               <td><div className="row"><Avatar user={m} size="sm" /><div><strong>{m.display_name}</strong><div className="small muted">{m.role_label}{m.is_main_admin ? " · Main administrator" : ""}{m.is_head ? " · Family head" : ""}</div></div></div></td>
               <td className="hide-mobile">{m.username}</td>
               <td className="hide-mobile small">{m.last_login ? formatDateTime(m.last_login) : "Never"}</td>
-              <td>{m.is_active ? <span className="badge ok">Active</span> : <span className="badge neutral">Disabled</span>}{m.totp_enabled && <span className="badge neutral">2FA</span>}{m.must_change_password && <span className="badge soon">Temp password</span>}</td>
+              <td>{m.is_active ? <span className="badge ok">Active</span> : <span className="badge neutral">Disabled</span>}{(m.totp_enabled || (m.passkey_count || 0) > 0) && <span className="badge neutral">2FA{(m.passkey_count || 0) > 0 ? ` · ${m.passkey_count} passkey${m.passkey_count === 1 ? "" : "s"}` : ""}</span>}{m.must_change_password && <span className="badge soon">Temp password</span>}</td>
               {admin && (
                 <td className="row">
                   <button className="btn small" onClick={() => setDialog({ kind: "member", member: m })}>Edit</button>
                   <button className="btn small" onClick={async () => { const r = await api(`family/members/${m.id}/reset-password`, { body: {} }); setDialog({ kind: "temp", value: r.temporary_password, name: m.display_name }); }}>Reset password</button>
-                  {m.totp_enabled && <button className="btn small" onClick={() => api(`family/members/${m.id}/reset-totp`, { body: {} }).then(() => { toast("Authenticator reset"); reload(); })}>Reset 2FA</button>}
+                  {(m.totp_enabled || (m.passkey_count || 0) > 0) && <button className="btn small" title="Removes the authenticator app, all passkeys and recovery codes, and signs the person out. They are notified." onClick={() => { if (confirm(`Reset two-step verification for ${m.display_name}? Their authenticator app, passkeys and recovery codes are removed and they are signed out everywhere.`)) api(`family/members/${m.id}/reset-2fa`, { body: {} }).then(() => { toast("Two-step verification reset"); reload(); }).catch((x) => toast(x.message, "error")); }}>Reset 2FA</button>}
                   {m.id !== session?.user?.id && <button className="btn small" onClick={() => api(`family/members/${m.id}`, { method: "PATCH", body: { is_active: !m.is_active } }).then(reload).catch((e) => toast(e.message, "error"))}>{m.is_active ? "Disable" : "Enable"}</button>}
                 </td>
               )}

@@ -19,6 +19,9 @@ export interface User extends UserMini {
   reminder_group?: string | null;
   groups?: string[];
   google_linked?: boolean;
+  passkey_count?: number;
+  passwordless_enabled?: boolean;
+  two_factor_setup_required?: boolean;
 }
 export interface Session {
   setup_complete: boolean;
@@ -26,6 +29,10 @@ export interface Session {
   version: string;
   google_enabled: boolean;
   pending_2fa: boolean;
+  pending_methods?: string[];
+  passkeys_enabled?: boolean;
+  passwordless_enabled?: boolean;
+  totp_allowed?: boolean;
   user: User | null;
   preferences?: { theme: string; layout: string; dashboard_widgets: string };
   date_format?: string;
