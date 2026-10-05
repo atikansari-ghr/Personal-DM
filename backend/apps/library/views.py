@@ -5,6 +5,7 @@ import mimetypes
 import re
 from datetime import timedelta
 
+from django.db import transaction
 from django.db.models import Count, Sum
 from django.http import FileResponse, Http404, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
@@ -16,6 +17,7 @@ from rest_framework.response import Response
 from apps.accounts.auth import IsActiveAuthenticated, IsMainAdmin
 from apps.accounts.models import FamilyGroup, User
 from apps.core import audit, config
+from apps.notify import events
 
 from . import permissions as P
 from . import search as searchlib
@@ -84,6 +86,7 @@ def folders(request):
         return Response(folder_json(ctx, f), status=201)
     include_archived = request.query_params.get("archived") == "1" and ctx.is_admin
     qs = Folder.objects.all() if include_archived else Folder.objects.filter(archived_at__isnull=True)
+    qs = qs.select_related("owner")
     visible = ctx.folder_ids_with(P.VIEW) if not ctx.is_admin else set(qs.values_list("id", flat=True))
     by_id = {f.id: f for f in qs}
     # include ancestors as path-only nodes so the tree renders
@@ -112,35 +115,37 @@ def folder_detail(request, pk):
     caps = ctx.folder_caps(folder.id)
     d = request.data
     try:
-        if "name" in d and d["name"] != folder.name:
-            if not caps & P.ORGANIZE:
-                raise PermissionDenied("You cannot rename this folder.")
-            name = (d["name"] or "").strip()
-            if not name or "/" in name or len(name) > 200:
-                return _err("Enter a valid folder name.")
-            if Folder.objects.filter(parent=folder.parent, name=name, archived_at__isnull=True).exclude(pk=folder.pk).exists():
-                return _err("A folder with this name already exists here.")
-            folder.name = name
-            if not folder.emoji_is_custom and config.get("documents.emoji_suggestions"):
-                folder.emoji = S.suggest_emoji(name)
-        if "emoji" in d:
-            if not caps & P.ORGANIZE:
-                raise PermissionDenied("You cannot change this folder's emoji.")
-            emoji = (d["emoji"] or "").strip()[:16]
-            folder.emoji = emoji or S.suggest_emoji(folder.name)
-            folder.emoji_is_custom = bool(emoji)
-        if "inherit_permissions" in d:
-            if not caps & P.MANAGE:
-                raise PermissionDenied("You cannot change permission inheritance here.")
-            folder.inherit_permissions = bool(d["inherit_permissions"])
-        folder.save()
-        if d.get("parent") and str(folder.parent_id) != str(d["parent"]):
-            new_parent = get_folder(request, d["parent"])
-            S.move_folder(ctx=ctx, actor=request.user, folder=folder, new_parent=new_parent)
+        with transaction.atomic():  # a refused move also undoes a rename sent in the same request
+            if "name" in d and d["name"] != folder.name:
+                if not caps & P.ORGANIZE:
+                    raise PermissionDenied("You cannot rename this folder.")
+                name = (d["name"] or "").strip()
+                if not name or "/" in name or len(name) > 200:
+                    return _err("Enter a valid folder name.")
+                if Folder.objects.filter(parent=folder.parent, name=name, archived_at__isnull=True).exclude(pk=folder.pk).exists():
+                    return _err("A folder with this name already exists here.")
+                folder.name = name
+                if not folder.emoji_is_custom and config.get("documents.emoji_suggestions"):
+                    folder.emoji = S.suggest_emoji(name)
+            if "emoji" in d:
+                if not caps & P.ORGANIZE:
+                    raise PermissionDenied("You cannot change this folder's emoji.")
+                emoji = (d["emoji"] or "").strip()[:16]
+                folder.emoji = emoji or S.suggest_emoji(folder.name)
+                folder.emoji_is_custom = bool(emoji)
+            if "inherit_permissions" in d:
+                if not caps & P.MANAGE:
+                    raise PermissionDenied("You cannot change permission inheritance here.")
+                folder.inherit_permissions = bool(d["inherit_permissions"])
+            folder.save()
+            if d.get("parent") and str(folder.parent_id) != str(d["parent"]):
+                new_parent = get_folder(request, d["parent"])
+                S.move_folder(ctx=ctx, actor=request.user, folder=folder, new_parent=new_parent, request=request)
     except S.DomainError as exc:
         return _err(str(exc), 403)
     audit.record("folder.update", request=request, target=folder, fields=list(d.keys()))
     ctx._cache.clear()
+    folder.refresh_from_db()
     return Response(folder_json(_rebuild(request), folder))
 
 
@@ -299,6 +304,8 @@ def _upload(request, ctx):
             audit.record("document.upload", request=request, target=doc, subject_user=owner, size=staged.size)
         except (storage.StorageError, S.DomainError) as exc:
             errors.append({"file": f.name, "error": str(exc)})
+    if created:
+        events.documents_added(actor=request.user, docs=created, via="upload")  # one summary per owner
     _rebuild(request)
     ctx = _ctx(request)
     return Response({"documents": [document_row(ctx, d) for d in created], "errors": errors},
@@ -315,10 +322,12 @@ def document_view(request, pk):
         doc = get_doc(request, pk, include_archived=True)
         if request.data.get("confirm") != doc.title:
             return _err("Type the document title to confirm permanent deletion.", 400, code="confirm_required")
+        gone = events.GoneDocument(doc)
         try:
             S.purge_document(actor=request.user, doc=doc, request=request)
         except S.DomainError as exc:
             return _err(str(exc))
+        events.documents_removed(actor=request.user, docs=[gone], permanent=True)
         return Response(status=204)
     doc = get_doc(request, pk, include_archived=True)
     if request.method == "GET":
@@ -365,7 +374,7 @@ def document_view(request, pk):
             searchlib.update_search_vector(doc)
         if "folder" in d and str(d["folder"]) != str(doc.folder_id):
             target = get_folder(request, d["folder"])
-            S.move_document(ctx=ctx, actor=request.user, doc=doc, folder=target)
+            S.move_document(ctx=ctx, actor=request.user, doc=doc, folder=target, request=request)
         if "inherit_permissions" in d:
             if not caps & P.MANAGE:
                 raise PermissionDenied("You cannot change permission inheritance.")
@@ -492,6 +501,7 @@ def field_reveal(request, pk, key):
 def document_archive(request, pk):
     doc = get_doc(request, pk, P.ARCHIVE)
     S.archive_document(actor=request.user, doc=doc, request=request)
+    events.documents_removed(actor=request.user, docs=[doc], permanent=False)
     return Response({"status": "archived"})
 
 
@@ -645,7 +655,7 @@ def documents_bulk(request):
     action = request.data.get("action")
     value = request.data.get("value")
     ids = list(request.data.get("ids") or [])[:500]
-    results = []
+    results, archived = [], []
     for did in ids:
         try:
             doc = Document.objects.select_related("folder", "owner").get(pk=did, archived_at__isnull=True)
@@ -669,17 +679,20 @@ def documents_bulk(request):
                     (doc.tags.add if action == "tag_add" else doc.tags.remove)(tag)
                 searchlib.update_search_vector(doc)
             elif action == "move":
-                S.move_document(ctx=ctx, actor=request.user, doc=doc, folder=get_folder(request, value))
+                S.move_document(ctx=ctx, actor=request.user, doc=doc, folder=get_folder(request, value), request=request)
             elif action == "archive":
                 if not caps & P.ARCHIVE:
                     raise S.DomainError("No archive permission")
                 S.archive_document(actor=request.user, doc=doc, request=request)
+                archived.append(doc)
             else:
                 raise S.DomainError("Unknown action")
             results.append({"id": did, "ok": True})
         except (S.DomainError, PermissionDenied, Http404) as exc:
             results.append({"id": did, "ok": False, "error": str(exc) or "Not permitted"})
     audit.record("document.bulk", request=request, bulk_action=action, count=len(ids), failed=sum(1 for r in results if not r["ok"]))
+    if archived:
+        events.documents_removed(actor=request.user, docs=archived, permanent=False)  # one summary per owner
     return Response({"results": results, "succeeded": sum(1 for r in results if r["ok"]), "failed": sum(1 for r in results if not r["ok"])})
 
 

@@ -60,11 +60,24 @@ Backup folders are named `backup-YYYYMMDD-HHMMSS-<installation identity>`; set t
 
 ## Schedule {#schedule}
 
-Default: daily at 02:30 (installation timezone). **Back up now** runs one immediately. These defaults were chosen conservatively by the developer and can be changed.
+**Settings → Storage & backup → Backup settings**:
+
+| Setting | Choices |
+|---|---|
+| Automatic backups | On / off. **Back up now** always works. |
+| Backup frequency | **Daily**, **Weekly** (choose the day of the week) or **Monthly** (choose the day of the month) |
+| Backup time | Local time in the installation timezone (default 02:30) |
+
+- **Monthly on the 29th, 30th or 31st** runs on the last day of shorter months (for example 28 February).
+- **Missed runs:** if the server was off at the scheduled time, the missed backup runs once, as soon as the
+  scheduler is back. It never runs twice for the same slot, also after a restart.
+- **Status:** the Backup status card shows the schedule ("Every Sunday at 02:30"), the next backup, the last
+  success and the last failure with its reason.
+- A backup that fails (for example the NAS is not mounted) is a critical notification for administrators.
 
 ## Retention {#retention}
 
-Default: keep the 14 most recent backups. Older ones are pruned after a successful backup, but the newest *verified* backup is never pruned.
+Default: keep the 14 most recent successful backups, whatever the frequency (14 daily backups ≈ two weeks, 14 weekly ≈ three months). Older ones are pruned after a successful backup, but the newest *verified* backup is never pruned.
 
 ## Encryption key {#keys}
 

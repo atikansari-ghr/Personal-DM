@@ -53,9 +53,14 @@ def tick() -> dict:
 
     for acc in due_accounts():
         jobs.enqueue("email_poll", {"account_id": acc.id}, idempotency_key=f"email:{acc.id}:{timezone.now():%Y%m%d%H%M}")
-    if config.get("backup.target") and _due_daily("backup", config.get("backup.schedule_time"), now_local):
-        jobs.enqueue("backup", {}, max_attempts=1, idempotency_key=f"backup:{now_local.date()}")
-        _mark("backup", now_local)
+    if config.get("backup.target"):
+        from apps.ops import schedule
+
+        row, _ = SchedulerRun.objects.get_or_create(name="backup")
+        occ = schedule.due(now_local, row.last_run_at)
+        if occ is not None:
+            jobs.enqueue("backup", {"scheduled_for": occ.isoformat()}, max_attempts=1, idempotency_key=f"backup:{occ.isoformat()}")
+            SchedulerRun.objects.filter(name="backup").update(last_local_date=now_local.date(), last_run_at=timezone.now())
     if _due_daily("maintenance", "03:30", now_local):
         days = int(config.get("audit.retention_days"))
         if days:

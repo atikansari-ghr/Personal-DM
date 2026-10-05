@@ -146,7 +146,9 @@ def test_at17_required_channels_missing_details_and_content(family, clients):
     assert email_msg.status == "skipped" and email_msg.last_error  # never faked as delivered
     for msg in OutboxMessage.objects.filter(document=d):
         assert "Q9988776" not in msg.body and "8776" not in msg.body
-        assert "Sam Sample" in msg.subject and "Passport" in msg.subject and "/documents/" in msg.body
+        assert "Sam Sample" in msg.subject and "Passport" in msg.subject
+        # external messages carry a sign-in link; in-app entries link to the document themselves
+        assert "/documents/" in msg.body if msg.channel != "in_app" else Notification.objects.get(document=d, user=son1).link.startswith("/documents/")
 
 
 def test_email_and_telegram_delivery_with_retry(family):

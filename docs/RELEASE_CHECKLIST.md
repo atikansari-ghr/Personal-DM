@@ -5,7 +5,8 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 ## Code and tests
 - [ ] `scripts/verify.sh` passes locally (compile, checks, migrations, settings reference, shell, pytest incl. OCR/LibreOffice tests, frontend build, hygiene)
 - [ ] CI green on the release commit
-- [ ] `node tests/e2e/flow.mjs` passes against a fresh database (13/13)
+- [ ] `scripts/e2e.sh` passes against a fresh database (flow 13/13, accessibility 0 serious, parity 24/24)
+- [ ] `npm audit --omit=dev` in `frontend/` reports no high/critical issues
 - [ ] Dependency review: `pip list --outdated`, `npm outdated`, security advisories for Django, cryptography, Pillow, pypdf, PyJWT
 - [ ] No critical security, data-loss or core-flow defects open
 
@@ -38,6 +39,14 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] `docs/TRACEABILITY.md` statuses current
 - [ ] `docs/IMPLEMENTATION_STATUS.md` updated
 - [ ] Screenshots refreshed if the UI changed
+
+## Public repository (only when the owner decides to publish)
+- [ ] License chosen and `LICENSE` added (README updated)
+- [ ] `scripts/privacy_check.sh --history` passes; any secret ever committed has been rotated and the history cleaned with the owner's approval
+- [ ] Screenshots in `docs/images/screenshots/` reviewed by eye: only synthetic names, documents, domains and IPs
+- [ ] README feature claims match `docs/IMPLEMENTATION_STATUS.md`; no AI assistant listed as author
+- [ ] GitHub private vulnerability reporting enabled (SECURITY.md)
+- [ ] Repository visibility changed by the owner (Settings → General → Danger zone)
 
 ## Publish
 - [ ] Tag `vX.Y.Z` and push; confirm `frontend-dist.tar.gz` is attached to the GitHub release

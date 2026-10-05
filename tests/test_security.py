@@ -17,7 +17,7 @@ from mmdb_writer import TEST_NETWORKS, build
 pytestmark = pytest.mark.django_db
 
 SA, IN, US, TR = "5.42.0.10", "14.96.0.10", "23.0.0.10", "31.145.0.10"
-PROXY = "192.168.10.5"
+PROXY = "192.168.1.5"
 
 
 @pytest.fixture(autouse=True)
@@ -45,7 +45,7 @@ def login(client, username="dad", password=PASSWORD):
 # ------------------------------------------------------------------ real client IP (AT-39, AT-41)
 
 def test_client_ip_trusted_proxy_rightmost_untrusted(rf, settings):
-    settings.TRUSTED_PROXY_IPS = ["192.168.10.0/24", "10.0.0.1"]
+    settings.TRUSTED_PROXY_IPS = ["192.168.1.0/24", "10.0.0.1"]
     req = rf.get("/", REMOTE_ADDR=PROXY, HTTP_X_FORWARDED_FOR=f"6.6.6.6, {SA}")
     assert netutil.client_ip(req) == SA  # the left entry was supplied by the client and is ignored
     req = rf.get("/", REMOTE_ADDR=PROXY, HTTP_X_FORWARDED_FOR=f"{SA}, 10.0.0.1")
@@ -426,7 +426,7 @@ def test_login_audit_retention(family):
 
 def test_proxy_diagnostics_hint(settings):
     settings.TRUSTED_PROXY_IPS = ["127.0.0.1"]
-    hints = netutil.proxy_diagnostics(["192.168.10.5"] * 6)
+    hints = netutil.proxy_diagnostics(["192.168.1.5"] * 6)
     assert hints and "PD_TRUSTED_PROXY_IPS" in hints[0]
 
 

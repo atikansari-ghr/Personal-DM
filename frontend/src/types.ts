@@ -34,7 +34,7 @@ export interface Session {
   passwordless_enabled?: boolean;
   totp_allowed?: boolean;
   user: User | null;
-  preferences?: { theme: string; layout: string; dashboard_widgets: string };
+  preferences?: { theme: string; layout: string; dashboard_widgets: string[] };
   date_format?: string;
   timezone?: string;
   delegations?: { group: string; group_id: string; scopes: string[] }[];
@@ -58,6 +58,8 @@ export interface DocRow {
   archived: boolean;
   size: number | null;
   format: string | null;
+  file_kind: string;
+  file_label: string;
   has_thumbnail: boolean;
   version_id: string | null;
   caps: string[];
@@ -71,6 +73,8 @@ export interface Version {
   sha256: string;
   mime: string;
   format: string;
+  file_kind: string;
+  file_label: string;
   comment: string;
   state: string;
   error: string;
@@ -124,6 +128,7 @@ export interface FolderNode {
   path_only: boolean;
   count: number;
   archived: boolean;
+  owner_user: UserMini | null;
 }
 export interface Group {
   id: string;

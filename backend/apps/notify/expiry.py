@@ -61,66 +61,63 @@ def recipients_for(doc) -> list:
     return unique
 
 
-def channels_for(user) -> list[str]:
-    prefs = config.get_user(user, "me.channels")
-    if prefs is None:
-        prefs = config.get("notifications.default_channels")
-    required = config.get("notifications.required_channels")
-    chosen = set(prefs) | set(required) | {"in_app"}
-    return [c for c in ("in_app", "email", "telegram") if c in chosen]
+def channels_for(user, event: str = "expiry.reminder") -> list[str]:
+    from .catalog import channels_for as resolve
+
+    return resolve(user, event)
 
 
 def channel_issue(user, channel: str) -> str | None:
-    """Actionable reason a channel cannot deliver, or None when it is ready."""
-    if channel == "email":
-        if not config.get("smtp.enabled"):
-            return "Email is not configured by the administrator."
-        if not user.email:
-            return "No email address on your profile."
-    if channel == "telegram":
-        if not config.get("telegram.enabled"):
-            return "Telegram is not configured by the administrator."
-        if not hasattr(user, "telegram_link"):
-            return "Telegram is not linked to your account."
-    return None
+    from .catalog import channel_issue as issue
+
+    return issue(user, channel)
 
 
-def expiry_message(doc, days: int) -> tuple[str, str, str]:
-    """Only name, document type, expiry date, days remaining and a login-required link."""
+def expiry_message(doc, days: int, user=None, header: bool = True) -> tuple[str, str, str]:
+    """Only name, document type, expiry date, days remaining and a login-required link (never the number)."""
+    from . import templates
+
     name = doc.owner.display_name
     dtype = doc.doc_type.name if doc.doc_type_id else "document"
     when = doc.expiry_date.strftime("%d %b %Y")
-    link = f"{settings.PUBLIC_ORIGIN}/documents/{doc.id}"
+    link = f"/documents/{doc.id}"
     if days == 0:
         subject = f"{name}'s {dtype} expires today"
     else:
         subject = f"{name}'s {dtype} expires in {days} day{'s' if days != 1 else ''}"
-    body = f"{subject} ({when}).\nSign in to view: {link}"
-    return subject, body, f"/documents/{doc.id}"
+    facts = [("Expiry date", when), ("Days left", str(days))]
+    if user is None:
+        body = f"{subject} ({when}).\nSign in to view: {settings.PUBLIC_ORIGIN}{link}"
+    else:
+        body = templates.render(user=user, title=f"{subject}.", facts=facts, link=link if header else "", header=header)
+    return subject, body, link
 
 
 def dispatch(user, *, kind: str, key: str, subject: str, body: str, link: str = "", document=None,
-             external_subject: str | None = None, external_body: str | None = None, external: bool = True) -> None:
-    """In-app always; external channels per the user's choices. External text may be more minimal than in-app text."""
-    for channel in channels_for(user):
+             external_subject: str | None = None, external_body: str | None = None, event: str = "expiry.reminder") -> dict:
+    """Deliver one notification for ``event`` on the channels it resolves to (critical / required channels plus
+    the person's choices). Returns {channel: "queued" | "skipped: <reason>" | "in-app"}."""
+    result = {}
+    for channel in channels_for(user, event):
         if channel == "in_app":
             _in_app(user, kind, key, subject, body, link, document)
-            continue
-        if not external:
+            result[channel] = "in-app"
             continue
         issue = channel_issue(user, channel)
         try:
             with transaction.atomic():  # savepoint: a duplicate key must not poison an enclosing transaction
-                OutboxMessage.objects.create(key=f"{key}:{user.pk}:{channel}", user=user, channel=channel, kind=kind,
-                                             subject=external_subject or subject, body=external_body or body, document=document,
+                OutboxMessage.objects.create(key=f"{key}:{user.pk}:{channel}"[:250], user=user, channel=channel, kind=kind,
+                                             subject=(external_subject or subject)[:200], body=external_body or body, document=document,
                                              status=OutboxMessage.SKIPPED if issue else OutboxMessage.PENDING,
                                              last_error=issue or "", next_attempt_at=timezone.now())
         except IntegrityError:
             pass  # already queued by an earlier (possibly interrupted) run
+        result[channel] = f"skipped: {issue}" if issue else "queued"
+    return result
 
 
 def _in_app(user, kind, key, subject, body, link, document):
-    marker = f"{key}:{user.pk}:in_app"
+    marker = f"{key}:{user.pk}:in_app"[:250]
     try:
         with transaction.atomic():
             OutboxMessage.objects.create(key=marker, user=user, channel="in_app", kind=kind, subject=subject, body=body,
@@ -159,10 +156,12 @@ def run_expiry_scan(today: date | None = None) -> dict:
                                                            defaults={"action": "sent"})
             if not created:
                 continue
-            subject, body, link = expiry_message(doc, days)
             key = f"expiry:{doc.id}:{doc.expiry_date.isoformat()}:{target}"
             for user in recipients_for(doc):
-                dispatch(user, kind="expiry", key=key, subject=subject, body=body, link=link, document=doc)
+                subject, external, link = expiry_message(doc, days, user)
+                body = expiry_message(doc, days, user, header=False)[1]
+                dispatch(user, kind="expiry", key=key, subject=subject, body=body, link=link, document=doc,
+                         external_subject=subject, external_body=external, event="expiry.reminder")
             sent += 1
     return {"date": today.isoformat(), "reminders": sent, "skipped_thresholds": skipped}
 

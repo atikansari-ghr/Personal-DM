@@ -33,6 +33,8 @@ def _json(s: ImportSession) -> dict:
             "scan": {k: v for k, v in s.scan.items() if k != "tree"}, "tree": s.scan.get("tree", [])[:2000],
             "mapping": s.mapping, "counts": counts, "created_at": s.created_at, "finished_at": s.finished_at,
             "preview": I.preview(s) if s.status in ("mapping", "importing", "done", "done_with_errors") and s.mapping else [],
+            "preview_tree": I.preview_tree(s) if s.status == "mapping" and s.mapping and all(
+                m.get("status") == "confirmed" for m in s.mapping.values()) else [],
             "capacity_warning": I.capacity_warning(s) if s.scan else None}
 
 

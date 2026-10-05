@@ -14,7 +14,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from apps.core import audit, config, crypto, ratelimit
+from apps.core import audit, config, crypto, ratelimit, registry
 from apps.security import login_audit
 
 from . import passkeys as PK
@@ -114,7 +114,7 @@ def session_state(request):
         data["preferences"] = {
             "theme": config.get_user(u, "me.theme"),
             "layout": config.get_user(u, "me.layout"),
-            "dashboard_widgets": config.get_user(u, "me.dashboard_widgets"),
+            "dashboard_widgets": registry.normalize_widgets(config.get_user(u, "me.dashboard_widgets")),
         }
         data["date_format"] = config.get("general.date_format")
         data["timezone"] = config.get("general.timezone")
@@ -348,7 +348,7 @@ def totp_enable(request):
     audit.record("account.totp_enable", request=request)
     from apps.security import alerts
 
-    alerts.account_security(request.user, "Authenticator app turned on")
+    alerts.account_security(request.user, "Authenticator app turned on", event="totp_enabled")
     return Response({"recovery_codes": codes})
 
 
@@ -365,7 +365,7 @@ def totp_disable(request):
     audit.record("account.totp_disable", request=request)
     from apps.security import alerts
 
-    alerts.account_security(user, "Authenticator app turned off")
+    alerts.account_security(user, "Authenticator app turned off", event="totp_disabled")
     return Response({"status": "ok"})
 
 
@@ -380,7 +380,7 @@ def recovery_codes(request):
     audit.record("account.recovery_codes", request=request)
     from apps.security import alerts
 
-    alerts.account_security(request.user, "Recovery codes regenerated")
+    alerts.account_security(request.user, "Recovery codes regenerated", event="recovery_codes")
     return Response({"recovery_codes": codes})
 
 
@@ -803,7 +803,7 @@ def my_passkeys(request):
     audit.record("account.passkey_register", request=request, target=row, name=row.name)
     from apps.security import alerts
 
-    alerts.account_security(user, f"New passkey “{row.name}” registered")
+    alerts.account_security(user, f"New passkey “{row.name}” registered", event="passkey_added")
     return Response({"passkey": passkey_json(row), "recovery_codes": codes}, status=201)
 
 
@@ -840,7 +840,7 @@ def my_passkey_detail(request, pk):
 
         RecoveryCode.objects.filter(user=user).delete()
     audit.record("account.passkey_revoke", request=request, target=row, name=row.name)
-    alerts.account_security(user, f"Passkey “{row.name}” removed")
+    alerts.account_security(user, f"Passkey “{row.name}” removed", event="passkey_removed")
     return Response(status=204)
 
 
@@ -861,7 +861,7 @@ def my_passwordless(request):
     user.passwordless_enabled = enabled
     user.save(update_fields=["passwordless_enabled"])
     audit.record("account.passwordless", request=request, enabled=enabled)
-    alerts.account_security(user, "Passwordless sign-in " + ("turned on" if enabled else "turned off"))
+    alerts.account_security(user, "Passwordless sign-in " + ("turned on" if enabled else "turned off"), event="passwordless")
     return Response({"passwordless_enabled": enabled})
 
 
