@@ -125,13 +125,17 @@ def folder_detail(request, pk):
                 if Folder.objects.filter(parent=folder.parent, name=name, archived_at__isnull=True).exclude(pk=folder.pk).exists():
                     return _err("A folder with this name already exists here.")
                 folder.name = name
-                if not folder.emoji_is_custom and config.get("documents.emoji_suggestions"):
-                    folder.emoji = S.suggest_emoji(name)
+                if not folder.emoji_is_custom:
+                    folder.emoji = S.default_emoji(name, folder.parent)
             if "emoji" in d:
                 if not caps & P.ORGANIZE:
-                    raise PermissionDenied("You cannot change this folder's emoji.")
-                emoji = (d["emoji"] or "").strip()[:16]
-                folder.emoji = emoji or S.suggest_emoji(folder.name)
+                    raise PermissionDenied("You cannot change this folder's icon.")
+                if folder.parent_id is None or folder.kind != Folder.NORMAL:
+                    return _err("The icon of a person's or the family's main area cannot be changed.")
+                emoji = (d["emoji"] or "").strip()  # "" = reset to the default icon
+                if emoji and emoji not in S.APPROVED_ICONS:
+                    return _err("Choose an icon from the list.")
+                folder.emoji = emoji or S.default_emoji(folder.name, folder.parent)
                 folder.emoji_is_custom = bool(emoji)
             if "inherit_permissions" in d:
                 if not caps & P.MANAGE:
@@ -244,7 +248,7 @@ def documents(request):
     if request.method == "POST":
         return _upload(request, ctx)
     params = {k: request.query_params.get(k) for k in ("folder", "owner", "type", "tag", "correspondent", "state",
-                                                     "expiring_days", "expired", "added_after") if request.query_params.get(k)}
+                                                     "expiring_days", "expired", "added_after", "sort") if request.query_params.get(k)}
     try:
         limit = min(200, int(request.query_params.get("limit", 50)))
         offset = max(0, int(request.query_params.get("offset", 0)))
@@ -282,7 +286,8 @@ def _resolve_owner(request, folder: Folder):
 def _upload(request, ctx):
     folder = get_folder(request, request.data.get("folder"), P.UPLOAD)
     files = request.FILES.getlist("files") or request.FILES.getlist("file")
-    if not files:
+    getlist = getattr(request.data, "getlist", lambda k: [])
+    if not files and not getlist("dirs"):
         return _err("Choose at least one file.")
     try:
         owner = _resolve_owner(request, folder)
@@ -290,26 +295,93 @@ def _upload(request, ctx):
         return _err(str(exc))
     doc_type = DocumentType.objects.filter(pk=request.data.get("doc_type")).first() if request.data.get("doc_type") else None
     blocked = {e.strip().lower().lstrip(".") for e in (config.get("documents.blocked_extensions") or "").split(",") if e.strip()}
-    created, errors = [], []
-    for f in files:
+    paths = getlist("paths")  # relative paths of dropped files ("House Documents/Lease/2024.pdf"), parallel to files
+    if paths and len(paths) != len(files):
+        return _err("Each dropped file needs its relative path.")
+    tree = _DropTree(request, ctx, folder)
+    for d in getlist("dirs"):  # empty folders that were dropped too
+        try:
+            tree.folder_for(d, is_dir=True)
+        except S.DomainError as exc:
+            tree.errors.append({"file": d, "error": str(exc)})
+    created, errors = [], tree.errors
+    for i, f in enumerate(files):
+        label = paths[i] if paths else f.name
         ext = f.name.rsplit(".", 1)[-1].lower() if "." in f.name else ""
         if ext in blocked:
-            errors.append({"file": f.name, "error": "This file type is blocked by the administrator."})
+            errors.append({"file": label, "error": "This file type is blocked by the administrator."})
             continue
         try:
+            target = tree.folder_for(paths[i]) if paths else folder
             staged = storage.stage_uploaded_file(f)
-            doc = S.create_document(actor=request.user, folder=folder, owner=owner, staged=staged,
-                                    title=request.data.get("title", "") if len(files) == 1 else "", doc_type=doc_type)
+            doc = S.create_document(actor=request.user, folder=target, owner=owner, staged=staged,
+                                    title=request.data.get("title", "") if len(files) == 1 and not paths else "", doc_type=doc_type)
             created.append(doc)
             audit.record("document.upload", request=request, target=doc, subject_user=owner, size=staged.size)
         except (storage.StorageError, S.DomainError) as exc:
-            errors.append({"file": f.name, "error": str(exc)})
+            errors.append({"file": label, "error": str(exc)})
     if created:
         events.documents_added(actor=request.user, docs=created, via="upload")  # one summary per owner
     _rebuild(request)
     ctx = _ctx(request)
-    return Response({"documents": [document_row(ctx, d) for d in created], "errors": errors},
-                    status=201 if created else 400)
+    ok = created or (tree.created and not errors)
+    return Response({"documents": [document_row(ctx, d) for d in created], "errors": errors,
+                     "folders_created": len(tree.created)}, status=201 if ok else 400)
+
+
+class _DropTree:
+    """Recreates the folder structure of files dragged from the desktop below the drop target.
+
+    Paths are validated (no "..", absolute paths or control characters); existing sub-folders are reused when the
+    person may add documents there, new ones are created only where the person may organise folders.
+    """
+
+    def __init__(self, request, ctx, root: Folder):
+        self.request, self.ctx, self.root = request, ctx, root
+        self.cache: dict[tuple, Folder] = {(): root}
+        self.created: list[Folder] = []
+        self.errors: list[dict] = []
+        self.new_ids: set = set()
+
+    def _caps(self, f: Folder) -> int:
+        if f.id in self.new_ids:  # created in this request: inherits the parent's access, which allowed creating it
+            return P.VIEW | P.UPLOAD | P.ORGANIZE
+        return self.ctx.folder_caps(f.id)
+
+    def folder_for(self, rel: str, is_dir: bool = False) -> Folder:
+        from .imports import excluded_reason, normalize_rel
+
+        try:
+            rel = normalize_rel(rel)
+        except ValueError:
+            raise S.DomainError("This path is not allowed (it points outside the folder you dropped on).")
+        if not rel:
+            raise S.DomainError("Missing file name.")
+        why = excluded_reason(rel)
+        if why:
+            raise S.DomainError(f"Skipped: {why}.")
+        parts = rel.split("/") if is_dir else rel.split("/")[:-1]
+        node = self.root
+        for n in range(1, len(parts) + 1):
+            key = tuple(p.lower() for p in parts[:n])
+            if key in self.cache:
+                node = self.cache[key]
+                continue
+            name = storage.safe_component(parts[n - 1], 200)
+            child = Folder.objects.filter(parent=node, name__iexact=name, archived_at__isnull=True).first()
+            if child is None:
+                if not self._caps(node) & P.ORGANIZE:
+                    raise S.DomainError(f"You cannot create folders in “{node.name}”, so “{name}” was not created.")
+                child = S.create_folder(actor=self.request.user, parent=node, name=name)
+                self.created.append(child)
+                self.new_ids.add(child.id)
+                audit.record("folder.create", request=self.request, target=child, via="drop")
+            elif not self._caps(child) & P.VIEW:
+                raise S.DomainError(f"A folder named “{name}” already exists here and you cannot open it.")
+            self.cache[key] = node = child
+        if not is_dir and not self._caps(node) & P.UPLOAD:
+            raise S.DomainError(f"You cannot add documents to “{node.name}”.")
+        return node
 
 
 @api_view(["GET", "PATCH", "DELETE"])
@@ -526,10 +598,19 @@ def document_reprocess(request, pk):
         return _err("No file to process.")
     from .models import Document as D
 
+    payload = {"version_id": str(doc.current_version_id)}
+    rotate = request.data.get("rotate") if hasattr(request, "data") else None
+    if rotate not in (None, "", "auto"):
+        try:
+            rotate = int(rotate)
+        except (TypeError, ValueError):
+            return _err("Rotation must be auto, 0, 90, 180 or 270.")
+        if rotate not in (0, 90, 180, 270):
+            return _err("Rotation must be auto, 0, 90, 180 or 270.")
+        payload["rotate"] = rotate  # manual orientation for the OCR re-run (clockwise degrees)
     D.objects.filter(pk=doc.pk).update(state=D.QUEUED)
-    jobs.enqueue("process_version", {"version_id": str(doc.current_version_id)},
-                 idempotency_key=f"process:{doc.current_version_id}:{timezone.now().timestamp()}")
-    audit.record("document.reprocess", request=request, target=doc)
+    jobs.enqueue("process_version", payload, idempotency_key=f"process:{doc.current_version_id}:{timezone.now().timestamp()}")
+    audit.record("document.reprocess", request=request, target=doc, rotate=payload.get("rotate", "auto"))
     return Response({"status": "queued"})
 
 
@@ -635,7 +716,10 @@ def document_thumbnail(request, pk):
 def document_text(request, pk):
     doc = get_doc(request, pk)
     v = _version_for(request, doc)
-    return Response({"text": v.text, "ocr_applied": v.ocr_applied, "version": v.number})
+    q = v.ocr_quality or {}
+    return Response({"text": v.text, "ocr_applied": v.ocr_applied, "version": v.number,
+                     "confidence": q.get("confidence"), "low_lines": q.get("low_lines") or [],
+                     "line_count": q.get("line_count")})
 
 
 @api_view(["GET"])

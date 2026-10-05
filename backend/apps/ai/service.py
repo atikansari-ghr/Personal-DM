@@ -393,7 +393,7 @@ def retrieve(ctx, question: str, *, document=None, limit: int = 8) -> list:
         for d in visible.filter(expiry_date__isnull=False, expiry_date__lte=today + timedelta(days=days)).order_by("expiry_date")[:limit]:
             picked.setdefault(d.pk, d)
     if "missing" in question.lower() and "expir" in question.lower():
-        for d in visible.filter(expiry_date__isnull=True, doc_type__has_expiry=True)[:limit]:
+        for d in visible.filter(expiry_date__isnull=True, no_expiry=False, doc_type__has_expiry=True)[:limit]:
             picked.setdefault(d.pk, d)
     if enabled("semantic_search") and len(picked) < limit:
         try:

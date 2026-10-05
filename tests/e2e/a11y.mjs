@@ -106,6 +106,16 @@ for (const theme of THEMES) {
         await audit(page, `${theme}/move-to-dialog`);
         await page.keyboard.press("Escape");
       }
+      // an open actions menu, and the details view with sortable headers
+      await page.goto(`${BASE}/folders/${first.folder}`);
+      await page.click(`button[aria-label='More actions for ${first.title}']`);
+      await page.waitForSelector(".menu-pop");
+      await audit(page, `${theme}/actions-menu`);
+      await page.keyboard.press("Escape");
+      await page.click("button[aria-label='Details view']");
+      await page.waitForSelector("table.details-table");
+      await audit(page, `${theme}/details-view`);
+      await page.click("button[aria-label='List view']");
     }
     // keyboard resizing of the folder tree
     const handle = page.locator(".panel-handle").first();

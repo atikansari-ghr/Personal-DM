@@ -49,7 +49,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         } catch {
           last = null;
         }
-        const s: Session = { setup_complete: true, app_name: "Personal Documents", version: "", google_enabled: false, pending_2fa: false,
+        const s: Session = { setup_complete: true, app_name: "Personal Documents Management System", version: "", google_enabled: false, pending_2fa: false,
           user: last ? ({ ...last, initials: "", avatar_color: "#ddd", role_label: "", is_main_admin: false, is_active: true, is_head: false } as any) : null };
         setSession(s);
         return s;
@@ -59,7 +59,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refresh().catch(() => setSession({ setup_complete: true, app_name: "Personal Documents", version: "", google_enabled: false, pending_2fa: false, user: null }));
+    refresh().catch(() => setSession({ setup_complete: true, app_name: "Personal Documents Management System", version: "", google_enabled: false, pending_2fa: false, user: null }));
     const out = () => refresh();
     window.addEventListener("pd:signed-out", out);
     window.addEventListener("online", out);

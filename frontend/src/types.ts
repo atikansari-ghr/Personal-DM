@@ -34,15 +34,15 @@ export interface Session {
   passwordless_enabled?: boolean;
   totp_allowed?: boolean;
   user: User | null;
-  preferences?: { theme: string; layout: string; dashboard_widgets: string[] };
+  preferences?: { theme: string; layout: string; dashboard_widgets: string[]; doc_view?: string; doc_sort?: string };
   date_format?: string;
   timezone?: string;
   delegations?: { group: string; group_id: string; scopes: string[] }[];
 }
 export interface Expiry {
-  days: number;
+  days: number | null;
   label: string;
-  level: "ok" | "soon" | "expired";
+  level: "ok" | "soon" | "expired" | "none";
 }
 export interface DocRow {
   id: string;
@@ -79,6 +79,7 @@ export interface Version {
   state: string;
   error: string;
   ocr_applied: boolean;
+  ocr_quality: { confidence: number; rotation: number; skew: number; steps: string[]; low_lines: number[]; line_count: number } | null;
   pdfa: boolean;
   pdfa_check: { validator: string; profile: string; compliant: boolean; full_validation: boolean; failed_rules: { description: string; clause?: string }[]; note?: string } | null;
   page_count: number | null;

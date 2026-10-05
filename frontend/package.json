@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "author": "Atik Ansari",
-  "description": "Personal Documents — private, self-hosted family document library (web app)",
+  "description": "Personal Documents Management System — private, self-hosted family document library (web app)",
   "type": "module",
   "scripts": {
     "dev": "vite",

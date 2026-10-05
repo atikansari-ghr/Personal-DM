@@ -53,6 +53,31 @@ def suggest_emoji(name: str) -> str:
     return "📁"
 
 
+# Icons a person may choose for a folder (the same list the web app offers; free-form emoji are not accepted).
+APPROVED_ICONS = ("📁", "✈️", "🛂", "🛃", "🏠", "🎓", "🩺", "🏦", "🛡️", "🚗", "📜", "🪪", "🧾", "🖼️", "📝", "👪", "👤", "💼",
+                  "🏥", "💳", "📦", "🔑", "⚖️", "🕌", "🧳", "🏫", "📚", "🧒", "💍", "🗂️", "📅", "⭐")
+STANDARD_ICON = "📁"
+
+
+def is_top_level(parent: Folder | None) -> bool:
+    """Directly in a person's or the family's area (e.g. "My Documents / Passports"): the level with semantic icons."""
+    return parent is not None and parent.kind in (Folder.PERSONAL_ROOT, Folder.SHARED)
+
+
+def default_emoji(name: str, parent: Folder | None) -> str:
+    """Top-level semantic folders get a suggested icon; deeper user folders get the standard folder icon."""
+    if is_top_level(parent) and config.get("documents.emoji_suggestions"):
+        return suggest_emoji(name)
+    return STANDARD_ICON
+
+
+def check_icon(emoji: str) -> str:
+    emoji = (emoji or "").strip()
+    if emoji and emoji not in APPROVED_ICONS:
+        raise DomainError("Choose an icon from the list.")
+    return emoji
+
+
 def folder_path(folder: Folder) -> list[Folder]:
     chain = []
     seen = set()
@@ -81,8 +106,10 @@ def create_folder(*, actor, parent: Folder | None, name: str, owner=None, kind: 
     if group is None and parent is not None:
         group = parent.group
     custom = emoji is not None and emoji != ""
-    if not custom:
-        emoji = suggest_emoji(name) if config.get("documents.emoji_suggestions") else "📁"
+    if custom:
+        emoji = check_icon(emoji)
+    else:
+        emoji = default_emoji(name, parent)
     folder = Folder.objects.create(parent=parent, name=name, owner=owner, kind=kind, emoji=emoji,
                                    emoji_is_custom=custom, source_path=source_path, created_by=actor, group=group)
     return folder
@@ -283,6 +310,10 @@ def set_field(*, actor, doc: Document, key: str, value: str, confirm: bool = Tru
 
     key = key.strip()[:80]
     value = (value or "").strip()
+    if key == "no_expiry":
+        if value.lower() not in ("", "yes", "no"):
+            raise DomainError("Use yes or no.")
+        value = value.lower() if value.lower() == "yes" else ""
     if key in DATE_FIELDS and value:
         parsed = parse_date(value)
         if parsed is None:
@@ -330,14 +361,17 @@ def apply_confirmed_fields(doc: Document) -> None:
     old_expiry = doc.expiry_date
     doc.issue_date = d("issue_date")
     doc.expiry_date = d("expiry_date")
+    doc.no_expiry = (vals.get("no_expiry") or "").lower() in ("yes", "true", "1")
     pending = doc.fields.filter(status=DocumentField.PROPOSED).exists()
     flags = []
     if doc.issue_date and doc.expiry_date and doc.issue_date >= doc.expiry_date:
         flags.append("Issue date is not before expiry date.")
+    if doc.no_expiry and doc.expiry_date:
+        flags.append("An expiry date is set although the document is marked as not expiring.")
     doc.review_flags = flags
     if doc.state in (Document.NEEDS_REVIEW, Document.READY):
         doc.state = Document.NEEDS_REVIEW if (pending or flags) else Document.READY
-    doc.save(update_fields=["issue_date", "expiry_date", "review_flags", "state", "updated_at"])
+    doc.save(update_fields=["issue_date", "expiry_date", "no_expiry", "review_flags", "state", "updated_at"])
     refresh_title(doc)
     if old_expiry != doc.expiry_date:
         from apps.notify.expiry import on_expiry_changed
@@ -463,7 +497,9 @@ def move_folder(*, ctx: P.AccessContext, actor, folder: Folder, new_parent: Fold
             raise DomainError(f"“{new_parent.name}” already has a folder called “{folder.name}”. Rename one of them first.")
         old_parent = folder.parent_id
         folder.parent = new_parent
-        folder.save(update_fields=["parent"])
+        if not folder.emoji_is_custom:  # a chosen icon travels with the folder; a default follows the new level
+            folder.emoji = default_emoji(folder.name, new_parent)
+        folder.save(update_fields=["parent", "emoji"])
         audit.record("folder.move", request=request, actor=actor, target=folder,
                      source=str(old_parent), destination=str(new_parent.id))
     return True

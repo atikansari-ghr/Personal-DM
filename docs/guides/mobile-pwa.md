@@ -14,7 +14,7 @@ In **Upload**, choose *Choose files* (Files or Photos) or *Take photo* to use th
 
 ## Share into the app {#share-in}
 
-On Android, an installed app may appear in the system share sheet: share a PDF or photo to *Personal Documents* and choose the folder. iPhones do not support sharing files into web apps — use Upload instead.
+On Android, an installed app may appear in the system share sheet: share a PDF or photo to *Personal Documents Management System* and choose the folder. iPhones do not support sharing files into web apps — use Upload instead.
 
 ## Share out of the app {#share-out}
 

@@ -94,3 +94,15 @@ Originals are write-once and always exist before their rows commit. `pg_dump` ta
   restarts neither skip nor repeat a slot.
 - **Preferences:** theme, layout, dashboard widgets and notification choices are per-account server settings; the
   client refreshes them when the app returns to the foreground.
+
+## Change set J (2026-10)
+
+- **Menus:** `components/Menu.tsx` renders every ⋮ menu in a portal positioned from its trigger, so panels never clip
+  it. See [ADR 0010](adr/0010-browsing-ocr-installer.md).
+- **Desktop drops:** `dropUpload.ts` walks dropped folders (File and Directory Entries API) and uploads in batches to
+  `POST /api/documents` with relative `paths`. `views._DropTree` validates them and recreates the folders.
+- **Views:** `me.doc_view` / `me.doc_sort` account settings; sorting is done by the server (`search.SORTS`).
+- **OCR:** `library/ocr.py` prepares images (EXIF, grayscale, contrast, upscale, denoise, orientation, deskew) and
+  returns per-line confidence. Each version stores `ocr_quality`; extraction reads only the reliable lines.
+- **Installer:** `personal-DM.sh` at the repository root checks the platform and delegates to `easy-install.sh` and
+  `personaldocs`.

@@ -116,7 +116,7 @@ button.link { border: 0; background: none; padding: 0; color: var(--brand); text
 /* ---------- shell */
 .shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100%; }
 .sidebar { background: var(--side-bg); padding: 1.1rem 0.9rem; display: flex; flex-direction: column; gap: 0.3rem; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-.brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 750; font-size: 1.15rem; color: var(--brand); padding: 0.2rem 0.5rem 1rem; text-decoration: none; }
+.brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 750; font-size: 1.02rem; line-height: 1.25; color: var(--brand); padding: 0.2rem 0.5rem 1rem; text-decoration: none; overflow-wrap: anywhere; }
 .nav a { display: flex; align-items: center; gap: 0.8rem; padding: 0.65rem 0.8rem; border-radius: 10px; color: var(--ink); text-decoration: none; font-weight: 520; }
 .nav a:hover { background: var(--brand-soft); }
 .nav a.active { background: var(--brand-soft); color: var(--brand); font-weight: 650; box-shadow: inset 3px 0 0 var(--brand); }
@@ -185,6 +185,7 @@ tr.clickable:hover td { background: var(--brand-softer); }
 .breadcrumb a:hover { color: var(--brand); text-decoration: underline; }
 .preview-frame { width: 100%; height: 480px; border: 1px solid var(--line); border-radius: 10px; background: #f6f7f6; }
 .preview-img { max-width: 100%; max-height: 520px; display: block; margin: 0 auto; border-radius: 10px; border: 1px solid var(--line); }
+.ocr-low { color: var(--muted); text-decoration: underline dotted; }
 .preview-text { white-space: pre-wrap; max-height: 480px; overflow: auto; background: #fafbfa; border: 1px solid var(--line); border-radius: 10px; padding: 1rem; font-size: 0.88rem; }
 .tabs { display: flex; gap: 0.2rem; border-bottom: 1px solid var(--line); margin-bottom: 0.9rem; overflow-x: auto; }
 .tabs button, .tabs a { border: 0; background: none; padding: 0.7rem 0.9rem; font: inherit; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; text-decoration: none; white-space: nowrap; }
@@ -389,3 +390,36 @@ table.responsive td.row, table.responsive td > .row { flex-wrap: wrap; }
 .doc-open { all: unset; cursor: pointer; font-weight: 600; display: block; border-radius: 4px; overflow-wrap: anywhere; }
 .doc-open:focus-visible { box-shadow: var(--focus); }
 .doc-open.small { font-size: 0.875rem; }
+
+/* ---- overflow menus (portal; positioned by components/Menu.tsx) */
+.menu-pop { position: fixed; z-index: 1000; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16); padding: 0.25rem 0; overflow-y: auto; max-width: calc(100vw - 16px); }
+.menu-pop [role="menuitem"] { display: flex; align-items: center; gap: 0.5rem; width: 100%; text-align: left; border: 0; background: none;
+  padding: 0.55rem 0.9rem; font: inherit; color: inherit; cursor: pointer; text-decoration: none; min-height: 40px; }
+.menu-pop [role="menuitem"]:hover, .menu-pop [role="menuitem"]:focus-visible { background: var(--brand-softer); outline: none; }
+.menu-pop [role="menuitem"]:focus-visible { box-shadow: inset 0 0 0 2px var(--brand); }
+.menu-pop [role="menuitem"].danger { color: var(--danger-ink); }
+.menu-sep { height: 1px; background: var(--line); margin: 0.25rem 0; }
+
+/* ---- folder tree row actions, view modes, details table, external drop */
+.tree-node .node-menu { margin-left: auto; opacity: 0; }
+.tree-node:hover .node-menu, .tree-node:focus-within .node-menu, .tree-node .node-menu[aria-expanded="true"] { opacity: 1; }
+@media (hover: none) { .tree-node .node-menu { opacity: 1; } }
+.tree-node .node-menu.icon-btn { width: 28px; height: 28px; min-width: 28px; }
+.view-switch .btn { padding-left: 0.6rem; padding-right: 0.6rem; }
+.list-pane { container-type: inline-size; }
+.details-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.details-table .name-cell { min-width: 11rem; }
+.details-table td.opt, .details-table th.opt { white-space: nowrap; }
+@container (max-width: 640px) { .details-table .opt { display: none; } }
+.details-table th { text-align: left; font-weight: 600; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.details-table th button { border: 0; background: none; font: inherit; color: inherit; cursor: pointer; padding: 0; display: inline-flex; gap: 0.25rem; align-items: center; }
+.details-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.details-table tr.active td { background: var(--brand-softer); }
+.details-table tr:hover td { background: var(--brand-softer); cursor: pointer; }
+.details-table .name-cell { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.details-table .name-cell .doc-open { overflow-wrap: anywhere; }
+.list-pane.drop-target { outline: 3px dashed var(--brand); outline-offset: -6px; background: var(--brand-softer); }
+.drop-hint { position: sticky; top: 0; z-index: 5; margin: 0.5rem; }
+.drop-progress { position: fixed; right: 16px; bottom: 16px; z-index: 900; width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; }
+.drop-progress ul { margin: 0.4rem 0 0; padding-left: 1.1rem; font-size: 0.86rem; }

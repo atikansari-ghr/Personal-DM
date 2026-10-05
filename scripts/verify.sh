@@ -21,7 +21,8 @@ step "Settings reference is current"
 
 step "Shell scripts"
 bash -n scripts/personaldocs scripts/verify.sh scripts/dev-server.sh scripts/easy-install.sh scripts/proxmox-create-lxc.sh
-if command -v shellcheck >/dev/null; then shellcheck -S error scripts/personaldocs scripts/verify.sh scripts/dev-server.sh scripts/easy-install.sh scripts/proxmox-create-lxc.sh; fi
+if command -v shellcheck >/dev/null; then shellcheck -S warning personal-DM.sh; shellcheck -S error scripts/personaldocs scripts/verify.sh scripts/dev-server.sh scripts/easy-install.sh scripts/proxmox-create-lxc.sh; fi
+if [ "$(id -u)" -eq 0 ]; then step "Installer lifecycle (stubbed)"; bash tests/installer/test_personal_dm.sh | tail -1; fi
 
 step "Backend tests"
 $PY -m pytest -q -W ignore::UserWarning ${PYTEST_ARGS:-}

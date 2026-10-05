@@ -3,7 +3,7 @@
 ## What a passkey is {#about}
 
 A passkey is a sign-in key stored on your phone, computer, password manager or security key. It is unlocked with your fingerprint,
-face or device PIN. The private key never leaves the device. Personal Documents only stores the public key, a counter, the name you gave
+face or device PIN. The private key never leaves the device. Personal Documents Management System only stores the public key, a counter, the name you gave
 it and when it was used. Passkeys are standard (WebAuthn) and work with:
 - iPhone/iPad and macOS (iCloud Keychain / Apple Passwords)
 - Android (Google Password Manager)

@@ -76,7 +76,7 @@ After saving a profile, **Discover models on the server** fills the model fields
 
 | Class | Meaning |
 |---|---|
-| **Local only** | The AI server runs on this Personal Documents server. |
+| **Local only** | The AI server runs on this server, next to the app. |
 | **Private LAN** | Another machine on your private network (RFC 1918, link-local or Tailscale/CGNAT addresses). |
 | **External endpoint** | Anything else. Requires ticking "I understand that selected document content may leave the local network". |
 

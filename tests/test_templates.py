@@ -36,7 +36,9 @@ def test_setup_can_apply_template_to_everyone(db):
     names = _names(personal_root(User.objects.get(username="son3")))
     assert {"Identity", "Identity/Passport", "Education", "Medical", "Travel"} <= names
     passport = Folder.objects.get(name="Passport", owner__username="son3")
-    assert passport.emoji == "🛂"  # normal emoji suggestions apply
+    travel = Folder.objects.get(name="Travel", owner__username="son3")
+    assert travel.emoji == "✈️"  # top-level folders get the suggested icon
+    assert passport.emoji == "📁"  # sub-folders use the standard folder icon
 
 
 def test_add_member_with_template_and_apply_is_idempotent(family, clients):

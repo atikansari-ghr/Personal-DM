@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# personaldocs — install, upgrade, rollback, repair and operate Personal Documents on Debian 13 (native, no Docker).
+# personaldocs — install, upgrade, rollback, repair and operate Personal Documents Management System on Debian 13 (native, no Docker).
 #
 #   personaldocs install [--public-origin URL] [--bind ADDR:PORT] [--ref REF] [--repo URL] [--build-frontend] [--with-verapdf]
 #   personaldocs upgrade [--ref REF] [--skip-backup]
@@ -46,7 +46,7 @@ MIN_DISK_MB=4096
 APT_PACKAGES=(
   python3 python3-venv python3-dev build-essential libpq-dev
   postgresql postgresql-client
-  tesseract-ocr tesseract-ocr-eng ocrmypdf ghostscript qpdf unpaper pngquant poppler-utils
+  tesseract-ocr tesseract-ocr-eng tesseract-ocr-osd ocrmypdf ghostscript qpdf unpaper pngquant poppler-utils
   libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui fonts-dejavu-core
   git curl ca-certificates jq util-linux rsync iproute2 nfs-common cifs-utils
 )
@@ -484,7 +484,7 @@ cmd_install() {
   health || { show_web_failure; die "the web service did not become healthy; see: journalctl -u personaldocs-web -n 50"; }
   prune_releases
   log "=== install complete: $(version_of "$dir") ($REV)"
-  c_ok "Personal Documents $(version_of "$dir") is installed and running on $PD_BIND."
+  c_ok "Personal Documents Management System $(version_of "$dir") is installed and running on $PD_BIND."
   if [ "${PD_QUIET_TOKEN:-0}" = 1 ]; then
     :  # the guided installer prints the setup code in its own summary
   elif manage shell -c "from apps.accounts.models import SetupState; import sys; sys.exit(0 if SetupState.get().completed_at else 1)" 2>/dev/null; then
@@ -654,7 +654,7 @@ cmd_check_access() { # explain, step by step, why the app is (not) reachable thr
     fi
     info_ "if the proxy connects from a different IP than ${proxy_ip:-configured} (Newt/Pangolin, Docker, VPN), it is blocked → remove with: nft delete table inet personaldocs; rm /etc/nftables.d/personaldocs.nft"
   else
-    ok_ "no Personal Documents firewall rule (port $port open to the network)"
+    ok_ "no Personal Documents Management System firewall rule (port $port open to the network)"
   fi
   if grep -q "^PD_ALLOWED_HOSTS=.*$domain" "$ENV_FILE" 2>/dev/null; then ok_ "$domain is an allowed host name"
   else bad_ "$domain is not in PD_ALLOWED_HOSTS" "personaldocs install --public-origin $origin"; fi

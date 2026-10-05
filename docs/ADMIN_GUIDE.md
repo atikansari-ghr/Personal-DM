@@ -1,6 +1,6 @@
 # Administrator guide
 
-For whoever installs and runs Personal Documents (the **main administrator**). Each section summarises what to do
+For whoever installs and runs Personal Documents Management System (the **main administrator**). Each section summarises what to do
 and links to the detailed guide (also available in the app under **Help**). Commands run as root inside the
 container (`pct enter <id>` from the Proxmox host).
 
@@ -8,7 +8,9 @@ container (`pct enter <id>` from the Proxmox host).
 
 1. Create a Debian 13 LXC (2 vCPU, 4 GB RAM, 50 GB, nesting on). `scripts/proxmox-create-lxc.sh` does it from the
    Proxmox host.
-2. Inside it, clone the repository and run `bash scripts/easy-install.sh`. It asks for:
+2. Inside it, as root, run the one-line installer:
+   `bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)"`.
+   You can also clone the repository and run `bash personal-DM.sh` or `bash scripts/easy-install.sh`. It asks for:
    - the domain
    - the proxy address
    - the NAS details
@@ -90,6 +92,11 @@ Guide: [notifications](guides/expiry-rules.md#critical).
 - **Settings → OCR & processing:** local OCR (English), concurrency (1 on 2 vCPU/4 GB), timeouts and memory limits.
 - The job list shows failures, which you can retry.
 - Optional PDF/A validation with veraPDF (`--with-verapdf`).
+- Images are preprocessed before OCR: EXIF orientation, grayscale, contrast, upscaling, denoise, 0/90/180/270°
+  orientation (needs the `tesseract-ocr-osd` package; `personaldocs repair` installs it) and deskew. Each version
+  stores its OCR confidence. Low-confidence lines are never used for suggested details. Members can re-run OCR with
+  a forced rotation. To reproduce the measurements: `PD_DEBUG=1 .venv/bin/python scripts/ocr_benchmark.py`
+  ([OCR benchmark](OCR_BENCHMARK.md)).
 
 Guides: [OCR and corrections](guides/ocr-corrections.md), [Office and DICOM](guides/office-dicom.md).
 
@@ -186,6 +193,10 @@ sudo personaldocs upgrade     # verified backup → new release → migrations �
 sudo personaldocs repair      # safe; also applies installer steps added in newer versions
 sudo personaldocs doctor      # proxy trust, GeoIP, passkey origin, AI profiles, storage, services, GoAccess
 ```
+
+The one-line installer offers the same actions as a menu (install, upgrade, repair, doctor, status, backup,
+restore, recover-admin): `bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)"`.
+See [one-line install](guides/installation.md#one-line).
 
 Guide: [upgrades](guides/upgrades.md) (with notes for each change set).
 

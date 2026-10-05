@@ -5,12 +5,15 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 ## Code and tests
 - [ ] `scripts/verify.sh` passes locally (compile, checks, migrations, settings reference, shell, pytest incl. OCR/LibreOffice tests, frontend build, hygiene)
 - [ ] CI green on the release commit
-- [ ] `scripts/e2e.sh` passes against a fresh database (flow 13/13, accessibility 0 serious, parity 24/24)
+- [ ] `scripts/e2e.sh` passes against a fresh database (flow 13/13, accessibility 0 serious, parity all steps)
+- [ ] `sudo bash tests/installer/test_personal_dm.sh` (one-line installer lifecycle, stubbed) passes
+- [ ] OCR benchmark re-run if `ocr.py`/`extraction.py` changed (`scripts/ocr_benchmark.py`), `docs/OCR_BENCHMARK.md` updated
 - [ ] `npm audit --omit=dev` in `frontend/` reports no high/critical issues
 - [ ] Dependency review: `pip list --outdated`, `npm outdated`, security advisories for Django, cryptography, Pillow, pypdf, PyJWT
 - [ ] No critical security, data-loss or core-flow defects open
 
 ## Operations (on a Debian 13 LXC)
+- [ ] One-line installer on a fresh Debian 13 machine: `bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)"` (needs the repository to be public), then `-- upgrade`, `-- doctor`, `-- status`, `-- backup`, `-- restore DIR --dry-run`
 - [ ] Fresh install from the private repository with a read-only token; token absent from logs and `ps`
 - [ ] Interrupted install rerun completes
 - [ ] Upgrade from the previous tag: pre-upgrade backup taken, migrations applied, health OK
@@ -47,6 +50,9 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] README feature claims match `docs/IMPLEMENTATION_STATUS.md`; no AI assistant listed as author
 - [ ] GitHub private vulnerability reporting enabled (SECURITY.md)
 - [ ] Repository visibility changed by the owner (Settings → General → Danger zone)
+- [ ] Raw installer URL returns the script (`curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh | head -3`)
+- [ ] README renders on GitHub: badges, screenshots near the top, one-line install, Ko-fi link; `.github/FUNDING.yml` shows the Sponsor button
+- [ ] Topics added by the owner (recommended: document-management, self-hosted, family, ocr, tesseract, django, react, pwa, webauthn, passkeys, local-ai, goaccess, privacy, debian, proxmox)
 
 ## Publish
 - [ ] Tag `vX.Y.Z` and push; confirm `frontend-dist.tar.gz` is attached to the GitHub release

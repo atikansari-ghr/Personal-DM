@@ -8,7 +8,7 @@ Generated from `backend/apps/core/registry.py` by `manage.py settings_reference`
 
 Name shown in the header, browser tab and notifications.
 
-- **Default:** `'Personal Documents'`
+- **Default:** `'Personal Documents Management System'`
 - **Allowed values:** –60
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
@@ -96,7 +96,7 @@ Comma separated extensions that are refused at upload (they would never execute 
 
 ### Suggest folder emoji (`documents.emoji_suggestions`)
 
-Suggest an emoji from the folder name (Travel ✈️, Passport 🛂 …) when folders are created.
+Suggest an icon from the name (Travel ✈️, Passport 🛂 …) for folders created directly in a person's or the family area. Deeper sub-folders get the standard 📁 icon; anyone can choose another icon.
 
 - **Default:** `True`
 - **Allowed values:** bool
@@ -1134,6 +1134,30 @@ Three-panel browser or full-page viewer.
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
 - **Learn more:** [themes#layout](guides/themes.md#layout)
+
+### Folder view (`me.doc_view`)
+
+How documents are shown in folders: list, thumbnails or details.
+
+- **Default:** `'list'`
+- **Allowed values:** list, thumbnails, details
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Applies on all your devices.
+- **Restart needed:** no
+- **Learn more:** [getting-started#views](guides/getting-started.md#views)
+
+### Sort documents by (`me.doc_sort`)
+
+Order of documents in folders.
+
+- **Default:** `'-added'`
+- **Allowed values:** -added, added, name, -name, size, -size, expiry, -expiry, type, -type
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Applies on all your devices.
+- **Restart needed:** no
+- **Learn more:** [getting-started#views](guides/getting-started.md#views)
 
 ## Section: my_notifications
 

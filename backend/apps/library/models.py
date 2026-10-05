@@ -114,6 +114,7 @@ class Document(models.Model):
     tags = models.ManyToManyField(Tag, blank=True, related_name="documents")
     issue_date = models.DateField(null=True, blank=True)
     expiry_date = models.DateField(null=True, blank=True, db_index=True)
+    no_expiry = models.BooleanField(default=False, help_text="A confirmed 'does not expire' statement (no reminders)")
     current_version = models.ForeignKey("DocumentVersion", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     state = models.CharField(max_length=16, default=QUEUED, db_index=True)
     review_flags = models.JSONField(default=list, blank=True)
@@ -156,6 +157,7 @@ class DocumentVersion(models.Model):
     ocr_applied = models.BooleanField(default=False)
     pdfa = models.BooleanField(default=False, help_text="Searchable copy passed PDF/A validation")
     pdfa_report = models.JSONField(default=dict, blank=True)
+    ocr_quality = models.JSONField(default=dict, blank=True, help_text="OCR confidence, rotation, steps, low-confidence lines")
     state = models.CharField(max_length=16, default="queued")
     error = models.TextField(blank=True)
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
@@ -170,8 +172,8 @@ class DocumentField(models.Model):
     """Structured detail value with provenance; proposed values never drive reminders/naming."""
 
     PROPOSED, CONFIRMED = "proposed", "confirmed"
-    STANDARD = ("full_name", "document_number", "issue_date", "expiry_date", "date_of_birth", "nationality", "issuer",
-                "country_code", "sex", "place_of_issue")
+    STANDARD = ("full_name", "document_number", "issue_date", "expiry_date", "no_expiry", "date_of_birth", "nationality",
+                "issuer", "country_code", "sex", "place_of_issue")
     SENSITIVE = ("document_number",)
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="fields")

@@ -17,7 +17,7 @@ class Command(BaseCommand):
     def handle(self, *args, path, verify_only, no_key, yes, **opts):
         p = Path(path)
         if not (p / "manifest.json").exists():
-            raise CommandError("Not a Personal Documents backup folder (manifest.json missing).")
+            raise CommandError("Not a Personal Documents Management System backup folder (manifest.json missing).")
         check = backup.verify_backup(p)
         self.stdout.write(f"Verification: {'OK' if check['ok'] else 'FAILED'} ({check['files']} files, {len(check['bad'])} problems)")
         if verify_only:
