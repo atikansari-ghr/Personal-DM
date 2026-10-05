@@ -11,7 +11,7 @@ LOGDIR=$(mktemp -d)
 (cd backend && ../$PY manage.py migrate --noinput >/dev/null)
 TOKEN=$(cd backend && ../$PY manage.py setup_token | sed -n 2p | tr -d ' ')
 FIXTURE="$LOGDIR/scan.pdf"
-$PY -c "import sys; sys.path.insert(0, 'tests'); from fixtures import make_image_pdf; open('$FIXTURE', 'wb').write(make_image_pdf('SAMPLE DOCUMENT - NOT A REAL PASSPORT\nSurname SAMPLE  Given names SAM\nDate of issue 19 Oct 2016\nDate of expiry 18 Oct 2026'))"
+$PY -c "import sys; sys.path.insert(0, 'tests'); from fixtures import make_image_pdf; open('$FIXTURE', 'wb').write(make_image_pdf('SAMPLE DOCUMENT - NOT A REAL PASSPORT\nSurname ANSARI  Given names AB\nDate of issue 19 Oct 2016\nDate of expiry 18 Oct 2026'))"
 (cd backend && exec ../.venv/bin/gunicorn personaldocs.wsgi -b 127.0.0.1:8000 -w 2 --timeout 300 >"$LOGDIR/web.log" 2>&1) &
 WEB=$!
 (cd backend && exec ../$PY manage.py worker >"$LOGDIR/worker.log" 2>&1) &

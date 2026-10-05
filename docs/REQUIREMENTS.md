@@ -154,7 +154,7 @@ Source: `CHANGE_PROMPT_PERSONAL_DOCUMENTS_PUBLIC_RELEASE` sections 21–24. Acce
 | VIEW-2 | Viewer keeps authorisation, never uses external viewers, fails safely on damaged files with Download available. |
 | PUB-1 | Public authorship: Atik Ansari as sole author/maintainer; no AI assistant as author; Git history not rewritten. |
 | PUB-2 | Secret/privacy audit of the tree and history; comprehensive .gitignore; safe env example; automated check. |
-| PUB-3 | Public README with sanitised screenshots, user guide, administrator guide, CONTRIBUTING, SECURITY; license decision flagged. |
+| PUB-3 | Public README with sanitised screenshots, user guide, administrator guide, CONTRIBUTING, SECURITY; MIT license (owner decision). |
 
 ## Change set J (2026-10): browsing, OCR quality, one-line installer, public presentation
 

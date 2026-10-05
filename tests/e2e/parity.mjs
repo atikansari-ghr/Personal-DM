@@ -1,6 +1,6 @@
 // Browser checks for the change set "UI, import, notifications, backup and mobile/PWA corrections" and the
 // full-page viewer (AT-61..AT-84 parts that need a real browser), plus a screen-by-screen desktop/tablet/mobile audit.
-// Runs after flow.mjs against the same instance (uses the "dad" account and Sam Sample's area). Synthetic data only.
+// Runs after flow.mjs against the same instance (uses the "dad" account and AB Ansari's area). Synthetic data only.
 // Usage: BASE=http://localhost:8000 PARITY=/tmp/parity node tests/e2e/parity.mjs
 import { chromium } from "playwright";
 import fs from "node:fs";
@@ -48,11 +48,11 @@ const desk = await browser.newContext({ viewport: { width: 1366, height: 900 } }
 const page = await signIn(desk);
 const ids = {};
 
-await step("setup: synthetic folders and files in Sam Sample's area", async () => {
+await step("setup: synthetic folders and files in AB Ansari's area", async () => {
   await api(page, "/api/settings", { method: "PUT", body: { values: { "me.theme": "green" } } }); // default look for screenshots
   await page.reload();
   const f = (await api(page, "/api/folders")).data.folders;
-  const sam = f.find((x) => x.kind === "personal_root" && x.owner_user?.display_name === "Sam Sample");
+  const sam = f.find((x) => x.kind === "personal_root" && x.owner_user?.display_name === "AB Ansari");
   ids.sam = sam.id;
   ids.parity = (await api(page, "/api/folders", { body: { parent: sam.id, name: "Parity" } })).data.id;
   ids.travel = (await api(page, "/api/folders", { body: { parent: ids.parity, name: "Travel" } })).data.id;
@@ -80,7 +80,7 @@ await step("AT-61 signed-in user's own area is identified at the top of the tree
   const txt = await page.locator(".my-area").innerText();
   expect(txt.includes("My Documents") && txt.includes("Atik Ansari"), `my-area text: ${txt}`);
   await page.waitForSelector(".tree-node:has-text('My Documents — Atik Ansari')");
-  expect(await page.locator(".tree-node:has-text('Sam Sample') .avatar").count() > 0, "member areas show an avatar");
+  expect(await page.locator(".tree-node:has-text('AB Ansari') .avatar").count() > 0, "member areas show an avatar");
 });
 
 await step("AT-62 file-type icons with readable labels in list and grid", async () => {
@@ -105,7 +105,7 @@ await step("AT-92 own library on top and expanded; other areas collapsed", async
   await fresh.waitForURL(new RegExp(`/folders/${mine.id}`));
   const first = await fresh.locator("[role=tree] > li >> nth=0").innerText();
   expect(first.startsWith("My Documents — Atik Ansari") || first.includes("My Documents — Atik Ansari"), `first tree item: ${first.slice(0, 60)}`);
-  const samItem = fresh.locator("[role=tree] li[role=treeitem]:has(> .tree-node:has-text('Sam Sample'))").first();
+  const samItem = fresh.locator("[role=tree] li[role=treeitem]:has(> .tree-node:has-text('AB Ansari'))").first();
   expect(await samItem.getAttribute("aria-expanded") === "false", "another member's area is not expanded automatically");
   await fresh.close();
 });
@@ -450,7 +450,7 @@ await step("AT-63/64 import into a chosen sub-folder with the exact final hierar
   await page.setInputFiles("input[type=file][webkitdirectory]", path.join(FIX, "import"));
   await page.waitForURL(/\/imports\/[0-9a-f-]+/);
   await page.selectOption("select[aria-label='Action for Old']", "user");
-  await page.selectOption("select[aria-label='Person for Old']", { label: "Sam Sample" });
+  await page.selectOption("select[aria-label='Person for Old']", { label: "AB Ansari" });
   await page.click("button[aria-label='Destination sub-folder for Old']");
   await page.click(".modal .picker-pick:has-text('Parity')");
   await page.click(".modal button:has-text('Done')");

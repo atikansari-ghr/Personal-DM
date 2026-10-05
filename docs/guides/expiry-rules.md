@@ -93,12 +93,12 @@ In-app, email and Telegram use the same layout:
 
 ```
 Notification from Personal Documents Management System
-Account: sam (Sam Sample)
+Account: son1 (AB Ansari)
 
 2 files imported to your account
 Imported by Atik Ansari.
 
-Folder: Family library / Sam Sample / Education
+Folder: Family library / AB Ansari / Education
 Date/time: 05 Oct 2026 14:31 (Asia/Riyadh)
 
 Files:

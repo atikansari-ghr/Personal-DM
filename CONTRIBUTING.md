@@ -43,5 +43,5 @@ documentation.
 
 ## License
 
-No license has been chosen yet (see the README). By contributing you agree that the maintainer may publish your
-contribution under the license eventually chosen for the project.
+The project is licensed under the [MIT License](LICENSE). By contributing you agree that your contribution is
+published under the same license.
