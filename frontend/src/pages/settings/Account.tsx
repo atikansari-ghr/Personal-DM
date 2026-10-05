@@ -146,38 +146,87 @@ function Linked() {
   );
 }
 
+const CH_LABEL: Record<string, string> = { in_app: "In-app", email: "Email", telegram: "Telegram" };
+const GROUPS: [string, string][] = [["documents", "Documents"], ["security", "Account & security"], ["system", "System (administrators)"]];
+
 function Channels() {
   const toast = useToast();
-  const { data, reload } = useAsync(() => api<any>("me/channels"), []);
+  const { data, reload } = useAsync(() => api<any>("me/notification-preferences"), []);
   const [link, setLink] = useState<any>(null);
+  const [busy, setBusy] = useState("");
   if (!data) return <Skeleton />;
-  const enabled = data.channels.filter((c: any) => c.enabled).map((c: any) => c.channel);
-  const toggle = async (ch: string, on: boolean) => {
-    try { await api("me/channels", { method: "PUT", body: { channels: on ? [...enabled, ch] : enabled.filter((c: string) => c !== ch) } }); reload(); } catch (e: any) { toast(e.message, "error"); }
+  const channels: any[] = data.channels;
+  const critical = data.events.filter((e: any) => e.critical);
+  const optional = data.events.filter((e: any) => !e.critical);
+  const toggle = async (ev: any, ch: string, on: boolean) => {
+    const next = on ? [...new Set([...ev.chosen, ch])] : ev.chosen.filter((c: string) => c !== ch);
+    setBusy(`${ev.key}:${ch}`);
+    try { await api("me/notification-preferences", { method: "PUT", body: { preferences: { [ev.key]: next } } }); await reload(); }
+    catch (e: any) { toast(e.message, "error"); } finally { setBusy(""); }
   };
   return (
-    <div className="grid two-col">
+    <div className="stack">
+      {data.problems.length > 0 && (
+        <div className="alert error" role="alert">
+          <strong>Some required notifications cannot reach you.</strong>
+          <ul style={{ margin: ".3rem 0 0" }}>{data.problems.map((p: any) => <li key={p.channel}>{CH_LABEL[p.channel]}: {p.issue} (needed for {p.events.slice(0, 3).join(", ")}{p.events.length > 3 ? ` and ${p.events.length - 3} more` : ""})</li>)}</ul>
+          <p className="small" style={{ margin: ".3rem 0 0" }}>Add an email address under Profile, link Telegram below, or ask the administrator to configure the channel.</p>
+        </div>
+      )}
       <div className="card">
-        <h2>Delivery channels</h2>
-        <p className="small muted">Choose how you receive expiry reminders. Messages contain only the person's name, document type, expiry date and a sign-in link — never document numbers or files.</p>
-        {data.channels.map((c: any) => (
-          <div className="setting-row" key={c.channel}>
-            <div><strong>{c.label}</strong>{c.required && <span className="badge neutral" style={{ marginLeft: ".4rem" }}><Icon name="lock" size={12} /> Required by admin</span>}
-              {c.issue && <div className="small error-text">{c.issue}</div>}</div>
-            <div><label className="switch"><input type="checkbox" aria-label={c.label} checked={c.enabled} disabled={!c.available || c.required} onChange={(e) => toggle(c.channel, e.target.checked)} /><span /></label>
-              {!c.available && <span className="small muted"> Not yet available</span>}</div>
-          </div>
-        ))}
-        <p className="small muted"><Icon name="info" size={14} /> Administrator-required channels cannot be turned off.</p>
+        <h2>Critical notifications</h2>
+        <p className="small muted">Chosen by the family administrator. They cannot be turned off and always arrive on the channels shown.</p>
+        <ul className="crit-list">
+          {critical.map((e: any) => (
+            <li key={e.key}><Icon name="lock" size={14} /> <strong>{e.label}</strong> <span className="small muted">— {e.description}</span>
+              <div className="small">{e.channels.map((c: string) => <span key={c} className="badge neutral" style={{ marginRight: ".25rem" }}>{CH_LABEL[c]}</span>)}</div></li>
+          ))}
+        </ul>
       </div>
-      <div style={{ gridColumn: "1 / -1" }}><SettingsForm keys={["me.event_alerts"]} title="Other alerts" /></div>
+      <div className="card">
+        <h2>Optional notifications</h2>
+        <p className="small muted">Pick the events you want and where each one should reach you. Large actions (imports, many uploads) arrive as one summary with a report link.</p>
+        <div className="table-scroll">
+          <table className="matrix">
+            <thead><tr><th scope="col">Event</th>{channels.map((c) => <th scope="col" key={c.channel}>{c.label}</th>)}</tr></thead>
+            {GROUPS.map(([g, gl]) => {
+              const rows = optional.filter((e: any) => e.group === g);
+              if (!rows.length) return null;
+              return (
+                <tbody key={g}>
+                  <tr className="matrix-group"><th colSpan={channels.length + 1} scope="rowgroup">{gl}</th></tr>
+                  {rows.map((e: any) => (
+                    <tr key={e.key}>
+                      <th scope="row"><div>{e.label}</div><div className="small muted" style={{ fontWeight: 400 }}>{e.description}</div></th>
+                      {channels.map((c) => {
+                        const locked = e.locked.includes(c.channel);
+                        const checked = e.channels.includes(c.channel);
+                        const unavailable = !c.configured && !checked;
+                        return (
+                          <td key={c.channel} data-label={c.label}>
+                            <input type="checkbox" aria-label={`${e.label} by ${c.label}`} checked={checked} disabled={locked || unavailable || busy === `${e.key}:${c.channel}`}
+                              title={locked ? "Required by the administrator" : unavailable ? `${c.label} is not configured by the administrator` : ""}
+                              onChange={(ev) => toggle(e, c.channel, ev.target.checked)} />
+                            {locked && <span className="sr-only"> (required)</span>}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              );
+            })}
+          </table>
+        </div>
+        <p className="small muted">{channels.filter((c) => c.channel !== "in_app" && c.issue).map((c) => `${c.label}: ${c.issue}`).join(" · ")}</p>
+      </div>
       <div className="card">
         <h2>Telegram</h2>
         {data.telegram.linked ? (
           <><p>Linked{data.telegram.username ? ` to @${data.telegram.username}` : ""}.</p><button className="btn danger" onClick={() => api("me/telegram", { method: "DELETE" }).then(reload)}>Unlink</button></>
         ) : (
           <div className="stack">
-            <p className="small">Link your own Telegram so reminders reach you there. You must send the code to the bot from your Telegram account.</p>
+            <p className="small">Link your own Telegram so notifications reach you there. You must send the code to the bot from your Telegram account.</p>
             {!link ? <button className="btn" onClick={() => api("me/telegram", { method: "POST" }).then(setLink).catch((e) => toast(e.message, "error"))}>Get link code</button> : (
               <div className="stack">
                 <p>Send <code>/start {link.code}</code> to the bot{data.telegram.bot ? ` @${data.telegram.bot}` : ""} within {link.expires_minutes} minutes.</p>

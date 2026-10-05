@@ -10,6 +10,9 @@ import zoneinfo
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from apps.notify.event_defs import DEFAULT_CRITICAL
+from apps.notify.event_defs import EVENTS as NOTIFY_EVENTS
+
 GLOBAL, USER = "global", "user"
 MAIN_ADMIN, SELF = "main_admin", "self"
 
@@ -23,7 +26,7 @@ class SettingDef:
     key: str
     label: str
     description: str
-    type: str  # bool|int|str|choice|int_list|time|secret|email|url|timezone|path|channel_list|widget_list
+    type: str  # bool|int|str|choice|int_list|time|secret|email|url|timezone|path|channel_list|widget_list|event_list|event_matrix
     default: Any
     section: str
     scope: str = GLOBAL
@@ -255,13 +258,24 @@ SETTINGS: list[SettingDef] = [
                "bool", True, "notifications", effect="Disabling stops owner reminders.", help="expiry-rules#recipients"),
     SettingDef("notifications.notify_head", "Notify head of family", "The owner's designated family head receives reminders.",
                "bool", True, "notifications", effect="Disabling stops head reminders.", help="expiry-rules#recipients"),
-    SettingDef("notifications.default_channels", "Default channels",
-               "Channels enabled for users who have not chosen their own.", "channel_list", ["in_app", "email"],
-               "notifications", effect="Affects users without personal preferences.", help="expiry-rules#channels"),
-    SettingDef("notifications.required_channels", "Required channels",
-               "Channels users cannot turn off. In-app is always on.", "channel_list", ["in_app"], "notifications",
-               effect="Users see these channels locked on; missing contact details are flagged.",
+    SettingDef("notifications.default_channels", "Default channels for expiry reminders",
+               "Channels used for expiry reminders by people who have not chosen their own.", "channel_list", ["in_app", "email"],
+               "notifications", effect="Affects people without personal preferences.", help="expiry-rules#channels"),
+    SettingDef("notifications.required_channels", "Required channels for expiry reminders",
+               "Channels people cannot turn off for expiry reminders. In-app is always on.", "channel_list", ["in_app"], "notifications",
+               effect="People see these channels locked on; missing contact details are flagged.",
                help="expiry-rules#channels"),
+    SettingDef("notifications.critical_events", "Critical notifications",
+               "Events people cannot turn off. They always arrive in-app and on the critical channels below.",
+               "event_list", list(DEFAULT_CRITICAL), "notifications", choices=list(NOTIFY_EVENTS),
+               effect="Applies to the next notification; people see these locked on.", help="expiry-rules#critical"),
+    SettingDef("notifications.critical_channels", "Channels for critical notifications",
+               "Every critical notification is also sent on these channels. Missing email addresses or unlinked Telegram are flagged to the person and to you, never reported as sent.",
+               "channel_list", ["in_app", "email", "telegram"], "notifications",
+               effect="Applies to the next notification.", help="expiry-rules#critical"),
+    SettingDef("notifications.include_names", "Include names in email/Telegram",
+               "Show folder, document and file names in external messages (long numbers are always masked). Turn off to send only counts and a sign-in link.",
+               "bool", True, "notifications", help="expiry-rules#templates"),
     # ---- Connections
     SettingDef("smtp.enabled", "Email (SMTP) enabled", "Send notification and password-reset email.", "bool", False,
                "connections", depends_on=("smtp.host", "smtp.from_address"),
@@ -427,6 +441,8 @@ SETTINGS: list[SettingDef] = [
                help="themes#choose"),
     SettingDef("me.layout", "Default document layout", "Three-panel browser or full-page viewer.", "choice",
                "three_panel", "appearance", scope=USER, editable_by=SELF, choices=LAYOUTS, help="themes#layout"),
+    SettingDef("me.notification_prefs", "My notifications", "Which optional notifications you receive, per channel.",
+               "event_matrix", {}, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#optional"),
     SettingDef("me.channels", "My notification channels", "Channels you want reminders on. Required channels stay on.",
                "channel_list", None, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#channels"),
     SettingDef("me.event_alerts", "Other alerts by email/Telegram",
@@ -481,6 +497,14 @@ def coerce(defn: SettingDef, value: Any) -> Any:
         if not isinstance(value, list) or any(v not in CHANNELS for v in value):
             raise SettingError(f"Channels must be from: {', '.join(CHANNELS)}.")
         value = [c for c in CHANNELS if c in value]
+    elif t == "event_list":
+        if not isinstance(value, list) or any(v not in NOTIFY_EVENTS for v in value):
+            raise SettingError("Unknown notification event.")
+        value = [k for k in NOTIFY_EVENTS if k in value]
+    elif t == "event_matrix":
+        from apps.notify.catalog import coerce_prefs
+
+        value = coerce_prefs(value)
     elif t == "widget_list":
         if not isinstance(value, (list, str)) or (isinstance(value, list) and any(v not in WIDGETS for v in value)):
             raise SettingError(f"Widgets must be from: {', '.join(WIDGETS)}.")

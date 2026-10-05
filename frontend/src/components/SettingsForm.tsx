@@ -52,6 +52,15 @@ function Input({ def, value, onChange }: { def: SettingDef; value: any; onChange
       const cur: string[] = Array.isArray(value) ? value : [];
       return <div className="row">{Object.entries(CHANNEL_LABELS).map(([k, l]) => <label key={k} className="check"><input type="checkbox" disabled={disabled} checked={cur.includes(k)} onChange={(e) => onChange(e.target.checked ? [...cur, k] : cur.filter((x) => x !== k))} /> {l}</label>)}</div>;
     }
+    case "event_list": {
+      const cur: string[] = Array.isArray(value) ? value : [];
+      const labels = def.choice_labels || {};
+      return (
+        <fieldset className="event-list" aria-label={def.label} disabled={disabled}>
+          {def.choices.map((k) => <label key={k} className="check"><input type="checkbox" checked={cur.includes(k)} onChange={(e) => onChange(e.target.checked ? [...cur, k] : cur.filter((x) => x !== k))} /> {labels[k] || k}</label>)}
+        </fieldset>
+      );
+    }
     case "widget_list":
       return <WidgetListEditor value={Array.isArray(value) ? value : []} choices={def.choices} labels={def.choice_labels || {}} disabled={disabled} onChange={onChange} />;
     default:
@@ -110,7 +119,7 @@ export default function SettingsForm({ section, keys, title, children }: { secti
             <div>
               <Input def={d} value={value} onChange={(v) => setDraft({ ...draft, [d.key]: v })} />
               {errors[d.key] && <div className="error-text small" role="alert">{errors[d.key]}</div>}
-              {d.type !== "secret" && d.key !== "documents.member_template" && d.default !== null && d.default !== undefined && <div className="small muted">Default: {d.type === "widget_list" ? "all widgets" : Array.isArray(d.default) ? d.default.join(", ") || "none" : String(KEY_CHOICE_LABELS[d.key]?.[d.default] || CHOICE_LABELS[d.default] || d.default) || "empty"}</div>}
+              {d.type !== "secret" && d.key !== "documents.member_template" && d.default !== null && d.default !== undefined && <div className="small muted">Default: {d.type === "widget_list" ? "all widgets" : d.type === "event_list" ? `${(d.default || []).length} security, backup and integrity events` : Array.isArray(d.default) ? d.default.join(", ") || "none" : String(KEY_CHOICE_LABELS[d.key]?.[d.default] || CHOICE_LABELS[d.default] || d.default) || "empty"}</div>}
             </div>
           </div>
         );

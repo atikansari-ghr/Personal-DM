@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from apps.accounts.auth import IsActiveAuthenticated, IsMainAdmin
 from apps.accounts.models import FamilyGroup, User
 from apps.core import audit, config
+from apps.notify import events
 
 from . import permissions as P
 from . import search as searchlib
@@ -303,6 +304,8 @@ def _upload(request, ctx):
             audit.record("document.upload", request=request, target=doc, subject_user=owner, size=staged.size)
         except (storage.StorageError, S.DomainError) as exc:
             errors.append({"file": f.name, "error": str(exc)})
+    if created:
+        events.documents_added(actor=request.user, docs=created, via="upload")  # one summary per owner
     _rebuild(request)
     ctx = _ctx(request)
     return Response({"documents": [document_row(ctx, d) for d in created], "errors": errors},
@@ -319,10 +322,12 @@ def document_view(request, pk):
         doc = get_doc(request, pk, include_archived=True)
         if request.data.get("confirm") != doc.title:
             return _err("Type the document title to confirm permanent deletion.", 400, code="confirm_required")
+        gone = events.GoneDocument(doc)
         try:
             S.purge_document(actor=request.user, doc=doc, request=request)
         except S.DomainError as exc:
             return _err(str(exc))
+        events.documents_removed(actor=request.user, docs=[gone], permanent=True)
         return Response(status=204)
     doc = get_doc(request, pk, include_archived=True)
     if request.method == "GET":
@@ -496,6 +501,7 @@ def field_reveal(request, pk, key):
 def document_archive(request, pk):
     doc = get_doc(request, pk, P.ARCHIVE)
     S.archive_document(actor=request.user, doc=doc, request=request)
+    events.documents_removed(actor=request.user, docs=[doc], permanent=False)
     return Response({"status": "archived"})
 
 
@@ -649,7 +655,7 @@ def documents_bulk(request):
     action = request.data.get("action")
     value = request.data.get("value")
     ids = list(request.data.get("ids") or [])[:500]
-    results = []
+    results, archived = [], []
     for did in ids:
         try:
             doc = Document.objects.select_related("folder", "owner").get(pk=did, archived_at__isnull=True)
@@ -678,12 +684,15 @@ def documents_bulk(request):
                 if not caps & P.ARCHIVE:
                     raise S.DomainError("No archive permission")
                 S.archive_document(actor=request.user, doc=doc, request=request)
+                archived.append(doc)
             else:
                 raise S.DomainError("Unknown action")
             results.append({"id": did, "ok": True})
         except (S.DomainError, PermissionDenied, Http404) as exc:
             results.append({"id": did, "ok": False, "error": str(exc) or "Not permitted"})
     audit.record("document.bulk", request=request, bulk_action=action, count=len(ids), failed=sum(1 for r in results if not r["ok"]))
+    if archived:
+        events.documents_removed(actor=request.user, docs=archived, permanent=False)  # one summary per owner
     return Response({"results": results, "succeeded": sum(1 for r in results if r["ok"]), "failed": sum(1 for r in results if not r["ok"])})
 
 
