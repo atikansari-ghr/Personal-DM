@@ -68,6 +68,7 @@ api = [
     path("me/sessions/<uuid:pk>", acc.revoke_session),
     path("me/google", google.my_link),
     path("me/channels", notify.my_channels),
+    path("me/notification-preferences", notify.my_notification_preferences),
     path("me/telegram", notify.telegram_link),
     path("me/telegram/check", notify.telegram_check),
     path("me/email-accounts", mail.accounts),
@@ -146,6 +147,7 @@ api = [
     path("notifications/read", notify.mark_read),
     path("notifications/test", notify.test_channel),
     path("notifications/deliveries", notify.delivery_history),
+    path("notifications/problems", notify.delivery_problems),
     path("notifications/preview", notify.template_preview),
     path("notifications/run", notify.run_reminders_now),
     # settings, admin, ops

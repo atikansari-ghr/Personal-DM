@@ -60,15 +60,35 @@ export function ProcessingPanel() {
   return <div className="stack"><SettingsForm section="processing" title="OCR & processing" /><JobsCard /></div>;
 }
 
+function DeliveryProblems() {
+  const { data } = useAsync(() => api<any>("notifications/problems"), []);
+  if (!data) return null;
+  return (
+    <div className="card">
+      <h2>Delivery problems</h2>
+      {data.people.length === 0 ? <p className="muted">Every active person can receive the required notifications.</p> : (
+        <>
+          <p className="small muted">These people would miss required (critical or reminder) notifications on some channels. Messages for them are recorded as “skipped” with the reason — never as sent.</p>
+          <table className="responsive"><thead><tr><th>Person</th><th>Problem</th></tr></thead><tbody>
+            {data.people.map((p: any) => <tr key={p.username}><td>{p.user}</td><td>{p.problems.map((x: any) => <div key={x.channel} className="small">{x.channel}: {x.issue}</div>)}</td></tr>)}
+          </tbody></table>
+        </>
+      )}
+      {data.skipped_messages > 0 && <p className="small muted">{data.skipped_messages} external message(s) were skipped in total; see Delivery history.</p>}
+    </div>
+  );
+}
+
 export function NotificationsAdmin() {
   const toast = useToast();
   const preview = useAsync(() => api<any>("notifications/preview"), []);
   const hist = useAsync(() => api<{ deliveries: any[] }>("notifications/deliveries"), []);
   return (
     <div className="stack">
-      <SettingsForm section="notifications" title="Expiry reminders">
-        <div className="alert small">Reminders go to the document owner and the head of their reminder group (plus delegates with “receive reminders”), once per threshold, and stop after the expiry day. Only confirmed expiry dates count.</div>
+      <SettingsForm section="notifications" title="Notification policy">
+        <div className="alert small">Expiry reminders go to the document owner and the head of their reminder group (plus delegates with “receive reminders”), once per threshold, and stop after the expiry day. Only confirmed expiry dates count. Critical notifications cannot be turned off by family members; everything else is chosen by each person under My account → Notifications.</div>
       </SettingsForm>
+      <DeliveryProblems />
       <div className="grid two-col">
         <div className="card">
           <h2>Message preview</h2>

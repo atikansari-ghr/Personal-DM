@@ -1,0 +1,51 @@
+"""Notification event definitions (no imports from the rest of the app, so the settings registry can use them)."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+CHANNELS = ("in_app", "email", "telegram")
+
+
+@dataclass(frozen=True)
+class Event:
+    key: str
+    label: str
+    description: str
+    group: str  # security | documents | system
+    admins_only: bool = False
+    default_critical: bool = False
+    default_channels: tuple = ("in_app",)
+
+
+EVENTS: dict[str, Event] = {e.key: e for e in [
+    # account security (the person concerned; administrators too for admin actions)
+    Event("security.passkey_added", "New passkey registered", "A passkey was added to your account.", "security", default_critical=True),
+    Event("security.passkey_removed", "Passkey removed", "A passkey was removed from your account.", "security", default_critical=True),
+    Event("security.totp_enabled", "Authenticator app turned on", "Two-step verification with an authenticator app was set up.", "security", default_critical=True),
+    Event("security.totp_disabled", "Authenticator app turned off", "Two-step verification with an authenticator app was turned off.", "security", default_critical=True),
+    Event("security.recovery_codes", "Recovery codes regenerated", "New recovery codes were created; the old ones stopped working.", "security", default_critical=True),
+    Event("security.passwordless", "Passwordless sign-in changed", "Signing in with a passkey alone was turned on or off.", "security", default_critical=True),
+    Event("security.admin_recovery", "Two-step verification reset", "An administrator (or the server console) reset two-step verification.", "security", default_critical=True),
+    Event("security.new_country", "Sign-in from a new country", "Your account signed in from a country it never used before.", "security", default_critical=True),
+    Event("security.new_ip", "Sign-in from a new address", "Your account signed in from a new IP address.", "security", default_channels=("in_app",)),
+    Event("account.login", "Every sign-in", "Each successful sign-in to your account, with device, address and country.", "security", default_channels=()),
+    # administrators
+    Event("security.failed_logins", "Repeated failed sign-ins", "Repeated failures and automatic temporary blocks.", "security", admins_only=True, default_critical=True),
+    Event("security.policy_exception", "Sign-in via temporary country access", "A sign-in only possible because of a travel exception.", "security", admins_only=True, default_critical=True),
+    Event("security.policy_change", "Access policy changes", "Country policy, trusted/blocked IPs and temporary access created, changed or expired.", "security", admins_only=True, default_critical=True),
+    Event("security.auth_policy", "Authentication policy changes", "Changes to sign-in, two-step verification and passkey settings.", "security", admins_only=True, default_critical=True),
+    Event("security.health", "GeoIP / traffic report problems", "A GeoIP update or traffic report failed.", "system", admins_only=True, default_channels=("in_app", "email")),
+    Event("backup.failed", "Backup failed", "The scheduled or manual backup did not complete.", "system", admins_only=True, default_critical=True),
+    Event("integrity.failed", "Integrity problems", "The storage integrity check found missing or changed files.", "system", admins_only=True, default_critical=True),
+    # documents
+    Event("expiry.reminder", "Expiry reminders", "Reminders before a confirmed expiry date (90/60/30/7/0 days by default).", "documents"),
+    Event("document.added", "Documents added", "Documents added to your folders by someone else or by an import (one summary per action).", "documents", default_channels=("in_app", "email")),
+    Event("document.archived", "Documents archived or deleted", "Your documents were archived (restorable) or permanently deleted by someone else.", "documents", default_channels=("in_app", "email")),
+    Event("document.shared", "Access given to you", "Someone gave you access to a folder or document.", "documents", default_channels=("in_app", "email")),
+    Event("import.finished", "Import finished", "A folder import finished (summary with a link to the report).", "documents", default_channels=("in_app", "email")),
+    Event("processing.completed", "OCR / processing finished", "A document you uploaded is processed and searchable.", "documents", default_channels=()),
+    Event("processing.failed", "OCR / processing failed", "A document you uploaded could not be processed (the original is safe).", "documents", default_channels=("in_app", "email")),
+]}
+
+DEFAULT_CRITICAL = [k for k, e in EVENTS.items() if e.default_critical]
+LABELS = {k: e.label for k, e in EVENTS.items()}
