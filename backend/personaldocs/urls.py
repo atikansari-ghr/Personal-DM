@@ -9,6 +9,7 @@ from apps.library import export, views as lib, views_import as imp, views_share 
 from apps.mailimport import views as mail
 from apps.notify import views as notify
 from apps.ops import views as ops
+from apps.security import views as sec
 
 
 def spa(request, *args, **kwargs):
@@ -136,6 +137,18 @@ api = [
     path("backup/run", ops.backup_now),
     path("backup/nas", ops.nas_api),
     path("integrity", ops.integrity_api),
+    path("admin/security/logins", sec.logins),
+    path("admin/security/policy", sec.access_policy),
+    path("admin/security/policy/rollback", sec.access_policy_rollback),
+    path("admin/security/policy/test", sec.access_policy_test),
+    path("admin/security/temporary", sec.temporary_access),
+    path("admin/security/temporary/<int:pk>", sec.temporary_access_detail),
+    path("admin/security/ip-rules", sec.ip_rules),
+    path("admin/security/ip-rules/<int:pk>", sec.ip_rule_detail),
+    path("admin/security/geoip", sec.geoip_api),
+    path("admin/security/geoip/upload", sec.geoip_upload),
+    path("admin/security/traffic", sec.traffic_api),
+    path("admin/security/traffic/report.html", sec.traffic_html),
     path("help", core.help_index),
     path("help/<str:slug>", core.help_guide),
 ]

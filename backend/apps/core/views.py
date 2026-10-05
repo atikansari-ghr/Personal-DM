@@ -23,7 +23,7 @@ from .registry import BY_KEY, GLOBAL, SETTINGS, USER, SettingError
 SECTIONS = [
     ("general", "General"), ("documents", "Documents & Folders"), ("processing", "OCR & Processing"),
     ("notifications", "Notifications"), ("connections", "Connections"), ("authentication", "Authentication"),
-    ("storage", "Storage & Backup"), ("activity", "Activity & Health"), ("appearance", "Appearance"),
+    ("storage", "Storage & Backup"), ("security", "Security & Access"), ("activity", "Activity & Health"), ("appearance", "Appearance"),
     ("my_notifications", "My notifications"), ("ai", "Future Local AI"),
 ]
 

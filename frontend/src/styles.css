@@ -98,6 +98,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 .badge.danger { background: var(--danger-bg); color: var(--danger-ink); }
 .badge.ok { background: var(--ok-bg); color: var(--ok-ink); }
 .badge.neutral { background: #eef0ef; color: #3d4741; }
+.badge.warn { background: var(--warn-bg); color: var(--warn-ink); }
+button.link { border: 0; background: none; padding: 0; color: var(--brand); text-decoration: underline; cursor: pointer; font: inherit; }
 
 /* ---------- cards */
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem 1.2rem; box-shadow: var(--shadow); }
@@ -186,6 +188,8 @@ tr.clickable:hover td { background: var(--brand-softer); }
 .tabs { display: flex; gap: 0.2rem; border-bottom: 1px solid var(--line); margin-bottom: 0.9rem; overflow-x: auto; }
 .tabs button, .tabs a { border: 0; background: none; padding: 0.7rem 0.9rem; font: inherit; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; text-decoration: none; white-space: nowrap; }
 .tabs .active { color: var(--brand); border-bottom-color: var(--brand); font-weight: 650; }
+.tabs.sub { margin-bottom: 0.3rem; }
+.tabs.sub button { padding: 0.45rem 0.8rem; font-size: 0.92rem; }
 .kv { display: grid; grid-template-columns: minmax(110px, 160px) 1fr auto; border: 1px solid var(--line); border-radius: 10px; }
 .kv > div { padding: 0.65rem 0.8rem; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 0.4rem; min-width: 0; overflow-wrap: anywhere; }
 .kv > div:nth-child(-n + 3) { border-top: 0; }
