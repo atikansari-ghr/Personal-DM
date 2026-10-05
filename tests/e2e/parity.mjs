@@ -216,11 +216,17 @@ await step("AT-89 list, thumbnails and details views; sorting; preference syncs"
   await page.click("button[aria-label='Details view']");
   await page.waitForSelector("table.details-table");
   await page.click("table.details-table th button:has-text('Name')");
-  await page.waitForFunction(() => document.querySelector("table.details-table th[aria-sort=ascending]"));
-  const names = await page.evaluate(() => [...document.querySelectorAll("table.details-table tbody .doc-open")].map((e) => e.textContent.toLowerCase()));
-  expect(names.join("|") === [...names].sort((a, b) => a.localeCompare(b)).join("|"), `sorted: ${names}`);
+  // the header state changes at once; the rows follow when the server returns the new order
+  const ordered = (dir) => page.waitForFunction((dir) => {
+    const names = [...document.querySelectorAll("table.details-table tbody .doc-open")].map((e) => e.textContent.toLowerCase());
+    if (names.length < 3 || !document.querySelector(`table.details-table th[aria-sort=${dir}]`)) return false;
+    const sorted = [...names].sort((a, b) => a.localeCompare(b));
+    if (dir === "descending") sorted.reverse();
+    return names.join("|") === sorted.join("|");
+  }, dir, { timeout: 10000 }).then(() => true, () => false);
+  expect(await ordered("ascending"), "rows sorted by name A–Z");
   await page.click("table.details-table th button:has-text('Name')");
-  await page.waitForFunction(() => document.querySelector("table.details-table th[aria-sort=descending]") && document.querySelectorAll("table.details-table tbody tr").length > 2);
+  expect(await ordered("descending"), "rows sorted by name Z–A");
   await page.screenshot({ path: `${SHOTS}/folders-details-view.png` });
   const other = await desk.browser().newContext({ viewport: { width: 1366, height: 900 }, storageState: await desk.storageState() });
   const op = await other.newPage();
