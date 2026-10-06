@@ -22,9 +22,13 @@ class AccountError(Exception):
     pass
 
 
-INITIAL_SLOTS = [
-    ("dad", "Dad"), ("mom", "Mom"), ("son1", "Son1"), ("daughter", "Daughter"), ("son2", "Son2"), ("son3", "Son3"),
-]
+# Relationship suggestions offered by the setup wizard and the add-member form. They are labels only: nothing is
+# created from them. A fresh installation has exactly one account (the main administrator) until the administrator
+# adds family members, during setup or later in Settings -> Family & access.
+RELATIONSHIP_SUGGESTIONS = ["Father", "Mother", "Mom", "Dad", "Spouse", "Son", "Daughter", "Parent", "Grandparent",
+                            "Sibling", "Relative", "Other"]
+# Older setup clients sent fixed slots; their labels are kept so such payloads still work.
+LEGACY_SLOT_LABELS = {"dad": "Dad", "mom": "Mom", "son1": "Son1", "daughter": "Daughter", "son2": "Son2", "son3": "Son3"}
 
 
 def generate_password(length: int = 14) -> str:
@@ -94,9 +98,31 @@ def library_root(actor=None):
     return root
 
 
+def _normalise_setup(data: dict) -> tuple[dict, list[dict]]:
+    """(administrator, optional members). Accepts the current format ({"admin": {...}, "members": [...]}) and the
+    earlier fixed-slot format (members with a "slot", where "dad" is the administrator)."""
+    members = [dict(m) for m in (data.get("members") or []) if isinstance(m, dict)]
+    admin = data.get("admin")
+    if not admin:
+        admin = next((m for m in members if m.get("slot") == "dad"), None)
+        members = [m for m in members if m.get("slot") != "dad"]
+        for m in members:
+            m.setdefault("role_label", LEGACY_SLOT_LABELS.get(m.get("slot"), ""))
+        if admin:
+            admin.setdefault("role_label", LEGACY_SLOT_LABELS["dad"])
+    if not admin:
+        raise AccountError("The main administrator account is required.")
+    # rows left empty in the optional step are ignored, never guessed
+    members = [m for m in members if (m.get("display_name") or "").strip() or (m.get("username") or "").strip()]
+    return dict(admin), members
+
+
 @transaction.atomic
 def complete_setup(data: dict, request=None) -> dict:
-    """Idempotent within its transaction; refuses to run twice once completed."""
+    """Create the main administrator and, optionally, the family members entered in the wizard (zero or more).
+
+    Refuses to run twice once completed.
+    """
     state = SetupState.objects.select_for_update().get_or_create(id=1)[0]
     if state.completed_at:
         raise AccountError("Setup is already complete.")
@@ -105,67 +131,64 @@ def complete_setup(data: dict, request=None) -> dict:
     config.set_value("general.timezone", tz)
     if data.get("app_name"):
         config.set_value("general.app_name", data["app_name"])
-    members = data.get("members") or []
-    slots = {m.get("slot"): m for m in members}
-    if "dad" not in slots:
-        raise AccountError("The main administrator (Dad) account is required.")
-    usernames = [(m.get("username") or "").strip().lower() for m in members]
-    if len(set(usernames)) != len(usernames) or any(not u for u in usernames):
+    admin, members = _normalise_setup(data)
+    people = [admin] + members
+    usernames = [(m.get("username") or "").strip().lower() for m in people]
+    if any(not u for u in usernames):
+        raise AccountError("Every account needs a username.")
+    if len(set(usernames)) != len(usernames):
         raise AccountError("Every account needs a unique username.")
+    for m in people:
+        if not (m.get("display_name") or "").strip():
+            raise AccountError("Every account needs a display name.")
     group, _ = FamilyGroup.objects.get_or_create(name=group_name)
     root = library_root()
     issued = {}
     created = state.progress.get("users", {})
-    order = [s for s, _ in INITIAL_SLOTS]
-    for idx, (slot, label) in enumerate(INITIAL_SLOTS):
-        m = slots.get(slot)
-        if not m:
-            continue
-        display = (m.get("display_name") or "").strip()
-        if not display:
-            raise AccountError(f"Enter a name for {label}.")
+    for idx, m in enumerate(people):
+        is_admin = idx == 0
+        key = "admin" if is_admin else f"member{idx}"
         username = m["username"].strip().lower()
-        user = User.objects.filter(pk=created.get(slot)).first() if created.get(slot) else None
+        user = User.objects.filter(pk=created.get(key)).first() if created.get(key) else None
         if user is None:
             if User.objects.filter(username=username).exists():
                 raise AccountError(f"Username {username} is already used.")
             user = User(username=username)
-        user.display_name = display[:80]
+        user.display_name = m["display_name"].strip()[:80]
         user.full_name = (m.get("full_name") or "").strip()[:150]
-        user.role_label = (m.get("role_label") or label)[:40]
+        user.role_label = (m.get("role_label") or ("Main administrator" if is_admin else "")).strip()[:40]
         user.email = (m.get("email") or "").strip()[:254]
-        user.sort_order = order.index(slot)
+        user.sort_order = idx
         user.avatar_color = AVATAR_COLORS[idx % len(AVATAR_COLORS)]
         user.reminder_group = group
-        if slot == "dad":
-            user.is_main_admin = True
+        user.is_main_admin = is_admin
         password = m.get("password") or ""
         if m.get("generate_password") or not password:
-            if slot == "dad" and not m.get("generate_password"):
+            if is_admin:
                 raise AccountError("Set a password for the main administrator.")
             password = generate_password()
             issued[username] = password
         check_new_password(password, user)
         user.set_password(password)
-        user.must_change_password = slot != "dad"
+        user.must_change_password = not is_admin
         user.password_changed_at = timezone.now()
         user.save()
-        created[slot] = str(user.pk)
+        created[key] = str(user.pk)
         GroupMembership.objects.get_or_create(group=group, user=user)
         personal = create_personal_root(actor=None, user=user, library_root=root)
         if data.get("apply_template"):
             from apps.library.services import apply_template
 
             apply_template(actor=None, root=personal)
-    dad = User.objects.get(pk=created["dad"])
-    group.head = dad
+    head = User.objects.get(pk=created["admin"])
+    group.head = head
     group.save()
-    _ensure_shared_folder(root, dad, group, share_view=bool(data.get("share_family_folder_view")))
+    _ensure_shared_folder(root, head, group, share_view=bool(data.get("share_family_folder_view")))
     state.progress = {"users": created}
     state.completed_at = timezone.now()
     state.token_hash = ""
     state.save()
-    audit.record("setup.complete", request=request, actor=dad, members=len(created))
+    audit.record("setup.complete", request=request, actor=head, members=len(created))
     return {"issued_passwords": issued, "users": created}
 
 

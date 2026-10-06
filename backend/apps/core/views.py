@@ -24,7 +24,7 @@ SECTIONS = [
     ("general", "General"), ("documents", "Documents & Folders"), ("processing", "OCR & Processing"),
     ("notifications", "Notifications"), ("connections", "Connections"), ("authentication", "Authentication"),
     ("storage", "Storage & Backup"), ("security", "Security & Access"), ("activity", "Activity & Health"), ("appearance", "Appearance"),
-    ("my_notifications", "My notifications"), ("ai", "Local AI"),
+    ("my_notifications", "My notifications"), ("ai", "Local AI"), ("overview", "Overview widgets"), ("login", "Sign-in page"),
 ]
 
 
@@ -40,6 +40,12 @@ def _setting_json(defn, user):
         extra["choice_labels"] = registry.WIDGETS
     elif defn.type == "event_list":
         extra["choice_labels"] = {k: e.label for k, e in registry.NOTIFY_EVENTS.items()}
+    elif defn.type == "country_list":
+        from . import overview
+
+        extra["choice_labels"] = overview.country_names()
+    elif defn.choice_labels:
+        extra["choice_labels"] = defn.choice_labels
     return {**defn.public(), **extra, "value": value, "configured": configured, "can_edit": config.can_edit(user, defn.key)}
 
 

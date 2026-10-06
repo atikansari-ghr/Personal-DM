@@ -1,6 +1,6 @@
 // Browser checks for the change set "UI, import, notifications, backup and mobile/PWA corrections" and the
 // full-page viewer (AT-61..AT-84 parts that need a real browser), plus a screen-by-screen desktop/tablet/mobile audit.
-// Runs after flow.mjs against the same instance (uses the "dad" account and AB Ansari's area). Synthetic data only.
+// Runs after flow.mjs against the same instance (uses the "admin" account and Son1's area). Synthetic data only.
 // Usage: BASE=http://localhost:8000 PARITY=/tmp/parity node tests/e2e/parity.mjs
 import { chromium } from "playwright";
 import fs from "node:fs";
@@ -18,6 +18,21 @@ const step = async (name, fn) => {
 };
 const expect = (cond, msg) => { if (!cond) throw new Error(msg); };
 
+// Fake weather provider (Open-Meteo-shaped answers with synthetic values) for the weather widget.
+import http from "node:http";
+const wxServer = http.createServer((req, res) => {
+  const u = new URL(req.url, "http://x");
+  const days = [...Array(5)].map((_, i) => new Date(Date.now() + i * 864e5).toISOString().slice(0, 10));
+  const body = u.pathname.endsWith("/search")
+    ? { results: [{ name: "Riyadh", country: "Saudi Arabia", country_code: "SA", admin1: "Riyadh Region", latitude: 24.69, longitude: 46.72, timezone: "Asia/Riyadh" }] }
+    : { current: { temperature_2m: 41, weather_code: 1, relative_humidity_2m: 10, wind_speed_10m: 12 },
+        daily: { time: days, weather_code: [1, 0, 2, 3, 1], temperature_2m_max: [42, 43, 41, 40, 39], temperature_2m_min: [29, 30, 28, 27, 26] } };
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(body));
+});
+await new Promise((r) => wxServer.listen(0, "127.0.0.1", r));
+const WX = `http://127.0.0.1:${wxServer.address().port}`;
+
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const errors = [];
 const foreign = new Set();
@@ -32,7 +47,7 @@ const api = (page, url, opts = {}) => page.evaluate(async ([url, opts]) => {
   return { status: r.status, data: r.headers.get("content-type")?.includes("json") ? await r.json() : null };
 }, [url, opts]);
 
-async function signIn(ctx, user = "dad", pw = PW) {
+async function signIn(ctx, user = "admin", pw = PW) {
   const page = await ctx.newPage();
   watch(page, user);
   await page.goto(BASE + "/login");
@@ -44,15 +59,15 @@ async function signIn(ctx, user = "dad", pw = PW) {
 }
 
 // ------------------------------------------------------------------ desktop
-const desk = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+const desk = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await signIn(desk);
 const ids = {};
 
-await step("setup: synthetic folders and files in AB Ansari's area", async () => {
+await step("setup: synthetic folders and files in Son1's area", async () => {
   await api(page, "/api/settings", { method: "PUT", body: { values: { "me.theme": "green" } } }); // default look for screenshots
   await page.reload();
   const f = (await api(page, "/api/folders")).data.folders;
-  const sam = f.find((x) => x.kind === "personal_root" && x.owner_user?.display_name === "AB Ansari");
+  const sam = f.find((x) => x.kind === "personal_root" && x.owner_user?.display_name === "Son1");
   ids.sam = sam.id;
   ids.parity = (await api(page, "/api/folders", { body: { parent: sam.id, name: "Parity" } })).data.id;
   ids.travel = (await api(page, "/api/folders", { body: { parent: ids.parity, name: "Travel" } })).data.id;
@@ -78,9 +93,9 @@ await step("AT-61 signed-in user's own area is identified at the top of the tree
   await page.goto(BASE + "/folders");
   await page.waitForSelector(".my-area");
   const txt = await page.locator(".my-area").innerText();
-  expect(txt.includes("My Documents") && txt.includes("Atik Ansari"), `my-area text: ${txt}`);
-  await page.waitForSelector(".tree-node:has-text('My Documents — Atik Ansari')");
-  expect(await page.locator(".tree-node:has-text('AB Ansari') .avatar").count() > 0, "member areas show an avatar");
+  expect(txt.includes("My Documents") && txt.includes("A. Ansari"), `my-area text: ${txt}`);
+  await page.waitForSelector(".tree-node:has-text('My Documents — A. Ansari')");
+  expect(await page.locator(".tree-node:has-text('Son1') .avatar").count() > 0, "member areas show an avatar");
 });
 
 await step("AT-62 file-type icons with readable labels in list and grid", async () => {
@@ -101,11 +116,11 @@ await step("AT-92 own library on top and expanded; other areas collapsed", async
   watch(fresh, "landing");
   await fresh.goto(BASE + "/folders");
   await fresh.waitForSelector(".tree-node");
-  const mine = (await api(fresh, "/api/folders")).data.folders.find((x) => x.kind === "personal_root" && x.owner_user?.display_name === "Atik Ansari");
+  const mine = (await api(fresh, "/api/folders")).data.folders.find((x) => x.kind === "personal_root" && x.owner_user?.display_name === "A. Ansari");
   await fresh.waitForURL(new RegExp(`/folders/${mine.id}`));
   const first = await fresh.locator("[role=tree] > li >> nth=0").innerText();
-  expect(first.startsWith("My Documents — Atik Ansari") || first.includes("My Documents — Atik Ansari"), `first tree item: ${first.slice(0, 60)}`);
-  const samItem = fresh.locator("[role=tree] li[role=treeitem]:has(> .tree-node:has-text('AB Ansari'))").first();
+  expect(first.startsWith("My Documents — A. Ansari") || first.includes("My Documents — A. Ansari"), `first tree item: ${first.slice(0, 60)}`);
+  const samItem = fresh.locator("[role=tree] li[role=treeitem]:has(> .tree-node:has-text('Son1'))").first();
   expect(await samItem.getAttribute("aria-expanded") === "false", "another member's area is not expanded automatically");
   await fresh.close();
 });
@@ -262,22 +277,30 @@ await step("AT-90 files dropped from the desktop upload into the drop target", a
   await page.click("button[aria-label='Close upload summary']");
 });
 
-await step("AT-93/94 OCR confidence and re-run with rotation in the document panel", async () => {
-  const scan = { id: ids["Sample scan"] };
-  await page.goto(`${BASE}/documents/${scan.id}`);
-  await page.click("[role=tab]:has-text('Text')");
-  await page.waitForSelector(".preview-text");
-  const doc = (await api(page, `/api/documents/${scan.id}`)).data;
-  if (doc.current_version.ocr_applied) expect(await page.locator(".badge:has-text('OCR confidence')").count() === 1, "confidence shown");
-  await page.click("button[aria-label='More actions']");
-  await page.click(".menu-pop [role=menuitem]:has-text('Re-run OCR')");
-  await page.waitForSelector(".modal:has-text('Re-run OCR')");
-  if (doc.current_version.format === "image") {
-    await page.check(".modal input[value='180']");
-    await page.screenshot({ path: `${SHOTS}/ocr-rerun.png` });
-  }
-  await page.click(".modal button:has-text('Re-run')");
-  await page.waitForSelector(".toast:has-text('Processing queued')");
+await step("AT-101/106/112 selective OCR: manual by default, chosen pages and languages, review queue", async () => {
+  const card = { id: ids["Sample residence card"] };
+  await page.goto(`${BASE}/documents/${card.id}`);
+  await page.click("[role=tab]:has-text('Text (OCR)')");
+  await page.waitForSelector(".ocr-panel >> text=OCR: Not processed"); // Manual is the default for new installations
+  await page.click("button:has-text('Run OCR…')");
+  await page.waitForSelector(".modal:has-text('Text recognition (OCR)')");
+  await page.fill(".modal input[aria-label^='Pages of']", "1");
+  for (const lang of ["English", "Arabic", "Hindi"]) expect(await page.locator(`.modal label:has-text('${lang}')`).count() === 1, `language ${lang} offered`);
+  await page.screenshot({ path: `${SHOTS}/ocr-run.png` });
+  await page.click(".modal button:has-text('Run OCR')");
+  await page.waitForSelector(".toast:has-text('Text recognition queued')");
+  await page.waitForSelector("text=OCR: Needs review", { timeout: 90000 });
+  expect(await page.locator(".badge:has-text('OCR confidence')").count() >= 1, "confidence shown");
+  await page.goto(BASE + "/ocr-review");
+  await page.waitForSelector("text=Sample residence card");
+  await page.screenshot({ path: `${SHOTS}/ocr-review.png` });
+  // a photo can be re-run with a forced rotation
+  await page.goto(`${BASE}/documents/${ids["Sample scan"]}`);
+  await page.click("[role=tab]:has-text('Text (OCR)')");
+  await page.click("button:has-text('Run OCR…')");
+  await page.selectOption("#ocr-rot", "180");
+  await page.click(".modal button:has-text('Run OCR')");
+  await page.waitForSelector(".toast:has-text('Text recognition queued')");
 });
 
 await step("AT-72 drag a document onto a sub-folder (chip and tree)", async () => {
@@ -402,17 +425,77 @@ await step("AT-84 damaged file fails safely; previews need a session; no externa
 await step("AT-65/66 dashboard widgets: tick and order visually", async () => {
   await page.goto(BASE + "/settings/account?tab=appearance");
   await page.waitForSelector(".widget-editor");
-  await page.locator(".widget-item:has-text('Storage used') input[type=checkbox]").uncheck();
+  await page.locator(".widget-item:has-text('Recent activity') input[type=checkbox]").uncheck();
   for (let i = 0; i < 5; i++) await page.click("button[aria-label='Move Recent documents up']").catch(() => undefined);
-  await page.screenshot({ path: `${SHOTS}/settings-dashboard-widgets.png` });
   await page.click("text=Save settings");
   await page.waitForSelector(".toast:has-text('Settings saved')");
   await page.goto(BASE + "/");
-  await page.waitForSelector(".dash-grid");
-  expect(await page.locator(".stat:has-text('Storage used')").count() === 0, "storage widget hidden");
-  const order = await page.evaluate(() => [...document.querySelectorAll(".dash-grid h2")].map((h) => h.textContent));
-  expect(order.findIndex((t) => t.startsWith("Recent documents")) < order.findIndex((t) => t.startsWith("Family library")), `order ${order}`);
-  await page.screenshot({ path: `${SHOTS}/dashboard.png` });
+  await page.waitForSelector(".ov-grid");
+  expect(await page.locator("[data-widget=activity]").count() === 0, "activity widget hidden");
+  const order = await page.evaluate(() => [...document.querySelectorAll(".ov-grid [data-widget]")].map((h) => h.dataset.widget));
+  expect(order.indexOf("recent") < order.indexOf("shared"), `order ${order}`);
+});
+
+await step("AT-116..121/125/127 Overview: customize, weather city, calendar and holidays", async () => {
+  // weather against a local fake provider (synthetic numbers, no internet)
+  await api(page, "/api/settings", { method: "PUT", body: { values: { "weather.enabled": true, "weather.base_url": `${WX}/v1/forecast`, "weather.geocoding_url": `${WX}/v1/search` } } });
+  await api(page, "/api/settings", { method: "PUT", body: { values: { "me.dashboard_widgets": ["date", "weather", "summary", "calendar", "holidays", "upcoming", "recent", "shared"], "me.overview_layout": {} } } });
+  await page.goto(BASE + "/");
+  await page.click("[data-widget=weather] button:has-text('Choose your city')");
+  await page.fill(".modal input[aria-label='City name']", "Riyadh");
+  await page.click(".modal button:has-text('Search')");
+  await page.click(".modal button:has-text('Riyadh')");
+  await page.waitForSelector("[data-widget=weather] .ov-forecast");
+  const wx = await page.locator("[data-widget=weather]").innerText();
+  expect(wx.includes("41°C") && wx.includes("Riyadh"), `weather ${wx}`);
+  await page.waitForSelector("[data-widget=calendar] .ov-cal-day.today");
+  const hijri = await page.locator("[data-widget=date] .ov-hijri").innerText();
+  expect(/\d+ .+ 14\d\d AH/.test(hijri), `hijri ${hijri}`);
+  // calendar navigation keeps holiday markers and returns to today
+  const label = await page.locator("[data-widget=calendar] strong").first().innerText();
+  await page.click("[data-widget=calendar] button[aria-label='Next month']");
+  await page.waitForFunction((l) => document.querySelector("[data-widget=calendar] strong")?.textContent !== l, label);
+  await page.click("[data-widget=calendar] button:has-text('Today')");
+  await page.waitForFunction((l) => document.querySelector("[data-widget=calendar] strong")?.textContent === l, label);
+  expect(await page.locator("[data-widget=holidays] li").count() > 0, "upcoming holidays listed");
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${SHOTS}/overview.png` });
+  // edit layout: style, size, keyboard reorder, remove, add; then save
+  await page.click("button:has-text('Customize Overview')");
+  await page.waitForSelector(".ov-editbar");
+  await page.selectOption("select[aria-label='Today (Gregorian + Hijri) style']", "circle");
+  expect(await page.locator("select[aria-label='Month calendar style'] option[value=circle]").count() === 0, "lists and calendars stay rectangular");
+  await page.click("button[aria-label='Make Documents summary wider']");
+  await page.click("button[aria-label='Move Weather later']");
+  await page.click("button[aria-label='Remove Shared with me']");
+  await page.selectOption("select[aria-label='Add widget']", "activity");
+  const wide = page.locator("button[aria-label='Make Month calendar wider']");
+  expect(await wide.isDisabled(), "calendar cannot grow past its maximum");
+  await page.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll("main, .main, .content").forEach((m) => m.scrollTo?.(0, 0)); });
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/overview-customize.png` });
+  await page.click("button:has-text('Save layout')");
+  await page.waitForSelector(".toast:has-text('Overview saved')");
+  await page.reload();
+  await page.waitForSelector("[data-widget=date] .ov-card.circle");
+  const order = await page.evaluate(() => [...document.querySelectorAll(".ov-grid [data-widget]")].map((h) => h.dataset.widget));
+  expect(order.join() === "date,summary,weather,calendar,holidays,upcoming,recent,activity", `saved order ${order}`);
+  const fit = await page.evaluate(() => [...document.querySelectorAll(".ov-cell")].every((c) => c.getBoundingClientRect().right <= window.innerWidth + 1));
+  expect(fit, "no widget off-screen");
+});
+
+await step("AT-123/124 holiday countries and corrections in settings", async () => {
+  await page.goto(BASE + "/settings/overview");
+  await page.waitForSelector("text=Holiday countries");
+  await page.fill("input[aria-label='Add to Holiday countries']", "United Arab");
+  await page.click(".country-matches button:has-text('United Arab Emirates')");
+  expect(await page.locator(".chip:has-text('United Arab Emirates')").count() === 1, "country chip");
+  await page.click("button[aria-label='Remove United Arab Emirates']");
+  expect(await page.locator(".chip").count() === 2, "back to SA + IN");
+  await page.waitForSelector("text=Holiday corrections");
+  await page.waitForSelector(".badge:has-text('Provisional'), .badge:has-text('Confirmed')");
+  await page.screenshot({ path: `${SHOTS}/settings-overview.png` });
 });
 
 await step("AT-68 optional notification matrix persists; critical events locked", async () => {
@@ -425,7 +508,7 @@ await step("AT-68 optional notification matrix persists; critical events locked"
   await page.waitForSelector("table.matrix");
   expect(await page.locator("input[aria-label='OCR / processing finished by In-app']").isChecked(), "choice persisted");
   expect(await page.locator(".crit-list li").count() > 3, "critical list");
-  await page.screenshot({ path: `${SHOTS}/notifications.png`, fullPage: true });
+  await page.screenshot({ path: `${SHOTS}/notifications.png` });
 });
 
 await step("AT-71 backup frequency shows the right fields and the next run", async () => {
@@ -441,7 +524,7 @@ await step("AT-71 backup frequency shows the right fields and the next run", asy
   await page.waitForSelector(".toast:has-text('Settings saved')");
   await page.reload();
   await page.waitForSelector("text=Monthly on day 31");
-  await page.screenshot({ path: `${SHOTS}/settings-backup.png`, fullPage: true });
+  await page.screenshot({ path: `${SHOTS}/settings-backup.png` });
   await api(page, "/api/settings", { method: "PUT", body: { values: { "backup.frequency": "daily", "backup.month_day": 1 } } });
 });
 
@@ -450,7 +533,7 @@ await step("AT-63/64 import into a chosen sub-folder with the exact final hierar
   await page.setInputFiles("input[type=file][webkitdirectory]", path.join(FIX, "import"));
   await page.waitForURL(/\/imports\/[0-9a-f-]+/);
   await page.selectOption("select[aria-label='Action for Old']", "user");
-  await page.selectOption("select[aria-label='Person for Old']", { label: "AB Ansari" });
+  await page.selectOption("select[aria-label='Person for Old']", { label: "Son1" });
   await page.click("button[aria-label='Destination sub-folder for Old']");
   await page.click(".modal .picker-pick:has-text('Parity')");
   await page.click(".modal button:has-text('Done')");
@@ -459,7 +542,7 @@ await step("AT-63/64 import into a chosen sub-folder with the exact final hierar
   await page.waitForSelector(".import-tree");
   const tree = await page.locator(".import-tree").innerText();
   expect(tree.includes("Address Update 22July2026") && tree.includes("new") && tree.includes("existing"), tree);
-  await page.screenshot({ path: `${SHOTS}/import-folder.png`, fullPage: true });
+  await page.screenshot({ path: `${SHOTS}/import-folder.png` });
   await page.click("button:has-text('Start import')");
   await page.waitForSelector("text=Open folders", { timeout: 30000 });
   const f = (await api(page, "/api/folders")).data.folders;
@@ -479,16 +562,43 @@ await step("screens for the README (desktop)", async () => {
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${SHOTS}/${file}` });
   }
-  const anon = await browser.newContext({ viewport: { width: 1366, height: 900 } });
-  const lp = await anon.newPage();
-  await lp.goto(BASE + "/login");
-  await lp.waitForSelector("#username");
-  await lp.screenshot({ path: `${SHOTS}/login.png` });
-  await anon.close();
+});
+
+await step("AT-128/130 every sign-in design keeps the same sign-in methods (desktop and phone)", async () => {
+  await api(page, "/api/settings", { method: "PUT", body: { values: { "auth.allow_passkeys": true, "auth.allow_passwordless": true } } });
+  for (const [design, w, h] of [["minimal", 1440, 900], ["nature", 1440, 900], ["travel", 1440, 900], ["family", 1440, 900], ["neutral", 1440, 900], ["travel", 390, 844]]) {
+    await api(page, "/api/settings", { method: "PUT", body: { values: { "login.design": design } } });
+    const anon = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 500, hasTouch: w < 500 });
+    const lp = await anon.newPage();
+    watch(lp, `login-${design}`);
+    await lp.goto(BASE + "/login");
+    await lp.waitForSelector(`.auth-art.design-${design}`);
+    for (const sel of ["#username", "#password", "button:has-text('Sign in')", "button:has-text('passkey')"]) expect(await lp.locator(sel).first().isVisible(), `${design}: ${sel} visible`);
+    const o = await lp.evaluate(() => ({ over: document.documentElement.scrollWidth - window.innerWidth, formTop: document.querySelector(".auth-form").getBoundingClientRect().top }));
+    expect(o.over <= 1, `${design}: overflow ${o.over}`);
+    if (w < 500) {
+      expect(o.formTop < 260, `phone: the form comes first (top ${o.formTop})`);
+      await lp.screenshot({ path: `${SHOTS}/mobile-login.png` });
+    } else if (["minimal", "nature", "travel", "family"].includes(design)) {
+      await lp.screenshot({ path: `${SHOTS}/${design === "minimal" ? "login" : `login-${design}`}.png` });
+    }
+    if (design === "travel" && w > 500) {
+      await lp.fill("#username", "son1");
+      await lp.fill("#password", "wrong-password");
+      await lp.click("button:has-text('Sign in')");
+      await lp.waitForSelector("[role=alert]");
+    }
+    await anon.close();
+  }
+  await page.goto(BASE + "/settings/overview");
+  await page.waitForSelector(".design-grid");
+  await page.locator(".design-grid").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${SHOTS}/settings-login-design.png` });
+  await api(page, "/api/settings", { method: "PUT", body: { values: { "login.design": "minimal", "auth.allow_passwordless": false } } });
 });
 
 // ------------------------------------------------------------------ tablet / mobile parity
-const ROUTES = ["/", "/folders", `/folders/${ids.parity}`, `/documents/${ids["Sample policy (3 pages)"]}`, "/search?q=sample", "/shared",
+const ROUTES = ["/", "/ocr-review", "/settings/overview", "/folders", `/folders/${ids.parity}`, `/documents/${ids["Sample policy (3 pages)"]}`, "/search?q=sample", "/shared",
   "/offline", "/notifications", "/archive", "/settings/account", "/settings/account?tab=security", "/settings/account?tab=appearance",
   "/settings/account?tab=notifications", "/settings/family", "/settings/notifications", "/settings/storage", "/settings/security",
   "/settings/ai", "/settings/activity?view=logins", "/assistant", "/imports/new", "/help/getting-started"];
@@ -549,13 +659,15 @@ for (const [vname, w, h] of VIEWPORTS) {
   if (vname === "mobile-portrait") {
     await step("AT-78 account preferences changed on desktop appear on mobile and back", async () => {
       await mp.goto(BASE + "/");
-      await mp.waitForSelector(".dash-grid");
-      expect(await mp.locator(".stat:has-text('Storage used')").count() === 0, "widget choice synced to mobile");
-      await mp.screenshot({ path: `${SHOTS}/mobile-dashboard.png`, fullPage: true });
+      await mp.waitForSelector(".ov-grid [data-widget=date] .ov-card.circle");
+      expect(await mp.locator("[data-widget=shared]").count() === 0, "widget choice synced to mobile");
+      const one = await mp.evaluate(() => getComputedStyle(document.querySelector(".ov-grid")).gridTemplateColumns.split(" ").length);
+      expect(one === 1, `phone uses one column (${one})`);
+      await mp.screenshot({ path: `${SHOTS}/mobile-overview.png` });
       await api(mp, "/api/settings", { method: "PUT", body: { values: { "me.theme": "blue" } } });
       await page.goto(BASE + "/");
       await page.waitForFunction(() => document.documentElement.dataset.theme === "blue");
-      await api(page, "/api/settings", { method: "PUT", body: { values: { "me.theme": "green", "me.dashboard_widgets": ["documents", "members", "expiring", "storage", "review", "family", "saved_views", "recent", "upcoming", "review_queue", "backup"] } } });
+      await api(page, "/api/settings", { method: "PUT", body: { values: { "me.theme": "green", "me.dashboard_widgets": ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity", "review_queue", "backup"] } } });
     });
   }
   await ctx.close();
@@ -563,5 +675,6 @@ for (const [vname, w, h] of VIEWPORTS) {
 
 await step("no uncaught page errors", async () => { expect(!errors.length, errors.join(" | ")); });
 await browser.close();
+wxServer.close();
 fs.writeFileSync(process.env.PARITY_REPORT || "docs/parity-report.json", JSON.stringify(results, null, 1));
 process.exit(results.some((r) => r[0] === "FAIL") ? 1 : 0);

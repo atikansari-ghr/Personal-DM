@@ -10,22 +10,27 @@ sudo personaldocs setup-token
 
 The code is valid for 24 hours and stops working after setup completes, so nobody on the internet can claim your installation.
 
-## The six initial accounts {#six-accounts}
+## The Main Administrator {#main-admin}
 
-| Role label | Suggested username | Initial responsibility |
-|---|---|---|
-| Dad | dad | Main administrator and head of the initial family group |
-| Mom | mom | Family member |
-| Son1 | son1 | Family member |
-| Daughter | daughter | Family member |
-| Son2 | son2 | Family member |
-| Son3 | son3 | Family member |
+Setup creates **one account only: the Main Administrator** (you). Enter your name, username and password; email and a relationship label (for example *Father*) are optional. You become the head of the initial family group. No other accounts, placeholder members or default names are created.
 
-Enter each person's real name. Role labels describe relationships and can be changed. Names, usernames and emails can be edited later without breaking anything, because every account has a permanent internal ID.
+## Adding family members (optional) {#add-members}
 
-- Dad sets his own password. Other members get an individually generated temporary password (shown once) or one you type; they must change it at first sign-in.
-- Leave a member's name empty to skip that slot; add the person later in Settings → Family & access.
-- Rerunning setup is refused once it has completed, so accounts are never duplicated.
+The next step, **Add family members (optional)**, lets you add zero, one or many people right away:
+
+- **Add a family member** adds a row: name, username, relationship (suggestions such as Mother, Son or Daughter, or type your own), optional email and an optional password. Leave the password empty to get a generated temporary password, shown once at the end.
+- **Remove** deletes a row before it is saved. **Skip for now** continues without members.
+- Members must change their temporary password at first sign-in.
+
+You can always add people later in **Settings → Family & access → Add member**. Rerunning setup is refused once it has completed, so accounts are never duplicated. Names, usernames and emails can be edited later without breaking anything, because every account has a permanent internal ID.
+
+### Upgrading an installation created by an earlier release {#six-accounts}
+
+Earlier releases created six default family accounts during setup. Upgrading **keeps every existing account, folder and document**; nothing is deleted or renamed. Accounts you no longer need can be deactivated in Settings → Family & access. Deactivating or removing a person never silently deletes their documents: the documents stay in their library, where the administrator can move them.
+
+### Names in screenshots {#demo-names}
+
+The public screenshots use the labels *A. Ansari* (administrator), *Mom*, *Son1*, *Son2*, *Son3* and *Daughter*. They are demonstration accounts added in the optional step for the pictures; they are not defaults, and the application never creates them.
 
 ## What each person sees initially {#initial-access}
 

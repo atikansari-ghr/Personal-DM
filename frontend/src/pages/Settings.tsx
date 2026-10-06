@@ -4,13 +4,14 @@ import AccountSettings from "./settings/Account";
 import { ActivityPanel, AuthPanel, ConnectionsPanel, DocumentsPanel, NotificationsAdmin, ProcessingPanel, StoragePanel } from "./settings/Admin";
 import FamilyPanel from "./settings/Family";
 import LocalAIPanel from "./settings/LocalAI";
+import OverviewAdminPanel from "./settings/OverviewAdmin";
 import { LoginAuditPanel, SecurityPanel, TrafficPanel } from "./settings/Security";
 import SettingsForm from "../components/SettingsForm";
 
 const ADMIN_TABS: [string, string][] = [
   ["general", "General"], ["family", "Family & access"], ["documents", "Documents & folders"], ["processing", "OCR & processing"],
   ["notifications", "Notifications"], ["connections", "Connections"], ["authentication", "Authentication"], ["storage", "Storage & backup"],
-  ["security", "Security & access"], ["activity", "Activity & health"], ["ai", "Local AI"],
+  ["security", "Security & access"], ["activity", "Activity & health"], ["ai", "Local AI"], ["overview", "Overview & sign-in"],
 ];
 
 export default function SettingsPage() {
@@ -38,6 +39,7 @@ export default function SettingsPage() {
       {active === "security" && admin && <SecurityPanel />}
       {active === "activity" && admin && <ActivityTabs />}
       {active === "ai" && admin && <LocalAIPanel />}
+      {active === "overview" && admin && <OverviewAdminPanel />}
     </div>
   );
 }

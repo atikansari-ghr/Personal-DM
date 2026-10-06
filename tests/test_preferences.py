@@ -14,10 +14,10 @@ def test_at65_widgets_are_a_list_of_real_widgets(family, clients):
     assert s["type"] == "widget_list"
     assert s["choices"] == list(registry.WIDGETS)
     assert set(s["choice_labels"]) == set(registry.WIDGETS)  # human labels, no comma-separated ids to type
-    assert s["value"] == list(registry.WIDGETS)
+    assert s["value"] == registry.DEFAULT_WIDGETS  # new accounts start with the suggested widgets
     r = clients["son1"].put("/api/settings", {"values": {"me.dashboard_widgets": ["recent", "nonsense"]}}, format="json")
     assert r.status_code == 400
-    assert _prefs(clients["son1"])["dashboard_widgets"] == list(registry.WIDGETS)
+    assert _prefs(clients["son1"])["dashboard_widgets"] == registry.DEFAULT_WIDGETS
 
 
 def test_at66_at78_order_persists_per_account_and_reaches_other_devices(family, clients):
@@ -28,7 +28,7 @@ def test_at66_at78_order_persists_per_account_and_reaches_other_devices(family, 
     phone = client_for(son1)  # a second device signed in to the same account
     assert _prefs(phone)["dashboard_widgets"] == ["upcoming", "expiring", "recent", "documents"]
     # other accounts are not affected
-    assert _prefs(clients["son2"])["dashboard_widgets"] == list(registry.WIDGETS)
+    assert _prefs(clients["son2"])["dashboard_widgets"] == registry.DEFAULT_WIDGETS
     # theme and layout follow the account too
     clients["son1"].put("/api/settings", {"values": {"me.theme": "blue", "me.layout": "full_page"}}, format="json")
     assert _prefs(phone)["theme"] == "blue" and _prefs(phone)["layout"] == "full_page"

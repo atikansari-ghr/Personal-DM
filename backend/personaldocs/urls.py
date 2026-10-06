@@ -5,8 +5,10 @@ from django.urls import path, re_path
 from apps.accounts import google
 from apps.ai import views as ai
 from apps.accounts import views as acc
+from apps.core import branding_views as brand
+from apps.core import overview_views as ov
 from apps.core import views as core
-from apps.library import export, views as lib, views_import as imp, views_share as share
+from apps.library import export, ocr_views as ocrv, views as lib, views_import as imp, views_share as share
 from apps.mailimport import views as mail
 from apps.notify import views as notify
 from apps.ops import views as ops
@@ -89,6 +91,18 @@ api = [
     path("family/delegations", acc.delegation),
     # library
     path("dashboard", lib.dashboard),
+    path("branding", brand.login_branding),
+    path("branding/wallpaper", brand.wallpaper),
+    path("branding/logo", brand.logo),
+    path("overview/calendar", ov.calendar),
+    path("overview/holidays", ov.upcoming_holidays),
+    path("overview/countries", ov.countries),
+    path("overview/weather", ov.weather),
+    path("overview/weather/cities", ov.weather_cities),
+    path("overview/weather/test", ov.weather_test),
+    path("overview/weather/default-city", ov.weather_default_city),
+    path("overview/holiday-overrides", ov.holiday_overrides),
+    path("overview/holiday-overrides/<int:pk>", ov.holiday_override_detail),
     path("folders", lib.folders),
     path("folders/<uuid:pk>", lib.folder_detail),
     path("folders/<uuid:pk>/archive", lib.folder_archive),
@@ -111,6 +125,13 @@ api = [
     path("documents/<uuid:pk>/preview", lib.document_preview),
     path("documents/<uuid:pk>/thumbnail", lib.document_thumbnail),
     path("documents/<uuid:pk>/text", lib.document_text),
+    path("documents/<uuid:pk>/ocr", ocrv.document_ocr),
+    path("documents/<uuid:pk>/ocr/cancel", ocrv.document_ocr_cancel),
+    path("documents/<uuid:pk>/ocr/reviewed", ocrv.document_ocr_reviewed),
+    path("ocr/review", ocrv.ocr_review_queue),
+    path("ocr/languages", ocrv.ocr_languages),
+    path("ocr/types", ocrv.ocr_types),
+    path("ocr/types/<int:pk>", ocrv.ocr_type_detail),
     path("documents/<uuid:pk>/similar", lib.document_similar),
     path("documents/<uuid:pk>/shares", share.document_shares),
     path("shares/<uuid:sid>", share.share_revoke),

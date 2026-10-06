@@ -9,7 +9,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const AXE = fs.readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const BASE = process.env.BASE || "http://localhost:8000";
-const USER = process.env.A11Y_USER || "dad";
+const USER = process.env.A11Y_USER || "admin";
 const PW = process.env.A11Y_PASSWORD || "Sample-Passw0rd!";
 const THEMES = ["green", "blue", "mono"];
 const PAGES = [
@@ -32,6 +32,8 @@ const PAGES = [
   ["local-ai", "/settings/ai", true],
   ["login-audit", "/settings/activity?view=logins", true],
   ["import", "/imports/new", true],
+  ["ocr-review", "/ocr-review", true],
+  ["settings-overview-sign-in", "/settings/overview", true],
 ];
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });

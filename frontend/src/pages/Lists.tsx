@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, formatDate, formatDateTime } from "../api";
 import DocumentPanel from "../components/DocumentPanel";
 import { Avatar, Confirm, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useAsync, useToast } from "../components/ui";
-import { useSession } from "../session";
 import type { DocRow, Meta, User } from "../types";
 import FileTypeIcon from "../components/FileTypeIcon";
 import { useAiStatus } from "../ai";
@@ -39,7 +38,7 @@ export function SearchPage() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [members, setMembers] = useState<User[]>([]);
   const q = params.get("q") || "";
-  const filters = ["owner", "type", "tag", "state", "expiring_days", "expired"].reduce((acc, k) => ({ ...acc, [k]: params.get(k) || "" }), {} as Record<string, string>);
+  const filters = ["owner", "type", "tag", "state", "expiring_days", "expired", "shared"].reduce((acc, k) => ({ ...acc, [k]: params.get(k) || "" }), {} as Record<string, string>);
   const [offset, setOffset] = useState(0);
   const ai = useAiStatus();
   const meaning = params.get("mode") === "meaning" && !!q;
@@ -66,6 +65,7 @@ export function SearchPage() {
         <select aria-label="Expiry" value={filters.expiring_days || (filters.expired ? "expired" : "")} onChange={(e) => { const n = new URLSearchParams(params); n.delete("expired"); n.delete("expiring_days"); if (e.target.value === "expired") n.set("expired", "1"); else if (e.target.value) n.set("expiring_days", e.target.value); setParams(n); }} style={{ maxWidth: 200 }}>
           <option value="">Any expiry</option><option value="30">Expires within 30 days</option><option value="90">Expires within 90 days</option><option value="expired">Expired</option>
         </select>
+        <label className="check"><input type="checkbox" checked={!!filters.shared} onChange={(e) => set("shared", e.target.checked ? "1" : "")} /> Shared with me</label>
         {ai?.semantic_search && q && <label className="check" title="Use the local AI to find documents with a similar meaning (filters do not apply)"><input type="checkbox" checked={meaning} onChange={(e) => set("mode", e.target.checked ? "meaning" : "")} /> Match meaning (AI)</label>}
       </div>
       {meaning && error && <div className="alert warn">Semantic search is unavailable ({error}). Untick “Match meaning” to use normal search.</div>}
@@ -84,10 +84,9 @@ export function SearchPage() {
 }
 
 export function SharedPage() {
-  const { session } = useSession();
-  const { data, loading } = useAsync(() => api<{ documents: DocRow[]; total: number }>("documents", { query: { limit: 200 } }), []);
+  const { data, loading } = useAsync(() => api<{ documents: DocRow[]; total: number }>("documents", { query: { shared: "1", limit: 200 } }), []);
   if (loading || !data) return <Skeleton />;
-  const shared = data.documents.filter((d) => d.owner.id !== session?.user?.id);
+  const shared = data.documents;
   return (
     <div className="stack">
       <div className="page-head"><div><h1>Shared with me</h1><p className="muted">Documents owned by other family members that you can view.</p></div></div>

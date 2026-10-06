@@ -69,3 +69,32 @@ class Job(models.Model):
 class RateLimitHit(models.Model):
     bucket = models.CharField(max_length=200, db_index=True)
     at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
+class HolidayOverride(models.Model):
+    """An administrator's correction to the holiday library: confirm or rename a calculated date, add a holiday the
+    library lacks, or hide one that does not apply. Library data itself is never edited."""
+
+    CONFIRMED, PROVISIONAL = "confirmed", "provisional"
+    STATUS = [(CONFIRMED, "Confirmed"), (PROVISIONAL, "Provisional")]
+
+    country = models.CharField(max_length=3)
+    date = models.DateField()
+    name = models.CharField(max_length=120, blank=True)
+    status = models.CharField(max_length=12, choices=STATUS, default=CONFIRMED)
+    hidden = models.BooleanField(default=False, help_text="Hide the library holidays of this country on this date")
+    source = models.CharField(max_length=200, blank=True, help_text="Where the correction comes from, e.g. an official announcement")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("country", "date")]
+        ordering = ["date"]
+
+
+class WeatherCache(models.Model):
+    """Last successful weather response per location, shared by all workers so the provider is asked rarely."""
+
+    key = models.CharField(max_length=120, primary_key=True)
+    data = models.JSONField(default=dict)
+    fetched_at = models.DateTimeField()

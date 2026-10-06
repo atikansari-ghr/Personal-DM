@@ -30,7 +30,7 @@ Every function works on phones and tablets; only the layout changes:
 - **Viewer:** the zoom/fit toolbar is one row you can swipe sideways; pinch-zoom of the page also works, but the
   buttons are always there. See [viewing documents](getting-started.md#viewer).
 - **Tables** (notification choices, family members, login audit) turn into stacked rows on narrow screens.
-- **Settings follow your account:** theme, dashboard widgets and their order, layout, notification choices and
+- **Settings follow your account:** theme, Overview widgets with their order, sizes and styles, layout, notification choices and
   profile photo are stored on the server, so a change on your computer appears on your phone (open the app again or
   switch back to it). Only device-specific things stay on the device: panel widths, list/grid view and files saved
   for offline use.

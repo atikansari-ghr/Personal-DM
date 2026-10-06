@@ -1,11 +1,11 @@
 [
  [
   "PASS",
-  "first-run setup wizard creates six accounts"
+  "first-run setup: Main Administrator, then optional family members"
  ],
  [
   "PASS",
-  "login page and sign in as Dad"
+  "login page and sign in as the administrator"
  ],
  [
   "PASS",
@@ -13,7 +13,11 @@
  ],
  [
   "PASS",
-  "dashboard shows stats, members and recent document"
+  "passport type is Manual: nothing is recognised until Run OCR is chosen"
+ ],
+ [
+  "PASS",
+  "Overview shows the date, holidays and the recent document"
  ],
  [
   "PASS",

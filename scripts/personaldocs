@@ -46,7 +46,7 @@ MIN_DISK_MB=4096
 APT_PACKAGES=(
   python3 python3-venv python3-dev build-essential libpq-dev
   postgresql postgresql-client
-  tesseract-ocr tesseract-ocr-eng tesseract-ocr-osd ocrmypdf ghostscript qpdf unpaper pngquant poppler-utils
+  tesseract-ocr tesseract-ocr-eng tesseract-ocr-osd tesseract-ocr-ara tesseract-ocr-hin ocrmypdf ghostscript qpdf unpaper pngquant poppler-utils
   libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui fonts-dejavu-core
   git curl ca-certificates jq util-linux rsync iproute2 nfs-common cifs-utils
 )
@@ -137,9 +137,24 @@ preflight() {
 }
 
 install_optional_packages() { # never fatal: the app works without them
-  log "optional packages (GoAccess traffic analytics)"
+  log "optional packages (GoAccess traffic analytics, OCR language packs)"
   export DEBIAN_FRONTEND=noninteractive
   apt-get install -y -q --no-install-recommends goaccess >/dev/null 2>&1 || c_warn "GoAccess could not be installed; traffic analytics will use the built-in summary."
+  install_ocr_languages
+}
+
+install_ocr_languages() { # Tesseract packs for the languages offered in Settings -> OCR & processing
+  local langs="eng ara hin" l
+  if [ -L "$CURRENT" ] && [ -f "$ENV_FILE" ]; then
+    langs=$(manage shell -c "from apps.core import config; print(' '.join(config.get('processing.ocr_languages') or ['eng']))" 2>/dev/null | tail -1)
+    [ -n "$langs" ] || langs="eng ara hin"
+  fi
+  for l in $langs; do
+    [[ "$l" =~ ^[a-z]{3}(_[a-z]{3,4})?$ ]] || continue
+    dpkg -s "tesseract-ocr-${l//_/-}" >/dev/null 2>&1 && continue
+    apt-get install -y -q --no-install-recommends "tesseract-ocr-${l//_/-}" >/dev/null 2>&1 \
+      || c_warn "OCR language pack tesseract-ocr-${l//_/-} could not be installed; that language is unavailable."
+  done
 }
 
 ensure_access_log() { # privacy-safe access log for traffic analytics + weekly rotation

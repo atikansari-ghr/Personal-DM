@@ -5,6 +5,7 @@ import { Icon } from "../components/ui";
 import { useSession } from "../session";
 import { getPasskey, passkeyErrorMessage, passkeysSupported } from "../webauthn";
 import PasskeysCard from "../components/Passkeys";
+import LoginArt from "../components/LoginArt";
 import { Reauth } from "../components/Reauth";
 
 const GOOGLE_ERRORS: Record<string, string> = {
@@ -17,21 +18,33 @@ const GOOGLE_ERRORS: Record<string, string> = {
   sign_in_first: "Please sign in first.",
 };
 
+export interface LoginBranding { design: string; title: string; tagline: string; overlay: number; position: string; wallpaper: string | null; logo: string | null; has_wallpaper?: boolean }
+
+/** Sign-in layout: light wallpaper on the left, the sign-in panel on the right. On phones the wallpaper becomes a
+ *  short banner so the form comes first. Sign-in behaves identically with every design. */
+export function AuthWallpaper({ b, preview }: { b: LoginBranding; preview?: boolean }) {
+  return (
+    <section className={`auth-art design-${b.design}${preview ? " preview" : ""}`} aria-hidden={preview ? undefined : true} aria-label={preview ? "Sign-in page preview" : undefined}>
+      {b.wallpaper ? <div className="auth-wallpaper" style={{ backgroundImage: `url(${b.wallpaper})`, backgroundPosition: b.position || "center" }} /> : <LoginArt design={b.design} />}
+      {b.overlay > 0 && <div className="auth-overlay" style={{ opacity: b.overlay / 100 }} />}
+      <div className="auth-brand">
+        <div className="brand">{b.logo ? <img src={b.logo} alt="" className="auth-logo" /> : <Icon name="shield" size={34} />}</div>
+        <h1>{b.title}</h1>
+        {b.tagline && <p className="auth-tagline">{b.tagline}</p>}
+      </div>
+      <p className="small auth-foot">Hosted on your own server.</p>
+    </section>
+  );
+}
+
+export const DEFAULT_BRANDING: LoginBranding = { design: "minimal", title: "Personal Documents Management System", tagline: "Your family documents, safely in one place.", overlay: 0, position: "center", wallpaper: null, logo: null };
+
 export function AuthFrame({ children }: { children: ReactNode }) {
   const { session } = useSession();
+  const b: LoginBranding = session?.login || { ...DEFAULT_BRANDING, title: session?.app_name || DEFAULT_BRANDING.title };
   return (
     <div className="auth">
-      <section className="auth-art" aria-hidden="true">
-        <div className="brand" style={{ fontSize: "1.5rem" }}><Icon name="shield" size={34} /> {session?.app_name || "Personal Documents Management System"}</div>
-        <h1>Your family documents.<br />Together.</h1>
-        <p className="muted" style={{ fontSize: "1.2rem" }}>A private space for the things that matter.</p>
-        <div className="folders-art">
-          <div><span>🪪</span>Identity</div>
-          <div><span>🎓</span>Education</div>
-          <div><span>✈️</span>Travel</div>
-        </div>
-        <p className="muted small" style={{ marginTop: "auto" }}>Hosted on your own server.</p>
-      </section>
+      <AuthWallpaper b={b} />
       <section className="auth-form">{children}</section>
     </div>
   );

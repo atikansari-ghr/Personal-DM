@@ -193,6 +193,14 @@ def _do_backup(target: Path) -> dict:
                 (work / "profile-photos").mkdir(exist_ok=True)
                 shutil.copyfile(src, work / "profile-photos" / src.name)
                 photos += 1
+    # Sign-in page wallpaper and logo (referenced by login.wallpaper_file / login.logo_file)
+    from apps.core.branding import branding_dir
+
+    for key in ("login.wallpaper_file", "login.logo_file"):
+        name = config.get(key)
+        if name and (branding_dir() / name).exists():
+            (work / "branding").mkdir(exist_ok=True)
+            shutil.copyfile(branding_dir() / name, work / "branding" / name)
     (work / "settings.json").write_text(json.dumps(config.snapshot_global(), indent=1, default=str))
     if config.get("backup.include_keys"):
         key = crypto.key_path()
@@ -267,6 +275,13 @@ def restore_backup(path: Path, *, include_key: bool = True) -> dict:
         for f in (path / "profile-photos").glob("*.webp"):
             shutil.copyfile(f, photo_dir() / f.name)
             os.chmod(photo_dir() / f.name, 0o640)
+    if (path / "branding").exists():
+        from apps.core.branding import branding_dir
+
+        branding_dir().mkdir(parents=True, exist_ok=True)
+        for f in (path / "branding").glob("*.webp"):
+            shutil.copyfile(f, branding_dir() / f.name)
+            os.chmod(branding_dir() / f.name, 0o640)
     key_restored = False
     if include_key and (path / "encryption.key").exists():
         kp = crypto.key_path()

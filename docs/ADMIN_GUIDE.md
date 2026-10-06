@@ -19,15 +19,20 @@ container (`pct enter <id>` from the Proxmox host).
    Then it installs and checks everything.
 3. Configure the reverse proxy (below), open the HTTPS address and enter the setup code
    (`personaldocs setup-token` prints a new one).
-4. The wizard creates the six family accounts. Hand each person their temporary password; they choose their own at
-   first sign-in.
+4. The wizard creates **only the Main Administrator** (your name, username and password; relationship label and email
+   are optional). No default family accounts are created.
+5. The next step, **Add family members (optional)**, adds zero, one or many people (name, username, relationship,
+   optional email and password), or **Skip for now**. Members without a password get a generated temporary password,
+   shown once; everyone must choose their own at first sign-in. You can add people later in **Settings → Family &
+   access → Add member**.
 
 Guides: [installation](guides/installation.md), [setup](guides/setup.md), [private GitHub access](guides/private-github.md).
 
 ## 2. Family, extended family and permissions {#family}
 
 **Settings → Family & access**:
-- Add or disable members.
+- Add or deactivate members. Deactivating never deletes the person's documents; they stay in their library, where
+  you can move them. Members cannot be deleted from the web interface.
 - Reset passwords.
 - Reset 2FA (removes the authenticator app, passkeys and recovery codes; audited, and the person is notified).
 - Manage profile photos.
@@ -89,7 +94,23 @@ Guide: [notifications](guides/expiry-rules.md#critical).
 
 ## 6. OCR and processing {#ocr}
 
-- **Settings → OCR & processing:** local OCR (English), concurrency (1 on 2 vCPU/4 GB), timeouts and memory limits.
+- **Selective OCR:** OCR reads only what is chosen. **OCR policy per document type** sets each type to *Disabled*,
+  *Manual* or *Automatic* (only the document's primary OCR source), with default languages, expected fields and
+  whether **AI may read text**. Add custom types or archive types no longer needed; built-in types and types in use
+  are never deleted. **Untyped documents** (`processing.ocr_untyped_mode`, default *Manual*) covers documents without
+  a type.
+- **Defaults:** new installations start with *Manual* for every type. Installations upgraded from an earlier release
+  are set to *Automatic* with AI allowed for every type and for untyped documents, so nothing changes until you
+  choose otherwise.
+- **Languages:** English, Arabic and Hindi are offered by default (`processing.ocr_languages`); add more as needed.
+  Install, upgrade and `sudo personaldocs repair` install the Tesseract pack for every offered language;
+  `sudo personaldocs doctor` reports missing packs. A language without its pack is shown as *not installed*.
+- **Limits:** concurrency (1 on 2 vCPU/4 GB), timeouts, memory, maximum file size for OCR (default 50 MB), maximum
+  pages per OCR job, queue size (default 50 waiting jobs) and attempts (default 2). Requests above a limit are refused
+  with a message; the file is still stored.
+- **Pause OCR queue** (`processing.ocr_paused`) keeps queued jobs waiting, for example during a backup or heavy
+  import; nothing is lost.
+- **OCR review** in the sidebar lists documents waiting for review or failed, limited to what each person may edit.
 - The job list shows failures, which you can retry.
 - Optional PDF/A validation with veraPDF (`--with-verapdf`).
 - Images are preprocessed before OCR: EXIF orientation, grayscale, contrast, upscaling, denoise, 0/90/180/270°
@@ -98,7 +119,7 @@ Guide: [notifications](guides/expiry-rules.md#critical).
   a forced rotation. To reproduce the measurements: `PD_DEBUG=1 .venv/bin/python scripts/ocr_benchmark.py`
   ([OCR benchmark](OCR_BENCHMARK.md)).
 
-Guides: [OCR and corrections](guides/ocr-corrections.md), [Office and DICOM](guides/office-dicom.md).
+Guides: [OCR and corrections](guides/ocr-corrections.md#selective), [Office and DICOM](guides/office-dicom.md).
 
 ## 7. Local AI (optional) {#ai}
 
@@ -109,12 +130,38 @@ Guides: [OCR and corrections](guides/ocr-corrections.md), [Office and DICOM](gui
 4. Switch on the features you want.
 
 - AI never changes documents without a person accepting the suggestion.
-- It only sees documents the asking person can open, and there is no cloud fallback.
+- It only sees documents the asking person can open, and only the text of document types where **AI may read
+  text** is allowed (Settings → OCR & processing). There is no cloud fallback.
 - A 2 vCPU/4 GB container cannot run useful models itself; use a LAN PC.
 
 Guide: [Local AI](guides/local-ai.md).
 
-## 8. Security and access {#security}
+## 8. Overview and sign-in page {#overview}
+
+**Settings → Overview & sign-in** (administrators only):
+
+- **Holiday countries:** searchable list of the countries supported by the bundled *holidays* library, up to 12
+  (default Saudi Arabia and India). Nothing is downloaded; no dates are hard-coded.
+- **Holiday corrections:** moon-dependent holidays are *Provisional*. Confirm or rename a date, add a missing holiday
+  or hide one, each with a status and source (for example "official announcement"). Deleting a correction restores
+  the library's data.
+- **Hijri date adjustment:** shift the Umm al-Qura date by up to ±2 days to match the local moon sighting. "Today"
+  follows the installation timezone (Settings → General).
+- **Weather:** off by default. When enabled, the server asks Open-Meteo (or the address you enter) for the forecast
+  and caches it (default 30 minutes) for everyone who chose the same city. Only city coordinates leave the server,
+  never names, documents or account details. An optional API key is stored encrypted. **Test connection** checks the
+  saved settings. If the provider is unreachable, the widget shows the last forecast (up to 24 hours) or "Weather
+  unavailable"; the rest of the Overview still loads.
+- **Sign-in page:** presets Minimal (default), Nature, Travel, Family and Neutral, or a custom wallpaper (JPEG, PNG or
+  WebP, at least 800 × 500, at most 10 MB). Uploads are previewed, re-encoded as WebP, stripped of metadata such as
+  GPS location, stored under the data directory and included in backups. Also: position, overlay, title, tagline and
+  logo (up to 2 MB). **Reset to default** returns to Minimal. The design never changes which sign-in methods are
+  offered.
+- **The sign-in page is public.** Do not use private family photos or pictures that show documents.
+
+Guides: [Overview](guides/overview.md), [sign-in page designs](guides/login-designs.md).
+
+## 9. Security and access {#security}
 
 **Real client IP:** list the NPM / Pangolin (Newt) address in `PD_TRUSTED_PROXY_IPS`, then check
 **Settings → Security & access → Your connection**.
@@ -149,7 +196,7 @@ In an emergency, `PD_ACCESS_POLICY_DISABLED=1` in `/etc/personaldocs/personaldoc
 
 Guides: [security & access](guides/security-access.md), [reverse proxy](guides/reverse-proxy.md).
 
-## 9. Monitoring {#monitoring}
+## 10. Monitoring {#monitoring}
 
 **Activity & health:**
 - **Health & audit log:** services, jobs, disk, and every audited action.
@@ -159,7 +206,7 @@ Guides: [security & access](guides/security-access.md), [reverse proxy](guides/r
 
 Guide: [security & access](guides/security-access.md#login-audit).
 
-## 10. Backups and restore {#backup}
+## 11. Backups and restore {#backup}
 
 - **Settings → Storage & backup:**
   - Connect the NAS (NFS or SMB) or use a mounted path containing the marker file.
@@ -167,14 +214,15 @@ Guide: [security & access](guides/security-access.md#login-audit).
     months) and a time.
   - Retention keeps N successful backups regardless of frequency.
 - The status card shows the schedule, the next run, the last success and the last failure.
-- A backup contains the database, originals, derivatives, settings and (optionally) the encryption key. The GeoIP
+- A backup contains the database, originals, derivatives, settings, the sign-in branding files and (optionally) the
+  encryption key. The GeoIP
   file is not included; update it after a restore.
 - **Restore** only from the console: `sudo personaldocs restore <backup-dir>`. Drill it on a second container.
 - `sudo personaldocs integrity` checks every stored file against its checksum.
 
 Guide: [backup & restore](guides/backup-restore.md).
 
-## 11. Recovery {#recovery}
+## 12. Recovery {#recovery}
 
 | Situation | Action |
 |---|---|
@@ -186,21 +234,27 @@ Guide: [backup & restore](guides/backup-restore.md).
 
 There is no web-based bypass of two-step verification or of the access policy.
 
-## 12. Upgrade, doctor and repair {#upgrade}
+## 13. Upgrade, doctor and repair {#upgrade}
 
 ```
 sudo personaldocs upgrade     # verified backup → new release → migrations → restart → health check
 sudo personaldocs repair      # safe; also applies installer steps added in newer versions
-sudo personaldocs doctor      # proxy trust, GeoIP, passkey origin, AI profiles, storage, services, GoAccess
+sudo personaldocs doctor      # proxy trust, GeoIP, passkey origin, AI profiles, OCR language packs, storage, services, GoAccess
 ```
 
 The one-line installer offers the same actions as a menu (install, upgrade, repair, doctor, status, backup,
 restore, recover-admin): `bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)"`.
 See [one-line install](guides/installation.md#one-line).
 
-Guide: [upgrades](guides/upgrades.md) (with notes for each change set).
+**Upgrading to the selective OCR / Overview release:** existing accounts, folders and documents are kept (no
+default accounts are added or removed). OCR stays automatic with AI allowed for every type until you change the
+policy. New Python packages and OCR language packs are installed by the upgrade; run `sudo personaldocs doctor`
+afterwards and `sudo personaldocs repair` if a language pack is reported missing. Weather stays off and the sign-in
+page uses Minimal until you change them. People who had chosen their dashboard widgets keep that choice.
 
-## 13. Public deployment considerations {#public}
+Guide: [upgrades](guides/upgrades.md#selective-ocr-overview) (with notes for each change set).
+
+## 14. Public deployment considerations {#public}
 
 - Expose only HTTPS through the proxy, and keep port 8000 firewalled to the proxy (the installer does this when it
   can).
@@ -208,4 +262,5 @@ Guide: [upgrades](guides/upgrades.md) (with notes for each change set).
   your countries with temporary travel access.
 - Keep the system updated (`apt upgrade`, `personaldocs upgrade`) and test a restore regularly.
 - Screenshots or logs shared for support must not contain real names, documents, IPs or tokens.
+- Keep the sign-in wallpaper and logo free of private photos; the sign-in page is visible to anyone.
 - If you publish your fork, run `scripts/privacy_check.sh --history` first and read [SECURITY.md](../SECURITY.md).

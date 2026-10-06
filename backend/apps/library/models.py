@@ -58,12 +58,22 @@ class AccessRule(models.Model):
 
 
 class DocumentType(models.Model):
-    TEMPLATES = ("generic", "passport", "visa", "iqama", "national_id", "driving_license", "insurance", "certificate")
+    TEMPLATES = ("generic", "passport", "visa", "iqama", "national_id", "driving_license", "employee_id", "insurance", "certificate")
+
+    OCR_DISABLED, OCR_MANUAL, OCR_AUTOMATIC = "disabled", "manual", "automatic"
+    OCR_MODES = (OCR_DISABLED, OCR_MANUAL, OCR_AUTOMATIC)
 
     name = models.CharField(max_length=80, unique=True)
     template = models.CharField(max_length=30, default="generic")
     has_expiry = models.BooleanField(default=False)
     emoji = models.CharField(max_length=16, blank=True)
+    # Selective OCR policy (Change Set K): nothing is recognised unless the type allows it.
+    ocr_mode = models.CharField(max_length=10, default=OCR_MANUAL, help_text="disabled | manual | automatic")
+    ocr_languages = models.JSONField(default=list, blank=True, help_text="Tesseract language codes, e.g. ['eng', 'ara']")
+    ocr_fields = models.JSONField(default=list, blank=True, help_text="Structured fields expected for this type")
+    ocr_ai_allowed = models.BooleanField(default=False, help_text="May Local AI read this type's recognised text")
+    is_custom = models.BooleanField(default=False)
+    archived = models.BooleanField(default=False, help_text="Hidden from new documents; existing documents keep it")
 
     class Meta:
         ordering = ["name"]
@@ -100,6 +110,9 @@ class CustomFieldDef(models.Model):
 
 
 class Document(models.Model):
+    # text recognition states (shown to people as: Not processed, Queued, Processing, Needs review, Confirmed,
+    # Failed, OCR removed)
+    OCR_STATES = ("not_processed", "queued", "processing", "needs_review", "confirmed", "failed", "removed")
     QUEUED, PROCESSING, NEEDS_REVIEW, READY, FAILED, UNSUPPORTED = (
         "queued", "processing", "needs_review", "ready", "failed", "unsupported")
 
@@ -122,6 +135,12 @@ class Document(models.Model):
     renews = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="renewed_by",
                                help_text="The previous credential this record renews (separate record)")
     content_text = models.TextField(blank=True)
+    # Text recognition (OCR) state for the whole logical document; see apps/library/ocr_runs.py
+    ocr_state = models.CharField(max_length=16, default="not_processed", db_index=True)
+    ocr_sources = models.JSONField(default=list, blank=True, help_text="Primary OCR source set: [{version, pages}]")
+    ocr_languages = models.JSONField(default=list, blank=True)
+    ocr_error = models.TextField(blank=True)
+    ocr_updated_at = models.DateTimeField(null=True, blank=True)
     search_vector = SearchVectorField(null=True)
     source_path = models.TextField(blank=True)
     archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -158,6 +177,8 @@ class DocumentVersion(models.Model):
     pdfa = models.BooleanField(default=False, help_text="Searchable copy passed PDF/A validation")
     pdfa_report = models.JSONField(default=dict, blank=True)
     ocr_quality = models.JSONField(default=dict, blank=True, help_text="OCR confidence, rotation, steps, low-confidence lines")
+    ocr_pages = models.CharField(max_length=200, blank=True, help_text="Pages recognised ('' = all pages)")
+    is_additional = models.BooleanField(default=False, help_text="Another side/copy of the same document (not a replacement)")
     state = models.CharField(max_length=16, default="queued")
     error = models.TextField(blank=True)
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")

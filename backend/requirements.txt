@@ -9,6 +9,8 @@ cryptography==50.0.2
 Django==5.2.17
 djangorestframework==3.18.1
 gunicorn==26.2.0
+hijridate==2.6.0
+holidays==0.106
 idna==3.20
 maxminddb==3.2.0
 packaging==26.3
@@ -20,8 +22,10 @@ PyJWT==2.15.1
 pyOpenSSL==26.4.0
 PyOTP==2.10.0
 pypdf==6.19.0
+python-dateutil==2.9.0.post0
 qrcode==8.2
 requests==2.34.2
+six==1.17.0
 sqlparse==0.6.0
 urllib3==2.8.0
 webauthn==3.0.1

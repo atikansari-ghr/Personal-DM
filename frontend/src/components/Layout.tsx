@@ -10,6 +10,7 @@ const NAV = [
   ["/", "home", "Overview"],
   ["/folders", "folder", "Folders"],
   ["/shared", "users", "Shared with me"],
+  ["/ocr-review", "eye", "OCR review"],
   ["/offline", "download", "Offline files"],
   ["/notifications", "bell", "Notifications"],
   ["/archive", "archive", "Archive"],

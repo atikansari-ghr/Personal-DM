@@ -24,7 +24,7 @@ from . import search as searchlib
 from . import services as S
 from . import storage
 from .models import (AccessRule, Correspondent, CustomFieldDef, Document, DocumentField, DocumentType, DocumentVersion, Folder,
-                     SavedView, Tag)
+                     DocumentHistory, SavedView, Tag)
 from .serializers import document_detail, document_row, field_json, folder_json, user_mini, version_json
 
 
@@ -468,7 +468,8 @@ def document_versions(request, pk):
         return _err("Choose a file.")
     try:
         staged = storage.stage_uploaded_file(f)
-        v = S.add_version(actor=request.user, doc=doc, staged=staged, comment=(request.data.get("comment") or "")[:255])
+        v = S.add_version(actor=request.user, doc=doc, staged=staged, comment=(request.data.get("comment") or "")[:255],
+                          additional=str(request.data.get("additional") or "").lower() in ("1", "true", "yes"))
     except (storage.StorageError, S.DomainError) as exc:
         return _err(str(exc))
     audit.record("document.version_upload", request=request, target=doc, subject_user=doc.owner, version=v.number)
@@ -535,6 +536,9 @@ def document_fields(request, pk):
         return _err(str(exc))
     audit.record("document.fields", request=request, target=doc, subject_user=doc.owner)
     doc.refresh_from_db()
+    if doc.ocr_state == "needs_review" and not doc.fields.filter(status=DocumentField.PROPOSED).exists():
+        Document.objects.filter(pk=doc.pk).update(ocr_state="confirmed")  # every suggestion was decided
+        doc.ocr_state = "confirmed"
     searchlib.update_search_vector(doc)
     return Response(document_detail(_ctx(request), doc))
 
@@ -608,9 +612,18 @@ def document_reprocess(request, pk):
         if rotate not in (0, 90, 180, 270):
             return _err("Rotation must be auto, 0, 90, 180 or 270.")
         payload["rotate"] = rotate  # manual orientation for the OCR re-run (clockwise degrees)
+    if "rotate" in payload:  # a rotation only matters for text recognition: re-run OCR on the source set
+        from . import ocr_runs
+
+        try:
+            ocr_runs.request_ocr(actor=request.user, doc=doc, rotate=payload["rotate"], set_primary=False, request=request)
+        except ocr_runs.OCRError as exc:
+            return _err(str(exc))
+        audit.record("document.reprocess", request=request, target=doc, rotate=payload["rotate"])
+        return Response({"status": "queued", "ocr": True})
     D.objects.filter(pk=doc.pk).update(state=D.QUEUED)
     jobs.enqueue("process_version", payload, idempotency_key=f"process:{doc.current_version_id}:{timezone.now().timestamp()}")
-    audit.record("document.reprocess", request=request, target=doc, rotate=payload.get("rotate", "auto"))
+    audit.record("document.reprocess", request=request, target=doc, rotate="auto")
     return Response({"status": "queued"})
 
 
@@ -912,6 +925,24 @@ def dashboard(request):
         "review": [document_row(ctx, d) for d in review],
         "saved_views": [],
     }
+    from apps.core import config as cfg
+    from apps.core import overview
+
+    shared = docs.exclude(owner=request.user)
+    data["stats"]["shared"] = shared.count()
+    data["shared"] = [document_row(ctx, d) for d in shared.select_related("owner", "doc_type", "current_version").order_by("-created_at")[:6]]
+    labels = {"created": "added", "edited": "edited", "moved": "moved", "archived": "archived", "restored": "restored",
+              "version_added": "uploaded a new version of", "file_added": "added a file to", "current_version": "changed the current version of",
+              "field_confirmed": "confirmed details of", "field_removed": "removed a detail from", "ai_suggestion_accepted": "accepted a suggestion for"}
+    data["activity"] = [{"at": h.at, "action": h.action, "verb": labels.get(h.action, h.action.replace("_", " ")),
+                         "actor": h.actor.display_name if h.actor_id else "System",
+                         "document": {"id": str(h.document_id), "title": h.document.title}}
+                        for h in DocumentHistory.objects.filter(document__in=docs).select_related("actor", "document").order_by("-at")[:8]]
+    data["today"] = overview.today_info()
+    data["holidays"] = overview.upcoming_holidays(limit=6)
+    data["holiday_countries"] = [{"code": c, "name": overview.country_names()[c], "flag": overview.flag(c)} for c in overview.configured_countries()]
+    data["weather_enabled"] = bool(cfg.get("weather.enabled"))
+    data["layout_limits"] = overview.layout_limits()
     for v in SavedView.objects.filter(user=request.user, show_on_dashboard=True):
         _rows, total, _ = searchlib.search(ctx, v.query.get("q", ""), v.query, limit=1)
         data["saved_views"].append({**_view_json(v), "count": total})

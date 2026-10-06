@@ -134,29 +134,101 @@ Server/NAS paths (one per line) from which the main administrator may import. So
 
 ## Section: processing
 
-### Local OCR (`processing.ocr_enabled`)
+### Text recognition (OCR) (`processing.ocr_enabled`)
 
-Run local English OCR (Tesseract) on scans and images.
+Master switch for local OCR (Tesseract). Which documents are recognised is decided per document type below.
 
 - **Default:** `True`
 - **Allowed values:** bool
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
-- **Effect of changing:** When off, scans are stored and previewed but not text-searchable.
+- **Effect of changing:** When off, nothing is recognised; documents are still stored, previewed and searchable by their details.
 - **Restart needed:** no
-- **Learn more:** [ocr-corrections#ocr](guides/ocr-corrections.md#ocr)
+- **Learn more:** [ocr-corrections#selective](guides/ocr-corrections.md#selective)
 
-### OCR language (`processing.ocr_language`)
+### OCR languages offered (`processing.ocr_languages`)
 
-Tesseract language pack used.
+Languages people can choose when running OCR. The installer installs the matching Tesseract language packs; the health check reports missing ones.
 
-- **Default:** `'eng'`
-- **Allowed values:** eng
+- **Default:** `['eng', 'ara', 'hin']`
+- **Allowed values:** eng, ara, hin, urd, tel, tam, mal, kan, ben, mar, guj, pan, fra, deu, spa, fas, tur
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
-- **Effect of changing:** Only English is supported in the initial release.
+- **Effect of changing:** Run `sudo personaldocs repair` after adding a language to install its pack.
 - **Restart needed:** no
-- **Learn more:** [ocr-corrections#ocr](guides/ocr-corrections.md#ocr)
+- **Learn more:** [ocr-corrections#languages](guides/ocr-corrections.md#languages)
+
+### OCR for documents without a type (`processing.ocr_untyped_mode`)
+
+Disabled: never. Manual: only when someone runs OCR. Automatic: the primary file is recognised after upload.
+
+- **Default:** `'manual'`
+- **Allowed values:** disabled, manual, automatic
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Applies to new uploads and to the Run OCR button.
+- **Restart needed:** no
+- **Learn more:** [ocr-corrections#selective](guides/ocr-corrections.md#selective)
+
+### Local AI for documents without a type (`processing.ocr_untyped_ai_allowed`)
+
+Allow Local AI to read the recognised text of documents without a type (when Local AI is on).
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Off: Local AI never receives their text.
+- **Restart needed:** no
+- **Learn more:** [ocr-corrections#ai](guides/ocr-corrections.md#ai)
+
+### Pause OCR queue (`processing.ocr_paused`)
+
+Queued OCR jobs wait until the queue is resumed. Uploads, previews and search keep working.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Resuming continues the waiting jobs in order.
+- **Restart needed:** no
+- **Learn more:** [ocr-corrections#limits](guides/ocr-corrections.md#limits)
+
+### Maximum file size for OCR (MB) (`processing.ocr_max_file_mb`)
+
+Files above this size are stored and previewed but cannot be sent to OCR.
+
+- **Default:** `50`
+- **Allowed values:** 1–2000
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [ocr-corrections#limits](guides/ocr-corrections.md#limits)
+
+### Maximum queued OCR jobs (`processing.ocr_queue_max`)
+
+New OCR requests are refused with a clear message while this many are waiting.
+
+- **Default:** `50`
+- **Allowed values:** 1–10000
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [ocr-corrections#limits](guides/ocr-corrections.md#limits)
+
+### OCR retries (`processing.ocr_max_attempts`)
+
+How many times a failed OCR job is attempted before it is marked Failed.
+
+- **Default:** `2`
+- **Allowed values:** 1–10
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [ocr-corrections#limits](guides/ocr-corrections.md#limits)
 
 ### Concurrent OCR/conversion jobs (`processing.heavy_concurrency`)
 
@@ -183,9 +255,9 @@ Maximum time for one OCR or conversion step.
 - **Restart needed:** no
 - **Learn more:** [ocr-corrections#limits](guides/ocr-corrections.md#limits)
 
-### Maximum pages for OCR (`processing.max_pages`)
+### Maximum pages per OCR job (`processing.max_pages`)
 
-PDFs above this page count are stored without OCR.
+OCR requests covering more pages than this are refused (choose a page range instead).
 
 - **Default:** `300`
 - **Allowed values:** 1–5000
@@ -1109,6 +1181,219 @@ Log request and response sizes (never their content) for troubleshooting.
 - **Restart needed:** no
 - **Learn more:** [local-ai#troubleshooting](guides/local-ai.md#troubleshooting)
 
+## Section: overview
+
+### Holiday countries (`overview.holiday_countries`)
+
+Countries whose public holidays appear in the calendar and the Upcoming holidays widget. Holiday dates come from the bundled holidays library; Islamic dates are calculated and shown as provisional until you confirm them below.
+
+- **Default:** `['SA', 'IN']`
+- **Allowed values:** country_list
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Applies to everyone's Overview immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#holidays](guides/overview.md#holidays)
+- **Example:** SA, IN
+
+### Hijri date adjustment (days) (`overview.hijri_adjust`)
+
+The Hijri date follows the Umm al-Qura calendar. If the local moon sighting differs, shift it by up to two days.
+
+- **Default:** `0`
+- **Allowed values:** -2–2
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#hijri](guides/overview.md#hijri)
+
+### Weather widget (`weather.enabled`)
+
+Fetch the weather for the city each person chooses. The provider only receives the city coordinates, never documents or names. Off by default.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#weather](guides/overview.md#weather)
+
+### Weather provider (`weather.provider`)
+
+Service used for forecasts and city search.
+
+- **Default:** `'open_meteo'`
+- **Allowed values:** open_meteo
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** weather.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#weather](guides/overview.md#weather)
+
+### Forecast address (`weather.base_url`)
+
+Forecast API address. Change it only for a commercial plan or a self-hosted mirror.
+
+- **Default:** `'https://api.open-meteo.com/v1/forecast'`
+- **Allowed values:** –300
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** weather.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#weather](guides/overview.md#weather)
+
+### City search address (`weather.geocoding_url`)
+
+Geocoding API used when someone searches for a city.
+
+- **Default:** `'https://geocoding-api.open-meteo.com/v1/search'`
+- **Allowed values:** –300
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** weather.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#weather](guides/overview.md#weather)
+
+### Weather API key (`weather.api_key`)
+
+Only needed for a commercial plan. Stored encrypted and never shown again.
+
+- **Default:** (secret, not shown)
+- **Allowed values:** secret
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** weather.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#weather](guides/overview.md#weather)
+
+### Weather cache (minutes) (`weather.cache_minutes`)
+
+How long a forecast is reused before the provider is asked again.
+
+- **Default:** `30`
+- **Allowed values:** 10–360
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** weather.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#weather](guides/overview.md#weather)
+
+### Temperature units (`weather.units`)
+
+Units for every account.
+
+- **Default:** `'celsius'`
+- **Allowed values:** celsius, fahrenheit
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** weather.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#weather](guides/overview.md#weather)
+
+## Section: overview_hidden
+
+### Default city (`weather.default_city`)
+
+City shown to people who have not chosen their own.
+
+- **Default:** `None`
+- **Allowed values:** json
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** weather.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#weather](guides/overview.md#weather)
+
+## Section: login
+
+### Sign-in page design (`login.design`)
+
+Wallpaper on the left of the sign-in page. Sign-in works the same with every design.
+
+- **Default:** `'minimal'`
+- **Allowed values:** minimal, nature, travel, family, neutral, custom
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [login-designs#presets](guides/login-designs.md#presets)
+
+### Sign-in title (`login.title`)
+
+Heading on the sign-in page.
+
+- **Default:** `'Personal Documents Management System'`
+- **Allowed values:** –80
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [login-designs#branding](guides/login-designs.md#branding)
+
+### Tagline (`login.tagline`)
+
+Short line under the title. Leave empty to hide it.
+
+- **Default:** `'Your family documents, safely in one place.'`
+- **Allowed values:** –120
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [login-designs#branding](guides/login-designs.md#branding)
+
+### Wallpaper overlay (%) (`login.overlay`)
+
+Lightens the wallpaper so text stays readable.
+
+- **Default:** `0`
+- **Allowed values:** 0–80
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [login-designs#custom](guides/login-designs.md#custom)
+
+### Wallpaper position (`login.position`)
+
+Which part of a custom wallpaper stays visible when it is cropped.
+
+- **Default:** `'center'`
+- **Allowed values:** center, top, bottom, left, right
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [login-designs#custom](guides/login-designs.md#custom)
+
+## Section: login_hidden
+
+### Custom wallpaper file (`login.wallpaper_file`)
+
+Set by uploading a wallpaper.
+
+- **Default:** `''`
+- **Allowed values:** –80
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [login-designs#custom](guides/login-designs.md#custom)
+
+### Logo file (`login.logo_file`)
+
+Set by uploading a logo.
+
+- **Default:** `''`
+- **Allowed values:** –80
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [login-designs#branding](guides/login-designs.md#branding)
+
 ## Section: appearance
 
 ### Theme (`me.theme`)
@@ -1199,14 +1484,40 @@ Also send access, import and (for administrators) backup and integrity alerts to
 
 ## Section: appearance
 
-### Dashboard widgets (`me.dashboard_widgets`)
+### Overview widgets (`me.dashboard_widgets`)
 
-Choose what your dashboard shows and in which order. Saved to your account, so every device shows the same.
+Choose what your Overview shows and in which order. Saved to your account, so every device shows the same. Use Customize Overview for sizes and styles.
 
-- **Default:** `['documents', 'members', 'expiring', 'storage', 'review', 'family', 'saved_views', 'recent', 'upcoming', 'review_queue', 'backup']`
-- **Allowed values:** documents, members, expiring, storage, review, family, saved_views, recent, upcoming, review_queue, backup
+- **Default:** `['date', 'weather', 'summary', 'calendar', 'holidays', 'upcoming', 'shared', 'recent', 'activity', 'review_queue', 'backup']`
+- **Allowed values:** documents, members, expiring, storage, review, family, saved_views, recent, upcoming, review_queue, backup, date, weather, summary, calendar, holidays, shared, activity
 - **Scope:** user · **Editable by:** each user
 - **Depends on:** nothing
 - **Effect of changing:** Applies on all your devices.
 - **Restart needed:** no
-- **Learn more:** [getting-started#dashboard](guides/getting-started.md#dashboard)
+- **Learn more:** [overview#customize](guides/overview.md#customize)
+
+## Section: appearance_hidden
+
+### Overview layout (`me.overview_layout`)
+
+Size, style and options of each Overview widget.
+
+- **Default:** `{}`
+- **Allowed values:** overview_layout
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#customize](guides/overview.md#customize)
+
+### Weather city (`me.weather_city`)
+
+City for your weather widget.
+
+- **Default:** `None`
+- **Allowed values:** json
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#weather](guides/overview.md#weather)

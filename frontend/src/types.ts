@@ -26,6 +26,7 @@ export interface User extends UserMini {
 export interface Session {
   setup_complete: boolean;
   app_name: string;
+  login?: import("./pages/Auth").LoginBranding;
   version: string;
   google_enabled: boolean;
   pending_2fa: boolean;
@@ -34,7 +35,7 @@ export interface Session {
   passwordless_enabled?: boolean;
   totp_allowed?: boolean;
   user: User | null;
-  preferences?: { theme: string; layout: string; dashboard_widgets: string[]; doc_view?: string; doc_sort?: string };
+  preferences?: { theme: string; layout: string; dashboard_widgets: string[]; overview_layout?: Record<string, WidgetCfg>; doc_view?: string; doc_sort?: string };
   date_format?: string;
   timezone?: string;
   delegations?: { group: string; group_id: string; scopes: string[] }[];
@@ -54,6 +55,7 @@ export interface DocRow {
   expiry_date: string | null;
   issue_date: string | null;
   expiry: Expiry | null;
+  ocr_state?: string;
   created_at: string;
   archived: boolean;
   size: number | null;
@@ -79,6 +81,8 @@ export interface Version {
   state: string;
   error: string;
   ocr_applied: boolean;
+  ocr_pages?: string;
+  is_additional?: boolean;
   ocr_quality: { confidence: number; rotation: number; skew: number; steps: string[]; low_lines: number[]; line_count: number } | null;
   pdfa: boolean;
   pdfa_check: { validator: string; profile: string; compliant: boolean; full_validation: boolean; failed_rules: { description: string; clause?: string }[]; note?: string } | null;
@@ -101,6 +105,7 @@ export interface Field {
   confirmed_at: string | null;
 }
 export interface DocDetail extends DocRow {
+  ocr?: { state: string; mode: string; sources: { version: string; pages: string }[]; languages: string[]; error: string; ai_allowed: boolean };
   title_is_custom: boolean;
   correspondent: { id: number; name: string } | null;
   tags: { id: number; name: string; color: string }[];
@@ -146,3 +151,5 @@ export interface Meta {
   templates: string[];
   standard_fields: string[];
 }
+
+export interface WidgetCfg { w?: number; style?: "rect" | "compact" | "circle" | "compact_circle"; settings?: Record<string, any> }

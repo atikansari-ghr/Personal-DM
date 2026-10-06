@@ -5,7 +5,7 @@ measured. None was added just because it is commonly recommended.
 
 ## Method
 
-- **Samples:** `tests/ocr_samples.py` generates 11 deterministic **synthetic** images. They are fictional ID
+- **Samples:** `tests/ocr_samples.py` generates 12 deterministic **synthetic** images. They are fictional ID
   cards, a resident card stating "No Expiry Date" and an insurance page, with distortions families actually
   upload:
   - phone photos on a textured table
@@ -29,26 +29,29 @@ measured. None was added just because it is commonly recommended.
 Each row adds one step to the row above it. The rows marked "rejected" are alternatives that were measured and
 not adopted.
 
-| Variant | clean card scan | clean text page | phone photo, patterned card, skewed 4° | phone photo stored sideways (EXIF 6) | upside-down scan | rotated 90° without EXIF | dim low-contrast photo | photo with glare | small crop (420 px) | noisy photo | skewed text page 3° | Mean F1 | Time |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| baseline (before) | 1.00 | 1.00 | 0.60 | 0.00 | 0.00 | 0.00 | 0.94 | 0.00 | 1.00 | 0.82 | 0.99 | **0.58** | 7s |
-| + EXIF orientation | 1.00 | 1.00 | 0.60 | 0.73 | 0.00 | 0.00 | 0.94 | 0.00 | 1.00 | 0.82 | 0.99 | **0.64** | 7s |
-| + grayscale/contrast | 1.00 | 1.00 | 0.92 | 1.00 | 0.00 | 0.00 | 0.94 | 0.74 | 0.92 | 1.00 | 0.99 | **0.77** | 4s |
-| + orientation (0/90/180/270) | 1.00 | 1.00 | 0.92 | 1.00 | 1.00 | 1.00 | 0.94 | 0.50 | 0.92 | 1.00 | 0.99 | **0.93** | 19s |
-| + deskew | 1.00 | 1.00 | 0.92 | 0.96 | 1.00 | 1.00 | 0.94 | 0.29 | 0.92 | 0.79 | 1.00 | **0.89** | 21s |
-| + denoise | 1.00 | 1.00 | 0.92 | 0.96 | 1.00 | 1.00 | 0.94 | 0.29 | 1.00 | 1.00 | 1.00 | **0.92** | 23s |
-| + upscale < 2400 px (chosen) | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 0.70 | 1.00 | 1.00 | 1.00 | **0.97** | 29s |
-| chosen + threshold (rejected) | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 0.94 | 0.60 | 1.00 | 0.97 | 1.00 | **0.96** | 27s |
-| chosen, psm 6 (rejected) | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 0.97 | 1.00 | 0.79 | 1.00 | 0.95 | 1.00 | **0.97** | 28s |
-| chosen, psm 11 (rejected) | 0.91 | 1.00 | 1.00 | 1.00 | 0.91 | 0.97 | 0.94 | 0.56 | 0.91 | 0.95 | 1.00 | **0.92** | 27s |
+| Variant | clean card scan | clean text page | phone photo, patterned card, skewed 4° | phone photo stored sideways (EXIF 6) | upside-down scan | rotated 90° without EXIF | dim low-contrast photo | photo with glare | small crop (420 px) | noisy photo | skewed text page 3° | sparse one-line scan | Mean F1 | Time |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| baseline (before) | 1.00 | 1.00 | 0.60 | 0.00 | 0.00 | 0.00 | 0.94 | 0.00 | 1.00 | 0.82 | 0.99 | 1.00 | **0.61** | 10s |
+| + EXIF orientation | 1.00 | 1.00 | 0.60 | 0.73 | 0.00 | 0.00 | 0.94 | 0.00 | 1.00 | 0.82 | 0.99 | 1.00 | **0.67** | 10s |
+| + grayscale/contrast | 1.00 | 1.00 | 0.92 | 1.00 | 0.00 | 0.00 | 0.94 | 0.38 | 1.00 | 1.00 | 0.99 | 1.00 | **0.77** | 6s |
+| + orientation (0/90/180/270) | 1.00 | 1.00 | 0.92 | 1.00 | 1.00 | 1.00 | 0.94 | 0.35 | 1.00 | 1.00 | 0.99 | 1.00 | **0.93** | 27s |
+| + deskew | 1.00 | 1.00 | 0.92 | 0.96 | 1.00 | 1.00 | 1.00 | 0.67 | 1.00 | 0.91 | 1.00 | 1.00 | **0.96** | 30s |
+| + denoise | 1.00 | 1.00 | 0.92 | 0.96 | 1.00 | 1.00 | 0.94 | 0.40 | 1.00 | 1.00 | 1.00 | 1.00 | **0.94** | 34s |
+| + upscale < 2400 px (chosen) | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 0.94 | 0.69 | 1.00 | 1.00 | 1.00 | 1.00 | **0.97** | 41s |
+| chosen + threshold (rejected) | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 0.59 | 1.00 | 0.97 | 0.99 | 1.00 | **0.96** | 37s |
+| chosen, psm 6 (rejected) | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 0.97 | 0.94 | 0.00 | 1.00 | 0.97 | 1.00 | 1.00 | **0.91** | 40s |
+| chosen, psm 11 (rejected) | 0.91 | 1.00 | 1.00 | 1.00 | 0.91 | 0.97 | 0.94 | 0.30 | 0.91 | 0.95 | 1.00 | 1.00 | **0.91** | 38s |
 
-Timing is the wall-clock time for all 11 samples on the development container (single CPU core per Tesseract
+Timing is the wall-clock time for all 12 samples on the development container (single CPU core per Tesseract
 call). The orientation check adds a fast `--psm 0` pass, plus a reduced-size four-way trial when the orientation
 model is unsure.
 
 ## Findings
 
-- **Mean F1 rose from 0.58 to 0.97.** The two clean samples stayed at 1.00, so clean scans are not degraded.
+- **Mean F1 rose from 0.61 to 0.97.** The clean samples stayed at 1.00, so clean scans are not degraded.
+- **Contrast stretching clips only the bright end.** Clipping the darkest 1 % as well erased the ink of sparse pages
+  (one line of text on a full page is far below 1 % of the pixels) and produced empty or truncated text. The
+  "sparse one-line scan" sample guards against this.
 - **Orientation matters most.** Pictures stored sideways or upside down produced pure junk (F1 0.00) before.
   EXIF orientation fixes phone photos. Tesseract's orientation model, with a confidence-based fallback, fixes
   scans that carry no EXIF tag.

@@ -5,7 +5,7 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 ## Code and tests
 - [ ] `scripts/verify.sh` passes locally (compile, checks, migrations, settings reference, shell, pytest incl. OCR/LibreOffice tests, frontend build, hygiene)
 - [ ] CI green on the release commit
-- [ ] `scripts/e2e.sh` passes against a fresh database (flow 13/13, accessibility 0 serious, parity all steps)
+- [ ] `scripts/e2e.sh` passes against a fresh database (flow, accessibility 0 serious/blocking, parity all steps)
 - [ ] `sudo bash tests/installer/test_personal_dm.sh` (one-line installer lifecycle, stubbed) passes
 - [ ] OCR benchmark re-run if `ocr.py`/`extraction.py` changed (`scripts/ocr_benchmark.py`), `docs/OCR_BENCHMARK.md` updated
 - [ ] `npm audit --omit=dev` in `frontend/` reports no high/critical issues
@@ -23,6 +23,9 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Backup to NAS verified; NAS unmounted → backup refused with a clear message
 - [ ] Restore drill on a clean LXC: sign-in, permissions, versions, settings, integration secrets
 - [ ] `personaldocs integrity` clean
+- [ ] `sudo personaldocs doctor` reports no missing OCR language packs (otherwise `sudo personaldocs repair`)
+- [ ] Fresh install: setup creates only the Main Administrator; upgrade from the previous tag keeps every existing account
+- [ ] After an upgrade, Settings → OCR & processing shows the expected OCR policy per document type (existing installations: Automatic with AI allowed)
 
 ## Integrations (when configured)
 - [ ] SMTP test email and a real expiry reminder (no document number in the message)
@@ -34,6 +37,7 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Access policy applied with lock-out confirmation; `personaldocs access-policy off|rollback` recovers
 - [ ] Traffic analytics report generated on the LXC
 - [ ] Passkey registration and sign-in (2FA and passwordless) on at least one phone and one desktop; TOTP autofill from a password manager
+- [ ] Weather stays off unless the family wants it; if enabled, **Test connection** succeeds and only city coordinates are sent
 - [ ] Local AI profile test, analysis, assistant and semantic search against a LAN AI server; AI server off → core features unaffected
 
 ## Documentation
@@ -42,11 +46,13 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] `docs/TRACEABILITY.md` statuses current
 - [ ] `docs/IMPLEMENTATION_STATUS.md` updated
 - [ ] Screenshots refreshed if the UI changed
+- [ ] Screenshot and documentation names are demo labels only (A. Ansari, Mom, Son1, Son2, Son3, Daughter), described as added in the optional setup step
 
 ## Public repository (only when the owner decides to publish)
 - [x] License: MIT (`LICENSE`, README badge and section)
 - [ ] `scripts/privacy_check.sh --history` passes; any secret ever committed has been rotated and the history cleaned with the owner's approval
 - [ ] Screenshots in `docs/images/screenshots/` reviewed by eye: only synthetic names, documents, domains and IPs
+- [ ] The sign-in wallpaper and logo (production and screenshots) are not private family photos and show no documents
 - [ ] README feature claims match `docs/IMPLEMENTATION_STATUS.md`; no AI assistant listed as author
 - [ ] GitHub private vulnerability reporting enabled (SECURITY.md)
 - [ ] Repository visibility changed by the owner (Settings → General → Danger zone)

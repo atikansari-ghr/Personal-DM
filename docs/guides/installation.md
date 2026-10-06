@@ -13,7 +13,7 @@
 `personaldocs install` is idempotent and resumable (rerun it after any failure; it continues safely and never wipes data or keys):
 
 1. Checks OS, architecture, RAM, disk, systemd, DNS/network and port availability.
-2. Installs packages: Python 3, PostgreSQL, Tesseract (English), OCRmyPDF, Ghostscript, qpdf, poppler-utils, LibreOffice (headless Writer/Calc/Impress), Node.js (only if the frontend must be built), git.
+2. Installs packages: Python 3, PostgreSQL, Tesseract (English, Arabic, Hindi and orientation detection; packs for any other offered OCR language are installed too), OCRmyPDF, Ghostscript, qpdf, poppler-utils, LibreOffice (headless Writer/Calc/Impress), Node.js (only if the frontend must be built), git.
 3. Creates the `personaldocs` system user, the PostgreSQL role/database (local socket only), and directories:
 
 | Path | Contents |
@@ -132,7 +132,7 @@ Useful options: `--bind 0.0.0.0:8000` (when the proxy runs on another host), `--
 ## After installing {#after}
 
 1. Configure the reverse proxy and open the public address.
-2. Enter the setup code (`personaldocs setup-token` prints a new one) and create the family accounts.
+2. Enter the setup code (`personaldocs setup-token` prints a new one) and create the **Main Administrator** (your name, username and password). Only this one account is created. In the next step, **Add family members (optional)**, add members now or choose **Skip for now** and add them later in Settings → Family & access. See [setup](setup.md#main-admin).
 3. Connect the NAS and check the backup destination (Settings → Storage & backup → **Connect NAS**), then run **Back up now** (the guided installer already did this if you answered the NAS questions).
 4. Optionally configure SMTP, Telegram, Google sign-in.
 5. Run `personaldocs doctor`.
@@ -142,7 +142,7 @@ Useful options: `--bind 0.0.0.0:8000` (when the proxy runs on another host), `--
 | Command | Purpose |
 |---|---|
 | `personaldocs status` | Service state, version, health |
-| `personaldocs doctor` | Read-only diagnostics (redacted) |
+| `personaldocs doctor` | Read-only diagnostics (redacted), including missing OCR language packs |
 | `personaldocs upgrade [--ref TAG]` | Back up, update, migrate, restart, verify |
 | `personaldocs rollback` | Return to the previous release when the schema is compatible |
 | `personaldocs repair` | Safe repairs (packages, permissions, services, migrations, stuck jobs) |

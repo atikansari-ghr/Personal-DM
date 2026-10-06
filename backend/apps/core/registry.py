@@ -26,7 +26,7 @@ class SettingDef:
     key: str
     label: str
     description: str
-    type: str  # bool|int|str|choice|int_list|time|secret|email|url|timezone|path|channel_list|widget_list|event_list|event_matrix
+    type: str  # bool|int|str|choice|choice_list|country_list|overview_layout|int_list|time|secret|email|url|timezone|path|channel_list|widget_list|event_list|event_matrix|json
     default: Any
     section: str
     scope: str = GLOBAL
@@ -40,6 +40,7 @@ class SettingDef:
     help: str = ""  # guide-slug#anchor
     example: str = ""
     validator: Callable[[Any], None] | None = field(default=None, compare=False)
+    choice_labels: dict | None = field(default=None, compare=False)  # labels for choice / choice_list values
 
     @property
     def secret(self) -> bool:
@@ -69,10 +70,16 @@ class SettingDef:
 
 CHANNELS = ("in_app", "email", "telegram")
 THEMES = ("green", "blue", "mono")
+# Tesseract language packs offered for OCR (Debian package tesseract-ocr-<code>)
+_OCR_LANGS = {
+    "eng": "English", "ara": "Arabic", "hin": "Hindi (Devanagari)", "urd": "Urdu", "tel": "Telugu", "tam": "Tamil",
+    "mal": "Malayalam", "kan": "Kannada", "ben": "Bengali", "mar": "Marathi", "guj": "Gujarati", "pan": "Punjabi",
+    "fra": "French", "deu": "German", "spa": "Spanish", "fas": "Persian", "tur": "Turkish",
+}
 LAYOUTS = ("three_panel", "full_page")
 
 
-# Dashboard widgets that actually exist (id -> label), in their default order.
+# Overview widgets that actually exist (id -> label), in their default order.
 WIDGETS = {
     "documents": "Documents (count)",
     "members": "Family members (count)",
@@ -85,7 +92,17 @@ WIDGETS = {
     "upcoming": "Upcoming expiries",
     "review_queue": "Review queue",
     "backup": "Backup status (administrators)",
+    "date": "Today (Gregorian + Hijri date)",
+    "weather": "Weather",
+    "summary": "Documents summary",
+    "calendar": "Month calendar with holidays",
+    "holidays": "Upcoming holidays",
+    "shared": "Shared with me",
+    "activity": "Recent activity",
 }
+# What a new account sees first (existing accounts keep the widgets they chose).
+DEFAULT_WIDGETS = ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity",
+                   "review_queue", "backup"]
 STAT_WIDGETS = ("documents", "members", "expiring", "storage", "review")
 
 
@@ -224,12 +241,35 @@ SETTINGS: list[SettingDef] = [
                "str", "", "documents", effect="Only listed folders can be scanned by the server import wizard.",
                help="folder-imports#server", example="/mnt/nas/old-documents"),
     # ---- Processing
-    SettingDef("processing.ocr_enabled", "Local OCR", "Run local English OCR (Tesseract) on scans and images.",
-               "bool", True, "processing", effect="When off, scans are stored and previewed but not text-searchable.",
-               help="ocr-corrections#ocr"),
-    SettingDef("processing.ocr_language", "OCR language", "Tesseract language pack used.", "choice", "eng",
-               "processing", choices=("eng",), effect="Only English is supported in the initial release.",
-               help="ocr-corrections#ocr"),
+    SettingDef("processing.ocr_enabled", "Text recognition (OCR)",
+               "Master switch for local OCR (Tesseract). Which documents are recognised is decided per document type below.",
+               "bool", True, "processing", effect="When off, nothing is recognised; documents are still stored, previewed and searchable by their details.",
+               help="ocr-corrections#selective"),
+    SettingDef("processing.ocr_languages", "OCR languages offered",
+               "Languages people can choose when running OCR. The installer installs the matching Tesseract language packs; the health check reports missing ones.",
+               "choice_list", ["eng", "ara", "hin"], "processing", choices=tuple(_OCR_LANGS),
+               choice_labels=_OCR_LANGS, effect="Run `sudo personaldocs repair` after adding a language to install its pack.",
+               help="ocr-corrections#languages"),
+    SettingDef("processing.ocr_untyped_mode", "OCR for documents without a type",
+               "Disabled: never. Manual: only when someone runs OCR. Automatic: the primary file is recognised after upload.",
+               "choice", "manual", "processing", choices=("disabled", "manual", "automatic"),
+               choice_labels={"disabled": "Disabled", "manual": "Manual (recommended)", "automatic": "Automatic"},
+               effect="Applies to new uploads and to the Run OCR button.", help="ocr-corrections#selective"),
+    SettingDef("processing.ocr_untyped_ai_allowed", "Local AI for documents without a type",
+               "Allow Local AI to read the recognised text of documents without a type (when Local AI is on).",
+               "bool", False, "processing", effect="Off: Local AI never receives their text.", help="ocr-corrections#ai"),
+    SettingDef("processing.ocr_paused", "Pause OCR queue",
+               "Queued OCR jobs wait until the queue is resumed. Uploads, previews and search keep working.",
+               "bool", False, "processing", effect="Resuming continues the waiting jobs in order.", help="ocr-corrections#limits"),
+    SettingDef("processing.ocr_max_file_mb", "Maximum file size for OCR (MB)",
+               "Files above this size are stored and previewed but cannot be sent to OCR.", "int", 50, "processing",
+               min=1, max=2000, help="ocr-corrections#limits"),
+    SettingDef("processing.ocr_queue_max", "Maximum queued OCR jobs",
+               "New OCR requests are refused with a clear message while this many are waiting.", "int", 50, "processing",
+               min=1, max=10000, help="ocr-corrections#limits"),
+    SettingDef("processing.ocr_max_attempts", "OCR retries",
+               "How many times a failed OCR job is attempted before it is marked Failed.", "int", 2, "processing",
+               min=1, max=10, help="ocr-corrections#limits"),
     SettingDef("processing.heavy_concurrency", "Concurrent OCR/conversion jobs",
                "How many expensive jobs run at once. 1 is recommended for 2 vCPU / 4 GB.", "int", 1, "processing",
                min=1, max=8, effect="Higher values use more CPU and memory; takes effect when the worker restarts.",
@@ -237,7 +277,7 @@ SETTINGS: list[SettingDef] = [
     SettingDef("processing.timeout_seconds", "Processing timeout (seconds)",
                "Maximum time for one OCR or conversion step.", "int", 600, "processing", min=30, max=7200,
                effect="Jobs exceeding this fail with a timeout error and can be retried.", help="ocr-corrections#limits"),
-    SettingDef("processing.max_pages", "Maximum pages for OCR", "PDFs above this page count are stored without OCR.",
+    SettingDef("processing.max_pages", "Maximum pages per OCR job", "OCR requests covering more pages than this are refused (choose a page range instead).",
                "int", 300, "processing", min=1, max=5000, effect="Protects the server from very large scans.",
                help="ocr-corrections#limits"),
     SettingDef("processing.max_image_megapixels", "Maximum image size (megapixels)",
@@ -444,6 +484,57 @@ SETTINGS: list[SettingDef] = [
                "int", 1, "ai", min=1, max=4, help="local-ai#resources"),
     SettingDef("ai.debug_logging", "AI diagnostic logging", "Log request and response sizes (never their content) for troubleshooting.",
                "bool", False, "ai", help="local-ai#troubleshooting"),
+    # ---- Overview
+    SettingDef("overview.holiday_countries", "Holiday countries",
+               "Countries whose public holidays appear in the calendar and the Upcoming holidays widget. Holiday dates "
+               "come from the bundled holidays library; Islamic dates are calculated and shown as provisional until "
+               "you confirm them below.",
+               "country_list", ["SA", "IN"], "overview", effect="Applies to everyone's Overview immediately.",
+               help="overview#holidays", example="SA, IN"),
+    SettingDef("overview.hijri_adjust", "Hijri date adjustment (days)",
+               "The Hijri date follows the Umm al-Qura calendar. If the local moon sighting differs, shift it by up to two days.",
+               "int", 0, "overview", min=-2, max=2, help="overview#hijri"),
+    SettingDef("weather.enabled", "Weather widget", "Fetch the weather for the city each person chooses. The provider "
+               "only receives the city coordinates, never documents or names. Off by default.",
+               "bool", False, "overview", help="overview#weather"),
+    SettingDef("weather.provider", "Weather provider", "Service used for forecasts and city search.", "choice",
+               "open_meteo", "overview", choices=("open_meteo",), depends_on=("weather.enabled",),
+               choice_labels={"open_meteo": "Open-Meteo (no account needed)"}, help="overview#weather"),
+    SettingDef("weather.base_url", "Forecast address", "Forecast API address. Change it only for a commercial plan or a self-hosted mirror.",
+               "url", "https://api.open-meteo.com/v1/forecast", "overview", depends_on=("weather.enabled",), max=300,
+               help="overview#weather"),
+    SettingDef("weather.geocoding_url", "City search address", "Geocoding API used when someone searches for a city.",
+               "url", "https://geocoding-api.open-meteo.com/v1/search", "overview", depends_on=("weather.enabled",), max=300,
+               help="overview#weather"),
+    SettingDef("weather.api_key", "Weather API key", "Only needed for a commercial plan. Stored encrypted and never shown again.",
+               "secret", "", "overview", depends_on=("weather.enabled",), help="overview#weather"),
+    SettingDef("weather.cache_minutes", "Weather cache (minutes)", "How long a forecast is reused before the provider is asked again.",
+               "int", 30, "overview", min=10, max=360, depends_on=("weather.enabled",), help="overview#weather"),
+    SettingDef("weather.units", "Temperature units", "Units for every account.", "choice", "celsius", "overview",
+               choices=("celsius", "fahrenheit"), choice_labels={"celsius": "Celsius (°C)", "fahrenheit": "Fahrenheit (°F)"},
+               depends_on=("weather.enabled",), help="overview#weather"),
+    SettingDef("weather.default_city", "Default city", "City shown to people who have not chosen their own.", "json", None,
+               "overview_hidden", depends_on=("weather.enabled",), help="overview#weather"),
+    # ---- Sign-in page
+    SettingDef("login.design", "Sign-in page design",
+               "Wallpaper on the left of the sign-in page. Sign-in works the same with every design.", "choice", "minimal",
+               "login", choices=("minimal", "nature", "travel", "family", "neutral", "custom"),
+               choice_labels={"minimal": "Minimal", "nature": "Nature", "travel": "Travel", "family": "Family",
+                              "neutral": "Neutral", "custom": "Custom wallpaper"}, help="login-designs#presets"),
+    SettingDef("login.title", "Sign-in title", "Heading on the sign-in page.", "str",
+               "Personal Documents Management System", "login", max=80, help="login-designs#branding"),
+    SettingDef("login.tagline", "Tagline", "Short line under the title. Leave empty to hide it.", "str",
+               "Your family documents, safely in one place.", "login", max=120, help="login-designs#branding"),
+    SettingDef("login.overlay", "Wallpaper overlay (%)", "Lightens the wallpaper so text stays readable.", "int", 0,
+               "login", min=0, max=80, help="login-designs#custom"),
+    SettingDef("login.position", "Wallpaper position", "Which part of a custom wallpaper stays visible when it is cropped.",
+               "choice", "center", "login", choices=("center", "top", "bottom", "left", "right"),
+               choice_labels={"center": "Centre", "top": "Top", "bottom": "Bottom", "left": "Left", "right": "Right"},
+               help="login-designs#custom"),
+    SettingDef("login.wallpaper_file", "Custom wallpaper file", "Set by uploading a wallpaper.", "str", "", "login_hidden",
+               max=80, help="login-designs#custom"),
+    SettingDef("login.logo_file", "Logo file", "Set by uploading a logo.", "str", "", "login_hidden", max=80,
+               help="login-designs#branding"),
     # ---- Per-user
     SettingDef("me.theme", "Theme", "Colour theme for your account on every device.", "choice", "green", "appearance",
                scope=USER, editable_by=SELF, choices=THEMES, effect="Applies immediately on all your devices.",
@@ -463,10 +554,15 @@ SETTINGS: list[SettingDef] = [
     SettingDef("me.event_alerts", "Other alerts by email/Telegram",
                "Also send access, import and (for administrators) backup and integrity alerts to your email/Telegram channels. They always appear in the in-app feed.",
                "bool", True, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#other-alerts"),
-    SettingDef("me.dashboard_widgets", "Dashboard widgets",
-               "Choose what your dashboard shows and in which order. Saved to your account, so every device shows the same.",
-               "widget_list", list(WIDGETS), "appearance", scope=USER, editable_by=SELF, choices=list(WIDGETS),
-               effect="Applies on all your devices.", help="getting-started#dashboard"),
+    SettingDef("me.dashboard_widgets", "Overview widgets",
+               "Choose what your Overview shows and in which order. Saved to your account, so every device shows the same. "
+               "Use Customize Overview for sizes and styles.",
+               "widget_list", DEFAULT_WIDGETS, "appearance", scope=USER, editable_by=SELF, choices=list(WIDGETS),
+               effect="Applies on all your devices.", help="overview#customize"),
+    SettingDef("me.overview_layout", "Overview layout", "Size, style and options of each Overview widget.", "overview_layout",
+               {}, "appearance_hidden", scope=USER, editable_by=SELF, help="overview#customize"),
+    SettingDef("me.weather_city", "Weather city", "City for your weather widget.", "json", None, "appearance_hidden",
+               scope=USER, editable_by=SELF, help="overview#weather"),
 ]
 
 BY_KEY = {s.key: s for s in SETTINGS}
@@ -501,6 +597,10 @@ def coerce(defn: SettingDef, value: Any) -> Any:
     elif t == "choice":
         if value not in defn.choices:
             raise SettingError(f"Choose one of: {', '.join(defn.choices)}.")
+    elif t == "choice_list":
+        if not isinstance(value, list) or any(v not in defn.choices for v in value):
+            raise SettingError(f"Choose from: {', '.join(defn.choices)}.")
+        value = [c for c in defn.choices if c in value]
     elif t == "int_list":
         if isinstance(value, str):
             value = [v for v in re.split(r"[,\s]+", value) if v]
@@ -524,6 +624,25 @@ def coerce(defn: SettingDef, value: Any) -> Any:
         if not isinstance(value, (list, str)) or (isinstance(value, list) and any(v not in WIDGETS for v in value)):
             raise SettingError(f"Widgets must be from: {', '.join(WIDGETS)}.")
         value = normalize_widgets(value)
+    elif t == "country_list":
+        from .overview import country_names
+
+        names = country_names()
+        if isinstance(value, str):
+            value = [v for v in re.split(r"[,\s]+", value) if v]
+        if not isinstance(value, list) or any(not isinstance(v, str) or v.upper() not in names for v in value):
+            raise SettingError("Choose countries from the list.")
+        value = list(dict.fromkeys(v.upper() for v in value))
+        if len(value) > 12:
+            raise SettingError("Choose at most 12 countries.")
+    elif t == "overview_layout":
+        from .overview import normalize_layout
+
+        value = normalize_layout(value)
+    elif t == "json" and defn.key in ("me.weather_city", "weather.default_city"):
+        from .overview import normalize_city
+
+        value = normalize_city(value)
     elif t == "time":
         if not isinstance(value, str) or (value and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value)):
             raise SettingError("Use 24-hour HH:MM, for example 08:00.")

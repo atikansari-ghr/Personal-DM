@@ -38,8 +38,9 @@ def version_json(v: DocumentVersion) -> dict:
     return {
         "id": str(v.id), "number": v.number, "original_name": v.original_name, "size": v.size, "sha256": v.sha256,
         "mime": v.mime, "format": v.format_class, **filetypes.describe(v), "comment": v.comment, "state": v.state, "error": v.error,
-        "ocr_applied": v.ocr_applied, "pdfa": v.pdfa, "page_count": v.page_count,
-        "ocr_quality": {k: v.ocr_quality.get(k) for k in ("confidence", "rotation", "skew", "steps", "low_lines", "line_count")}
+        "ocr_applied": v.ocr_applied, "ocr_pages": v.ocr_pages, "is_additional": v.is_additional, "pdfa": v.pdfa,
+        "page_count": v.page_count,
+        "ocr_quality": {k: v.ocr_quality.get(k) for k in ("confidence", "rotation", "skew", "steps", "low_lines", "line_count", "languages", "pages", "engine")}
         if v.ocr_quality else None,
         "pdfa_check": {k: v.pdfa_report.get(k) for k in ("validator", "profile", "compliant", "full_validation", "failed_rules", "note")} if v.pdfa_report else None,
         "has_preview": bool(v.preview_path or v.searchable_path or v.format_class in ("pdf", "image", "text")),
@@ -54,7 +55,7 @@ def document_row(ctx: P.AccessContext, d: Document, snippet: str | None = None) 
         "id": str(d.id), "title": d.title, "folder": str(d.folder_id), "owner": user_mini(d.owner),
         "type": {"id": d.doc_type_id, "name": d.doc_type.name} if d.doc_type_id else None,
         "state": d.state, "expiry_date": d.expiry_date, "issue_date": d.issue_date, "expiry": expiry_status(d),
-        "no_expiry": d.no_expiry,
+        "no_expiry": d.no_expiry, "ocr_state": d.ocr_state,
         "created_at": d.created_at, "archived": d.archived_at is not None,
         "size": v.size if v else None, "format": v.format_class if v else None, **filetypes.describe(v),
         "has_thumbnail": bool(v and v.thumbnail_path), "version_id": str(v.id) if v else None,
@@ -94,8 +95,17 @@ def document_detail(ctx: P.AccessContext, d: Document) -> dict:
                      "actor": h.actor.display_name if h.actor_id and h.actor else None}
                     for h in d.history.select_related("actor")[:50]] if caps & P.EDIT else [],
         "archived_at": d.archived_at,
+        "ocr": ocr_json(d),
     })
     return data
+
+
+def ocr_json(d: Document) -> dict:
+    from . import ocr_policy
+
+    return {"state": d.ocr_state, "mode": ocr_policy.mode_for(d), "sources": d.ocr_sources or [],
+            "languages": d.ocr_languages or [], "default_languages": ocr_policy.default_languages(d),
+            "error": d.ocr_error, "updated_at": d.ocr_updated_at, "ai_allowed": ocr_policy.ai_allowed(d)}
 
 
 def _link(ctx, d):

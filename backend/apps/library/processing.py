@@ -1,4 +1,8 @@
-"""Background processing of document versions: text extraction, local OCR, previews, thumbnails, field proposals."""
+"""Background processing of document versions: native text extraction, previews, thumbnails, field proposals.
+
+Text recognition (OCR) is *not* done here. It is selective (Change Set K): it runs only when a person asks for it
+or when the document type's policy is Automatic, and only on the chosen source files/pages (see ocr_runs.py).
+"""
 from __future__ import annotations
 
 import logging
@@ -69,9 +73,9 @@ def _thumbnail_image(img_path: Path, out_dir: Path, max_mp: int) -> str:
     return storage.derivative_rel(thumb)
 
 
-def _ocr(src: Path, out_pdf: Path, timeout: int, *, image: bool, workdir: Path) -> tuple[bool, str]:
+def _ocr(src: Path, out_pdf: Path, timeout: int, *, image: bool, workdir: Path, lang: str = "eng") -> tuple[bool, str]:
     cmd = list(settings.OCRMYPDF_CMD) + [
-        "--output-type", "pdfa-2", "-l", config.get("processing.ocr_language"), "--jobs", "1",
+        "--output-type", "pdfa-2", "-l", lang, "--jobs", "1",
         "--skip-text", "--optimize", "0", "--quiet",
     ]
     if image:
@@ -111,18 +115,14 @@ def process_version(job):
         Document.objects.filter(pk=doc.pk).update(state=Document.PROCESSING)
 
     timeout = int(config.get("processing.timeout_seconds"))
-    max_pages = int(config.get("processing.max_pages"))
     max_mp = int(config.get("processing.max_image_megapixels"))
-    ocr_enabled = bool(config.get("processing.ocr_enabled"))
     out_dir = storage.derivative_dir(version.id)
     storage.ensure_dirs()
     workdir = Path(tempfile.mkdtemp(prefix="proc-", dir=settings.TMP_DIR))
     fmt = version.format_class
-    text, preview, searchable, thumb = "", "", "", ""
-    quality: dict = {}
-    reliable: str | None = None  # text without low-confidence lines, for field extraction
-    pages, ocr_applied, pdfa, state, error = None, False, False, "ready", ""
-    pdfa_report: dict = {}
+    text, preview, thumb = "", "", ""
+    pages, state, error = None, "ready", ""
+    needs_ocr = False  # the file has no usable native text (a scan or a photo)
     try:
         if fmt == "pdf":
             pages, text, encrypted = _pdf_info(original)
@@ -130,17 +130,6 @@ def process_version(job):
                 state, error = "unsupported", "Password-protected PDF: stored safely; preview and OCR are not possible."
             else:
                 needs_ocr = len(text.strip()) < max(40, 25 * (pages or 1))
-                if needs_ocr and ocr_enabled and pages and pages <= max_pages:
-                    out_pdf = out_dir / "searchable.pdf"
-                    ok_pdfa, err = _ocr(original, out_pdf, timeout, image=False, workdir=workdir)
-                    if out_pdf.exists():
-                        searchable = storage.derivative_rel(out_pdf)
-                        ocr_applied, pdfa = True, ok_pdfa
-                        _p, text, _e = _pdf_info(out_pdf)
-                    else:
-                        error = f"OCR failed: {err}" if err else "OCR failed"
-                elif needs_ocr and pages and pages > max_pages:
-                    error = f"OCR skipped: {pages} pages exceeds the limit of {max_pages}."
                 thumb = _thumbnail_pdf(original, out_dir, timeout)
         elif fmt == "image":
             from PIL import Image
@@ -153,35 +142,7 @@ def process_version(job):
                         raise Image.DecompressionBombError("too large")
                     im.verify()
                 thumb = _thumbnail_image(original, out_dir, max_mp)
-                if ocr_enabled:
-                    src, result = original, None
-                    try:  # preprocessing + orientation + confidences (see ocr.py and docs/OCR_BENCHMARK.md)
-                        from . import ocr as ocrlib
-
-                        opts = ocrlib.Options(rotate=job.payload.get("rotate"))
-                        with Image.open(original) as im:
-                            im.load()
-                            result = ocrlib.recognise(im, opts, lang=config.get("processing.ocr_language"), timeout=timeout)
-                            src = workdir / "ocr-page.png"
-                            ocrlib.prepared_image(im, result, opts).save(src, "PNG", dpi=(300, 300))
-                    except (sandbox.ToolError, OSError) as exc:
-                        log.warning("image OCR preprocessing failed, using the plain image: %s", exc.__class__.__name__)
-                        result = None
-                        if version.mime not in ("image/jpeg", "image/png", "image/tiff"):
-                            src = workdir / "convert.png"
-                            with Image.open(original) as im:
-                                im.convert("RGB").save(src, "PNG")
-                    out_pdf = out_dir / "searchable.pdf"
-                    ok_pdfa, err = _ocr(src, out_pdf, timeout, image=True, workdir=workdir)
-                    if out_pdf.exists():
-                        searchable = storage.derivative_rel(out_pdf)
-                        ocr_applied, pdfa = True, ok_pdfa
-                        pages, text, _e = _pdf_info(out_pdf)
-                    elif result is None:
-                        error = f"OCR failed: {err}" if err else "OCR failed"
-                    if result is not None:
-                        text, quality, reliable = result.text, result.quality(), result.reliable_text()
-                        ocr_applied = True
+                pages, needs_ocr = 1, True
             except (Image.DecompressionBombError, Image.UnidentifiedImageError, OSError) as exc:
                 state, error = "unsupported", f"Image could not be processed safely ({exc.__class__.__name__})."
         elif fmt == "text":
@@ -206,29 +167,31 @@ def process_version(job):
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
-    if searchable:
-        from .pdfa import validate
-
-        try:
-            pdfa_report = validate(storage.resolve_derivative(searchable), timeout=min(timeout, 300))
-        except Exception as exc:  # validation is informational; it must never fail the document
-            pdfa_report = {"validator": "none", "compliant": False, "full_validation": False,
-                           "note": f"PDF/A validation could not run: {exc}"[:500]}
-        pdfa = bool(pdfa and pdfa_report.get("compliant"))
-
     with transaction.atomic():
-        DocumentVersion.objects.filter(pk=vid).update(
-            text=text, preview_path=preview, searchable_path=searchable, thumbnail_path=thumb, page_count=pages,
-            ocr_applied=ocr_applied, pdfa=pdfa, pdfa_report=pdfa_report, ocr_quality=quality, state=state, error=error[:2000])
+        # A new upload of the same version (re-processing) keeps earlier OCR results unless OCR is re-run.
+        current = DocumentVersion.objects.get(pk=vid)
+        keep_ocr = current.ocr_applied
+        updates = dict(preview_path=preview, thumbnail_path=thumb, page_count=pages, state=state, error=error[:2000])
+        if not keep_ocr:
+            updates["text"] = text
+        DocumentVersion.objects.filter(pk=vid).update(**updates)
         doc = Document.objects.select_for_update(of=("self",)).select_related("owner", "doc_type").get(pk=doc.pk)
-        if doc.current_version_id == version.id:
-            _apply_to_document(doc, version, text, state, reliable)
-    if state != "failed" and doc.current_version_id == version.id:
-        # Optional Local AI runs afterwards as separate jobs; the document is already stored and searchable.
-        from apps.ai.jobs import after_processing
+        if doc.current_version_id == version.id and not version.is_additional:
+            from .ocr_runs import document_text
 
-        after_processing(doc)
-    return {"state": state, "ocr": ocr_applied, "pages": pages}
+            _apply_to_document(doc, version, document_text(doc), state)
+    if state in ("ready", "unsupported") and needs_ocr and not keep_ocr:
+        from .ocr_runs import auto_ocr
+
+        auto_ocr(doc, version)
+    elif state == "ready" and text.strip() and doc.current_version_id == version.id:
+        from . import ocr_policy
+
+        if ocr_policy.ai_allowed(doc):  # native text of a type the administrator opened to Local AI
+            from apps.ai.jobs import after_processing
+
+            after_processing(doc)
+    return {"state": state, "pages": pages, "needs_ocr": needs_ocr}
 
 
 def _apply_to_document(doc: Document, version: DocumentVersion, text: str, version_state: str,

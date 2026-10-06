@@ -6,7 +6,7 @@ switched off individually so the benchmark can compare variants.
 
 Pipeline for an image:
 1. EXIF orientation applied (phone photos are often stored sideways with an orientation tag).
-2. Grayscale + contrast stretch (``autocontrast`` with a small cut-off).
+2. Grayscale + contrast stretch (``autocontrast`` clipping only the brightest 1 %).
 3. Images smaller than 2400 px are upscaled so text is large enough (huge ones are downscaled), then a 3x3
    median filter removes sensor/JPEG speckle.
 4. Orientation (0/90/180/270) from Tesseract's orientation model (``--psm 0``); when that is unsure, the
@@ -95,7 +95,9 @@ def prepare(img, opts: Options, steps: list[str]):
         img = img.convert("L")
         steps.append("grayscale")
     if opts.contrast:
-        img = ImageOps.autocontrast(img, cutoff=1)
+        # Clip only the brightest 1 % (paper, glare). Clipping the darkest 1 % as well erased the ink of sparse pages,
+        # where text is under 1 % of the pixels (found with a one-line scanned page).
+        img = ImageOps.autocontrast(img, cutoff=(0, 1))
         steps.append("contrast")
     long_side = max(img.size)
     if opts.upscale and long_side < (opts.upscale_below or TARGET_LONG_SIDE):

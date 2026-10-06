@@ -190,8 +190,12 @@ def ai_jobs_api(request):
 def reindex(request):
     if not service.enabled("semantic_search"):
         return _fail("Turn on semantic search first.", 409)
+    from apps.library import ocr_policy
+
     n = 0
-    for doc in Document.objects.filter(archived_at__isnull=True).exclude(content_text="").only("id")[:5000]:
+    for doc in Document.objects.filter(archived_at__isnull=True).exclude(content_text="").select_related("doc_type")[:5000]:
+        if not ocr_policy.ai_allowed(doc):  # only types the administrator opened to Local AI
+            continue
         ai_jobs.queue(AIJob.EMBED, document=doc, user=request.user)
         n += 1
     audit.record("ai.reindex", request=request, documents=n)
@@ -234,6 +238,10 @@ def document_analyze(request, pk):
     if not service.user_allowed(request.user) or not (service.enabled("ocr_assist") or service.enabled("smart_organization")):
         raise PermissionDenied("AI document analysis is not available.")
     doc, _ctx = _doc(request, pk, P.EDIT)
+    from apps.library import ocr_policy
+
+    if not ocr_policy.ai_allowed(doc):
+        raise PermissionDenied("Local AI is not allowed for this document type (Settings → OCR & processing).")
     job = ai_jobs.queue(AIJob.ANALYZE, document=doc, user=request.user)
     audit.record("ai.analyze_requested", request=request, target=doc, subject_user=doc.owner)
     return Response({"job": str(job.id), "status": "queued"}, status=202)
