@@ -1,7 +1,9 @@
 # User guide
 
 For everyone in the family. The same help is built into the app under **Help**; the linked topic guides go deeper.
-Examples use the demo accounts Atik Ansari, JR, AB Ansari, N Ansari, AZ Ansari and AR Ansari.
+Examples use the demo labels A. Ansari (administrator), Mom, Son1, Son2, Son3 and Daughter. These are demonstration
+accounts added in the optional setup step for the screenshots; the app never creates them
+([names in screenshots](guides/setup.md#demo-names)).
 
 ## 1. Signing in {#sign-in}
 
@@ -14,6 +16,10 @@ Examples use the demo accounts Atik Ansari, JR, AB Ansari, N Ansari, AZ Ansari a
 
 **First sign-in:** use the temporary password the administrator gave you. You are asked to choose your own straight
 away.
+
+**Sign-in page design:** the administrator may choose a wallpaper, title and logo for the sign-in page. The design
+only changes the look; the sign-in methods (password, code, passkey, Google) are the same with every design. See
+[sign-in page designs](guides/login-designs.md).
 
 **Password managers:** the username, password and one-time-code fields are standard, so Bitwarden, 1Password, Apple
 Passwords and browser password managers can fill them. You can paste the code, and typing it always works.
@@ -28,11 +34,11 @@ More: [authenticator app and recovery codes](guides/totp-recovery.md), [passkeys
 | Profile | Name, email (needed for email notifications), [profile photo](guides/getting-started.md#profile-photo) |
 | Password & security | Change password, authenticator app, recovery codes, passkeys, passwordless sign-in, signed-in devices |
 | Linked accounts | Link Google sign-in (optional) |
-| Appearance | Theme (Green, Blue, Black & White), layout, dashboard widgets |
+| Appearance | Theme (Green, Blue, Black & White), layout, Overview widgets |
 | Notifications | Critical notifications (read-only), your optional notifications per channel, Telegram link |
 | Email imports | Import attachments from your own mailbox by rule |
 
-Your theme, dashboard, layout and notification choices are saved to your account, so they are the same on every
+Your theme, Overview, layout and notification choices are saved to your account, so they are the same on every
 device.
 
 **Security changes** need a fresh confirmation (password or passkey within the last few minutes). This covers:
@@ -43,11 +49,25 @@ device.
 
 Each of these sends you a security notification.
 
-## 3. Dashboard {#dashboard}
+## 3. Overview {#dashboard}
 
-It shows only documents you can open: counters, family members, recent documents, upcoming expiries and the review
-queue. **Customise** lets you tick the widgets you want and drag (or use ↑/↓) to order them.
-See [dashboard](guides/getting-started.md#dashboard).
+The **Overview** is your start page (it replaces the former dashboard). It shows only documents you can open.
+
+- **Widgets:** Today (Gregorian and Hijri date), Weather, Documents summary, Month calendar with holidays, Upcoming
+  holidays, Expiring soon, Shared with me, Recent documents, Recent activity, Review queue and more.
+- **Customize Overview:** add (**Add widget…**) or remove (**×**) widgets, reorder by dragging or with **‹ / ›**,
+  resize with **− / +**, choose a style (rectangular, compact, circular for single-value widgets) and open **⚙** for
+  widget settings. **Save layout** stores it for your account on every device; **Cancel** and **Reset to default**
+  are always available. The selection and order can also be changed in My account → Appearance → Overview widgets.
+- **Hijri date:** Umm al-Qura calendar, following the installation timezone. The administrator may shift it by up to
+  two days to match the local moon sighting.
+- **Holidays:** public holidays of the countries chosen by the administrator (Saudi Arabia and India by default).
+  Moon-dependent holidays are marked *Provisional* until confirmed.
+- **Weather** (only if the administrator enabled it): choose your own city in the widget. Only the city's
+  coordinates are sent to the weather provider.
+
+If you had chosen your widgets before an upgrade, your choice is kept; add the new widgets with **Customize
+Overview**. See [Overview](guides/overview.md).
 
 ## 4. Folders and file types {#folders}
 
@@ -96,11 +116,22 @@ because it inherits the new folder's access. See [moving](guides/getting-started
 
 - **Viewer:** zoom − / +, the current %, **Fit page**, **Fit width**, **100%**, page arrows, **Full screen** and
   **Download**. Keys: `+` `−` `0` `W` `P`. See [viewer](guides/getting-started.md#viewer).
-- **OCR:** scans and photos are straightened, turned upright and made searchable on your server. The **Text** tab
-  shows the recognised text, the **OCR confidence** and greys out unreliable lines. If the text is junk, use
-  **⋮ → Re-run OCR…** and pick a rotation. Your confirmed values are never overwritten by a re-run. A card that says
-  "No Expiry Date" is suggested as **Does not expire** instead of an invented date. See
-  [OCR quality](guides/ocr-corrections.md#quality).
+- **OCR (text recognition):** runs on your server, and only on what is chosen. Depending on the document type, the
+  administrator sets OCR to *Disabled*, *Manual* (the default for new installations) or *Automatic*. To recognise a
+  document, open **Text (OCR)** and choose **Run OCR…**: tick the source files (for example front and back, added with
+  **⋮ → Add another side or copy…**), the pages (`1-2, 5`, empty for all), the languages (English, Arabic, Hindi
+  and any others offered) and, if needed, a forced rotation. The status shows *Not processed*, *Queued*,
+  *Processing*, *Needs review*, *Confirmed*, *Failed* or *OCR removed*; a queued job can be cancelled. See
+  [selective OCR](guides/ocr-corrections.md#selective).
+- **OCR quality:** the **Text** tab shows the recognised text and the **OCR confidence**, and greys out unreliable
+  lines. If the text is junk, use **Re-run OCR…** with other pages, languages or a rotation. Your confirmed values
+  are never overwritten by a re-run. A card that says "No Expiry Date" is suggested as **Does not expire** instead of
+  an invented date. See [OCR quality](guides/ocr-corrections.md#quality).
+- **OCR review:** the **OCR review** page in the sidebar lists the documents you may edit whose text waits for
+  review or failed. Accept, correct or reject the suggested details, or **Mark reviewed**. See
+  [review queue](guides/ocr-corrections.md#review).
+- **Remove OCR data…** deletes the recognised text and its search entries. The original file stays unchanged and
+  details you confirmed are kept. See [removing OCR data](guides/ocr-corrections.md#remove).
 - **Details:** suggested details (issue/expiry date, number, name) only count after you **Confirm** them. Confirmed
   dates drive the document name and reminders. See [OCR and corrections](guides/ocr-corrections.md).
 - **Versions and renewals:** a better scan is a new version; a renewed passport is a new linked document. See
@@ -114,7 +145,8 @@ because it inherits the new folder's access. See [moving](guides/getting-started
   to its sources.
 - **Match meaning** in search finds documents with similar meaning.
 
-AI runs on your family's own server, and normal search, OCR and uploads work without it.
+AI runs on your family's own server, and normal search, OCR and uploads work without it. It reads a document's text
+only when the administrator allows AI for that document type.
 See [Local AI](guides/local-ai.md).
 
 ## 9. Search {#search}
@@ -179,7 +211,7 @@ all your devices. See [themes](guides/themes.md).
 | Lost phone with authenticator / passkey | Sign in with a recovery code or another passkey; otherwise ask the administrator to **Reset 2FA** |
 | "Access not allowed" page | You are outside the allowed countries; ask the administrator for temporary travel access |
 | A move was refused | Read the message; you may lack permission at the destination |
-| Document stuck in Processing | Wait a few minutes; then **Re-run OCR / preview** from the ⋮ menu |
+| Document stuck in Processing or Queued | Wait a few minutes (the administrator may have paused the OCR queue); cancel a queued job or use **Re-run OCR…** in the Text (OCR) tab |
 | Not receiving email/Telegram | My account → Notifications shows what is missing |
 
 More: [troubleshooting](guides/troubleshooting.md).

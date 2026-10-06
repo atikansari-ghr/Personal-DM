@@ -26,6 +26,7 @@ export interface User extends UserMini {
 export interface Session {
   setup_complete: boolean;
   app_name: string;
+  login?: import("./pages/Auth").LoginBranding;
   version: string;
   google_enabled: boolean;
   pending_2fa: boolean;
@@ -34,7 +35,7 @@ export interface Session {
   passwordless_enabled?: boolean;
   totp_allowed?: boolean;
   user: User | null;
-  preferences?: { theme: string; layout: string; dashboard_widgets: string[]; doc_view?: string; doc_sort?: string };
+  preferences?: { theme: string; layout: string; dashboard_widgets: string[]; overview_layout?: Record<string, WidgetCfg>; doc_view?: string; doc_sort?: string };
   date_format?: string;
   timezone?: string;
   delegations?: { group: string; group_id: string; scopes: string[] }[];
@@ -150,3 +151,5 @@ export interface Meta {
   templates: string[];
   standard_fields: string[];
 }
+
+export interface WidgetCfg { w?: number; style?: "rect" | "compact" | "circle" | "compact_circle"; settings?: Record<string, any> }

@@ -34,9 +34,9 @@ Compatibility with specific third-party password managers is tested manually (se
 On the server console (requires root on the LXC):
 
 ```
-sudo personaldocs recover-admin dad --generate            # temporary password
-sudo personaldocs recover-admin dad --generate --reset-totp
-sudo personaldocs recover-admin dad --generate --reset-2fa   # also removes all passkeys (lost devices)
+sudo personaldocs recover-admin <username> --generate            # temporary password
+sudo personaldocs recover-admin <username> --generate --reset-totp
+sudo personaldocs recover-admin <username> --generate --reset-2fa   # also removes all passkeys (lost devices)
 ```
 
 It works only for main administrator accounts, signs out all their sessions and is recorded in the audit log. There is no web-based backdoor.

@@ -24,7 +24,7 @@ from . import search as searchlib
 from . import services as S
 from . import storage
 from .models import (AccessRule, Correspondent, CustomFieldDef, Document, DocumentField, DocumentType, DocumentVersion, Folder,
-                     SavedView, Tag)
+                     DocumentHistory, SavedView, Tag)
 from .serializers import document_detail, document_row, field_json, folder_json, user_mini, version_json
 
 
@@ -925,6 +925,24 @@ def dashboard(request):
         "review": [document_row(ctx, d) for d in review],
         "saved_views": [],
     }
+    from apps.core import config as cfg
+    from apps.core import overview
+
+    shared = docs.exclude(owner=request.user)
+    data["stats"]["shared"] = shared.count()
+    data["shared"] = [document_row(ctx, d) for d in shared.select_related("owner", "doc_type", "current_version").order_by("-created_at")[:6]]
+    labels = {"created": "added", "edited": "edited", "moved": "moved", "archived": "archived", "restored": "restored",
+              "version_added": "uploaded a new version of", "file_added": "added a file to", "current_version": "changed the current version of",
+              "field_confirmed": "confirmed details of", "field_removed": "removed a detail from", "ai_suggestion_accepted": "accepted a suggestion for"}
+    data["activity"] = [{"at": h.at, "action": h.action, "verb": labels.get(h.action, h.action.replace("_", " ")),
+                         "actor": h.actor.display_name if h.actor_id else "System",
+                         "document": {"id": str(h.document_id), "title": h.document.title}}
+                        for h in DocumentHistory.objects.filter(document__in=docs).select_related("actor", "document").order_by("-at")[:8]]
+    data["today"] = overview.today_info()
+    data["holidays"] = overview.upcoming_holidays(limit=6)
+    data["holiday_countries"] = [{"code": c, "name": overview.country_names()[c], "flag": overview.flag(c)} for c in overview.configured_countries()]
+    data["weather_enabled"] = bool(cfg.get("weather.enabled"))
+    data["layout_limits"] = overview.layout_limits()
     for v in SavedView.objects.filter(user=request.user, show_on_dashboard=True):
         _rows, total, _ = searchlib.search(ctx, v.query.get("q", ""), v.query, limit=1)
         data["saved_views"].append({**_view_json(v), "count": total})

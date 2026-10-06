@@ -93,6 +93,8 @@ SORTS = {  # folder browsing order (the "Sort by" menu); the same keys are store
 def search(ctx: P.AccessContext, q: str, params: dict | None = None, limit: int = 50, offset: int = 0):
     params = params or {}
     qs = _filters(ctx.documents(P.VIEW), params).distinct()
+    if params.get("shared") and ctx.user is not None:
+        qs = qs.exclude(owner=ctx.user)  # documents other people own that this person may open
     q = (q or "").strip()
     if not q:
         total = qs.count()

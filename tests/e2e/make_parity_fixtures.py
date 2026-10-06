@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from fixtures import make_text_pdf  # noqa: E402
+from fixtures import make_image_pdf, make_text_pdf  # noqa: E402
 
 from PIL import Image, ImageDraw  # noqa: E402
 from pypdf import PdfReader, PdfWriter  # noqa: E402
@@ -28,6 +28,10 @@ def image(path, fmt, size=(1200, 800), colour=(40, 120, 80)):
     d.text((80, 80), "SAMPLE IMAGE - NOT A REAL DOCUMENT", fill=colour)
     img.save(path, fmt)
 
+
+# an image-only scan (needs OCR) with labelled values, for the selective OCR and review queue checks
+(files / "Sample residence card.pdf").write_bytes(make_image_pdf(
+    "SAMPLE RESIDENCE CARD - NOT A REAL DOCUMENT\nName SON1 SAMPLE\nCard No 2345678901\nExpiry Date 31/12/2030"))
 
 image(files / "Sample photo.jpg", "JPEG")
 image(files / "Sample diagram.png", "PNG", (600, 900), (30, 60, 160))

@@ -74,6 +74,8 @@ function Input({ def, value, onChange }: { def: SettingDef; value: any; onChange
         </fieldset>
       );
     }
+    case "country_list":
+      return <CountryListInput value={Array.isArray(value) ? value : []} names={def.choice_labels || {}} disabled={disabled} onChange={onChange} label={def.label} />;
     case "widget_list":
       return <WidgetListEditor value={Array.isArray(value) ? value : []} choices={def.choices} labels={def.choice_labels || {}} disabled={disabled} onChange={onChange} />;
     default:
@@ -81,6 +83,38 @@ function Input({ def, value, onChange }: { def: SettingDef; value: any; onChange
         ? <textarea id={id} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)} placeholder={def.example} rows={def.key === "documents.member_template" ? 8 : 3} />
         : <input id={id} type={def.type === "email" ? "email" : "text"} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)} placeholder={def.example} />;
   }
+}
+
+const flagOf = (code: string) => code.length === 2 ? String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65)) : "";
+
+/** Searchable country selector: chosen countries as removable chips, and a filtered list to add more. */
+export function CountryListInput({ value, names, disabled, onChange, label }: { value: string[]; names: Record<string, string>; disabled?: boolean; onChange: (v: string[]) => void; label: string }) {
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const matches = needle ? Object.entries(names).filter(([c, n]) => !value.includes(c) && (n.toLowerCase().includes(needle) || c.toLowerCase() === needle)).slice(0, 8) : [];
+  return (
+    <div className="country-list">
+      <div className="row" style={{ gap: ".35rem" }}>
+        {value.length === 0 && <span className="small muted">No countries chosen.</span>}
+        {value.map((c) => (
+          <span key={c} className="chip">{flagOf(c)} {names[c] || c}
+            {!disabled && <button type="button" className="chip-x" aria-label={`Remove ${names[c] || c}`} onClick={() => onChange(value.filter((x) => x !== c))}><Icon name="x" size={12} /></button>}
+          </span>
+        ))}
+      </div>
+      {!disabled && (
+        <div className="country-search">
+          <input type="search" role="combobox" aria-expanded={matches.length > 0} aria-controls="country-matches" aria-label={`Add to ${label}`} placeholder="Search countries, e.g. United Arab Emirates" value={q} onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && matches[0]) { e.preventDefault(); onChange([...value, matches[0][0]]); setQ(""); } }} />
+          {matches.length > 0 && (
+            <ul id="country-matches" role="listbox" className="country-matches">
+              {matches.map(([c, n]) => <li key={c} role="option" aria-selected={false}><button type="button" onClick={() => { onChange([...value, c]); setQ(""); }}>{flagOf(c)} {n} <span className="muted small">{c}</span></button></li>)}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function SettingsForm({ section, keys, title, children }: { section?: string; keys?: string[]; title?: string; children?: React.ReactNode }) {
@@ -138,7 +172,7 @@ export default function SettingsForm({ section, keys, title, children }: { secti
             <div>
               <Input def={d} value={value} onChange={(v) => setDraft({ ...draft, [d.key]: v })} />
               {errors[d.key] && <div className="error-text small" role="alert">{errors[d.key]}</div>}
-              {d.type !== "secret" && d.key !== "documents.member_template" && d.default !== null && d.default !== undefined && <div className="small muted">Default: {d.type === "widget_list" ? "all widgets" : d.type === "event_list" ? `${(d.default || []).length} security, backup and integrity events` : Array.isArray(d.default) ? d.default.join(", ") || "none" : String(KEY_CHOICE_LABELS[d.key]?.[d.default] || CHOICE_LABELS[d.default] || d.default) || "empty"}</div>}
+              {d.type !== "secret" && d.key !== "documents.member_template" && d.default !== null && d.default !== undefined && <div className="small muted">Default: {d.type === "widget_list" ? "suggested widgets" : d.type === "country_list" ? (d.default || []).map((c: string) => d.choice_labels?.[c] || c).join(", ") : d.type === "event_list" ? `${(d.default || []).length} security, backup and integrity events` : Array.isArray(d.default) ? d.default.join(", ") || "none" : String(KEY_CHOICE_LABELS[d.key]?.[d.default] || CHOICE_LABELS[d.default] || d.default) || "empty"}</div>}
             </div>
           </div>
         );

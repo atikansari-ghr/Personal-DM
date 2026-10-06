@@ -14,6 +14,46 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to the selective OCR / Overview release (Change Sets K and L) {#selective-ocr-overview}
+
+```
+sudo personaldocs upgrade
+# or: bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)" -- upgrade
+sudo personaldocs doctor     # also reports missing OCR language packs
+sudo personaldocs repair     # only if doctor reports a missing language pack
+```
+
+This release adds **three database migrations**, applied automatically after the verified backup:
+
+- `library.0006`: OCR state, sources, languages and errors per document, and the OCR policy fields per document type.
+- `library.0007`: fills the policy. Each type gets its expected fields and English as default language, and the
+  *Employee / company ID* type is added. On an **existing installation** (setup already completed) every type and
+  untyped documents are set to **Automatic with AI allowed**, so uploads are recognised as before. Documents that
+  were already recognised get the state *Confirmed* (or *Needs review* if suggestions are open). **New
+  installations** start with **Manual** OCR and no AI access to recognised text.
+- `core.0003`: the weather cache and holiday corrections tables.
+
+After upgrading:
+
+- **Accounts:** every existing account, folder and document is kept. No accounts are added or removed. New
+  installations create only the Main Administrator; see [setup](setup.md#six-accounts).
+- **Python packages:** the new dependencies (`holidays`, `hijridate`, `python-dateutil`, `six`) are installed by the
+  upgrade in the new release.
+- **OCR language packs:** upgrade and repair install the Tesseract packs for the offered languages (English, Arabic
+  and Hindi by default: `tesseract-ocr-ara`, `tesseract-ocr-hin`). If `doctor` lists a missing pack, run
+  `sudo personaldocs repair`.
+- **OCR policy:** review **Settings → OCR & processing → OCR policy per document type** and switch types to *Manual*
+  or *Disabled* where automatic OCR or AI is not wanted. See [selective OCR](ocr-corrections.md#selective).
+- **Overview:** people who had saved a widget choice keep it; they add the new widgets (Today, Weather, Month
+  calendar, Upcoming holidays, Documents summary, Shared with me, Recent activity) with **Customize Overview**.
+  People who never chose get the new default set. See [Overview](overview.md).
+- **Weather** is off until an administrator enables it in Settings → Overview & sign-in.
+- **Sign-in page:** uses the *Minimal* design and the default title until you change it. See
+  [sign-in page designs](login-designs.md).
+
+To go back, `sudo personaldocs rollback` works only while the previous release knows every applied migration; this
+release adds migrations, so otherwise restore the pre-upgrade backup (see [Rollback](#rollback)).
+
 ## Upgrading to the browsing, OCR and installer release (Change Set J) {#change-set-j}
 
 ```
@@ -34,7 +74,8 @@ After upgrading:
 
 - **Folder view:** each person's view (List, Thumbnails, Details) and sort order are now saved to their account.
   The first time, everyone starts with List / Newest first.
-- **OCR:** new uploads use the improved pipeline. To improve an older scan, open it and use **⋮ → Re-run OCR…**.
+- **OCR:** new uploads use the improved pipeline. To improve an older scan, open it and use **Re-run OCR…** in the
+  Text (OCR) tab.
   Confirmed details are never overwritten.
 - **One-line installer:** from now on you can also upgrade with
   `bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)" -- upgrade`
@@ -53,8 +94,8 @@ options are stored as settings. After upgrading:
   the critical channels.
 - **Backups** keep running daily at the same time; choose weekly or monthly in Settings → Storage & backup if you
   prefer.
-- **Dashboard:** your previous widget list is kept (sections that were always shown stay visible); use
-  **Customise** to change it.
+- **Dashboard** (now called Overview): your previous widget list is kept (sections that were always shown stay
+  visible); use **Customize Overview** to change it.
 - **Browser cache:** the app reloads its new version automatically; if a page looks old, reload it once.
 
 ## Upgrading from the previous release (profile photos, Local AI, security, passkeys) {#change-set-2026-10}

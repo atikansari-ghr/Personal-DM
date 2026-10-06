@@ -1,7 +1,7 @@
 [
  [
   "PASS",
-  "setup: synthetic folders and files in AB Ansari's area"
+  "setup: synthetic folders and files in Son1's area"
  ],
  [
   "PASS",
@@ -37,7 +37,7 @@
  ],
  [
   "PASS",
-  "AT-93/94 OCR confidence and re-run with rotation in the document panel"
+  "AT-101/106/112 selective OCR: manual by default, chosen pages and languages, review queue"
  ],
  [
   "PASS",
@@ -69,6 +69,14 @@
  ],
  [
   "PASS",
+  "AT-116..121/125/127 Overview: customize, weather city, calendar and holidays"
+ ],
+ [
+  "PASS",
+  "AT-123/124 holiday countries and corrections in settings"
+ ],
+ [
+  "PASS",
   "AT-68 optional notification matrix persists; critical events locked"
  ],
  [
@@ -82,6 +90,10 @@
  [
   "PASS",
   "screens for the README (desktop)"
+ ],
+ [
+  "PASS",
+  "AT-128/130 every sign-in design keeps the same sign-in methods (desktop and phone)"
  ],
  [
   "PASS",

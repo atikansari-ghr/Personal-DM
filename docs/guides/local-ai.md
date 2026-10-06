@@ -16,7 +16,7 @@ such as LM Studio or Ollama on a PC in your home. It is off by default and never
 
 ## How it works {#architecture}
 
-Upload → file checks → original stored → text extraction / Tesseract OCR → *(optional)* AI analysis → **suggestions** → you review →
+Upload → file checks → original stored → text extraction / Tesseract OCR (as the OCR policy allows) → *(optional)* AI analysis → **suggestions** → you review →
 accepted values saved → search, reminders and assistant use them.
 
 - AI never changes a document by itself. Title, type, owner, folder, dates, reminders, tags, issuer and confirmed details only
@@ -87,7 +87,9 @@ never follow redirects.
 ## OCR assist {#ocr-assist}
 
 After processing (if *Analyse new uploads automatically* is on), or with **Analyse again** on a document, the model gets the OCR text
-(up to *Max text sent*). It returns suggestions shown under **AI suggestions** in the document's details:
+(up to *Max text sent*). This happens only for document types where **AI may read text** is allowed in Settings → OCR & processing
+(or, for documents without a type, the *Untyped documents* setting); other documents are skipped by re-indexing and **Analyse** is
+refused. The AI never receives every upload by default; see [Local AI and OCR text](ocr-corrections.md#ai). It returns suggestions shown under **AI suggestions** in the document's details:
 
 - **Accept**, **Dismiss** or **Accept all**.
 - Document numbers are only suggested if they literally appear in the text.

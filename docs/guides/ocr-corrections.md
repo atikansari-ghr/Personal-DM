@@ -1,24 +1,62 @@
 # OCR, details and corrections
 
-## Local OCR {#ocr}
+## Selective OCR {#selective}
 
-Scans and photos are read locally with Tesseract (English) through OCRmyPDF. The result is a searchable PDF/A copy next to the untouched original. Born-digital PDFs that already contain text are indexed without OCR. Turn OCR off in **Settings → OCR & processing** if needed.
+Text recognition (OCR) runs locally with Tesseract through OCRmyPDF. It reads **only what you choose**, so a 40-page bank statement is not recognised just because one page matters. Born-digital PDFs that already contain text are always indexed without OCR.
 
-Before reading a photo or scan, the app prepares a working copy. It applies the phone's orientation tag, converts to grayscale, stretches the contrast, enlarges small images, removes speckle, turns sideways or upside-down pages upright and straightens small skews. Each step was chosen by measurement ([OCR benchmark](../OCR_BENCHMARK.md)). Only the working copy is changed; your original file is never modified.
+The administrator sets a policy for each document type in **Settings → OCR & processing → OCR policy per document type**:
 
-Processing states: *Queued*, *Processing*, *Needs review*, *Ready*, *Failed* (retry from the document's menu) and *No preview* (stored safely, but no preview for this format).
+| Policy | What happens |
+| --- | --- |
+| **Disabled** | Never recognised. The file is stored, previewed and downloadable as usual. |
+| **Manual** (default for new installations) | Nothing is recognised until someone with edit rights chooses **Run OCR**. |
+| **Automatic** | Only the document's **primary OCR source** (the files and pages marked as primary) is recognised after upload. |
+
+Each type also lists its expected fields (for example passport number and expiry date), its default languages and whether the local AI may read its text. Administrators can add **custom types** and **archive** types no longer needed. A type that documents use, or a built-in type, is never deleted. Documents without a type follow *Untyped documents* in the same settings section.
+
+Installations upgraded from earlier releases keep their previous behaviour: every type is set to *Automatic* with AI allowed, so nothing changes until the administrator chooses otherwise.
+
+### Choosing what to recognise {#sources}
+
+Open a document, then **Text (OCR)** (or **⋮ → Text recognition (OCR)…**) and **Run OCR…**:
+
+- **Source files** — tick one or more files of the document. A front and back side added with **⋮ → Add another side or copy…** can be recognised together as one job.
+- **Pages** — for PDFs, leave empty for all pages or enter pages and ranges such as `1-2, 5`. Invalid ranges are rejected with a clear message.
+- **Languages** — see below.
+- **Orientation of photos** — detect automatically or force 90°, 180° or 270°.
+- **Use these files as the primary OCR source** — marks the selection as the document's primary source, which is what *Automatic* processes for new versions.
+
+Status: *Not processed*, *Queued*, *Processing*, *Needs review*, *Confirmed*, *Failed* and *OCR removed*. A queued job can be cancelled. The original files are never changed.
+
+### Languages {#languages}
+
+English, Arabic and Hindi (Devanagari) are offered by default; the administrator can offer more in **Settings → OCR & processing → OCR languages**. Choose the languages printed on the document. Combining several is slower. A language whose Tesseract pack is missing on the server is shown as *not installed* and cannot be chosen; `sudo personaldocs repair` installs the packs for every offered language and `sudo personaldocs doctor` reports any that are missing.
+
+### Review queue {#review}
+
+**OCR review** in the sidebar lists the documents you may edit whose recognised text waits for review or failed. Accept, correct or reject each suggested detail, or open the document. Nobody sees documents or text they could not already open. **Mark reviewed** on a document moves it to *Confirmed*; remaining suggestions stay available.
+
+### Removing OCR data {#remove}
+
+**Remove OCR data…** deletes the recognised text, its search entries, confidence values, the searchable PDF copy and the details that were only *suggested* from it. The **original file stays unchanged**, details you confirmed are kept, and the document no longer appears in full-text search results for words that came only from OCR. You can run OCR again later.
+
+### Local AI and OCR text {#ai}
+
+The local AI never receives every upload. It may read a document's text only when the document type allows AI (*AI may read text* in the type policy, or the *Untyped documents* setting) and AI features are enabled. Types that do not allow it are skipped by re-indexing and refused by **Analyse**. There is no external or cloud fallback.
 
 ## OCR quality and re-running OCR {#quality}
 
-The document's **Text** tab shows the **OCR confidence**, the engine's average certainty for the words it read, and any rotation that was applied:
+Before reading a photo or scan, the app prepares a working copy. It applies the phone's orientation tag, converts to grayscale, stretches the contrast, enlarges small images, removes speckle, turns sideways or upside-down pages upright and straightens small skews. Each step was chosen by measurement ([OCR benchmark](../OCR_BENCHMARK.md)). Only the working copy is changed.
+
+The **Text (OCR)** tab shows the **OCR confidence**, the engine's average certainty for the words it read, and any rotation that was applied:
 
 - **85 % or more** (green): usually reliable.
 - **60–85 %** (amber): check important values.
 - **Below 60 %** (red): much of the text is probably wrong.
 
-Lines read with low confidence are **greyed out**. They stay searchable, but they are never used to suggest details, so junk characters do not end up in your document's metadata.
+Lines read with low confidence are **greyed out**. They stay searchable, but they are never used to suggest details.
 
-If the text looks like junk, open **⋮ → Re-run OCR…**. For photos and image scans you can let the app detect the orientation again or force a rotation (90°, 180° or 270°). Re-running OCR never overwrites values you have confirmed. If the new reading differs, it appears next to the confirmed value as "New scan suggests …", and you decide. When a photo has strong glare or blur, retake it in even light; no software can recover ink that is not in the picture.
+If the text looks like junk, choose **Re-run OCR…** with other pages, languages or a forced rotation. Re-running OCR never overwrites values you have confirmed. If the new reading differs, it appears next to the confirmed value as "New scan suggests …", and you decide. When a photo has strong glare or blur, retake it in even light; no software can recover ink that is not in the picture.
 
 ## Documents without an expiry date {#no-expiry}
 
@@ -48,4 +86,4 @@ Each detail has a copy button for filling forms. Document numbers are masked on 
 
 ## Limits {#limits}
 
-To protect a small server, the administrator can set: concurrent OCR/conversion jobs (default 1 for 2 vCPU / 4 GB), a timeout per step, a maximum page count for OCR, and a maximum image size in megapixels (decompression-bomb protection). Larger files are still stored and downloadable.
+To protect a small server, the administrator can set in **Settings → OCR & processing**: concurrent OCR/conversion jobs (default 1 for 2 vCPU / 4 GB), a timeout per step, the maximum file size for OCR (default 50 MB), the maximum pages per OCR job, the queue size (default 50 waiting jobs), the number of attempts (default 2) and a maximum image size in megapixels (decompression-bomb protection). **Pause OCR queue** keeps queued jobs waiting until it is turned off again; nothing is lost. Files above the limits are still stored and downloadable.

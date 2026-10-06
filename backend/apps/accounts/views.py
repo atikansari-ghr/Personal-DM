@@ -14,7 +14,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from apps.core import audit, config, crypto, ratelimit, registry
+from apps.core import audit, branding, config, crypto, ratelimit, registry
 from apps.security import login_audit
 
 from . import passkeys as PK
@@ -100,6 +100,7 @@ def session_state(request):
     data = {
         "setup_complete": bool(state.completed_at),
         "app_name": config.get("general.app_name"),
+        "login": branding.public(),
         "version": settings.APP_VERSION,
         "google_enabled": bool(config.get("google.enabled")),
         "pending_2fa": bool(request.session.get("pending_2fa")),
@@ -115,6 +116,7 @@ def session_state(request):
             "theme": config.get_user(u, "me.theme"),
             "layout": config.get_user(u, "me.layout"),
             "dashboard_widgets": registry.normalize_widgets(config.get_user(u, "me.dashboard_widgets")),
+            "overview_layout": config.get_user(u, "me.overview_layout") or {},
             "doc_view": config.get_user(u, "me.doc_view"),
             "doc_sort": config.get_user(u, "me.doc_sort"),
         }

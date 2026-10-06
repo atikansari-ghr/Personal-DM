@@ -1,20 +1,32 @@
 # Implementation status
 
-Last updated: 2026-10-05 · Version 0.1.0 (pre-release)
+Last updated: 2026-10-06 · Version 0.1.0 (pre-release)
 
 ## Summary
 
-Every internal build stage (1–8) is implemented, plus change set 2026-10 (profile photos, optional Local AI, login audit, real client IP, GeoIP, country/IP access policy, security alerts, traffic analytics, passkeys and authentication policy) change sets H/I (UI, import destinations, critical/optional notifications, backup schedules, drag and drop and Move to, full-page viewer, mobile/PWA parity, public-release readiness) and change set J (portal overflow menus with rename/archive/permanent delete, folder icons, List/Thumbnails/Details views with sorting, desktop file-and-folder drop with hierarchy, own library first, measured OCR preprocessing with confidence and re-run, "No expiry", the public title, the one-line installer `personal-DM.sh` and a LinkedIn-ready README): data model, settings registry, setup, accounts, permissions, delegation, authentication (password, TOTP, Google linking, console recovery), storage, versions, renewals, archive, imports, OCR/previews/extraction, search, UI/PWA/themes, offline/export, reminders over three channels, sharing, IMAP import, audit, backup/restore/integrity, native operations tooling, CI and documentation.
+Every internal build stage (1–8) is implemented, plus change set 2026-10 (profile photos, optional Local AI, login audit, real client IP, GeoIP, country/IP access policy, security alerts, traffic analytics, passkeys and authentication policy) change sets H/I (UI, import destinations, critical/optional notifications, backup schedules, drag and drop and Move to, full-page viewer, mobile/PWA parity, public-release readiness) and change set J (portal overflow menus with rename/archive/permanent delete, folder icons, List/Thumbnails/Details views with sorting, desktop file-and-folder drop with hierarchy, own library first, measured OCR preprocessing with confidence and re-run, "No expiry", the public title, the one-line installer `personal-DM.sh` and a LinkedIn-ready README), change set K (selective multilingual OCR with a policy per document type, source/page/language selection, OCR review queue and Remove OCR data; the customizable Overview with Today/Hijri, weather, month calendar and holidays; sign-in page designs and custom wallpaper) and change set L (setup creates only the Main Administrator, optional family members): data model, settings registry, setup, accounts, permissions, delegation, authentication (password, TOTP, Google linking, console recovery), storage, versions, renewals, archive, imports, OCR/previews/extraction, search, UI/PWA/themes, offline/export, reminders over three channels, sharing, IMAP import, audit, backup/restore/integrity, native operations tooling, CI and documentation.
 
 **Release readiness: not yet approved for family production use.** The code and its automated tests are complete for the initial scope. The remaining release gates need environments that were not available in the build container (see Blockers). Per the release rules, the first family release should wait until AT-26 (Debian 13 install/upgrade) and AT-24 (restore on a clean LXC) have been validated on the real Proxmox host.
 
+**Acceptance scenarios AT-01…AT-137:** every scenario is implemented and covered by automated tests or, for AT-136, by a
+documented review; the status of each one is in [TRACEABILITY.md](TRACEABILITY.md). Items marked *Pending-env* there
+(real hardware, real providers or credentials) are listed under Blockers below and are not reported as passed.
+
 ## Completed (with evidence)
 
+- Change sets K and L (2026-10-06): new backend tests `tests/test_selective_ocr.py` (11, AT-101…AT-115),
+  `tests/test_overview.py` (15, AT-116…AT-130 backend parts, including a fake local weather server) and
+  `tests/test_family_setup.py` (AT-131…AT-135, AT-137); the full backend suite passes (for the current count see the
+  `scripts/verify.sh` output). `scripts/e2e.sh`: 48 PASS, 0 FAIL, covering the setup wizard (administrator plus
+  optional members), manual OCR on a passport, selective OCR and the review queue, Overview customize / weather (fake
+  local provider) / calendar / holidays, holiday countries and corrections, all five sign-in designs at desktop and
+  phone, and the accessibility audit (now also `/ocr-review` and `/settings/overview`) with 0 blocking violations in
+  3 themes. OCR contrast fix with a sparse-ink regression sample; benchmark mean F1 0.61 → 0.97 (12 samples).
 - Backend: 232 automated tests passing (incl. `test_security` 30, `test_ai` 15, `test_passkeys` 14, `test_photos` 9, `test_browser_moves` 11, `test_browsing_v3` 7, `test_ocr_quality` 6, `test_notification_policy` 7, `test_backup_schedule` 3, `test_preferences` 3). Frontend: 17 unit tests (vitest). One-line installer: 18 stubbed lifecycle checks. OCR benchmark: mean F1 0.61 → 0.97. (`docs/TEST_REPORT.md`).
-- Frontend: type-checked production build; 13-step browser end-to-end flow; 31 parity/viewer/browsing checks (`tests/e2e/parity.mjs`) at desktop, tablet, phone portrait and landscape; accessibility audit with 0 serious/critical violations in 3 themes; README screenshots in `docs/images/screenshots/`.
+- Frontend: type-checked production build; browser end-to-end flow (`tests/e2e/flow.mjs`) and parity/viewer/browsing checks (`tests/e2e/parity.mjs`; 48 PASS, 0 FAIL in `scripts/e2e.sh` on 2026-10-06; 31/31 at change set J) at desktop, tablet, phone portrait and landscape; accessibility audit with 0 serious/critical violations in 3 themes; README screenshots in `docs/images/screenshots/`.
 - Tooling: one-line installer `personal-DM.sh` (menu + commands, delegates to the tools below); guided installers `scripts/proxmox-create-lxc.sh` (Proxmox host: creates the container) and `scripts/easy-install.sh` (inside the LXC: asks all parameters and installs, configures, connects the NAS, backs up and checks); `scripts/personaldocs` (install, upgrade, rollback, repair, status, doctor, backup, restore, integrity, recover-admin, setup-token, logs, manage, nas-apply), systemd units, `scripts/verify.sh`, GitHub Actions CI with prebuilt frontend release asset.
-- New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title) — applied by `personaldocs upgrade`.
-- Documentation: 30 bundled guides, `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 9 ADRs, generated settings reference, test report, release checklist, changelog.
+- New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections) — applied by `personaldocs upgrade`.
+- Documentation: 30 bundled guides, `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 11 ADRs, generated settings reference, test report, release checklist, changelog.
 
 ## Blockers (external validation)
 
@@ -36,6 +48,9 @@ Every internal build stage (1–8) is implemented, plus change set 2026-10 (prof
 | Public release | Making the repository public (owner action in GitHub settings; license chosen: MIT) |
 | AT-98/99 one-line installer for real | A fresh Debian 13 VM/LXC with systemd, and a **public** repository so the raw URL works (tested here with stubbed system commands only) |
 | AT-90/91 real desktop drag | Dragging a folder from Windows Explorer / Finder into Chrome, Edge, Firefox and Safari (tested with a synthetic DataTransfer and unit-tested folder walk) |
+| AT-111 real Arabic/Hindi scans | Non-sensitive printed Arabic and Hindi test pages on the production server (only synthetic samples were used) |
+| AT-125 real weather provider | Outbound internet access from the LXC to Open-Meteo (tested with a fake local provider) |
+| AT-128/130 real phones | Sign-in designs on a real Android phone and iPhone (emulated viewports only) |
 | AT-27 resource-constrained load | Benchmark on the 2 vCPU / 4 GB LXC with realistic multi-page scans |
 
 None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT.md`.
@@ -45,7 +60,8 @@ None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT
 - The six annotated reference screenshots mentioned in the change prompt arrived during the work as chat images; they were used as requirements only and are not committed.
 - Drag and drop needs a mouse/trackpad; touch screens use **Move to…** (same server checks).
 - PDF.js renders pages as images (no selectable text layer in the viewer); the recognised text is in the **Text** tab.
-- OCR remains English-only by default. Strong glare is still the weakest case in the benchmark (F1 0.70): ink that is
+- English, Arabic and Hindi are offered by default; Arabic and Hindi recognition was only checked with synthetic
+  samples, not with real scans. Strong glare is still the weakest case in the benchmark (F1 0.70): ink that is
   washed out in the photo cannot be recovered, so the guide tells people to retake such photos.
 - Folders dropped from the desktop in a browser without the File and Directory Entries API are reported and not
   uploaded; such users should use **Import folder**.
@@ -68,7 +84,16 @@ None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT
 
 ## Session log
 
-- 2026-10-05 (change set J): portal overflow menus (fixed: menus clipped by the breadcrumb bar and scrolling panels; keyboard-opened menus did not receive focus), document rename/archive/permanent delete and folder rename/icon/share/archive from the menu, standard 📁 for sub-folders with an approved icon picker and data migration, List/Thumbnails/Details with server-side sorting saved per account, desktop file-and-folder drop with hierarchy, own library first and expanded, OCR rework (root causes: EXIF orientation ignored, no rotation/skew handling, month-first dates rejected, header/value columns not paired; benchmark 0.61 → 0.97), "No expiry" documents, public title, demo owner Atik Ansari, `personal-DM.sh`, LinkedIn-ready README, Ko-fi `FUNDING.yml`.
+- 2026-10-06 (change sets K and L): selective OCR (policy per type Disabled/Manual/Automatic, languages, expected
+  fields and AI permission; custom types; source, page and language selection; front and back as one job; states,
+  cancel, Mark reviewed, Remove OCR data; OCR review queue; limits and pause; language packs via doctor/repair),
+  Overview widgets (Today with Hijri via `hijridate`, weather proxy with cache, month calendar, upcoming holidays from
+  the `holidays` library with administrator corrections, Documents summary, Shared with me, Recent activity;
+  Customize Overview with sizes and styles), sign-in designs (five bundled presets, custom wallpaper and logo,
+  re-encoded and stripped of metadata), and the admin-only setup with optional members. Fixed: the OCR contrast
+  stretch clipped sparse ink and erased text (regression sample added); calendar accessibility roles.
+
+- 2026-10-05 (change set J): portal overflow menus (fixed: menus clipped by the breadcrumb bar and scrolling panels; keyboard-opened menus did not receive focus), document rename/archive/permanent delete and folder rename/icon/share/archive from the menu, standard 📁 for sub-folders with an approved icon picker and data migration, List/Thumbnails/Details with server-side sorting saved per account, desktop file-and-folder drop with hierarchy, own library first and expanded, OCR rework (root causes: EXIF orientation ignored, no rotation/skew handling, month-first dates rejected, header/value columns not paired; benchmark 0.61 → 0.97), "No expiry" documents, public title, demo owner (now the demo label A. Ansari), `personal-DM.sh`, LinkedIn-ready README, Ko-fi `FUNDING.yml`.
 
 - 2026-10-05 (change sets H/I): folder tree identity, validated file-type icons, atomic and serialised moves (fixed: members could not move their own documents; concurrent opposite moves could orphan folders; moves into archived folders), drag and drop and Move to…, PDF.js viewer with zoom/fit, import destination picker with exact preview, dashboard widget editor, critical/optional notification catalogue with templates and bulk summaries, daily/weekly/monthly backups, tablet overflow fixes, malformed-filter 500 fixed, open-redirect hardening of `?next=`, dependency upgrades (PDF.js 6.4 for GHSA-hq66-cqwq-w95j, React Router 7.18 for GHSA-wrjc-x8rr-h8h6), public README/guides/SECURITY/CONTRIBUTING, privacy check (tree and history clean; one real LAN address replaced in code/tests).
 

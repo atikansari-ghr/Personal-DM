@@ -5,7 +5,7 @@ Personal Documents Management System is a private, self-hosted library for your 
 ## First steps {#first-steps}
 
 1. The administrator runs the installer on the server and opens the web address (see [Installation](installation.md)).
-2. The first-run wizard creates the six initial family accounts (see [Family accounts and setup](setup.md)).
+2. The first-run wizard creates your Main Administrator account and, optionally, accounts for family members (see [Family accounts and setup](setup.md)). You can add members later.
 3. Each person signs in with the temporary password they were given and chooses their own.
 4. Upload documents, or import an existing folder structure with the [folder import wizard](folder-imports.md).
 
@@ -13,7 +13,8 @@ Personal Documents Management System is a private, self-hosted library for your 
 
 | Section | What it is for |
 |---|---|
-| Overview | Your dashboard: statistics, family members, recent documents, upcoming expiries, review queue |
+| Overview | Your customizable start page: date (Gregorian and Hijri), weather, documents summary, calendar with holidays, expiring documents, shared documents and recent activity (see [Overview](overview.md)) |
+| OCR review | Recognised text and suggested details waiting for your review (see [OCR](ocr-corrections.md#review)) |
 | Folders | The three-panel browser: folder tree, documents, preview and details |
 | Shared with me | Documents owned by others that you are allowed to view |
 | Offline files | Files you saved on this device, and full-library export |
@@ -22,16 +23,9 @@ Personal Documents Management System is a private, self-hosted library for your 
 | Ask AI | The document assistant, when the administrator enabled [Local AI](local-ai.md) |
 | Settings | Your account and, for administrators, the whole workspace |
 
-## Dashboard {#dashboard}
+## Overview {#dashboard}
 
-The dashboard only counts documents you can see. Administrators additionally see backup and processing health.
-
-Choose what it shows with **Customise** on the dashboard (or Settings → My account → Appearance → Dashboard widgets):
-- **Tick** the widgets you want: the counters (documents, family members, expiring in 90 days, storage, needs
-  review), the family member cards, saved views, recent documents, upcoming expiries, the review queue and (for
-  administrators) backup status.
-- **Order** the ticked widgets by dragging them, or with the ↑ / ↓ buttons (keyboard and touch).
-- **Save settings.** The choice belongs to your account, so your phone, tablet and computer show the same dashboard.
+The Overview only counts documents you can see. Choose **Customize Overview** to add, remove, reorder and resize widgets and to pick their style. See the [Overview guide](overview.md) for every widget, the Hijri date, holidays and weather.
 
 ## Your own folders {#my-documents}
 

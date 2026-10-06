@@ -8,7 +8,7 @@ Application name, installation timezone (used for reminders), date display forma
 
 ## Family & access {#family}
 
-Members, groups and heads, delegation. Folder permissions are managed on each folder (**Who has access**). See [Extended family](extended-family.md).
+Members (add, deactivate; documents are never deleted), groups and heads, delegation. Folder permissions are managed on each folder (**Who has access**). See [Extended family](extended-family.md).
 
 ## Documents & folders {#documents}
 
@@ -16,7 +16,11 @@ Stored filename template, upload size limit, blocked extensions, emoji suggestio
 
 ## OCR & processing {#processing}
 
-OCR on/off, language, concurrency, timeouts and size limits, and the processing queue with retry.
+OCR on/off, the OCR policy per document type (Disabled, Manual, Automatic; languages, expected fields, AI permission), untyped documents, OCR languages offered, concurrency, timeouts, size, page, queue and attempt limits, **Pause OCR queue**, and the processing queue with retry. See [selective OCR](ocr-corrections.md#selective).
+
+## Overview & sign-in {#overview}
+
+Administrators only: holiday countries and corrections, Hijri date adjustment, the weather provider (off by default), and the sign-in page design, wallpaper, title, tagline and logo. See [Overview](overview.md) and [sign-in page designs](login-designs.md).
 
 ## Notifications and connections {#notifications}
 

@@ -4,6 +4,25 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-06) — selective OCR, Overview, sign-in designs, admin-only setup (Change Sets K and L)
+- Selective OCR: a policy per document type (Disabled, Manual, Automatic) with default languages, expected fields and whether the local AI may read the text; custom types can be added and archived (built-in and in-use types are never deleted).
+- **Run OCR…** with chosen source files (front and back via **⋮ → Add another side or copy…** as one job), pages and ranges (`1-2, 5`) and languages; English, Arabic and Hindi offered by default; missing Tesseract packs reported by `personaldocs doctor` and installed by install, upgrade and repair.
+- OCR states (Not processed, Queued, Processing, Needs review, Confirmed, Failed, OCR removed), Cancel, **Mark reviewed**, **Remove OCR data…** (original and confirmed details kept), the **OCR review** page, and limits for file size, pages, queue length and attempts, plus **Pause OCR queue**.
+- Overview: Today (Gregorian and Hijri, Umm al-Qura, installation timezone, ±2 day adjustment), Weather (Open-Meteo through the server with a shared cache, off by default, city per person), Documents summary, Month calendar, Upcoming holidays (bundled `holidays` library; Saudi Arabia and India by default; provisional moon-dependent dates; administrator corrections), Shared with me and Recent activity.
+- **Customize Overview**: add, remove, reorder, resize on a responsive grid, rectangular or circular styles, widget settings, reset; saved per account on every device.
+- Sign-in page designs: Minimal (default), Nature, Travel, Family and Neutral; custom wallpaper (re-encoded, metadata removed, backed up), position, overlay, title, tagline and logo in **Settings → Overview & sign-in**.
+- Setup: an optional **Add family members** step after the Main Administrator, with generated temporary passwords.
+- Search filter `shared=1`; new dependencies `holidays`, `hijridate`, `python-dateutil` and `six`; migrations `library.0006`, `library.0007` and `core.0003`; ADR 0011.
+
+### Changed (2026-10-06) — Change Sets K and L
+- Setup creates only the Main Administrator; it no longer creates default family accounts. Upgraded installations keep every existing account, and deactivating a member never deletes their documents.
+- New installations recognise text only on request (Manual OCR); upgraded installations keep automatic OCR with AI allowed per type.
+- The dashboard is now the **Overview**, with a new default widget set for new accounts; accounts that had chosen widgets keep their choice. Settings → My account → Appearance → *Dashboard widgets* is now *Overview widgets*.
+
+### Fixed (2026-10-06) — Change Sets K and L
+- The OCR contrast stretch clipped sparse ink and could erase text on mostly blank scans (regression sample added; benchmark mean F1 stays 0.61 → 0.97).
+- Calendar accessibility roles on the Overview month calendar.
+
 ### Added (2026-10-05) — browsing, OCR quality, one-line installer (Change Set J)
 - ⋮ menus that open on top of every panel and stay on screen (keyboard, Escape, outside click), with Rename, Share, Archive and (administrator) Delete permanently for documents, and Rename, Change icon, Share and Archive for folders.
 - Folder icons: sub-folders default to 📁; icons chosen from a list with **Reset to default**; chosen icons survive moves and upgrades.
@@ -67,7 +86,7 @@ The first implementation of the full initial-release scope. See `docs/IMPLEMENTA
 - Changing your own password signed out the device you were using.
 
 ### Added
-- First-run setup wizard (one-time console code) creating the six family accounts; extended-family groups, heads and scoped delegation.
+- First-run setup wizard (one-time console code) creating the family accounts (since Change Set L: only the Main Administrator, with optional members); extended-family groups, heads and scoped delegation.
 - Default-deny capability permissions with folder inheritance, document exceptions and access explanations.
 - Folder library with emoji suggestions, immutable checksummed originals, versions, renewals and archive/restore/purge.
 - Local OCR (Tesseract/OCRmyPDF, searchable PDF/A), LibreOffice previews, thumbnails, DICOM-safe storage.

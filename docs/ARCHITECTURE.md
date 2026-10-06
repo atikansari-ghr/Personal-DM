@@ -49,14 +49,14 @@ sign-in. Every outcome is written to `LoginEvent`.
 `process_version` (heavy job):
 
 1. Detect the format from magic bytes and extension.
-2. PDF: extract native text. If there is too little text and the page count is within the limit, run OCRmyPDF (`--skip-text`, PDF/A-2, one job, `OMP_THREAD_LIMIT=1`).
-3. Image: verify it and check its pixel count, make a thumbnail, then OCR it into a searchable PDF.
+2. PDF: extract native text. If there is too little text, the OCR policy of the document type allows automatic OCR and the page count is within the limit, run OCRmyPDF (`--skip-text`, PDF/A-2, one job, `OMP_THREAD_LIMIT=1`) on the primary OCR source. Otherwise the document stays *Not processed* until someone chooses **Run OCR…** (see Change set K below).
+3. Image: verify it and check its pixel count, make a thumbnail, then (only under an *Automatic* policy) OCR it into a searchable PDF.
 4. Office: convert with headless LibreOffice using a throwaway profile, then extract text and make a thumbnail.
 5. Text: read it, up to 2 MB.
 6. DICOM and other formats: store the file and mark it *unsupported* (no preview).
 7. Propose fields (labels and MRZ). Confirmed fields are never overwritten; a differing new scan is flagged instead.
 8. Update the search vector: title (A), metadata and fields excluding the document number (B), content (C).
-9. If Local AI is enabled: queue `ai_task` jobs (analysis → suggestions; embeddings) **after** the document is stored and searchable.
+9. If Local AI is enabled and the document type allows AI to read its text: queue `ai_task` jobs (analysis → suggestions; embeddings) **after** the document is stored and searchable.
 
 All tools run through `sandbox.run`: their own session, an address-space limit, a CPU-time limit, a timeout, a scrubbed environment and a private working directory.
 
@@ -74,7 +74,7 @@ Originals are write-once and always exist before their rows commit. `pg_dump` ta
 |---|---|---|
 | `/opt/personaldocs/releases/<ver>-<sha>` | root:personaldocs, read-only | code, `.venv`, `frontend/dist` |
 | `/etc/personaldocs` | root:personaldocs 0750 | env file, `secret_key`, `encryption.key` (0600 personaldocs), `github-token` (0600 root) |
-| `/var/lib/personaldocs` | personaldocs 0750 | storage, staging, tmp, quarantine, pre-upgrade DB snapshots, status files, `profile-photos/`, `geoip/`, `logs/access.log`, `goaccess/` |
+| `/var/lib/personaldocs` | personaldocs 0750 | storage, staging, tmp, quarantine, pre-upgrade DB snapshots, status files, `profile-photos/`, `branding/` (sign-in wallpaper and logo), `geoip/`, `logs/access.log`, `goaccess/` |
 
 ## Extension points (later phases)
 
@@ -92,7 +92,7 @@ Originals are write-once and always exist before their rows commit. `pg_dump` ta
   served by the app.
 - **Backups:** `ops/schedule.py` computes daily/weekly/monthly occurrences; the scheduler stores the last run so
   restarts neither skip nor repeat a slot.
-- **Preferences:** theme, layout, dashboard widgets and notification choices are per-account server settings; the
+- **Preferences:** theme, layout, dashboard (now Overview) widgets and notification choices are per-account server settings; the
   client refreshes them when the app returns to the foreground.
 
 ## Change set J (2026-10)
@@ -106,3 +106,29 @@ Originals are write-once and always exist before their rows commit. `pg_dump` ta
   returns per-line confidence. Each version stores `ocr_quality`; extraction reads only the reliable lines.
 - **Installer:** `personal-DM.sh` at the repository root checks the platform and delegates to `easy-install.sh` and
   `personaldocs`.
+
+## Change sets K and L (2026-10)
+
+See [ADR 0011](adr/0011-selective-ocr-overview.md).
+
+- **Selective OCR:** `library/ocr_policy.py` decides the mode (Disabled / Manual / Automatic), default languages,
+  page ranges and whether AI may read a document's text, per document type and for untyped documents.
+  `library/ocr_runs.py` validates requests (sources, pages, languages, size, page, queue and attempt limits), queues
+  one `ocr_run` job per request (several source files, such as front and back, in one job), cancels queued jobs,
+  removes OCR data and marks documents reviewed. `library/ocr_views.py` serves `/api/documents/<id>/ocr`,
+  `/ocr/cancel`, `/ocr/reviewed`, `/api/ocr/review`, `/api/ocr/languages` and `/api/ocr/types`. Frontend:
+  `components/OcrPanel.tsx`, `pages/OcrReview.tsx`, `pages/settings/OcrTypes.tsx`. Migrations `library.0006` (fields)
+  and `library.0007` (defaults; existing installations stay Automatic).
+- **Overview:** `core/overview.py` holds the layout rules (`normalize_layout`, per-widget limits), the Gregorian and
+  Hijri date (`hijridate`, Umm al-Qura, installation timezone), holidays (`holidays` library merged with
+  `HolidayOverride` rows) and the weather proxy (`WeatherCache` rows shared by everyone who chose the same city; only
+  coordinates leave the server). `core/overview_views.py` serves `/api/overview/calendar`, `/holidays`, `/countries`,
+  `/weather`, `/weather/cities`, `/weather/test`, `/weather/default-city` and `/holiday-overrides`; `/api/dashboard`
+  carries the widget data. Frontend: `pages/Dashboard.tsx`, `components/OverviewWidgets.tsx`,
+  `pages/settings/OverviewAdmin.tsx`. Per-account layout in `me.dashboard_widgets` and `me.overview_layout`.
+  Migration `core.0003`.
+- **Sign-in designs:** `core/branding.py` validates, re-encodes (WebP, metadata removed) and stores uploads under
+  `<data>/branding`; `core/branding_views.py` serves the public `/api/branding`, `/api/branding/wallpaper` and
+  `/api/branding/logo` (changes are administrator-only). The presets are SVG drawings in `components/LoginArt.tsx`.
+- **Setup:** `accounts/services.py::complete_setup` creates the Main Administrator and the optional members in one
+  transaction; no default accounts exist.
