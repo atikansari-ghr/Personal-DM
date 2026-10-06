@@ -295,8 +295,7 @@ def setup_verify(request):
     if not S.check_setup_token(request.data.get("token", "")):
         ratelimit.hit(f"setup:{ip}")
         return _fail("The setup code is invalid or expired. Run `personaldocs setup-token` on the server console.")
-    return Response({"status": "ok", "slots": [{"slot": s, "role_label": l} for s, l in S.INITIAL_SLOTS],
-                     "timezone": config.get("general.timezone")})
+    return Response({"status": "ok", "relationships": S.RELATIONSHIP_SUGGESTIONS, "timezone": config.get("general.timezone")})
 
 
 @api_view(["POST"])

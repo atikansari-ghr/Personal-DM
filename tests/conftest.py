@@ -70,6 +70,14 @@ def family(db):
     S.complete_setup(setup_payload())
     users = {u.username: u for u in User.objects.all()}
     User.objects.update(must_change_password=False)
+    # Most tests describe documents that are recognised on upload (the behaviour of installations upgraded from
+    # earlier releases). Selective-OCR tests switch the policy back to Manual explicitly.
+    from apps.core import config
+    from apps.library.models import DocumentType
+
+    DocumentType.objects.update(ocr_mode="automatic", ocr_ai_allowed=True)
+    config.set_value("processing.ocr_untyped_mode", "automatic")
+    config.set_value("processing.ocr_untyped_ai_allowed", True)
     for u in users.values():
         u.refresh_from_db()
     return users

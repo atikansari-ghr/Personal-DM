@@ -26,7 +26,7 @@ class SettingDef:
     key: str
     label: str
     description: str
-    type: str  # bool|int|str|choice|int_list|time|secret|email|url|timezone|path|channel_list|widget_list|event_list|event_matrix
+    type: str  # bool|int|str|choice|choice_list|int_list|time|secret|email|url|timezone|path|channel_list|widget_list|event_list|event_matrix|json
     default: Any
     section: str
     scope: str = GLOBAL
@@ -40,6 +40,7 @@ class SettingDef:
     help: str = ""  # guide-slug#anchor
     example: str = ""
     validator: Callable[[Any], None] | None = field(default=None, compare=False)
+    choice_labels: dict | None = field(default=None, compare=False)  # labels for choice / choice_list values
 
     @property
     def secret(self) -> bool:
@@ -69,6 +70,12 @@ class SettingDef:
 
 CHANNELS = ("in_app", "email", "telegram")
 THEMES = ("green", "blue", "mono")
+# Tesseract language packs offered for OCR (Debian package tesseract-ocr-<code>)
+_OCR_LANGS = {
+    "eng": "English", "ara": "Arabic", "hin": "Hindi (Devanagari)", "urd": "Urdu", "tel": "Telugu", "tam": "Tamil",
+    "mal": "Malayalam", "kan": "Kannada", "ben": "Bengali", "mar": "Marathi", "guj": "Gujarati", "pan": "Punjabi",
+    "fra": "French", "deu": "German", "spa": "Spanish", "fas": "Persian", "tur": "Turkish",
+}
 LAYOUTS = ("three_panel", "full_page")
 
 
@@ -224,12 +231,35 @@ SETTINGS: list[SettingDef] = [
                "str", "", "documents", effect="Only listed folders can be scanned by the server import wizard.",
                help="folder-imports#server", example="/mnt/nas/old-documents"),
     # ---- Processing
-    SettingDef("processing.ocr_enabled", "Local OCR", "Run local English OCR (Tesseract) on scans and images.",
-               "bool", True, "processing", effect="When off, scans are stored and previewed but not text-searchable.",
-               help="ocr-corrections#ocr"),
-    SettingDef("processing.ocr_language", "OCR language", "Tesseract language pack used.", "choice", "eng",
-               "processing", choices=("eng",), effect="Only English is supported in the initial release.",
-               help="ocr-corrections#ocr"),
+    SettingDef("processing.ocr_enabled", "Text recognition (OCR)",
+               "Master switch for local OCR (Tesseract). Which documents are recognised is decided per document type below.",
+               "bool", True, "processing", effect="When off, nothing is recognised; documents are still stored, previewed and searchable by their details.",
+               help="ocr-corrections#selective"),
+    SettingDef("processing.ocr_languages", "OCR languages offered",
+               "Languages people can choose when running OCR. The installer installs the matching Tesseract language packs; the health check reports missing ones.",
+               "choice_list", ["eng", "ara", "hin"], "processing", choices=tuple(_OCR_LANGS),
+               choice_labels=_OCR_LANGS, effect="Run `sudo personaldocs repair` after adding a language to install its pack.",
+               help="ocr-corrections#languages"),
+    SettingDef("processing.ocr_untyped_mode", "OCR for documents without a type",
+               "Disabled: never. Manual: only when someone runs OCR. Automatic: the primary file is recognised after upload.",
+               "choice", "manual", "processing", choices=("disabled", "manual", "automatic"),
+               choice_labels={"disabled": "Disabled", "manual": "Manual (recommended)", "automatic": "Automatic"},
+               effect="Applies to new uploads and to the Run OCR button.", help="ocr-corrections#selective"),
+    SettingDef("processing.ocr_untyped_ai_allowed", "Local AI for documents without a type",
+               "Allow Local AI to read the recognised text of documents without a type (when Local AI is on).",
+               "bool", False, "processing", effect="Off: Local AI never receives their text.", help="ocr-corrections#ai"),
+    SettingDef("processing.ocr_paused", "Pause OCR queue",
+               "Queued OCR jobs wait until the queue is resumed. Uploads, previews and search keep working.",
+               "bool", False, "processing", effect="Resuming continues the waiting jobs in order.", help="ocr-corrections#limits"),
+    SettingDef("processing.ocr_max_file_mb", "Maximum file size for OCR (MB)",
+               "Files above this size are stored and previewed but cannot be sent to OCR.", "int", 50, "processing",
+               min=1, max=2000, help="ocr-corrections#limits"),
+    SettingDef("processing.ocr_queue_max", "Maximum queued OCR jobs",
+               "New OCR requests are refused with a clear message while this many are waiting.", "int", 50, "processing",
+               min=1, max=10000, help="ocr-corrections#limits"),
+    SettingDef("processing.ocr_max_attempts", "OCR retries",
+               "How many times a failed OCR job is attempted before it is marked Failed.", "int", 2, "processing",
+               min=1, max=10, help="ocr-corrections#limits"),
     SettingDef("processing.heavy_concurrency", "Concurrent OCR/conversion jobs",
                "How many expensive jobs run at once. 1 is recommended for 2 vCPU / 4 GB.", "int", 1, "processing",
                min=1, max=8, effect="Higher values use more CPU and memory; takes effect when the worker restarts.",
@@ -237,7 +267,7 @@ SETTINGS: list[SettingDef] = [
     SettingDef("processing.timeout_seconds", "Processing timeout (seconds)",
                "Maximum time for one OCR or conversion step.", "int", 600, "processing", min=30, max=7200,
                effect="Jobs exceeding this fail with a timeout error and can be retried.", help="ocr-corrections#limits"),
-    SettingDef("processing.max_pages", "Maximum pages for OCR", "PDFs above this page count are stored without OCR.",
+    SettingDef("processing.max_pages", "Maximum pages per OCR job", "OCR requests covering more pages than this are refused (choose a page range instead).",
                "int", 300, "processing", min=1, max=5000, effect="Protects the server from very large scans.",
                help="ocr-corrections#limits"),
     SettingDef("processing.max_image_megapixels", "Maximum image size (megapixels)",
@@ -501,6 +531,10 @@ def coerce(defn: SettingDef, value: Any) -> Any:
     elif t == "choice":
         if value not in defn.choices:
             raise SettingError(f"Choose one of: {', '.join(defn.choices)}.")
+    elif t == "choice_list":
+        if not isinstance(value, list) or any(v not in defn.choices for v in value):
+            raise SettingError(f"Choose from: {', '.join(defn.choices)}.")
+        value = [c for c in defn.choices if c in value]
     elif t == "int_list":
         if isinstance(value, str):
             value = [v for v in re.split(r"[,\s]+", value) if v]

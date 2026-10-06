@@ -40,6 +40,8 @@ def _setting_json(defn, user):
         extra["choice_labels"] = registry.WIDGETS
     elif defn.type == "event_list":
         extra["choice_labels"] = {k: e.label for k, e in registry.NOTIFY_EVENTS.items()}
+    elif defn.choice_labels:
+        extra["choice_labels"] = defn.choice_labels
     return {**defn.public(), **extra, "value": value, "configured": configured, "can_edit": config.can_edit(user, defn.key)}
 
 

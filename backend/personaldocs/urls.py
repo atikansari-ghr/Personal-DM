@@ -6,7 +6,7 @@ from apps.accounts import google
 from apps.ai import views as ai
 from apps.accounts import views as acc
 from apps.core import views as core
-from apps.library import export, views as lib, views_import as imp, views_share as share
+from apps.library import export, ocr_views as ocrv, views as lib, views_import as imp, views_share as share
 from apps.mailimport import views as mail
 from apps.notify import views as notify
 from apps.ops import views as ops
@@ -111,6 +111,13 @@ api = [
     path("documents/<uuid:pk>/preview", lib.document_preview),
     path("documents/<uuid:pk>/thumbnail", lib.document_thumbnail),
     path("documents/<uuid:pk>/text", lib.document_text),
+    path("documents/<uuid:pk>/ocr", ocrv.document_ocr),
+    path("documents/<uuid:pk>/ocr/cancel", ocrv.document_ocr_cancel),
+    path("documents/<uuid:pk>/ocr/reviewed", ocrv.document_ocr_reviewed),
+    path("ocr/review", ocrv.ocr_review_queue),
+    path("ocr/languages", ocrv.ocr_languages),
+    path("ocr/types", ocrv.ocr_types),
+    path("ocr/types/<int:pk>", ocrv.ocr_type_detail),
     path("documents/<uuid:pk>/similar", lib.document_similar),
     path("documents/<uuid:pk>/shares", share.document_shares),
     path("shares/<uuid:sid>", share.share_revoke),

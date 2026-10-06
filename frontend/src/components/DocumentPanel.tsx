@@ -3,11 +3,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, formatBytes, formatDate, formatDateTime, upload } from "../api";
 import { saveOffline } from "../offline";
 import { useSession } from "../session";
-import type { DocDetail, DocRow, Meta, Version } from "../types";
+import type { DocDetail, DocRow, Meta } from "../types";
 import PermissionsDialog from "./PermissionsDialog";
 import { Avatar, Confirm, CopyButton, ExpiryBadge, HelpTip, Icon, Modal, Skeleton, StateBadge, useToast } from "./ui";
 import AISuggestions from "./AISuggestions";
 import Menu from "./Menu";
+import OcrPanel, { OcrStateBadge } from "./OcrPanel";
 import DocViewer from "./DocViewer";
 import FileTypeIcon from "./FileTypeIcon";
 import { useAiStatus } from "../ai";
@@ -141,71 +142,23 @@ function Fields({ doc, onChange }: { doc: DocDetail; onChange: () => void }) {
   );
 }
 
-function OcrText({ text, applied, confidence, lowLines, quality, onRerun }: {
-  text: string; applied: boolean; confidence: number | null; lowLines: number[]; quality: Version["ocr_quality"]; onRerun?: () => void;
-}) {
-  const low = new Set(lowLines);
-  const lines = text.split("\n");
-  const level = confidence === null ? "" : confidence >= 85 ? "ok" : confidence >= 60 ? "soon" : "danger";
-  return (
-    <div className="stack">
-      <div className="row between">
-        <span className="small muted">
-          {applied ? "Recognised locally with OCR — check important values." : "Text extracted from the file."}
-          {applied && confidence !== null && <> <span className={`badge ${level}`} title="Mean word confidence reported by the OCR engine">OCR confidence {Math.round(confidence)}%</span></>}
-          {quality?.rotation ? <> <span className="badge neutral">Rotated {quality.rotation}°</span></> : null}
-        </span>
-        <span className="row" style={{ gap: ".3rem" }}>
-          {onRerun && applied && <button className="btn small" onClick={onRerun}><Icon name="refresh" size={16} /> Re-run OCR…</button>}
-          <CopyButton label="Text" getValue={() => text} />
-        </span>
-      </div>
-      {low.size > 0 && <p className="small muted">Greyed lines were read with low confidence. They are not used for suggested details. If most of the text looks wrong, try <em>Re-run OCR</em> with a rotation or upload a better scan.</p>}
-      <pre className="preview-text">{lines.map((ln, i) => low.has(i) ? <span key={i} className="ocr-low" title="Low confidence">{ln}{"\n"}</span> : <span key={i}>{ln}{"\n"}</span>)}</pre>
-    </div>
-  );
-}
-
-function RerunDialog({ doc, onClose, onDone }: { doc: DocDetail; onClose: () => void; onDone: () => void }) {
-  const [rotate, setRotate] = useState("auto");
-  const [err, setErr] = useState("");
-  const isImage = doc.current_version?.format === "image";
-  return (
-    <Modal title="Re-run OCR" onClose={onClose}>
-      <form className="stack" onSubmit={async (e) => {
-        e.preventDefault();
-        try { await api(`documents/${doc.id}/reprocess`, { body: rotate === "auto" ? {} : { rotate: Number(rotate) } }); onDone(); } catch (x: any) { setErr(x.message); }
-      }}>
-        {err && <div className="alert error">{err}</div>}
-        <p className="small">The original file is not changed. Values you have already confirmed are kept; if the new reading differs, it is shown next to them as a suggestion.</p>
-        {isImage ? (
-          <fieldset className="field"><legend>Orientation</legend>
-            {[["auto", "Detect automatically"], ["90", "Rotate 90° clockwise"], ["180", "Rotate 180° (upside down)"], ["270", "Rotate 90° anticlockwise"], ["0", "As stored (no rotation)"]].map(([k, l]) => (
-              <label key={k} className="check"><input type="radio" name="rot" value={k} checked={rotate === k} onChange={() => setRotate(k)} /> {l}</label>
-            ))}
-          </fieldset>
-        ) : <p className="small muted">Pages are straightened and rotated automatically.</p>}
-        <div className="row" style={{ justifyContent: "flex-end" }}><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary">Re-run</button></div>
-      </form>
-    </Modal>
-  );
-}
-
-function VersionDialog({ doc, mode, onClose, onDone }: { doc: DocDetail; mode: "version" | "renew"; onClose: () => void; onDone: (id?: string) => void }) {
+function VersionDialog({ doc, mode, onClose, onDone }: { doc: DocDetail; mode: "version" | "renew" | "additional"; onClose: () => void; onDone: (id?: string) => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [comment, setComment] = useState("");
   const [err, setErr] = useState("");
   const [p, setP] = useState<number | null>(null);
   return (
-    <Modal title={mode === "version" ? "Upload a new version" : "Add renewed document"} onClose={onClose}>
+    <Modal title={mode === "version" ? "Upload a new version" : mode === "additional" ? "Add another side or copy" : "Add renewed document"} onClose={onClose}>
       <div className="stack">
         <div className="alert">
-          {mode === "version"
+          {mode === "additional"
+            ? "Use this for the back side of a card or another copy that belongs to the same document. It does not replace the current file; you can include it when running OCR."
+            : mode === "version"
             ? "Use this for a better scan or corrected copy of the same document. The original stays in version history; details stay shared."
             : "Use this when the credential was renewed (e.g. a new passport). A separate record is created and linked; the old one keeps its dates and history."}
         </div>
         <input type="file" aria-label="File" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-        {mode === "version" && <div className="field"><label htmlFor="vc">What changed? (optional)</label><input id="vc" type="text" value={comment} onChange={(e) => setComment(e.target.value)} /></div>}
+        {mode !== "renew" && <div className="field"><label htmlFor="vc">{mode === "additional" ? "Description (optional, e.g. Back side)" : "What changed? (optional)"}</label><input id="vc" type="text" value={comment} onChange={(e) => setComment(e.target.value)} /></div>}
         {p !== null && <div className="progress"><div style={{ width: `${p * 100}%` }} /></div>}
         {err && <div className="alert error">{err}</div>}
         <div className="row" style={{ justifyContent: "flex-end" }}>
@@ -214,7 +167,8 @@ function VersionDialog({ doc, mode, onClose, onDone }: { doc: DocDetail; mode: "
             const f = new FormData();
             f.set("file", file!);
             f.set("comment", comment);
-            try { setP(0); const r = await upload<any>(`documents/${doc.id}/${mode === "version" ? "versions" : "renew"}`, f, setP); onDone(mode === "renew" ? r.id : undefined); } catch (e: any) { setErr(e.message); setP(null); }
+            if (mode === "additional") f.set("additional", "true");
+            try { setP(0); const r = await upload<any>(`documents/${doc.id}/${mode === "renew" ? "renew" : "versions"}`, f, setP); onDone(mode === "renew" ? r.id : undefined); } catch (e: any) { setErr(e.message); setP(null); }
           }}>Upload</button>
         </div>
       </div>
@@ -326,18 +280,16 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
   const [error, setError] = useState("");
   const [tab, setTab] = useState("details");
   const [dialog, setDialog] = useState<string>("");
-  const [ocrText, setOcrText] = useState<string | null>(null);
-  const [ocrInfo, setOcrInfo] = useState<{ confidence: number | null; low_lines: number[] }>({ confidence: null, low_lines: [] });
+
   const [similar, setSimilar] = useState<(DocRow & { reasons: string[] })[] | null>(null);
   const load = () => api<DocDetail>(`documents/${id}`).then((d) => { setDoc(d); setError(""); }).catch((e) => setError(e.status === 404 ? "This document does not exist or you do not have access to it." : e.message));
-  useEffect(() => { setDoc(null); setTab("details"); setOcrText(null); setSimilar(null); load(); }, [id]);
+  useEffect(() => { setDoc(null); setTab("details"); setSimilar(null); load(); }, [id]);
   useEffect(() => {
     if (!doc || !["queued", "processing"].includes(doc.state)) return;
     const t = setTimeout(load, 4000);
     return () => clearTimeout(t);
   }, [doc]);
   useEffect(() => {
-    if (tab === "text" && ocrText === null) api(`documents/${id}/text`).then((r) => { setOcrText(r.text); setOcrInfo({ confidence: r.confidence ?? null, low_lines: r.low_lines || [] }); });
     if (tab === "similar" && similar === null) api(`documents/${id}/similar`).then((r) => setSimilar(r.similar));
   }, [tab]);
   if (error) return <div className="alert error" style={{ margin: "1rem" }}>{error}</div>;
@@ -351,7 +303,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
       <div className="row between" style={{ alignItems: "flex-start" }}>
         <div className="grow">
           <h2 style={{ fontSize: full ? "1.6rem" : "1.25rem", marginBottom: ".2rem" }}>{doc.title}</h2>
-          <div className="row small muted"><StateBadge state={doc.state} /><ExpiryBadge expiry={doc.expiry} />{v && <span>{v.original_name} · {formatBytes(v.size)} · v{v.number}</span>}{doc.archived && <span className="badge neutral">Archived</span>}</div>
+          <div className="row small muted"><StateBadge state={doc.state} />{doc.ocr && doc.ocr.state !== "not_processed" && <OcrStateBadge state={doc.ocr.state} />}<ExpiryBadge expiry={doc.expiry} />{v && <span>{v.original_name} · {formatBytes(v.size)} · v{v.number}</span>}{doc.archived && <span className="badge neutral">Archived</span>}</div>
         </div>
         <div className="row">
           {can("download") && v && <a className="btn primary" href={`/api/documents/${doc.id}/file?download=1`}><Icon name="download" /> Download</a>}
@@ -360,10 +312,12 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
           <Menu label="More actions" className="btn" items={[
             { label: "Rename / edit details…", hidden: !can("edit"), onSelect: () => setDialog("edit") },
             { label: "Upload new version (better scan)…", hidden: !can("version"), onSelect: () => setDialog("version") },
+            { label: "Add another side or copy…", hidden: !can("version"), onSelect: () => setDialog("additional") },
             { label: "Add renewed document…", hidden: !doc.folder, onSelect: () => setDialog("renew") },
             { label: "Save for offline use", hidden: !(can("download") && v), onSelect: async () => { try { await saveOffline(session!.user!.id, doc, v!); toast("Saved for offline use on this device"); } catch (e: any) { toast(e.message, "error"); } } },
             { label: "Who has access", onSelect: () => setDialog("perms") },
-            { label: "Re-run OCR / preview…", hidden: !can("edit"), onSelect: () => setDialog("rerun") },
+            { label: "Text recognition (OCR)…", hidden: !can("edit") || doc.ocr?.mode === "disabled", onSelect: () => setTab("text") },
+            { label: "Regenerate preview", hidden: !can("edit"), onSelect: () => api(`documents/${doc.id}/reprocess`, { method: "POST" }).then(() => { toast("Preview regeneration queued"); changed(); }).catch((e) => toast(e.message, "error")) },
             "separator",
             { label: "Archive…", danger: true, hidden: !can("archive") || doc.archived, onSelect: () => setDialog("archive") },
           ]} />
@@ -371,21 +325,18 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
       </div>
       <Preview doc={doc} full={full} />
       <div className="tabs" role="tablist">
-        {[["details", "Details"], ["text", "Text"], ["versions", `Versions (${doc.versions.length})`], ["similar", "More like this"], ...(doc.history.length ? [["history", "History"]] : [])].map(([k, l]) => (
+        {[["details", "Details"], ["text", "Text (OCR)"], ["versions", `Versions (${doc.versions.length})`], ["similar", "More like this"], ...(doc.history.length ? [["history", "History"]] : [])].map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{l}</button>
         ))}
         {doc.fields.length > 0 && !doc.fields.some((f) => f.status === "proposed") && <span className="badge ok" style={{ marginLeft: "auto", alignSelf: "center" }}><Icon name="check" size={13} /> Details confirmed</span>}
       </div>
       {tab === "details" && <><Fields doc={doc} onChange={changed} /><AISuggestions docId={doc.id} onChange={changed} />{ai?.assistant && <Link className="btn small ghost" to={`/assistant?document=${doc.id}`}><Icon name="sparkle" size={16} /> Ask AI about this document</Link>}</>}
-      {tab === "text" && (ocrText === null ? <Skeleton /> : ocrText ? (
-        <OcrText text={ocrText} applied={!!v?.ocr_applied} confidence={ocrInfo.confidence} lowLines={ocrInfo.low_lines} quality={v?.ocr_quality || null}
-          onRerun={can("edit") ? () => setDialog("rerun") : undefined} />
-      ) : <div className="empty">No text available for this document.</div>)}
+      {tab === "text" && <OcrPanel docId={doc.id} onChanged={changed} />}
       {tab === "versions" && (
         <table className="responsive"><thead><tr><th>Version</th><th>File</th><th>Added</th><th /></tr></thead><tbody>
           {doc.versions.map((ver) => (
             <tr key={ver.id}>
-              <td>v{ver.number} {ver.id === v?.id && <span className="badge">Current</span>}{ver.pdfa_check && (
+              <td>v{ver.number} {ver.id === v?.id && <span className="badge">Current</span>}{ver.is_additional && <span className="badge neutral" title="Another side or copy; does not replace the current file">Additional</span>}{ver.ocr_applied && <span className="badge ok" title={ver.ocr_pages ? `Pages ${ver.ocr_pages} recognised` : "Recognised"}>OCR{ver.ocr_pages ? ` p.${ver.ocr_pages}` : ""}</span>}{ver.pdfa_check && (
                 <span className={`badge ${ver.pdfa_check.compliant ? "ok" : "soon"}`}
                   title={ver.pdfa_check.compliant ? `${ver.pdfa_check.profile} — ${ver.pdfa_check.full_validation ? "validated by veraPDF" : "structural check, not a full validation"}` : ver.pdfa_check.failed_rules.map((r) => r.description).join("; ")}>
                   {ver.pdfa_check.compliant ? "PDF/A ✓" : "PDF/A issues"}{ver.pdfa_check.full_validation ? "" : "*"}
@@ -409,8 +360,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
         <ul className="small">{doc.history.map((h, i) => <li key={i}>{formatDateTime(h.at)} — {h.actor || "system"}: {h.action.replace(/_/g, " ")} {Object.keys(h.changes || {}).length ? <span className="muted">{JSON.stringify(h.changes)}</span> : null}</li>)}</ul>
       )}
       {dialog === "edit" && <EditDialog doc={doc} onClose={() => setDialog("")} onDone={() => { setDialog(""); changed(); }} />}
-      {(dialog === "version" || dialog === "renew") && <VersionDialog doc={doc} mode={dialog} onClose={() => setDialog("")} onDone={(newId) => { setDialog(""); changed(); if (newId) nav(`/documents/${newId}`); }} />}
-      {dialog === "rerun" && <RerunDialog doc={doc} onClose={() => setDialog("")} onDone={() => { toast("Processing queued"); setDialog(""); setOcrText(null); setTab("details"); changed(); }} />}
+      {(dialog === "version" || dialog === "renew" || dialog === "additional") && <VersionDialog doc={doc} mode={dialog} onClose={() => setDialog("")} onDone={(newId) => { setDialog(""); changed(); if (newId) nav(`/documents/${newId}`); }} />}
       {dialog === "share" && <ShareDialog doc={doc} onClose={() => setDialog("")} />}
       {dialog === "perms" && <PermissionsDialog target={{ kind: "documents", id: doc.id, name: doc.title }} onClose={() => { setDialog(""); changed(); }} />}
       {dialog === "archive" && (

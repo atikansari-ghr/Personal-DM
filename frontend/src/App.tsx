@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import OcrReviewPage from "./pages/OcrReview";
 import { safeNext } from "./api";
 import Layout from "./components/Layout";
 import { Skeleton } from "./components/ui";
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="/imports/new" element={<ImportWizard />} />
         <Route path="/imports/:id" element={<ImportWizard />} />
         <Route path="/assistant" element={<AssistantPage />} />
+        <Route path="/ocr-review" element={<OcrReviewPage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/help/:slug" element={<HelpPage />} />
         <Route path="/upload-shared" element={<UploadShared />} />

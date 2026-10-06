@@ -468,7 +468,8 @@ def document_versions(request, pk):
         return _err("Choose a file.")
     try:
         staged = storage.stage_uploaded_file(f)
-        v = S.add_version(actor=request.user, doc=doc, staged=staged, comment=(request.data.get("comment") or "")[:255])
+        v = S.add_version(actor=request.user, doc=doc, staged=staged, comment=(request.data.get("comment") or "")[:255],
+                          additional=str(request.data.get("additional") or "").lower() in ("1", "true", "yes"))
     except (storage.StorageError, S.DomainError) as exc:
         return _err(str(exc))
     audit.record("document.version_upload", request=request, target=doc, subject_user=doc.owner, version=v.number)
@@ -535,6 +536,9 @@ def document_fields(request, pk):
         return _err(str(exc))
     audit.record("document.fields", request=request, target=doc, subject_user=doc.owner)
     doc.refresh_from_db()
+    if doc.ocr_state == "needs_review" and not doc.fields.filter(status=DocumentField.PROPOSED).exists():
+        Document.objects.filter(pk=doc.pk).update(ocr_state="confirmed")  # every suggestion was decided
+        doc.ocr_state = "confirmed"
     searchlib.update_search_vector(doc)
     return Response(document_detail(_ctx(request), doc))
 
@@ -608,9 +612,18 @@ def document_reprocess(request, pk):
         if rotate not in (0, 90, 180, 270):
             return _err("Rotation must be auto, 0, 90, 180 or 270.")
         payload["rotate"] = rotate  # manual orientation for the OCR re-run (clockwise degrees)
+    if "rotate" in payload:  # a rotation only matters for text recognition: re-run OCR on the source set
+        from . import ocr_runs
+
+        try:
+            ocr_runs.request_ocr(actor=request.user, doc=doc, rotate=payload["rotate"], set_primary=False, request=request)
+        except ocr_runs.OCRError as exc:
+            return _err(str(exc))
+        audit.record("document.reprocess", request=request, target=doc, rotate=payload["rotate"])
+        return Response({"status": "queued", "ocr": True})
     D.objects.filter(pk=doc.pk).update(state=D.QUEUED)
     jobs.enqueue("process_version", payload, idempotency_key=f"process:{doc.current_version_id}:{timezone.now().timestamp()}")
-    audit.record("document.reprocess", request=request, target=doc, rotate=payload.get("rotate", "auto"))
+    audit.record("document.reprocess", request=request, target=doc, rotate="auto")
     return Response({"status": "queued"})
 
 

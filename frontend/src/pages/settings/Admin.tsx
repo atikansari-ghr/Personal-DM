@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import OcrTypes from "./OcrTypes";
 import { api, formatBytes, formatDateTime } from "../../api";
 import SettingsForm from "../../components/SettingsForm";
 import { CopyButton, Icon, Skeleton, useAsync, useToast } from "../../components/ui";
@@ -57,7 +58,7 @@ function JobsCard() {
 }
 
 export function ProcessingPanel() {
-  return <div className="stack"><SettingsForm section="processing" title="OCR & processing" /><JobsCard /></div>;
+  return <div className="stack"><SettingsForm section="processing" title="OCR & processing" /><OcrTypes /><JobsCard /></div>;
 }
 
 function DeliveryProblems() {

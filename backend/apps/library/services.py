@@ -259,8 +259,11 @@ def create_document(*, actor, folder: Folder, owner, staged: storage.Staged, tit
     return doc
 
 
-def add_version(*, actor, doc: Document, staged: storage.Staged, comment: str = "") -> DocumentVersion:
-    """A better scan / edited copy of the same document. Renewals must use create_document(renews=...)."""
+def add_version(*, actor, doc: Document, staged: storage.Staged, comment: str = "", additional: bool = False) -> DocumentVersion:
+    """A better scan / edited copy of the same document. Renewals must use create_document(renews=...).
+
+    ``additional`` stores another side or copy (e.g. an ID card's back) without replacing the current file.
+    """
     final_path = None
     try:
         with transaction.atomic():
@@ -268,10 +271,15 @@ def add_version(*, actor, doc: Document, staged: storage.Staged, comment: str = 
             number = (locked.versions.order_by("-number").values_list("number", flat=True).first() or 0) + 1
             version = _commit_version(actor=actor, doc=locked, staged=staged, number=number, comment=comment)
             final_path = storage.resolve_original(version.storage_path)
-            locked.current_version = version
-            locked.state = Document.QUEUED
-            locked.save(update_fields=["current_version", "state", "updated_at"])
-            _history(locked, actor, "version_added", version=number)
+            if additional:
+                DocumentVersion.objects.filter(pk=version.pk).update(is_additional=True)
+                version.is_additional = True
+                _history(locked, actor, "file_added", version=number)
+            else:
+                locked.current_version = version
+                locked.state = Document.QUEUED
+                locked.save(update_fields=["current_version", "state", "updated_at"])
+                _history(locked, actor, "version_added", version=number)
             transaction.on_commit(lambda: jobs.enqueue("process_version", {"version_id": str(version.id)},
                                                        idempotency_key=f"process:{version.id}"))
     except Exception:
@@ -285,6 +293,9 @@ def add_version(*, actor, doc: Document, staged: storage.Staged, comment: str = 
 def set_current_version(*, actor, doc: Document, version: DocumentVersion) -> None:
     if version.document_id != doc.id:
         raise DomainError("Version does not belong to this document.")
+    if version.is_additional:  # an additional side/copy promoted to the main file
+        DocumentVersion.objects.filter(pk=version.pk).update(is_additional=False)
+        version.is_additional = False
     doc.current_version = version
     doc.content_text = version.text
     doc.save(update_fields=["current_version", "content_text", "updated_at"])

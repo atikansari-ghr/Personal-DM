@@ -75,7 +75,7 @@ come from the documents themselves, and everything runs on a small server you co
 **Processing and viewing**
 - Local OCR with Tesseract/OCRmyPDF (searchable PDF/A), with measured preprocessing: phone-photo orientation,
   upside-down and sideways scans, deskew, contrast and denoise. On the synthetic benchmark, mean accuracy went from
-  0.58 to 0.97 ([OCR benchmark](docs/OCR_BENCHMARK.md)). Confidence is shown per document and unreliable lines are
+  0.61 to 0.97 ([OCR benchmark](docs/OCR_BENCHMARK.md)). Confidence is shown per document and unreliable lines are
   greyed out.
 - LibreOffice previews, thumbnails and DICOM-safe storage.
 - Built-in viewer for PDFs and images: zoom (25–400 %), fit page, fit width, 100 %, page navigation, full screen

@@ -42,6 +42,11 @@ class Command(BaseCommand):
         for name, cmd in (("ocrmypdf", settings.OCRMYPDF_CMD[0]), ("tesseract", settings.TESSERACT_CMD), ("libreoffice", settings.SOFFICE_CMD),
                           ("pdftoppm", settings.PDFTOPPM_CMD), ("pg_dump", settings.PG_DUMP_CMD)):
             report(f"tool {name}", shutil.which(cmd) is not None)
+        from apps.library import ocr_policy
+
+        missing = ocr_policy.missing_languages()
+        report("OCR language packs installed", not missing,
+               f"missing: {', '.join(missing)} (run `sudo personaldocs repair`)" if missing else ", ".join(ocr_policy.installed_languages()))
         du = shutil.disk_usage(settings.DATA_DIR if Path(settings.DATA_DIR).exists() else "/")
         report("free disk > 2 GB", du.free > 2 * 1024 ** 3, f"{du.free // 1024 ** 2} MB free")
         report("public origin uses HTTPS", settings.PUBLIC_ORIGIN.startswith("https://"), settings.PUBLIC_ORIGIN)

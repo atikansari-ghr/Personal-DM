@@ -38,7 +38,7 @@ function Input({ def, value, onChange }: { def: SettingDef; value: any; onChange
     case "bool":
       return <label className="switch"><input id={id} type="checkbox" checked={!!value} disabled={disabled} onChange={(e) => onChange(e.target.checked)} aria-label={def.label} /><span /></label>;
     case "choice":
-      return <select id={id} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)}>{def.choices.map((c) => <option key={c} value={c}>{KEY_CHOICE_LABELS[def.key]?.[c] || CHOICE_LABELS[c] || c}</option>)}</select>;
+      return <select id={id} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value)}>{def.choices.map((c) => <option key={c} value={c}>{KEY_CHOICE_LABELS[def.key]?.[c] || def.choice_labels?.[c] || CHOICE_LABELS[c] || c}</option>)}</select>;
     case "int":
       return <input id={id} type="number" min={def.min ?? undefined} max={def.max ?? undefined} value={value ?? ""} disabled={disabled} onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))} style={{ maxWidth: 160 }} />;
     case "time":
@@ -64,6 +64,7 @@ function Input({ def, value, onChange }: { def: SettingDef; value: any; onChange
       const cur: string[] = Array.isArray(value) ? value : [];
       return <div className="row">{Object.entries(CHANNEL_LABELS).map(([k, l]) => <label key={k} className="check"><input type="checkbox" disabled={disabled} checked={cur.includes(k)} onChange={(e) => onChange(e.target.checked ? [...cur, k] : cur.filter((x) => x !== k))} /> {l}</label>)}</div>;
     }
+    case "choice_list":
     case "event_list": {
       const cur: string[] = Array.isArray(value) ? value : [];
       const labels = def.choice_labels || {};

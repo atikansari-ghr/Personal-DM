@@ -150,6 +150,7 @@ PAGE_LINES = [
     "This synthetic page is used to check that clean scans are not degraded.",
 ]
 PAGE_TEXT = " ".join(PAGE_LINES)
+SPARSE_TEXT = "PAGE TWO BRAVO SAMPLE"
 PAGE_FIELDS = {"issue_date": "2025-01-01", "expiry_date": "2026-12-31"}
 
 
@@ -173,6 +174,8 @@ def samples() -> list[tuple[str, Image.Image, str, dict]]:
         ("noisy photo", jpeg(noise(on_table(patterned(resident, 4), seed=4, angle=1.5, scale=0.6), seed=5, amount=40, salt=0.01), 55),
          RESIDENT_TEXT, RESIDENT_FIELDS),
         ("skewed text page 3°", text_page(PAGE_LINES).rotate(-3, expand=True, fillcolor="white"), PAGE_TEXT, PAGE_FIELDS),
+        # ink is well under 1 % of the pixels: guards the contrast stretch against erasing sparse text
+        ("sparse one-line scan", text_page([SPARSE_TEXT], width=2550, height=3300), SPARSE_TEXT, {}),
     ]
     return out
 

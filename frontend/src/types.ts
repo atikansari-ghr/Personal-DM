@@ -54,6 +54,7 @@ export interface DocRow {
   expiry_date: string | null;
   issue_date: string | null;
   expiry: Expiry | null;
+  ocr_state?: string;
   created_at: string;
   archived: boolean;
   size: number | null;
@@ -79,6 +80,8 @@ export interface Version {
   state: string;
   error: string;
   ocr_applied: boolean;
+  ocr_pages?: string;
+  is_additional?: boolean;
   ocr_quality: { confidence: number; rotation: number; skew: number; steps: string[]; low_lines: number[]; line_count: number } | null;
   pdfa: boolean;
   pdfa_check: { validator: string; profile: string; compliant: boolean; full_validation: boolean; failed_rules: { description: string; clause?: string }[]; note?: string } | null;
@@ -101,6 +104,7 @@ export interface Field {
   confirmed_at: string | null;
 }
 export interface DocDetail extends DocRow {
+  ocr?: { state: string; mode: string; sources: { version: string; pages: string }[]; languages: string[]; error: string; ai_allowed: boolean };
   title_is_custom: boolean;
   correspondent: { id: number; name: string } | null;
   tags: { id: number; name: string; color: string }[];
