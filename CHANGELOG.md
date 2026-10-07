@@ -4,6 +4,33 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-07) — rich notification formatting, icons, templates and interactive actions (Change Set O)
+- **One structured message per notification** (event, severity Critical/Warning/Success/Information, category, icon, title, heading, summary, details with icons, actions, guidance) rendered for in-app, email, Telegram and push, with a central icon list (SVG with accessible labels in the app, emoji in email and Telegram) and severity always shown as text.
+- **Rich email**: responsive HTML part (header, severity and category badges, headline, summary, details table, buttons, guidance, footer; table layout, inline styles, no JavaScript, no images or tracking pixels, `dir="auto"`) plus the plain-text part.
+- **Rich Telegram**: HTML formatting with an emoji per detail and inline buttons on an `https://` address; plain-text fallback.
+- **Web Push** as a fourth channel: turned on per device in My account → Notifications (*Turn on for this device*, *Send test push*, device list with *Remove*), lock-screen detail Minimal / Standard / Detailed (`me.push_preview`), encrypted payloads signed with VAPID keys stored encrypted, only known push services (Apple, Google, Mozilla, Microsoft) over HTTPS, expired subscriptions removed; new Python dependencies `http-ece` 1.2.1 and `py-vapid` 1.9.4.
+- **Notification Center** (`/notifications`): cards with icon, severity, category, summary, time, unread dot, actions and *Show details*; Mark read / unread, Mark all read, filters All/Unread, category and severity, *Load more*. **Banners** for new warning, critical and success notifications.
+- **Event-specific actions** (Open Document, Go to Folder, View Expiry Reminders, Snooze 7 days, Review Activity, Manage Sessions, Change Password, View Security Event, Security Health, View System Status, Open Storage Health, Run Cleanup Analysis, View Import Report …); application paths only, no tokens, never a quarantine release.
+- **Template Manager** (Settings → Notifications → Templates, main administrator): title/subject, heading, summary with allowlisted placeholders, icon, severity shown and action labels per event and channel; live previews (email desktop and mobile, Telegram, in-app, push, plain text); Reset to default; **Send a TEST message to yourself**; audited.
+- **Delivery history** with queued / retrying / sent / failed / skipped, attempts, "accepted by the provider", redacted errors, filters and TEST rows.
+- New events *authentik account linked/unlinked* (critical by default) and *documents moved, restored, re-typed or confirmed by someone else* (optional, in-app).
+- Expiry reminders use the document type and confirmed details (name, expiry date, days left, folder), with severity by days left; optional masked document number.
+- Settings `notifications.include_document_number` (off), `notifications.push_enabled` (on), `notifications.repeat_cooldown_hours` (24), `me.push_preview` (standard).
+- API: `/api/notifications` (list, `read`, `<id>/action`, `push`, `push/test`, `templates`, `templates/<event>`, `/preview`, `/test`, `deliveries`).
+- Migration `notify.0002_rich_notifications`; guide notifications; ADR 0014; new screenshots (synthetic data).
+
+### Changed (2026-10-07) — Change Set O
+- Email is now multipart (HTML and plain text) instead of plain text only.
+- Telegram messages are now HTML-formatted with buttons instead of the same plain text as email.
+- The in-app notification list is replaced by the Notification Center with cards, details, actions, filters and banners.
+- Severity, category and icon come from the event catalogue instead of hard-coded strings at each call site; security and system events use the policy severity (antivirus events critical and for administrators only, OS update results, reboot requests, security test findings, storage warnings).
+- Recurring conditions (antivirus unavailable, stale or failed signature updates, storage warnings) are repeated to the same person only after the repeat cooldown; new critical events are still sent at once.
+- Existing SMTP/Telegram configuration, preferences, critical events and channels and expiry schedules are kept; push is never added to anyone's channels automatically.
+
+### Fixed (2026-10-07) — Change Set O
+- The in-app feed showed only a title with a generic icon, so severity and the affected document or device were not visible without opening the linked page.
+- Recurring conditions could notify the same person again every day when the daily key changed.
+
 ### Added (2026-10-07) — document types, metadata templates, field sources and type assignment (Change Set N)
 - **Document types as editable data** (Settings → Documents & folders → Document types, main administrator): list with document counts; add from a standard template (passport, visa, residence permit / iqama, national ID, driving licence, employee ID, insurance, certificate, generic) or a copy of another type; edit name, icon, description, expiry awareness and **per-type reminder days**; archive/restore; delete only when unused or after moving its documents to another type.
 - **Metadata templates** per type: fields with stable key, label, field type (text, long text, date, number, yes/no, select, country, person, identifier), shown, required, order (↑/↓, keyboard accessible), help text, *OCR / Local AI may suggest*, searchable, role (expiry, issue, no expiry), choices and validation (pattern, min, max, max length), with a preview of the Details panel.

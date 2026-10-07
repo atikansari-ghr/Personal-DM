@@ -97,16 +97,32 @@ Guides: [SMTP](guides/smtp.md), [Telegram](guides/telegram.md).
 | Critical notifications | Events members cannot turn off. Default: account security changes, sign-ins from new countries, failed-sign-in alerts, access/authentication policy changes, failed backups, integrity problems |
 | Channels for critical notifications | Where critical events always go (default in-app + email + Telegram) |
 | Include names in email/Telegram | Folder/file names in external messages (long numbers are always masked) |
+| Include document numbers in email/Telegram | `notifications.include_document_number`, default off. When on, expiry messages show the number masked to the last four characters in email, Telegram and in-app; never in push |
+| Push notifications (PWA) | `notifications.push_enabled`, default on. Lets people turn on Web Push per device; needs the HTTPS address. Off: push is not offered and nothing is sent |
+| Repeat cooldown for recurring conditions | `notifications.repeat_cooldown_hours`, default 24 (1–168). Antivirus unavailable, stale signatures, failed signature updates and storage warnings are not repeated to the same person within this time; new critical events are always sent at once |
 | Expiry reminder days, send time, recipients | When and to whom reminders go |
 | Default / required channels for expiry reminders | Starting point and locked channels for reminders |
 
 - **Delivery problems** lists anyone who would miss required notifications (no email address, Telegram not linked).
   If email or Telegram is not configured at all, it says so, and those messages are recorded as *skipped*.
-- **Delivery history** shows every external message with its status.
-- Members choose everything else themselves, per event and channel.
+- **Delivery history** shows every external message (email, Telegram, push) with its state (queued, retrying with
+  the next try, sent, failed, skipped), attempts, "accepted by the provider" when the provider returned a message id,
+  and errors with credentials removed; filter by channel and state. Providers do not report delivery to the device.
+- **Templates** (main administrator): per event and channel, change the title/subject, heading, summary (plain text
+  with allowlisted placeholders such as `{document_type}` or `{days_remaining}`), icon, severity shown (critical
+  events never below Warning) and action labels. No code or HTML is accepted. Live previews show Email (desktop and
+  mobile), Telegram, In-app, Push and Plain text; **Reset to default** removes an override. **Send a TEST message to
+  yourself** sends the draft with sample data, marked TEST, on the channels you choose and creates no real event.
+  Saves, resets and TEST sends are audited.
+- Members choose everything else themselves, per event and channel, and turn on push per device. Push is never added
+  to anyone's channels automatically; add it to *Channels for critical notifications* only if you want critical
+  events on push too.
 - Bulk uploads and imports produce one summary message per person.
+- Release from quarantine is never offered in a message; it stays in Settings → Security → Antivirus.
 
-Guide: [notifications](guides/expiry-rules.md#critical).
+Guides: [notifications](guides/notifications.md) ([templates](guides/notifications.md#templates),
+[delivery history](guides/notifications.md#delivery), [noise control](guides/notifications.md#noise),
+[privacy](guides/notifications.md#privacy)) and [critical and optional notifications](guides/expiry-rules.md#critical).
 
 ## 6. OCR and processing {#ocr}
 
@@ -381,6 +397,14 @@ documents keep their type (confirmed, source *Migrated*), untyped documents stay
 template become additional details. Nothing is deleted. Afterwards, optionally run
 `sudo personaldocs manage document_types report`, set folder suggested types and **Review untyped documents**.
 See [Change Set N](guides/upgrades.md#change-set-n).
+
+**Upgrading to the rich notifications release (Change Set O):** one migration (`notify.0002_rich_notifications`)
+and two small Python packages for Web Push (`http-ece`, `py-vapid`), installed automatically; no extra post-upgrade
+step. Existing notifications, SMTP/Telegram configuration, preferences, critical events and channels and expiry
+schedules are kept; push is not added to anyone's channels. Email becomes HTML with a plain-text part, Telegram gets
+formatting and buttons (buttons need the `https://` address) and the in-app list becomes the Notification Center.
+Afterwards, optionally review Settings → Notifications → Templates and send yourself a TEST. See
+[Change Set O](guides/upgrades.md#change-set-o).
 
 Guide: [upgrades](guides/upgrades.md#change-set-m) (with notes for each change set).
 

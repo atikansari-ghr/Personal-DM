@@ -48,11 +48,29 @@ Each person receives one message even if they hold several roles. Disabled accou
 | In-app | Always on |
 | Email | SMTP configured by the administrator and an email address on the profile |
 | Telegram | Telegram configured by the administrator and linked by the person |
+| Push | The HTTPS address, push allowed by the administrator, and turned on by the person on each device ([push](notifications.md#push)) |
 | WhatsApp | Planned for a later release — not available |
 
 The administrator chooses default channels and may make channels **required**; users cannot turn required channels off. If a channel cannot deliver (no email address, Telegram not linked), the person sees the reason in **My account → Notifications** and the delivery is recorded as skipped — never as sent.
 
-Messages contain only the person's name, document type, expiry date, days remaining and a link that requires sign-in. Never a document number or attachment.
+Push is never added to anyone's channels automatically. What each message contains is described [below](#message).
+
+## What an expiry message contains {#message}
+
+| Detail | Source |
+|---|---|
+| Title, e.g. "📅 Passport Expiry Alert" | The [document type](document-types.md#reminders); "Document (type not assigned)" when the document has no type |
+| Name | The confirmed full name from the details, otherwise the owner |
+| Expiry date and days remaining | The confirmed value of the field with the expiry role, in the installation time zone and date format |
+| Folder | Where the document is kept |
+| Document number | Hidden by default. Shown masked (last four characters) in email, Telegram and in-app only when the administrator turns on **Include document numbers in email/Telegram**; never in push |
+
+Severity: 7 days or less, or the expiry day itself, is **Critical**; up to 60 days **Warning**; otherwise
+**Information**. Unconfirmed OCR or Local AI values are never shown. There is never an attachment.
+
+Actions: **Open Document**, **Go to Folder**, **View Expiry Reminders** and, in the app only, **Snooze 7 days**
+(pauses this document's reminders for you for a week). Links require signing in and the normal permissions.
+Layout per channel, icons and privacy: [notifications](notifications.md#document-types).
 
 ## Critical and optional notifications {#critical}
 
@@ -65,6 +83,7 @@ critical notifications** (default: in-app, email and Telegram). By default these
 - authenticator app turned on or off, recovery codes regenerated, passwordless sign-in turned on or off
 - two-step verification reset by an administrator or from the server console
 - sign-in from a new country
+- authentik account linked or unlinked
 - for administrators: repeated failed sign-ins and automatic blocks, sign-ins allowed only by temporary country
   access, access-policy changes, authentication-policy changes, failed backups and integrity problems
 
@@ -81,7 +100,7 @@ cannot fix that). Critical messages then still arrive in-app.
 ## Choosing your optional notifications {#optional}
 
 **My account → Notifications → Optional notifications** is a table of events and channels (In-app, Email,
-Telegram). Tick exactly the combinations you want; each change is saved immediately and follows your account on
+Telegram, Push). Tick exactly the combinations you want; each change is saved immediately and follows your account on
 every device.
 
 | Event | Default |
@@ -96,6 +115,7 @@ every device.
 | Sign-in from a new address | In-app |
 | Every sign-in (device, address, country) | Off |
 | GeoIP / traffic report problems (administrators) | In-app, email |
+| Documents moved, restored, re-typed or confirmed by someone else | In-app |
 
 A channel the administrator has not configured is greyed out. Your choices never switch off a critical
 notification or a required channel. If you had chosen channels or "Other alerts by email/Telegram" before this
@@ -103,7 +123,9 @@ version, those choices are used as your starting point.
 
 ## What messages look like {#templates}
 
-In-app, email and Telegram use the same layout:
+Every channel is rendered from the same structured message (see [notifications](notifications.md#channels)): a card
+in the Notification Center, an HTML email with a plain-text part, a formatted Telegram message with buttons, and a
+short push notification. The plain-text part of an email keeps this layout:
 
 ```
 Notification from Personal Documents Management System
@@ -127,7 +149,8 @@ Sign-in alerts add the **IP address**, **Country** (from the local GeoIP databas
 
 Rules:
 - **Never included:** passwords, one-time codes, TOTP seeds, recovery codes, passkey material, tokens, API keys,
-  document numbers, file contents, or anything about documents the recipient cannot open.
+  file contents, or anything about documents the recipient cannot open. Document numbers only masked and only when
+  the administrator allows it (never in push); see [privacy](notifications.md#privacy).
 - **Names:** folder, document and file names appear in full inside the app. In email and Telegram, long digit runs
   (often document numbers) are masked, e.g. `Passport Z99•••••`. Turn off **Include names in email/Telegram** to
   send only counts and a link.
@@ -142,4 +165,4 @@ Rules:
 
 The events above replace the earlier single "Other alerts by email/Telegram" switch. Backup failures and integrity
 problems are sent at most once a day; security alerts are throttled so an attack produces one message, not
-thousands.
+thousands. Recurring conditions follow the repeat cooldown described in [noise control](notifications.md#noise).

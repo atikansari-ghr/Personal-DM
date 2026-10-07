@@ -38,7 +38,7 @@ export default function NotificationBanners({ userId, onUnread }: { userId: stri
         return (
           <div key={n.id} className={`note-banner sev-${n.severity}`} role={n.severity === "critical" ? "alert" : "status"}>
             <span className="note-banner-icon" aria-hidden="true"><Icon name={n.icon || "bell"} size={18} /></span>
-            <span className="grow"><strong>{SEVERITY_LABEL[n.severity] || "Notice"}:</strong> <span dir="auto">{n.title}</span>{n.summary && <span className="hide-mobile muted"> — {n.summary}</span>}</span>
+            <span className="grow">{n.test && <span className="badge neutral" style={{ marginRight: ".3rem" }}>TEST</span>}<strong>{SEVERITY_LABEL[n.severity] || "Notice"}:</strong> <span dir="auto">{n.title}</span>{n.summary && <span className="hide-mobile muted"> — {n.summary}</span>}</span>
             <Link className="btn small" to={primary?.path || "/notifications"} onClick={() => setShown((s) => s.filter((x) => x.id !== n.id))}>{primary ? "View" : "Open"}</Link>
             <button type="button" className="icon-btn" aria-label="Dismiss banner" onClick={() => setShown((s) => s.filter((x) => x.id !== n.id))}><Icon name="x" size={16} /></button>
           </div>
