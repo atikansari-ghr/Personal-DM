@@ -359,8 +359,8 @@ Channels people cannot turn off for expiry reminders. In-app is always on.
 
 Events people cannot turn off. They always arrive in-app and on the critical channels below.
 
-- **Default:** `['security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.failed_logins', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'antivirus.threat', 'antivirus.released', 'antivirus.unavailable', 'antivirus.definitions', 'security.operations', 'backup.failed', 'integrity.failed']`
-- **Allowed values:** security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, account.login, security.failed_logins, security.policy_exception, security.policy_change, security.auth_policy, security.health, antivirus.threat, antivirus.released, antivirus.unavailable, antivirus.definitions, security.operations, backup.failed, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, import.finished, processing.completed, processing.failed
+- **Default:** `['security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.failed_logins', 'security.authentik', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'antivirus.threat', 'antivirus.released', 'antivirus.unavailable', 'antivirus.definitions', 'security.operations', 'backup.failed', 'integrity.failed']`
+- **Allowed values:** security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, account.login, security.failed_logins, security.authentik, security.policy_exception, security.policy_change, security.auth_policy, security.health, antivirus.threat, antivirus.released, antivirus.unavailable, antivirus.definitions, security.operations, backup.failed, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, document.changed, import.finished, processing.completed, processing.failed
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
 - **Effect of changing:** Applies to the next notification; people see these locked on.
@@ -390,6 +390,42 @@ Show folder, document and file names in external messages (long numbers are alwa
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
 - **Learn more:** [expiry-rules#templates](guides/expiry-rules.md#templates)
+
+### Include document numbers in email/Telegram (`notifications.include_document_number`)
+
+Show a masked document number (last four characters) in email and Telegram expiry messages. Never shown in push notifications.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Applies to the next notification.
+- **Restart needed:** no
+- **Learn more:** [notifications#privacy](guides/notifications.md#privacy)
+
+### Push notifications (PWA) (`notifications.push_enabled`)
+
+Let people receive notifications on their phone or computer through the installed app (Web Push). Needs the HTTPS address; only known push services (Apple, Google, Mozilla, Microsoft) are contacted.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** When off, push is not offered and nothing is sent.
+- **Restart needed:** no
+- **Learn more:** [notifications#push](guides/notifications.md#push)
+
+### Repeat cooldown for recurring conditions (`notifications.repeat_cooldown_hours`)
+
+A recurring condition (antivirus unavailable, storage nearly full, update failures …) is notified again only after this many hours. New critical events (malware found, failed backups) are always sent at once.
+
+- **Default:** `24`
+- **Allowed values:** 1–168
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [notifications#noise](guides/notifications.md#noise)
 
 ## Section: connections
 
@@ -1804,6 +1840,18 @@ Channels you want reminders on. Required channels stay on.
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
 - **Learn more:** [expiry-rules#channels](guides/expiry-rules.md#channels)
+
+### Push notification detail (`me.push_preview`)
+
+What your phone or computer may show on the lock screen. Minimal: only that something needs attention. Standard: the alert title and a short summary without names. Detailed: also document names. Document numbers and text are never shown.
+
+- **Default:** `'standard'`
+- **Allowed values:** minimal, standard, detailed
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [notifications#push](guides/notifications.md#push)
 
 ### Other alerts by email/Telegram (`me.event_alerts`)
 
