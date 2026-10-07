@@ -20,14 +20,14 @@ each one is in [TRACEABILITY.md](TRACEABILITY.md). Summary, based on the latest 
 | Not run (manual steps, not automated) | 1 | AT-15 |
 
 The pending real-environment parts (real hardware, real providers or credentials) are listed under Blockers below and
-are not reported as passed. AT-194 is counted from the parity steps of the browser suite: <!-- O_E2E -->
+are not reported as passed. AT-194 is counted from the parity steps of the browser suite: **59 PASS, 0 FAIL**
 
 ## Completed (with evidence)
 
 - Change set O (2026-10-07): `tests/test_rich_notifications.py` (19 tests, AT-176…AT-193 and AT-195): all passed.
   The affected earlier suites (expiry, events, notification policy, security, antivirus, passkeys, auth, security
-  center, document types, authentik): 125 passed after the change. Full backend suite: <!-- O_BACKEND -->.
-  `scripts/e2e.sh`: <!-- O_E2E -->, with the new desktop step *AT-176..186 rich notifications: TEST messages,
+  center, document types, authentik): 125 passed after the change. Full backend suite: **331 passed** (330 in the full run plus the live ClamAV test re-run once the local daemon was started).
+  `scripts/e2e.sh`: **59 PASS, 0 FAIL**, with the new desktop step *AT-176..186 rich notifications: TEST messages,
   Notification Center, banners, template manager* and `AT-194 <viewport>: Notification Center cards, filters and
   actions by touch without clipping` for tablet, mobile-portrait and mobile-landscape; `/notifications` and
   `/settings/notifications` are in the overflow route list and the accessibility audit. Not run: real mail clients,
@@ -122,9 +122,9 @@ channels and expiry schedules are unchanged; push is never added to anyone's cha
 **Tests.** `tests/test_rich_notifications.py`: 19 tests (AT-176…AT-193, AT-195), all passed; the push test decrypts
 the encrypted payload with the subscriber key; `http://`, `127.0.0.1`, unknown hosts and URLs with credentials are
 refused as endpoints; `<script>`, `<img onerror>`, Markdown and Telegram markup are escaped; TEST sends create only
-the audit entry `notifications.test_sent`. Affected earlier suites: 125 passed. Full backend suite: <!-- O_BACKEND -->.
+the audit entry `notifications.test_sent`. Affected earlier suites: 125 passed. Full backend suite: **331 passed** (330 in the full run plus the live ClamAV test re-run once the local daemon was started).
 `scripts/e2e.sh` (desktop step AT-176..186 and AT-194 at tablet, mobile-portrait and mobile-landscape):
-<!-- O_E2E -->.
+**59 PASS, 0 FAIL**.
 
 **Pending (not run).** Real SMTP delivery and HTML rendering in Gmail, Outlook and Apple Mail; a real Telegram bot
 with inline buttons on an https address; real Web Push on Android/Chrome, the iOS/iPadOS Home Screen app, Firefox and
