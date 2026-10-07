@@ -205,11 +205,14 @@ def health(refresh: bool = False) -> dict:
             "stale": stale, "critically_stale": critical}
 
 
-def _alert(event: str, key: str, title: str, lines: list[str], link: str = "/settings/security?view=antivirus") -> None:
+def _alert(event: str, key: str, title: str, lines: list[str], link: str = "/settings/security?view=antivirus",
+           cooldown: str = "") -> None:
+    """Administrators only. Recurring conditions (daemon down, stale signatures) use a cooldown so the hourly check
+    never repeats the same message; a detected threat is always sent at once."""
     from apps.notify import events
 
     for admin in events._admins():
-        events.notify(admin, event, kind=event, key=key, title=title, lines=lines, link=link)
+        events.notify(admin, event, kind=event, key=key, title=title, lines=lines, link=link, cooldown_group=cooldown)
 
 
 def check_health_and_alert() -> dict:
@@ -219,16 +222,17 @@ def check_health_and_alert() -> dict:
     if h["status"] == "unavailable":
         _alert("antivirus.unavailable", f"av_down:{day}", "Antivirus (ClamAV) is unavailable",
                ["New files are stored and usable but marked Not scanned until ClamAV is back.",
-                "On the server: sudo personaldocs doctor"])
+                "On the server: sudo personaldocs doctor"], cooldown="av_down")
     elif h["status"] in ("stale", "critical_stale"):
         _alert("antivirus.definitions", f"av_stale:{day}", "Antivirus definitions are out of date",
-               [f"Signatures are {h['signature_age_days']} days old.", "Use Update now, or check clamav-freshclam on the server."])
+               [f"Signatures are {h['signature_age_days']} days old.", "Use Update now, or check clamav-freshclam on the server."],
+               cooldown="av_stale")
     from .models import HealthState
 
     upd = HealthState.get("freshclam")
     if upd.get("ok") is False and upd.get("finished_at", "")[:10] == day:
         _alert("antivirus.definitions", f"av_update_fail:{day}", "Antivirus signature update failed",
-               [f"Error: {str(upd.get('error') or 'unknown')[:200]}"])
+               [f"Error: {str(upd.get('error') or 'unknown')[:200]}"], cooldown="av_update_fail")
     return h
 
 
@@ -281,7 +285,7 @@ def scan_version(version, *, actor=None, run=None) -> str:
         _set(version, "not_scanned", detail=str(exc)[:300])
         audit.record("antivirus.unavailable", actor=actor, outcome="failure", target_type="version", target_id=str(version.id))
         _alert("antivirus.unavailable", f"av_down:{timezone.localdate()}", "Antivirus (ClamAV) is unavailable",
-               ["Files stay usable but are marked Not scanned. Re-scan them once ClamAV is running again."])
+               ["Files stay usable but are marked Not scanned. Re-scan them once ClamAV is running again."], cooldown="av_down")
         return "not_scanned"
     except ScanError as exc:
         if str(exc) == "size_limit":

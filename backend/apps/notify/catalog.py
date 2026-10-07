@@ -76,6 +76,11 @@ def channel_issue(user, channel: str) -> str | None:
             return "Telegram is not configured by the administrator."
         if not hasattr(user, "telegram_link"):
             return "Telegram is not linked to the account."
+    if channel == "push":
+        if not config.get("notifications.push_enabled"):
+            return "Push notifications are turned off by the administrator."
+        if not user.push_subscriptions.exists():
+            return "No device is registered for push notifications."
     return None
 
 
@@ -88,6 +93,8 @@ def channel_configured(channel: str) -> bool:
         return bool(config.get("smtp.enabled"))
     if channel == "telegram":
         return bool(config.get("telegram.enabled"))
+    if channel == "push":
+        return bool(config.get("notifications.push_enabled"))
     return True
 
 

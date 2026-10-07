@@ -527,6 +527,9 @@ def change_type(*, actor, doc: Document, new_type: DocumentType | None, source: 
     audit.record("document.type_change", request=request, actor=actor, target=doc,
                  subject_user=doc.owner, old=old_name, new=new_type.name if new_type else None, source=source)
     searchlib.update_search_vector(doc)
+    from apps.notify.events import documents_changed
+
+    documents_changed(actor=actor, doc=doc, change=f"set the type ({new_type.name if new_type else 'not assigned'}) of")
     return plan
 
 

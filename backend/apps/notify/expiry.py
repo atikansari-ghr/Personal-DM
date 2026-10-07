@@ -26,7 +26,7 @@ from django.utils import timezone
 
 from apps.core import config
 
-from .models import ExpiryMark, Notification, OutboxMessage
+from .models import ExpiryMark, ExpirySnooze, Notification, OutboxMessage
 
 log = logging.getLogger("personaldocs.notify")
 
@@ -73,41 +73,116 @@ def channel_issue(user, channel: str) -> str | None:
     return issue(user, channel)
 
 
-def expiry_message(doc, days: int, user=None, header: bool = True) -> tuple[str, str, str]:
-    """Only name, document type, expiry date, days remaining and a login-required link (never the number)."""
-    from . import templates
+def expiry_details(doc, days: int):
+    """Facts for an expiry message from the document type's template (Change Set N): only confirmed values;
+    the document number is marked sensitive (masked, opt-in, never on lock screens)."""
+    from apps.library import doctypes
+    from apps.library.models import DocumentField
+    from apps.library.services import folder_path
 
-    name = doc.owner.display_name
-    dtype = doc.doc_type.name if doc.doc_type_id else "document"
-    when = doc.expiry_date.strftime("%d %b %Y")
-    link = f"/documents/{doc.id}"
+    from .rich import Detail
+    from .templates import Name
+
+    dtype = doc.doc_type.name if doc.doc_type_id else "Document (type not assigned)"
+    confirmed = {f.key: f.value for f in doc.fields.filter(status=DocumentField.CONFIRMED).exclude(scope="unmapped") if f.value}
+    labels = {f.key: f.label for f in doctypes.active_fields(doc.doc_type)} if doc.doc_type_id else {}
+    number_key = "document_number"
+    details = [Detail("Document type", dtype, "document")]
+    if confirmed.get("full_name"):
+        details.append(Detail(labels.get("full_name", "Full name"), Name(confirmed["full_name"]), "user"))
+    else:
+        details.append(Detail("Owner", doc.owner.display_name, "user"))
+    if confirmed.get(number_key):
+        details.append(Detail(labels.get(number_key, "Document number"), confirmed[number_key], "key", sensitive=True))
+    details.append(Detail("Expiry date", fmt_date(doc.expiry_date), "calendar", emphasis=True))
+    details.append(Detail("Days left", "Expires today" if days == 0 else f"{days} day{'s' if days != 1 else ''}", "time", emphasis=True))
+    try:
+        details.append(Detail("Location", Name(" > ".join(f.name for f in folder_path(doc.folder) if f.parent_id)), "folder"))
+    except Exception:  # noqa: BLE001 - a missing folder never blocks a reminder
+        pass
+    return dtype, details
+
+
+def _folder_text(doc) -> str:
+    from apps.library.services import folder_path
+
+    try:
+        return " > ".join(f.name for f in folder_path(doc.folder) if f.parent_id)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def fmt_date(d) -> str:
+    fmt = config.get("general.date_format") or "d MMM yyyy"
+    py = {"d MMM yyyy": "%-d %b %Y", "yyyy-MM-dd": "%Y-%m-%d", "dd/MM/yyyy": "%d/%m/%Y", "MM/dd/yyyy": "%m/%d/%Y"}.get(fmt, "%-d %b %Y")
+    return d.strftime(py)
+
+
+def expiry_message(doc, days: int, user=None):
+    """The structured expiry reminder: type, confirmed holder name, expiry date from the expiry-role field, days left,
+    folder; actions Open document / Go to folder / Expiring documents / Snooze (in the app)."""
+    from .rich import Action, Message
+
+    dtype, details = expiry_details(doc, days)
+    owner = doc.owner.display_name
+    short = dtype if doc.doc_type_id else "document"
+    mine = user is not None and user.pk == doc.owner_id
+    whose = "Your" if mine else f"{owner}'s"
     if days == 0:
-        subject = f"{name}'s {dtype} expires today"
+        heading, summary, severity = f"{whose} {short} expires today", "Renew it as soon as possible.", "critical"
     else:
-        subject = f"{name}'s {dtype} expires in {days} day{'s' if days != 1 else ''}"
-    facts = [("Expiry date", when), ("Days left", str(days))]
-    if user is None:
-        body = f"{subject} ({when}).\nSign in to view: {settings.PUBLIC_ORIGIN}{link}"
-    else:
-        body = templates.render(user=user, title=f"{subject}.", facts=facts, link=link if header else "", header=header)
-    return subject, body, link
+        heading = f"{whose} {short} is expiring soon"
+        summary = f"The document will expire in {days} day{'s' if days != 1 else ''} ({fmt_date(doc.expiry_date)})."
+        severity = "critical" if days <= 7 else "warning" if days <= 60 else "info"
+    # subject keeps the earlier wording (owner and type), used by filters people may have set up
+    title = f"{owner}'s {short} expires today" if days == 0 else f"{owner}'s {short} expires in {days} day{'s' if days != 1 else ''}"
+    actions = [Action("open_document", "Open Document", f"/documents/{doc.id}", primary=True),
+               Action("folder", "Go to Folder", f"/folders/{doc.folder_id}"),
+               Action("reminders", "View Expiry Reminders", "/search?expiring_days=90"),
+               Action("snooze", "Snooze 7 days", "", in_app_only=True)]
+    return Message(event="expiry.reminder", title=title, heading=heading, summary=summary, severity=severity,
+                   push_title=f"{short[:1].upper()}{short[1:]} Expiry Alert",
+                   icon="calendar", details=details, actions=actions, link=f"/documents/{doc.id}",
+                   guidance=["Renew the document before the expiry date.", "Upload the renewed document with Add renewed document."],
+                   context={"document_name": doc.title, "document_type": short, "owner_name": owner,
+                            "expiry_date": fmt_date(doc.expiry_date), "days_remaining": str(days),
+                            "folder_path": _folder_text(doc),
+                            "document_id": str(doc.id), "tag": str(doc.id)})
 
 
-def dispatch(user, *, kind: str, key: str, subject: str, body: str, link: str = "", document=None,
-             external_subject: str | None = None, external_body: str | None = None, event: str = "expiry.reminder") -> dict:
-    """Deliver one notification for ``event`` on the channels it resolves to (critical / required channels plus
-    the person's choices). Returns {channel: "queued" | "skipped: <reason>" | "in-app"}."""
+def dispatch(user, message, *, kind: str, key: str, document=None, group: str = "") -> dict:
+    """Deliver one structured message for ``message.event`` on the channels it resolves to (critical / required
+    channels plus the person's choices). Every channel is rendered from the same message.
+    Returns {channel: "in-app" | "queued" | "skipped: <reason>"}."""
+    from . import rich, templates
+
+    event = message.event
     result = {}
     for channel in channels_for(user, event):
         if channel == "in_app":
-            _in_app(user, kind, key, subject, body, link, document)
+            card = rich.render_in_app(message)
+            body = templates.render(user=user, title=card["title"], lines=[x for x in (card["summary"],) if x] + card["guidance"],
+                                    facts=[(d["label"], d["value"]) for d in card["details"]], items=message.items,
+                                    items_label=message.items_label, more=message.more, header=False)
+            _in_app(user, kind, key, card, body, message, document, group)
             result[channel] = "in-app"
             continue
         issue = channel_issue(user, channel)
+        html_part, payload = "", {}
+        if channel == "email":
+            subject, body, html_part = rich.render_email(message, user)
+        elif channel == "telegram":
+            subject, body, _h = rich.render_email(message, user)
+            payload = rich.render_telegram(message, user)
+        else:  # push
+            payload = rich.render_push(message, user)
+            subject, body = payload["title"], payload["body"]
         try:
             with transaction.atomic():  # savepoint: a duplicate key must not poison an enclosing transaction
                 OutboxMessage.objects.create(key=f"{key}:{user.pk}:{channel}"[:250], user=user, channel=channel, kind=kind,
-                                             subject=(external_subject or subject)[:200], body=external_body or body, document=document,
+                                             subject=subject[:200], body=body, html=html_part, payload=payload,
+                                             event=event, severity=message.severity, document=document,
+                                             is_test=message.test,
                                              status=OutboxMessage.SKIPPED if issue else OutboxMessage.PENDING,
                                              last_error=issue or "", next_attempt_at=timezone.now())
         except IntegrityError:
@@ -116,13 +191,20 @@ def dispatch(user, *, kind: str, key: str, subject: str, body: str, link: str = 
     return result
 
 
-def _in_app(user, kind, key, subject, body, link, document):
+def _in_app(user, kind, key, card, body, message, document, group=""):
     marker = f"{key}:{user.pk}:in_app"[:250]
+    data = {k: card[k] for k in ("details", "actions", "guidance", "items", "items_label", "more", "heading", "icon_label")}
+    if group:
+        data["group"] = group
     try:
         with transaction.atomic():
-            OutboxMessage.objects.create(key=marker, user=user, channel="in_app", kind=kind, subject=subject, body=body,
-                                         document=document, status=OutboxMessage.SENT, sent_at=timezone.now())
-            Notification.objects.create(user=user, kind=kind, title=subject, body=body, link=link, document=document)
+            OutboxMessage.objects.create(key=marker, user=user, channel="in_app", kind=kind, subject=card["title"], body=body,
+                                         event=message.event, severity=card["severity"], document=document,
+                                         is_test=message.test, status=OutboxMessage.SENT, sent_at=timezone.now())
+            Notification.objects.create(user=user, kind=kind, title=card["title"], body=body, link=message.link,
+                                        document=document, event=message.event, category=card["category"],
+                                        severity=card["severity"], icon=card["icon"], summary=card["summary"][:500],
+                                        data=data, is_test=message.test)
     except IntegrityError:
         pass
 
@@ -158,11 +240,11 @@ def run_expiry_scan(today: date | None = None) -> dict:
             if not created:
                 continue
             key = f"expiry:{doc.id}:{doc.expiry_date.isoformat()}:{target}"
+            snoozed = set(ExpirySnooze.objects.filter(document=doc, until__gte=today).values_list("user_id", flat=True))
             for user in recipients_for(doc):
-                subject, external, link = expiry_message(doc, days, user)
-                body = expiry_message(doc, days, user, header=False)[1]
-                dispatch(user, kind="expiry", key=key, subject=subject, body=body, link=link, document=doc,
-                         external_subject=subject, external_body=external, event="expiry.reminder")
+                if user.pk in snoozed:
+                    continue  # the person paused reminders for this document (in-app Snooze)
+                dispatch(user, expiry_message(doc, days, user), kind="expiry", key=key, document=doc)
             sent += 1
     return {"date": today.isoformat(), "reminders": sent, "skipped_thresholds": skipped}
 
@@ -178,38 +260,55 @@ MAX_ATTEMPTS = 5
 
 
 def deliver_outbox(limit: int = 100) -> dict:
-    from . import telegram
-    from .mailer import send_mail_now
-
     now = timezone.now()
     done = failed = 0
     for msg in OutboxMessage.objects.filter(status=OutboxMessage.PENDING, next_attempt_at__lte=now).select_related("user")[:limit]:
-        # Re-check state at execution time.
-        if not msg.user.is_active or (msg.document_id and msg.document and msg.document.archived_at):
-            msg.status, msg.last_error = OutboxMessage.SKIPPED, "Recipient disabled or document archived"
-            msg.save(update_fields=["status", "last_error"])
-            continue
-        issue = channel_issue(msg.user, msg.channel)
-        if issue:
-            msg.status, msg.last_error = OutboxMessage.SKIPPED, issue
-            msg.save(update_fields=["status", "last_error"])
-            continue
-        msg.attempts += 1
-        try:
-            if msg.channel == "email":
-                send_mail_now(msg.user.email, msg.subject, msg.body)
-            elif msg.channel == "telegram":
-                telegram.send(msg.user.telegram_link.chat_id, msg.body)
-            msg.status, msg.sent_at, msg.last_error = OutboxMessage.SENT, timezone.now(), ""
-            done += 1
-        except Exception as exc:  # noqa: BLE001
-            from apps.core.logging import redact
-
-            msg.last_error = redact(f"{exc.__class__.__name__}: {exc}")[:500]
-            if msg.attempts >= MAX_ATTEMPTS:
-                msg.status = OutboxMessage.FAILED
-            else:
-                msg.next_attempt_at = timezone.now() + timedelta(minutes=5 * (2 ** (msg.attempts - 1)))
-            failed += 1
-        msg.save(update_fields=["status", "sent_at", "last_error", "attempts", "next_attempt_at"])
+        outcome = deliver_one(msg)
+        done += outcome == "sent"
+        failed += outcome == "failed"
     return {"sent": done, "failed": failed}
+
+
+def deliver_one(msg) -> str:
+    """Send one queued message now. Returns "sent", "skipped" or "failed" (failures retry with back-off)."""
+    from . import mailer, telegram
+
+    # Re-check state at execution time.
+    if not msg.user.is_active or (msg.document_id and msg.document and msg.document.archived_at):
+        msg.status, msg.last_error = OutboxMessage.SKIPPED, "Recipient disabled or document archived"
+        msg.save(update_fields=["status", "last_error"])
+        return "skipped"
+    issue = channel_issue(msg.user, msg.channel)
+    if issue:
+        msg.status, msg.last_error = OutboxMessage.SKIPPED, issue
+        msg.save(update_fields=["status", "last_error"])
+        return "skipped"
+    msg.attempts += 1
+    outcome = "sent"
+    try:
+        ref = ""
+        if msg.channel == "email":
+            if msg.html:
+                mailer.send_mail_now(msg.user.email, msg.subject, msg.body, html=msg.html)
+            else:
+                mailer.send_mail_now(msg.user.email, msg.subject, msg.body)
+        elif msg.channel == "telegram":
+            ref = telegram.send(msg.user.telegram_link.chat_id, msg.body, msg.payload or None)
+        elif msg.channel == "push":
+            from . import webpush
+
+            ref = webpush.deliver(msg.user, msg.payload or {"title": msg.subject, "body": msg.body, "url": "/notifications"},
+                                  severity=msg.severity)
+        msg.status, msg.sent_at, msg.last_error = OutboxMessage.SENT, timezone.now(), ""
+        msg.provider_ref = str(ref or "")[:120]
+    except Exception as exc:  # noqa: BLE001
+        from apps.core.logging import redact
+
+        msg.last_error = redact(f"{exc.__class__.__name__}: {exc}")[:500]
+        if msg.attempts >= MAX_ATTEMPTS:
+            msg.status = OutboxMessage.FAILED
+        else:
+            msg.next_attempt_at = timezone.now() + timedelta(minutes=5 * (2 ** (msg.attempts - 1)))
+        outcome = "failed"
+    msg.save(update_fields=["status", "sent_at", "last_error", "attempts", "next_attempt_at", "provider_ref"])
+    return outcome

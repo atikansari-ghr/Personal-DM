@@ -38,8 +38,17 @@ def _call(method: str, **params) -> dict:
     return data
 
 
-def send(chat_id: str, text: str) -> None:
-    _call("sendMessage", chat_id=chat_id, text=text, disable_web_page_preview=True)
+def send(chat_id: str, text: str, payload: dict | None = None) -> str:
+    """Plain text, or the rich ``payload`` (HTML parse mode + inline URL buttons). If Telegram rejects the rich form
+    (e.g. a button URL it does not accept) the plain text is sent instead, so a notification is never lost."""
+    if payload and payload.get("text"):
+        try:
+            data = _call("sendMessage", chat_id=chat_id, **payload)
+            return str(data.get("result", {}).get("message_id", ""))
+        except TelegramError:
+            pass
+    data = _call("sendMessage", chat_id=chat_id, text=text[:4000], disable_web_page_preview=True)
+    return str(data.get("result", {}).get("message_id", ""))
 
 
 def test_connection() -> dict:

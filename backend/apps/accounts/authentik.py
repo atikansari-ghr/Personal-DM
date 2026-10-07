@@ -255,6 +255,9 @@ def handle_callback(request, *, state: str, code: str, error: str = "") -> tuple
         except IntegrityError:
             return ("/settings/account", {"tab": "security", "error": "authentik_already_linked"})
         audit.record("auth.authentik_link", request=request, actor=user, subject_user=user)
+        from apps.notify.events import authentik_link_changed
+
+        authentik_link_changed(user, linked=True)
         return ("/settings/account", {"tab": "security", "linked": "authentik"})
     ident = ExternalIdentity.objects.select_related("user").filter(issuer=issuer, subject=subject).first()
     if ident is None:
@@ -300,6 +303,9 @@ def my_link(request):
         if ident:
             ident.delete()
             audit.record("auth.authentik_unlink", request=request, subject_user=request.user)
+            from apps.notify.events import authentik_link_changed
+
+            authentik_link_changed(request.user, linked=False)
         return Response({"linked": False})
     return Response({"enabled": enabled(), "label": config.get("authentik.button_label"), "linked": bool(ident),
                      "username": ident.username if ident else None, "email": ident.email if ident else None,
@@ -328,6 +334,9 @@ def link_detail(request, pk):
     user.session_epoch += 1  # sessions opened through authentik end; local sign-in still works
     user.save(update_fields=["session_epoch"])
     audit.record("auth.authentik_unlink", request=request, target=user, subject_user=user, by="main_admin")
+    from apps.notify.events import authentik_link_changed
+
+    authentik_link_changed(user, linked=False, by_admin=True)
     return Response(status=204)
 
 
