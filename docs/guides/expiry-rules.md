@@ -15,6 +15,20 @@ Rules:
 - Changing the reminder days applies from the next run; reminders already sent are not repeated.
 - Retries and restarts never send duplicates.
 
+## Document types and the expiry field {#types}
+
+- The expiry date of a document is the **confirmed** value of the field with the **expiry role** in its document
+  type's template (for example *Expiry date* for a Passport, *End date* for Insurance). Unconfirmed OCR or Local AI
+  suggestions never set it.
+- A type can have its own **reminder days** (Settings → Documents & folders → Document types → edit the type), for
+  example 180, 90 and 30 for passports. An empty list uses the global schedule above.
+- A confirmed value of a field with the *No expiry* role ("Does not expire") keeps the document out of expiry lists.
+- Changing a document's type works the expiry date out again. If the new type has no expiry field, or the old value
+  waits under *Previous details*, reminders for that document stop until the value is mapped. Pending reminders for
+  the old date are cancelled; no date is invented.
+
+See [document types](document-types.md#reminders).
+
 ## Timezone {#timezone}
 
 Days are counted in the installation timezone (**Settings → General**, default Asia/Riyadh). Expiry dates are calendar dates without time.

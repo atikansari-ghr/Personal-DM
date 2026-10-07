@@ -12,7 +12,7 @@ The administrator sets a policy for each document type in **Settings → OCR & p
 | **Manual** (default for new installations) | Nothing is recognised until someone with edit rights chooses **Run OCR**. |
 | **Automatic** | Only the document's **primary OCR source** (the files and pages marked as primary) is recognised after upload. |
 
-Each type also lists its expected fields (for example passport number and expiry date), its default languages and whether the local AI may read its text. Administrators can add **custom types** and **archive** types no longer needed. A type that documents use, or a built-in type, is never deleted. Documents without a type follow *Untyped documents* in the same settings section.
+Each type also lists its expected fields (for example passport number and expiry date), its default languages and whether the local AI may read its text. The expected fields are the template fields marked **OCR / Local AI may suggest** in the type's template: OCR and the local AI only suggest those fields for a typed document (see [document types](document-types.md#ocr-ai)). For an untyped document, OCR may also suggest a type from the recognised text; it is never applied without a person accepting it. Administrators can add **custom types** and **archive** types no longer needed. Since Change Set N types and their fields are managed in **Settings → Documents & folders → Document types**; a type that documents use is never deleted (move its documents to another type first, or archive it). See [managing types](document-types.md#manage). Documents without a type follow *Untyped documents* in the same settings section.
 
 Installations upgraded from earlier releases keep their previous behaviour: every type is set to *Automatic* with AI allowed, so nothing changes until the administrator chooses otherwise.
 
@@ -34,7 +34,7 @@ English, Arabic and Hindi (Devanagari) are offered by default; the administrator
 
 ### Review queue {#review}
 
-**OCR review** in the sidebar lists the documents you may edit whose recognised text waits for review or failed. Accept, correct or reject each suggested detail, or open the document. Nobody sees documents or text they could not already open. **Mark reviewed** on a document moves it to *Confirmed*; remaining suggestions stay available.
+**OCR review** in the sidebar lists the documents you may edit whose recognised text waits for review or failed. Accept, correct or reject each suggested detail, or open the document. Filter the queue by **Document type** (All, Not assigned, or one type). Nobody sees documents or text they could not already open. **Mark reviewed** on a document moves it to *Confirmed*; remaining suggestions stay available.
 
 ### Removing OCR data {#remove}
 
@@ -78,7 +78,7 @@ The app suggests details such as name, document number, issue and expiry dates u
 - are marked **Suggested** and never rename the document or schedule reminders until confirmed;
 - are flagged when something looks wrong — check-digit mismatches, ambiguous characters (O/0, I/1), impossible date order, or a name that does not match the owner. Not every error can be detected; always compare with the document.
 
-Use **Confirm all**, confirm one value with ✓, or edit it. If nothing was recognised, add details manually with **Add a detail**. Corrections are recorded in the document's history and reschedule reminders automatically.
+Use **Confirm all**, confirm one value with ✓, or edit it. If nothing was recognised, add details manually with **Add a detail**. Each value shows its source (Manual, OCR, OCR (MRZ), Local AI…) and **Edited** when a person replaced a suggested value; see [provenance](document-types.md#provenance). After a type change, **Re-map existing OCR data** proposes the new type's fields from the existing text without a new scan ([re-mapping](document-types.md#remap)). Corrections are recorded in the document's history and reschedule reminders automatically.
 
 ## Copying details {#copy}
 
