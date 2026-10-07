@@ -9,7 +9,7 @@ import { Avatar, CopyButton, Icon, Skeleton, useAsync, useToast } from "../../co
 import { FolderSelect } from "../../components/UploadDialog";
 import { useSession } from "../../session";
 import type { FolderNode } from "../../types";
-import { ChangePassword } from "../Auth";
+import { AuthentikLogo, ChangePassword } from "../Auth";
 
 const SUB: [string, string][] = [["profile", "Profile"], ["security", "Password & security"], ["linked", "Linked accounts"], ["appearance", "Appearance"], ["notifications", "Notifications"], ["email", "Email imports"]];
 
@@ -115,6 +115,34 @@ function Sessions() {
         </ul>
       )}
       <button className="btn" style={{ marginTop: ".6rem" }} onClick={() => api("me/sessions/revoke", { method: "POST" }).then(() => { toast("Other devices were signed out"); reload(); })}>Sign out all other devices</button>
+    </div>
+  );
+}
+
+function AuthentikLink() {
+  const toast = useToast();
+  const [params] = useSearchParams();
+  const [reauth, setReauth] = useState<(() => void) | null>(null);
+  const { data, reload } = useAsync(() => api<any>("me/authentik"), []);
+  const err = params.get("error");
+  if (!data || !data.enabled) return null;
+  return (
+    <div className="card" style={{ maxWidth: 720, marginTop: "1rem" }}>
+      <h2><AuthentikLogo /> authentik</h2>
+      {params.get("linked") === "authentik" && <div className="alert ok">authentik account linked.</div>}
+      {err === "authentik_already_linked" && <div className="alert error">That authentik account is already linked to another family account.</div>}
+      {err === "reauth_required" && <div className="alert warn">Please confirm your password, then link again.</div>}
+      <p className="small muted">Link your family identity-provider account so you can use <strong>{data.label}</strong>. Accounts are only linked here, by you — never because an email address matches. Your password and two-step verification keep working.</p>
+      {data.linked ? (
+        <div className="stack">
+          <p>Linked to <strong>{data.username || data.email}</strong> since {formatDate(data.linked_at)}{data.last_login_at ? `; last used ${formatDateTime(data.last_login_at)}` : ""}.</p>
+          <button className="btn danger" disabled={!data.has_password} title={data.has_password ? "" : "Ask the administrator to set a local password first."}
+            onClick={withReauth(async () => { await api("me/authentik", { method: "DELETE" }); toast("authentik unlinked"); reload(); }, setReauth, toast)}>Unlink</button>
+        </div>
+      ) : (
+        <button className="btn primary" onClick={() => setReauth(() => () => { window.location.href = "/api/auth/authentik/start?mode=link"; })}>Link authentik account</button>
+      )}
+      {reauth && <Reauth onClose={() => setReauth(null)} onDone={reauth} />}
     </div>
   );
 }
@@ -294,7 +322,7 @@ export default function AccountSettings() {
     <div>
       <nav className="tabs" aria-label="My account">{SUB.map(([k, l]) => <button key={k} className={tab === k ? "active" : ""} aria-current={tab === k} onClick={() => setParams({ tab: k })}>{l}</button>)}</nav>
       {tab === "profile" && <Profile />}
-      {tab === "security" && <Security />}
+      {tab === "security" && <><Security /><AuthentikLink /></>}
       {tab === "linked" && <Linked />}
       {tab === "appearance" && <SettingsForm section="appearance" title="Appearance"><p className="small muted">Your theme applies to your account on every device. Other family members choose their own. Black & White is a monochrome light theme.</p></SettingsForm>}
       {tab === "notifications" && <Channels />}

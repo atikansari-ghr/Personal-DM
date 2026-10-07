@@ -16,7 +16,8 @@ container (`pct enter <id>` from the Proxmox host).
    - the NAS details
    - the backup time
 
-   Then it installs and checks everything.
+   Then it installs and checks everything, including the ClamAV antivirus (about 1.2 GB of memory; skip it with
+   `--without-antivirus` on smaller machines) and the root host helper used by Settings → Security.
 3. Configure the reverse proxy (below), open the HTTPS address and enter the setup code
    (`personaldocs setup-token` prints a new one).
 4. The wizard creates **only the Main Administrator** (your name, username and password; relationship label and email
@@ -37,6 +38,11 @@ Guides: [installation](guides/installation.md), [setup](guides/setup.md), [priva
 - Reset 2FA (removes the authenticator app, passkeys and recovery codes; audited, and the person is notified).
 - Manage profile photos.
 - Optional folder templates.
+- **Administrator role** (Edit → *Administrator*): for a trusted person who helps with security and operations. An
+  Administrator gets **Settings → Security** (the security center) and the administrator-only security
+  notifications. The role **never grants access to any document or folder**; permissions stay as they are. Only the
+  main administrator can set it (or an authentik group mapping, see below), and the main administrator keeps every
+  other setting.
 
 **Extended family:** groups with a head, and delegation scopes (documents, folder permissions, receive reminders).
 
@@ -51,17 +57,27 @@ Guides: [setup](guides/setup.md), [extended family](guides/extended-family.md).
 
 **Settings → Authentication**:
 - Allow authenticator apps (TOTP), passkeys, and passwordless passkey sign-in (off by default).
-- **Require two-step verification** for nobody, administrators or everyone. People without one are guided to set
-  it up; nobody is locked out.
+- **Require two-step verification** for nobody, administrators or everyone. *Administrators* covers the main
+  administrator and every account with the Administrator role. People without one are guided to set it up; nobody is
+  locked out.
 - Re-confirmation window for sensitive changes.
 - Optional Google sign-in (linking only; no automatic accounts).
+- Optional **authentik** sign-in (**External identity providers**): OpenID Connect with PKCE, state and nonce, an
+  HTTPS issuer only, and the client secret stored encrypted. Local sign-in always stays available. People link their
+  own account in My account → Password & security (after confirming their password); accounts are never linked by a
+  matching email. You see and can revoke every link; the account and its documents are kept. **Account provisioning**
+  defaults to *Existing Personal DM accounts only*; *Create accounts automatically* creates member accounts, never a
+  main administrator. **Map authentik groups to roles** (off by default) assigns only Member or Administrator, never
+  touches the main administrator and never grants document permissions; every change is audited. The redirect URI
+  is `https://<your address>/api/auth/authentik/callback`.
 
 Any change to these settings is a critical notification to administrators.
 
 **Passkeys** only work on the HTTPS address in `PD_PUBLIC_ORIGIN`. Changing the domain later makes existing passkeys
 unusable. `personaldocs doctor` checks the relying-party ID and origin.
 
-Guides: [passkeys](guides/passkeys.md), [authenticator and recovery](guides/totp-recovery.md), [Google](guides/google.md).
+Guides: [passkeys](guides/passkeys.md), [authenticator and recovery](guides/totp-recovery.md), [Google](guides/google.md),
+[authentik](guides/authentik.md#setup).
 
 ## 4. Email and Telegram {#channels}
 
@@ -163,8 +179,11 @@ Guides: [Overview](guides/overview.md), [sign-in page designs](guides/login-desi
 
 ## 9. Security and access {#security}
 
+The country/IP settings are now under **Settings → Security → Access policy** (main administrator only). The rest of
+Settings → Security is the security center, described in the next two sections.
+
 **Real client IP:** list the NPM / Pangolin (Newt) address in `PD_TRUSTED_PROXY_IPS`, then check
-**Settings → Security & access → Your connection**.
+**Settings → Security → Access policy → Your connection**.
 
 **GeoIP:**
 1. Enter your MaxMind account ID and licence key (stored encrypted).
@@ -196,7 +215,76 @@ In an emergency, `PD_ACCESS_POLICY_DISABLED=1` in `/etc/personaldocs/personaldoc
 
 Guides: [security & access](guides/security-access.md), [reverse proxy](guides/reverse-proxy.md).
 
-## 10. Monitoring {#monitoring}
+## 10. Antivirus {#antivirus}
+
+**Settings → Security → Antivirus** (main administrator and Administrators):
+
+- Every new file is scanned in the background by ClamAV on the local Unix socket `/run/clamav/clamd.ctl` (no TCP
+  port). Uploads are never held up. Statuses: Scan pending, Clean, Not scanned, Not scanned — size limit exceeded,
+  Scan failed, Threat detected, Quarantined, Released from quarantine.
+- **Fail-open:** when ClamAV is down, files are stored and usable but marked *Not scanned*, and administrators get a
+  critical alert. Re-scan them once ClamAV runs again.
+- Archives are scanned as one file with ClamAV's archive limits; Personal DM does not unpack them.
+- **Quarantine:** a detected file is moved to `<data>/quarantine` (read-only for the service); preview, download,
+  sharing, export, OCR and Local AI are blocked. Only the main administrator can **Release…** (malware warning,
+  confirmation and a reason of at least 10 characters; audited) or **Delete…** (type DELETE). Administrators see the
+  quarantine but cannot release.
+- **Maximum scan size** (`antivirus.max_scan_mb`, default 50 MB). Larger files are stored and marked *Not scanned —
+  size limit exceeded*.
+- **Scan entire existing library** runs in batches with progress, pause, resume and cancel. **Re-scan the whole
+  library** can run Daily, Weekly or Monthly (default Disabled). After the upgrade to this release, files stored
+  earlier are marked *Not scanned* ("Stored before antivirus scanning was added") until you run it.
+- **Signatures:** `clamav-freshclam` updates them automatically; **Update now** runs freshclam through the host
+  helper. Older than 2 days (`antivirus.stale_days`) is a warning, older than 7 days
+  (`antivirus.critical_stale_days`) is critically stale.
+- Threats, releases, ClamAV unavailable or scan failures, and stale definitions or failed updates are **critical
+  administrator notifications that cannot be turned off**.
+- On a small machine, install with `--without-antivirus` and turn scanning off here.
+
+Guide: [antivirus](guides/antivirus.md#overview).
+
+## 11. Security center {#security-center}
+
+**Settings → Security** views: Overview, Antivirus, Security test, OS updates, Firewall, Security records, Storage and
+(main administrator) Access policy. None of these checks proves the system is free of vulnerabilities.
+
+- **Deployment exposure:** *LAN only* or *Published on the Internet*. An Internet-facing installation is **Internet
+  Ready** only when the public address uses HTTPS with a valid certificate, HTTP redirects to HTTPS, cookies are
+  Secure, security headers are present and HSTS is sent (`PD_HSTS_SECONDS`, one year by default for https origins).
+  See [Internet Ready](guides/security-center.md#internet-ready).
+- **Basic Internet Security Test:** runs only when you press **Run Security Test**, never during install or upgrade.
+  It checks this application and this server only (HTTPS, configuration, access control, web baseline, uploads,
+  dependencies, secrets and file permissions, host). Findings are Passed / Warning / Failed with a severity and a fix,
+  compared with the previous run and kept for one year. Critical and High findings never block the site, but they
+  are never shown as a pass and administrators are notified. `--with-security-tools` (install or repair) adds
+  `pip-audit`. See [security test](guides/security-center.md#test).
+- **OS updates:** lists pending Debian security updates through the host helper. **Install security updates…** first
+  takes a database and settings backup to `<data>/pre-update-backups` (newest 3 kept; not a Proxmox snapshot). If that
+  backup fails, nothing is installed unless you tick the override and give a reason (audited). **Reboot required** is
+  shown; **Reboot server…** lists open sessions and running jobs, stops the worker and scheduler and refuses duplicate
+  requests; afterwards the page shows whether the services came back. Nothing is installed automatically. Without the
+  host helper the page shows the commands to run by hand. See [updates](guides/security-center.md#updates).
+- **Firewall:** monitoring only (ufw/nftables state, listening services, unexpected exposure such as ClamAV 3310 or
+  PostgreSQL 5432 not on localhost). Change rules on the host. See [firewall](guides/security-center.md#firewall).
+- **Security Health:** an administrator-only widget (also on the Overview) with a score from 0 to 100: Healthy (90+),
+  Attention (70–89), At Risk (below 70). Malware in quarantine, failed HTTPS or an inactive firewall on an
+  Internet-facing deployment, critically stale definitions and unresolved Critical test findings always mean At
+  Risk. It is a summary, not a certification. See [score](guides/security-center.md#score).
+- **Security records:** kept for `security.log_retention_days` (default and minimum 365) and removed nightly. A manual
+  purge shows a cleanup analysis first, needs confirmation and cannot remove records younger than 30 days; the purge
+  record, records about quarantined files and the latest test are always kept. See
+  [retention](guides/security-center.md#retention).
+- **Storage:** total, used and free space by category, with notifications at `storage.warn_percent` (80 %) and
+  `storage.critical_percent` (90 %). **Safe cleanup** offers only temporary files older than 24 hours, orphan previews
+  and OCR copies, and expired security records. **Original documents are never deleted** by any cleanup, purge,
+  antivirus, update or repair workflow. See [storage](guides/security-center.md#storage).
+
+The **host helper** (`personaldocs-host.path`, installed by install, upgrade and repair) is a root service that
+accepts only fixed actions: inspect, check updates, install security updates, update ClamAV signatures and reboot.
+
+Guide: [security center](guides/security-center.md).
+
+## 12. Monitoring {#monitoring}
 
 **Activity & health:**
 - **Health & audit log:** services, jobs, disk, and every audited action.
@@ -206,7 +294,7 @@ Guides: [security & access](guides/security-access.md), [reverse proxy](guides/r
 
 Guide: [security & access](guides/security-access.md#login-audit).
 
-## 11. Backups and restore {#backup}
+## 13. Backups and restore {#backup}
 
 - **Settings → Storage & backup:**
   - Connect the NAS (NFS or SMB) or use a mounted path containing the marker file.
@@ -216,13 +304,15 @@ Guide: [security & access](guides/security-access.md#login-audit).
 - The status card shows the schedule, the next run, the last success and the last failure.
 - A backup contains the database, originals, derivatives, settings, the sign-in branding files and (optionally) the
   encryption key. The GeoIP
-  file is not included; update it after a restore.
+  file is not included; update it after a restore. Files in the antivirus quarantine are not included either.
+- Pre-update backups from Settings → Security → OS updates are local (`<data>/pre-update-backups`, newest 3) and do not
+  replace the NAS backup.
 - **Restore** only from the console: `sudo personaldocs restore <backup-dir>`. Drill it on a second container.
 - `sudo personaldocs integrity` checks every stored file against its checksum.
 
 Guide: [backup & restore](guides/backup-restore.md).
 
-## 12. Recovery {#recovery}
+## 14. Recovery {#recovery}
 
 | Situation | Action |
 |---|---|
@@ -234,12 +324,14 @@ Guide: [backup & restore](guides/backup-restore.md).
 
 There is no web-based bypass of two-step verification or of the access policy.
 
-## 13. Upgrade, doctor and repair {#upgrade}
+## 15. Upgrade, doctor and repair {#upgrade}
 
 ```
 sudo personaldocs upgrade     # verified backup → new release → migrations → restart → health check
 sudo personaldocs repair      # safe; also applies installer steps added in newer versions
-sudo personaldocs doctor      # proxy trust, GeoIP, passkey origin, AI profiles, OCR language packs, storage, services, GoAccess
+sudo personaldocs doctor      # proxy trust, GeoIP, passkey origin, AI profiles, OCR language packs, storage, services, GoAccess,
+                              # ClamAV, signature age, files pending scan, host helper, Internet HTTPS, storage thresholds, reboot
+sudo personaldocs status      # services incl. clamav-daemon, clamav-freshclam, personaldocs-host.path; "Reboot required"
 ```
 
 The one-line installer offers the same actions as a menu (install, upgrade, repair, doctor, status, backup,
@@ -252,12 +344,22 @@ policy. New Python packages and OCR language packs are installed by the upgrade;
 afterwards and `sudo personaldocs repair` if a language pack is reported missing. Weather stays off and the sign-in
 page uses Minimal until you change them. People who had chosen their dashboard widgets keep that choice.
 
-Guide: [upgrades](guides/upgrades.md#selective-ocr-overview) (with notes for each change set).
+**Upgrading to the antivirus / authentik / security center release (Change Set M):** the upgrade installs ClamAV
+(about 1.2 GB of memory) and the host helper; run `sudo personaldocs post-upgrade` once afterwards when coming from an older
+release (the one-line `personal-DM.sh -- upgrade` does this for you). Existing files are marked *Not scanned* ("Stored before antivirus scanning was added") until you run **Scan entire existing
+library**. HSTS is now sent for https origins. The country/IP settings moved to Settings → Security → Access policy.
+Nothing is deleted.
 
-## 14. Public deployment considerations {#public}
+Guide: [upgrades](guides/upgrades.md#change-set-m) (with notes for each change set).
+
+## 16. Public deployment considerations {#public}
 
 - Expose only HTTPS through the proxy, and keep port 8000 firewalled to the proxy (the installer does this when it
   can).
+- Set **Deployment exposure** to *Published on the Internet* and check that Settings → Security shows **Internet
+  Ready**; keep the firewall active (the Firewall view only reports it).
+- Run the **Basic Internet Security Test** after changes and resolve Critical findings. It is a baseline check, not a
+  penetration test.
 - Use strong passwords, require two-step verification for administrators at least, and consider an allow list of
   your countries with temporary travel access.
 - Keep the system updated (`apt upgrade`, `personaldocs upgrade`) and test a restore regularly.

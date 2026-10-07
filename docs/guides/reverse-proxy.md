@@ -19,6 +19,12 @@ The real client IP drives the login audit, GeoIP, the country/IP access policy a
 
 Then `systemctl restart personaldocs-web`.
 
+## HTTPS headers and HSTS {#hsts}
+
+With an `https://` `PD_PUBLIC_ORIGIN` the app sends `Strict-Transport-Security` with one year (`PD_HSTS_SECONDS`, default 31536000; `0` turns it off; `PD_HSTS_INCLUDE_SUBDOMAINS=1` adds `includeSubDomains`). Django sends it only on requests it sees as HTTPS, so behind a proxy keep `PD_BEHIND_PROXY=1` and make the proxy send `X-Forwarded-Proto: https`. Lower the value while you are still testing a new domain: browsers remember HSTS for the whole period.
+
+Settings → Security → Overview checks this from outside as part of **Internet Ready**: valid certificate, HTTP→HTTPS redirect (*Force SSL* in NPM), Secure cookies, security headers and HSTS. See [Internet Ready](security-center.md#internet-ready).
+
 ## Opening the app by IP on the home network {#local}
 
 The app only answers to its public domain, so `http://<container-ip>:8000` shows **Bad Request (400)** by design. To also use it
@@ -48,13 +54,15 @@ Create an HTTP resource for `docs.example.com` targeting the LXC IP and port 800
 
 - `/s/*` — public share links (they have their own expiry/password),
 - `/api/auth/google/callback` — Google sign-in return,
+- `/api/auth/authentik/callback` — authentik sign-in return (if you use it),
 - optionally `/manifest.webmanifest`, `/sw.js`, `/icon*` for PWA installation.
 
 Never bypass `/api/*` as a whole: the app's own sign-in protects it, and the outer gate is an extra layer.
 
 ## Requirements checklist {#checklist}
 
-- HTTPS everywhere (required for secure cookies, PWA install, camera, Google sign-in).
+- HTTPS everywhere (required for secure cookies, HSTS, PWA install, camera, Google and authentik sign-in).
+- `X-Forwarded-Proto` passed to the app (HTTPS detection, Secure cookies and HSTS).
 - Large uploads and long requests allowed (exports and imports stream for minutes).
 - Range requests passed through (PDF previews, resumable downloads).
 - The exact public origin configured in the app (CSRF and Google callback depend on it).

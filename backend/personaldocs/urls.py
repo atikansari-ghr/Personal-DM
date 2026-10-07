@@ -2,10 +2,12 @@ from django.conf import settings
 from django.http import FileResponse, Http404, HttpResponse
 from django.urls import path, re_path
 
-from apps.accounts import google
+from apps.accounts import authentik, google
 from apps.ai import views as ai
 from apps.accounts import views as acc
 from apps.core import branding_views as brand
+from apps.security import views_av as avv
+from apps.security import views_center as sc
 from apps.core import overview_views as ov
 from apps.core import views as core
 from apps.library import export, ocr_views as ocrv, views as lib, views_import as imp, views_share as share
@@ -48,6 +50,12 @@ api = [
     path("auth/reauth/passkey", acc.reauth_passkey),
     path("auth/passkey/options", acc.passkey_login_options),
     path("auth/passkey/verify", acc.passkey_login_verify),
+    path("auth/authentik/start", authentik.start),
+    path("auth/authentik/callback", authentik.callback),
+    path("auth/authentik/test", authentik.test_connection),
+    path("auth/authentik/links", authentik.links),
+    path("auth/authentik/links/<int:pk>", authentik.link_detail),
+    path("me/authentik", authentik.my_link),
     path("auth/google/start", google.start),
     path("auth/google/callback", google.callback),
     path("auth/google/diagnostics", google.diagnostics),
@@ -91,6 +99,25 @@ api = [
     path("family/delegations", acc.delegation),
     # library
     path("dashboard", lib.dashboard),
+    path("security/health", sc.health),
+    path("security/https", sc.https),
+    path("security/tests", sc.tests),
+    path("security/tests/<int:pk>", sc.test_detail),
+    path("security/os-updates", sc.os_updates),
+    path("security/os-updates/check", sc.os_check),
+    path("security/os-updates/install", sc.os_install),
+    path("security/os-updates/<int:pk>/log", sc.os_log),
+    path("security/reboot", sc.reboot),
+    path("security/firewall", sc.firewall),
+    path("security/records", sc.security_records),
+    path("security/storage", sc.storage),
+    path("security/antivirus", avv.overview),
+    path("security/antivirus/scan", avv.scan),
+    path("security/antivirus/runs/<int:pk>", avv.run_action),
+    path("security/antivirus/update", avv.update_signatures),
+    path("security/antivirus/update/status", avv.freshclam_status),
+    path("security/antivirus/quarantine/<uuid:pk>/release", avv.release),
+    path("security/antivirus/quarantine/<uuid:pk>/delete", avv.delete_quarantined),
     path("branding", brand.login_branding),
     path("branding/wallpaper", brand.wallpaper),
     path("branding/logo", brand.logo),

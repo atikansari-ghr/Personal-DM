@@ -147,6 +147,8 @@ def public_share_file(request, token):
     if s is None or (s.password_hash and not request.session.get(_session_key(s))):
         raise Http404
     v = s.version
+    if v.av_blocked:
+        raise Http404  # quarantined files are never served through share links
     download = request.GET.get("download") == "1"
     if download and not s.allow_download:
         raise Http404

@@ -80,6 +80,8 @@ def validate_request(doc: Document, sources: list[dict], languages: list[str]) -
         v = versions.get(str(s.get("version") or ""))
         if v is None:
             raise OCRError("That file does not belong to this document.")
+        if v.av_blocked:
+            raise OCRError(f"“{v.original_name}” is in antivirus quarantine and cannot be recognised.")
         if v.format_class not in OCRABLE:
             raise OCRError(f"“{v.original_name}” is not a scan or image, so it cannot be recognised.")
         if v.size > max_mb * 1024 * 1024:

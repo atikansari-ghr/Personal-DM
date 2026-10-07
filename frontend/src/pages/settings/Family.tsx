@@ -15,7 +15,7 @@ const SCOPE_LABELS: Record<string, string> = {
 
 function MemberDialog({ member, groups, onClose, onDone }: { member?: User; groups: Group[]; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
-  const [f, setF] = useState<any>(member ? { display_name: member.display_name, full_name: member.full_name, email: member.email, role_label: member.role_label, username: member.username, reminder_group: member.reminder_group || "" }
+  const [f, setF] = useState<any>(member ? { display_name: member.display_name, full_name: member.full_name, email: member.email, role_label: member.role_label, username: member.username, reminder_group: member.reminder_group || "", is_admin: !!member.is_admin && !member.is_main_admin }
     : { display_name: "", full_name: "", email: "", role_label: "", username: "", group: groups[0]?.id || "", apply_template: true });
   const [temp, setTemp] = useState("");
   return (
@@ -37,6 +37,9 @@ function MemberDialog({ member, groups, onClose, onDone }: { member?: User; grou
           ))}
           <div className="field"><label htmlFor="m-g">{member ? "Reminder group (whose head gets their expiry reminders)" : "Family group"}</label>
             <select id="m-g" value={member ? f.reminder_group : f.group} onChange={(e) => setF({ ...f, [member ? "reminder_group" : "group"]: e.target.value })}><option value="">None</option>{groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+          {member && !member.is_main_admin && (
+            <label className="check"><input type="checkbox" checked={!!f.is_admin} onChange={(e) => setF({ ...f, is_admin: e.target.checked })} /> Administrator — can use the Security area (antivirus, security tests, OS updates, storage health). Does not give access to anyone's documents.</label>
+          )}
           {!member && <label className="check"><input type="checkbox" checked={!!f.apply_template} onChange={(e) => setF({ ...f, apply_template: e.target.checked })} /> Create template folders (Settings → Documents & folders)</label>}
           <p className="small muted">Every person whose documents are managed gets their own account, even if they never sign in. A personal folder is created for them, visible only to them and the main administrator.</p>
           <button className="btn primary">{member ? "Save" : "Add member"}</button>
@@ -67,7 +70,7 @@ export default function FamilyPanel() {
         <table className="responsive"><thead><tr><th>Person</th><th className="hide-mobile">Username</th><th className="hide-mobile">Last sign-in</th><th>Status</th>{admin && <th />}</tr></thead><tbody>
           {members.data.members.map((m) => (
             <tr key={m.id}>
-              <td><div className="row"><Avatar user={m} size="sm" /><div><strong>{m.display_name}</strong><div className="small muted">{m.role_label}{m.is_main_admin ? " · Main administrator" : ""}{m.is_head ? " · Family head" : ""}</div></div></div></td>
+              <td><div className="row"><Avatar user={m} size="sm" /><div><strong>{m.display_name}</strong><div className="small muted">{m.role_label}{m.is_main_admin ? " · Main administrator" : m.is_admin ? " · Administrator" : ""}{m.is_head ? " · Family head" : ""}</div></div></div></td>
               <td className="hide-mobile">{m.username}</td>
               <td className="hide-mobile small">{m.last_login ? formatDateTime(m.last_login) : "Never"}</td>
               <td>{m.is_active ? <span className="badge ok">Active</span> : <span className="badge neutral">Disabled</span>}{(m.totp_enabled || (m.passkey_count || 0) > 0) && <span className="badge neutral">2FA{(m.passkey_count || 0) > 0 ? ` · ${m.passkey_count} passkey${m.passkey_count === 1 ? "" : "s"}` : ""}</span>}{m.must_change_password && <span className="badge soon">Temp password</span>}</td>

@@ -66,6 +66,10 @@ class Command(BaseCommand):
             self._security_checks(report, warn, info)
         except Exception as exc:  # noqa: BLE001 - diagnostics must not crash
             warn("security checks could not run", exc.__class__.__name__)
+        try:
+            self._operations_checks(report, warn, info)
+        except Exception as exc:  # noqa: BLE001
+            warn("antivirus/host checks could not run", exc.__class__.__name__)
         raise SystemExit(0 if ok else 1)
 
     def _security_checks(self, report, warn, info):
@@ -133,3 +137,46 @@ class Command(BaseCommand):
             failed = AIJob.objects.filter(status="failed", created_at__gte=timezone.now() - timedelta(days=1)).count()
             if failed:
                 warn("Local AI jobs", f"{failed} failed in the last 24 hours (Settings → Local AI → AI jobs)")
+
+    def _operations_checks(self, report, warn, info):
+        """Change Set M: antivirus, signatures, host helper, exposure, storage thresholds, pending reboot."""
+        from apps.core import config
+        from apps.ops import host
+        from apps.security import antivirus
+
+        if config.get("antivirus.enabled"):
+            h = antivirus.health(refresh=True)
+            report("ClamAV daemon reachable", h.get("status") != "unavailable",
+                   h.get("engine") or h.get("error") or "")
+            if h.get("signatures_date"):
+                detail = f"version {h.get('signatures')}, {h.get('signature_age_days')} days old"
+                if h.get("critically_stale"):
+                    report("ClamAV signatures up to date", False, detail + " (check clamav-freshclam)")
+                elif h.get("stale"):
+                    warn("ClamAV signatures", detail)
+                else:
+                    info("ClamAV signatures", detail)
+            from apps.library.models import DocumentVersion
+
+            stuck = DocumentVersion.objects.filter(av_status="pending").count()
+            if stuck:
+                info("files waiting for an antivirus scan", str(stuck))
+        else:
+            warn("antivirus scanning", "turned off in Settings → Security → Antivirus")
+        if host.installed():
+            info("host helper", "installed (Settings → Security can check updates, firewall and reboot)")
+        else:
+            warn("host helper", "not installed; run `sudo personaldocs repair`")
+        if config.get("security.deployment") == "internet" and not settings.PUBLIC_ORIGIN.startswith("https://"):
+            report("Internet-facing deployment uses HTTPS", False, "set PD_PUBLIC_ORIGIN to the https:// address")
+        warn_pct, crit_pct = int(config.get("storage.warn_percent")), int(config.get("storage.critical_percent"))
+        import shutil as _sh
+
+        du = _sh.disk_usage(settings.DATA_DIR if Path(settings.DATA_DIR).exists() else "/")
+        pct = du.used / du.total * 100 if du.total else 0
+        if pct >= crit_pct:
+            report("storage below the critical threshold", False, f"{pct:.0f}% used (critical at {crit_pct}%)")
+        elif pct >= warn_pct:
+            warn("storage", f"{pct:.0f}% used (warning at {warn_pct}%)")
+        if Path("/run/reboot-required").exists():
+            warn("reboot required", "updated system packages need a reboot (Settings → Security → OS updates)")

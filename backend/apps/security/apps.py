@@ -7,4 +7,4 @@ class SecurityConfig(AppConfig):
     label = "security"
 
     def ready(self):
-        from . import jobs  # noqa: F401 - registers job handlers
+        from . import antivirus, center, jobs  # noqa: F401 - registers job handlers

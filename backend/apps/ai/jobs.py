@@ -46,6 +46,10 @@ def ai_task(job):
     ai_job = AIJob.objects.select_related("document", "requested_by").filter(pk=job.payload.get("ai_job")).first()
     if ai_job is None or ai_job.document is None:
         return {"skipped": "missing"}
+    cv = ai_job.document.current_version
+    if cv is not None and cv.av_blocked:  # never let Local AI read a quarantined file
+        service.finish_job(ai_job, error=AIError("The file is in antivirus quarantine."))
+        return {"skipped": "quarantined"}
     running = AIJob.objects.filter(status=AIJob.RUNNING).exclude(pk=ai_job.pk).count()
     if running >= int(config.get("ai.max_parallel")):
         raise jobs.RetryLater("AI concurrency limit reached", delay_seconds=30)

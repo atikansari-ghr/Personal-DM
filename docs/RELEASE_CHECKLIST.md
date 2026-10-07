@@ -26,12 +26,22 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] `sudo personaldocs doctor` reports no missing OCR language packs (otherwise `sudo personaldocs repair`)
 - [ ] Fresh install: setup creates only the Main Administrator; upgrade from the previous tag keeps every existing account
 - [ ] After an upgrade, Settings → OCR & processing shows the expected OCR policy per document type (existing installations: Automatic with AI allowed)
+- [ ] `personaldocs status`: `clamav-daemon` and `clamav-freshclam` active; Settings → Security → Antivirus shows ClamAV running and signatures not stale (`doctor` reports the signature age)
+- [ ] After an upgrade, **Scan entire existing library** finished; no files left *Scan pending*
+- [ ] Host helper installed: `personaldocs-host.path` active and Settings → Security → OS updates can **Check for updates** (no manual-commands notice)
+- [ ] No *Reboot required* left open after OS updates
+- [ ] **Deployment exposure** set correctly (LAN only or Published on the Internet)
+- [ ] Internet deployments: **Internet Ready** shown (HTTPS, valid certificate, HTTP→HTTPS redirect, Secure cookies, headers, HSTS)
+- [ ] Basic Internet Security Test run and reviewed: no unresolved Critical findings; High findings understood (the test is a baseline, not a penetration test)
+- [ ] Firewall active on the host (Settings → Security → Firewall); ClamAV 3310 and PostgreSQL 5432 not exposed
+- [ ] Security Health not *At Risk*; Storage below the warning threshold
 
 ## Integrations (when configured)
 - [ ] SMTP test email and a real expiry reminder (no document number in the message)
 - [ ] Telegram link and reminder
 - [ ] IMAP import idempotent across two polls
 - [ ] Google link, sign-in, unlink; unknown account refused
+- [ ] authentik: **Test connection**, link from My account, sign-in, unlinked user refused, local sign-in still works, revoke
 - [ ] Real client IP through NPM/Pangolin shown in *Your connection* and the login audit
 - [ ] GeoIP update from MaxMind; *Test an address*; failed update keeps the previous database
 - [ ] Access policy applied with lock-out confirmation; `personaldocs access-policy off|rollback` recovers

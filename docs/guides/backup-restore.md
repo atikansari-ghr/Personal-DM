@@ -12,7 +12,8 @@
 - `manifest.json` listing every file, size, checksum and whether the backup verified.
 
 Not included: the GeoIP database file (download or upload it again after a restore — see
-[Security & access](security-access.md#backup)). Secrets such as AI API keys and the MaxMind license key are stored encrypted in the
+[Security & access](security-access.md#backup)), and files held in the **antivirus quarantine** (`<data>/quarantine`; see
+[Antivirus](antivirus.md#quarantine)). Secrets such as AI API keys and the MaxMind license key are stored encrypted in the
 database; they are only usable after a restore when the backup includes the encryption key (or you keep the key safely yourself).
 Passkeys remain valid after a restore as long as the public address (domain) stays the same.
 
@@ -94,10 +95,18 @@ sudo personaldocs restore /mnt/nas-backup/personaldocs/backup-20261003-023000-pe
 
 The command verifies every checksum, stops the services, restores the database, originals, previews and (if present) the key, then restarts and runs health checks. Restores are console-only by design.
 
+## Pre-update backups {#pre-update}
+
+**Install security updates…** in Settings → Security → OS updates first writes a database and settings backup to
+`<data>/pre-update-backups` on the server itself; the newest three are kept. It is a quick safety net for an update,
+not a replacement for the NAS backup, and it does not contain originals or a Proxmox snapshot. See
+[OS updates](security-center.md#updates).
+
 ## Proxmox snapshots {#snapshots}
 
-LXC snapshots are a useful extra layer but are not a verified application backup on their own.
+LXC snapshots are a useful extra layer but are not a verified application backup on their own. Take one on the Proxmox
+host before installing OS updates if you want a full rollback.
 
 ## Integrity check {#integrity}
 
-Runs nightly (without checksums) and on demand (with checksums) from Settings → Storage & backup, or `personaldocs integrity`. It reports missing or changed originals, broken version references and orphaned files. Repairs requeue missing previews and move unknown files to `/var/lib/personaldocs/quarantine` — nothing is deleted. A missing original can only come back from a backup.
+Runs nightly (without checksums) and on demand (with checksums) from Settings → Storage & backup, or `personaldocs integrity`. It reports missing or changed originals, broken version references and orphaned files. Files moved to the antivirus quarantine are not reported as missing; only a quarantined file whose quarantine copy has disappeared is reported. Repairs requeue missing previews and move unknown files to `/var/lib/personaldocs/quarantine` — nothing is deleted. A missing original can only come back from a backup.

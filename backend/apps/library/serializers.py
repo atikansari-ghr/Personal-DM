@@ -46,6 +46,9 @@ def version_json(v: DocumentVersion) -> dict:
         "has_preview": bool(v.preview_path or v.searchable_path or v.format_class in ("pdf", "image", "text")),
         "has_thumbnail": bool(v.thumbnail_path), "created_at": v.created_at,
         "created_by": v.created_by.display_name if v.created_by_id and v.created_by else None,
+        "antivirus": {"status": v.av_status, "signature": v.av_signature, "engine": v.av_engine, "detail": v.av_detail,
+                      "scanned_at": v.av_scanned_at, "blocked": v.av_blocked,
+                      "released_at": v.av_released_at if v.av_status == "released" else None},
     }
 
 
@@ -55,7 +58,7 @@ def document_row(ctx: P.AccessContext, d: Document, snippet: str | None = None) 
         "id": str(d.id), "title": d.title, "folder": str(d.folder_id), "owner": user_mini(d.owner),
         "type": {"id": d.doc_type_id, "name": d.doc_type.name} if d.doc_type_id else None,
         "state": d.state, "expiry_date": d.expiry_date, "issue_date": d.issue_date, "expiry": expiry_status(d),
-        "no_expiry": d.no_expiry, "ocr_state": d.ocr_state,
+        "no_expiry": d.no_expiry, "ocr_state": d.ocr_state, "av_status": v.av_status if v else None,
         "created_at": d.created_at, "archived": d.archived_at is not None,
         "size": v.size if v else None, "format": v.format_class if v else None, **filetypes.describe(v),
         "has_thumbnail": bool(v and v.thumbnail_path), "version_id": str(v.id) if v else None,

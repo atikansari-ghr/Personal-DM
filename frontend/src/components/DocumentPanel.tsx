@@ -9,6 +9,7 @@ import { Avatar, Confirm, CopyButton, ExpiryBadge, HelpTip, Icon, Modal, Skeleto
 import AISuggestions from "./AISuggestions";
 import Menu from "./Menu";
 import OcrPanel, { OcrStateBadge } from "./OcrPanel";
+import { AvBadge } from "../pages/settings/SecurityCenter";
 import DocViewer from "./DocViewer";
 import FileTypeIcon from "./FileTypeIcon";
 import { useAiStatus } from "../ai";
@@ -303,7 +304,9 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
       <div className="row between" style={{ alignItems: "flex-start" }}>
         <div className="grow">
           <h2 style={{ fontSize: full ? "1.6rem" : "1.25rem", marginBottom: ".2rem" }}>{doc.title}</h2>
-          <div className="row small muted"><StateBadge state={doc.state} />{doc.ocr && doc.ocr.state !== "not_processed" && <OcrStateBadge state={doc.ocr.state} />}<ExpiryBadge expiry={doc.expiry} />{v && <span>{v.original_name} · {formatBytes(v.size)} · v{v.number}</span>}{doc.archived && <span className="badge neutral">Archived</span>}</div>
+          <div className="row small muted"><StateBadge state={doc.state} />{doc.ocr && doc.ocr.state !== "not_processed" && <OcrStateBadge state={doc.ocr.state} />}<ExpiryBadge expiry={doc.expiry} /><AvBadge status={v?.antivirus?.status} compact />{v && <span>{v.original_name} · {formatBytes(v.size)} · v{v.number}</span>}{doc.archived && <span className="badge neutral">Archived</span>}</div>
+          {v?.antivirus?.blocked && <div className="alert error" role="alert" style={{ marginTop: ".5rem" }}><strong>Quarantined by the antivirus ({v.antivirus.signature}).</strong> Preview, download, OCR and Local AI are blocked for this file. The main administrator can review it in Settings → Security → Antivirus.</div>}
+          {v?.antivirus && ["not_scanned", "size_limit", "failed"].includes(v.antivirus.status) && <div className="small muted" style={{ marginTop: ".3rem" }}>Antivirus: {v.antivirus.detail || "not scanned"}</div>}
         </div>
         <div className="row">
           {can("download") && v && <a className="btn primary" href={`/api/documents/${doc.id}/file?download=1`}><Icon name="download" /> Download</a>}
@@ -336,7 +339,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
         <table className="responsive"><thead><tr><th>Version</th><th>File</th><th>Added</th><th /></tr></thead><tbody>
           {doc.versions.map((ver) => (
             <tr key={ver.id}>
-              <td>v{ver.number} {ver.id === v?.id && <span className="badge">Current</span>}{ver.is_additional && <span className="badge neutral" title="Another side or copy; does not replace the current file">Additional</span>}{ver.ocr_applied && <span className="badge ok" title={ver.ocr_pages ? `Pages ${ver.ocr_pages} recognised` : "Recognised"}>OCR{ver.ocr_pages ? ` p.${ver.ocr_pages}` : ""}</span>}{ver.pdfa_check && (
+              <td>v{ver.number} {ver.id === v?.id && <span className="badge">Current</span>}{ver.is_additional && <span className="badge neutral" title="Another side or copy; does not replace the current file">Additional</span>}{ver.antivirus && <span title={`${ver.antivirus.engine || "ClamAV"}${ver.antivirus.scanned_at ? ` · scanned ${formatDateTime(ver.antivirus.scanned_at)}` : ""}${ver.antivirus.signature ? ` · ${ver.antivirus.signature}` : ""}${ver.antivirus.detail ? ` · ${ver.antivirus.detail}` : ""}`}><AvBadge status={ver.antivirus.status} /></span>}{ver.ocr_applied && <span className="badge ok" title={ver.ocr_pages ? `Pages ${ver.ocr_pages} recognised` : "Recognised"}>OCR{ver.ocr_pages ? ` p.${ver.ocr_pages}` : ""}</span>}{ver.pdfa_check && (
                 <span className={`badge ${ver.pdfa_check.compliant ? "ok" : "soon"}`}
                   title={ver.pdfa_check.compliant ? `${ver.pdfa_check.profile} — ${ver.pdfa_check.full_validation ? "validated by veraPDF" : "structural check, not a full validation"}` : ver.pdfa_check.failed_rules.map((r) => r.description).join("; ")}>
                   {ver.pdfa_check.compliant ? "PDF/A ✓" : "PDF/A issues"}{ver.pdfa_check.full_validation ? "" : "*"}

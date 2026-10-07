@@ -6,7 +6,7 @@
 Every request passes these layers in order. Each one has a single job:
 
 Internet → Nginx Proxy Manager / Pangolin (HTTPS) → **country / IP access policy** → sign-in rate limits → Personal Documents Management System
-sign-in (password, passkey, authenticator app, Google) → per-document permissions → audit log.
+sign-in (password, passkey, authenticator app, Google, authentik) → per-document permissions → audit log.
 
 - The **access policy** decides *whether a network may reach the app at all*. It runs before sign-in and before any document code.
 - The **login audit** records *who actually signed in*, recorded by the app itself (not guessed from web logs).
@@ -14,6 +14,12 @@ sign-in (password, passkey, authenticator app, Google) → per-document permissi
 - **Local AI** only ever sees documents that permissions already allow (see [Local AI](local-ai.md#permissions)).
 
 Country filtering is defence in depth. It does not replace strong passwords, two-step verification, rate limits, HTTPS and permissions.
+
+These settings are under **Settings → Security → Access policy** (main administrator only; before Change Set M they were
+called *Settings → Security & access*). The other views of Settings → Security — antivirus, the Basic Internet Security
+Test, OS updates, firewall monitoring, security records and storage — are described in [Security center](security-center.md)
+and [Antivirus](antivirus.md). authentik sign-in is an additional sign-in method under the same layers: the access policy
+runs before it, and every authentik sign-in is recorded in the login audit (see [authentik](authentik.md)).
 
 ## Real client IP behind NPM or Pangolin {#real-ip}
 
@@ -23,7 +29,7 @@ trusted proxy** listed in `PD_TRUSTED_PROXY_IPS` (`/etc/personaldocs/personaldoc
 Anyone else can send a forged `X-Forwarded-For` header, and it is ignored: the socket address is used instead. The header is read from the
 right; the first address that is not itself a trusted proxy is the client.
 
-Settings → Security & access → **Your connection** shows the address the server sees for you, and whether the request came
+Settings → Security → Access policy → **Your connection** shows the address the server sees for you, and whether the request came
 through a trusted proxy. `sudo personaldocs doctor` warns when all recent sign-ins appear to come from one internal address,
 which usually means the proxy is not listed as trusted.
 
@@ -51,7 +57,7 @@ Check the result in **Your connection** after signing in through the public addr
 
 - time, account (or the username typed, for unknown accounts), result and failure reason
   (`bad_credentials`, `bad_code`, `passkey_invalid`, `rate_limited`, `disabled_account`, …)
-- method (`password`, `password+totp`, `password+passkey`, `passkey` = passwordless, `google`, `…+recovery_code`)
+- method (`password`, `password+totp`, `password+passkey`, `passkey` = passwordless, `google`, `authentik`, `…+recovery_code`)
 - real client IP, country from the local GeoIP database, browser, operating system and device class
 - the device-session reference (matches **My account → Sessions**)
 - flags: **new IP**, **new country** (first time for that account), **temporary access** (allowed only by a travel exception) and
@@ -78,7 +84,7 @@ Country lookups use a MaxMind-format database stored on the server (`/var/lib/pe
 addresses are never sent to a lookup service.
 
 1. Create a free account at maxmind.com and generate a **license key** (GeoLite2).
-2. In **Settings → Security & access**, enter the **MaxMind account ID** and **license key** (stored encrypted, never shown again).
+2. In **Settings → Security → Access policy**, enter the **MaxMind account ID** and **license key** (stored encrypted, never shown again).
 3. Click **Update now** in the GeoIP card. With **Update GeoIP weekly** on, it refreshes every Wednesday night.
 
 Alternatively upload a `.mmdb` file (GeoLite2-Country/City or a compatible database) with **Upload .mmdb**.
@@ -88,7 +94,7 @@ old database and the access policy untouched. The failure is shown in the card, 
 
 ## Country policy {#country-policy}
 
-**Settings → Security & access → Geographic access control** offers three modes. The active mode is always shown in the
+**Settings → Security → Access policy → Geographic access control** offers three modes. The active mode is always shown in the
 banner at the top of the card.
 
 | Mode | Effect |
@@ -161,7 +167,7 @@ nothing needs to be reinstalled. There is no way to bypass the policy anonymousl
 
 ## Security alerts {#alerts}
 
-Each alert can be switched on or off in **Settings → Security & access**. Alerts go to the in-app feed and, per person, to email/Telegram:
+Each alert can be switched on or off in **Settings → Security → Access policy**. Alerts go to the in-app feed and, per person, to email/Telegram:
 
 | Alert | Who | Default |
 |---|---|---|
@@ -173,12 +179,15 @@ Each alert can be switched on or off in **Settings → Security & access**. Aler
 | GeoIP update or traffic report failures | administrators | on |
 | Passkeys, authenticator app, recovery codes, passwordless and admin resets | the person (+ administrators for admin actions) | on |
 
+Antivirus, OS update, storage and security-test alerts are separate administrator notifications described in
+[Antivirus](antivirus.md#signatures) and [Security center](security-center.md); the antivirus ones are always critical.
+
 Alerts are throttled per type and subject (an attack produces one alert, not thousands). They never contain passwords, codes,
 tokens or document content.
 
 ## Traffic analytics (GoAccess) {#goaccess}
 
-Turn on **Traffic analytics (GoAccess)** in Settings → Security & access. The app writes a privacy-safe access log
+Turn on **Traffic analytics (GoAccess)** in Settings → Security → Access policy. The app writes a privacy-safe access log
 (`/var/lib/personaldocs/logs/access.log`, rotated weekly):
 - the real client IP
 - the path **without query string**, with share-link tokens masked

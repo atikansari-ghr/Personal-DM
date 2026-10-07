@@ -89,6 +89,18 @@
  ],
  [
   "PASS",
+  "AT-138/140/141 antivirus: background scan, quarantine and release (EICAR test string)"
+ ],
+ [
+  "PASS",
+  "AT-149/150/156/159 security center: health score, Internet test, storage"
+ ],
+ [
+  "PASS",
+  "AT-146 authentik settings and sign-in button"
+ ],
+ [
+  "PASS",
   "screens for the README (desktop)"
  ],
  [

@@ -19,8 +19,11 @@
 │ imports/backups    │ └───────────────────────┘
 └──────────┬─────────┘
            │ subprocess with limits: ocrmypdf/tesseract, soffice, pdftoppm, pg_dump
+           │ Unix socket /run/clamav/clamd.ctl → clamav-daemon (no TCP); clamav-freshclam updates signatures
            ▼
   /var/lib/personaldocs/storage/{originals,derivatives}   →   NAS mount (application backups)
+
+  personaldocs-host.path (root) ← <data>/host/request.json: inspect, check/install security updates, freshclam, reboot
 ```
 
 ## Principles
@@ -74,7 +77,7 @@ Originals are write-once and always exist before their rows commit. `pg_dump` ta
 |---|---|---|
 | `/opt/personaldocs/releases/<ver>-<sha>` | root:personaldocs, read-only | code, `.venv`, `frontend/dist` |
 | `/etc/personaldocs` | root:personaldocs 0750 | env file, `secret_key`, `encryption.key` (0600 personaldocs), `github-token` (0600 root) |
-| `/var/lib/personaldocs` | personaldocs 0750 | storage, staging, tmp, quarantine, pre-upgrade DB snapshots, status files, `profile-photos/`, `branding/` (sign-in wallpaper and logo), `geoip/`, `logs/access.log`, `goaccess/` |
+| `/var/lib/personaldocs` | personaldocs 0750 | storage, staging, tmp, quarantine (antivirus quarantine 0400 files; integrity orphans), `pre-update-backups/` (newest 3), `host/` (host helper requests and logs), pre-upgrade DB snapshots, status files, `profile-photos/`, `branding/` (sign-in wallpaper and logo), `geoip/`, `logs/access.log`, `goaccess/` |
 
 ## Extension points (later phases)
 
@@ -132,3 +135,33 @@ See [ADR 0011](adr/0011-selective-ocr-overview.md).
   `/api/branding/logo` (changes are administrator-only). The presets are SVG drawings in `components/LoginArt.tsx`.
 - **Setup:** `accounts/services.py::complete_setup` creates the Main Administrator and the optional members in one
   transaction; no default accounts exist.
+
+## Change set M (2026-10)
+
+See [ADR 0012](adr/0012-antivirus-authentik-security-center.md).
+
+- **Antivirus:** `security/antivirus.py` marks each new `DocumentVersion` *pending* in the upload transaction and
+  queues a scan job after commit; the job streams the file to clamd over the local Unix socket (`INSTREAM`) and
+  stores status, signature, engine and time. A detection moves the file to `<data>/quarantine` (0400) and
+  `DocumentVersion.av_blocked` stops preview, download, share links, export, OCR and AI jobs. Library scans are
+  `AvScanRun` rows processed in batches (pause, resume, cancel, schedule). `security/views_av.py` serves
+  `/api/security/antivirus*`. Backups skip quarantined versions; the integrity check expects them in the quarantine.
+- **authentik:** `accounts/authentik.py` is a generic OpenID Connect client (discovery, authorization code with
+  PKCE, state and nonce, ID token verified with the provider's JWKS, issuer and audience). `ExternalIdentity` links a
+  provider subject to a user; an existing account is linked only through the link flow
+  (`/api/auth/authentik/start?mode=link`) started by the signed-in user after recent re-authentication, never by
+  matching email. Optional automatic provisioning creates a new member account with its link; group mapping changes
+  only `is_admin` on accounts that are not the main administrator.
+  Routes `/api/auth/authentik/start`, `/callback`, `/test`, `/links`.
+- **Administrator role:** `User.is_admin`; `User.is_administrator` (main administrator or Administrator) gates the
+  security center APIs and security notifications and is not consulted by `library/permissions.py`.
+- **Security center:** `security/center.py` holds the HTTPS checks, the Basic Internet Security Test
+  (`SecurityTestRun`, run as a background job), the Security Health score, record retention and purge, and Storage
+  Health with safe cleanup; `security/views_center.py` serves `/api/security/health`, `/https`, `/tests`,
+  `/os-updates`, `/reboot`, `/firewall`, `/records` and `/storage`. Frontend: `pages/settings/SecurityCenter.tsx`.
+- **Host helper:** the app writes `<data>/host/request.json`; `personaldocs-host.path` starts `personaldocs
+  host-apply`, which runs `ops/host_helper.py` as root with a fixed list of actions and writes status and logs back.
+  `ops/host.py` is the app side. The web app never runs `sudo`.
+- **HTTPS:** `SECURE_HSTS_SECONDS` from `PD_HSTS_SECONDS` (default one year for https origins), sent only on requests
+  Django sees as HTTPS (`PD_BEHIND_PROXY` and `X-Forwarded-Proto`).
+- Migrations `accounts.0005`, `accounts.0006`, `library.0008`, `security.0002`, `security.0003`.

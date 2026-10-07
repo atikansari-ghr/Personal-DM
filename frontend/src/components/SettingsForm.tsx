@@ -8,7 +8,7 @@ import WidgetListEditor from "./WidgetListEditor";
 export interface SettingDef {
   key: string; label: string; description: string; type: string; default: any; section: string; scope: string; editable_by: string;
   choices: string[]; min: number | null; max: number | null; depends_on: string[]; effect: string; restart: boolean; help: string;
-  example: string; secret: boolean; value: any; configured: boolean | null; can_edit: boolean; choice_labels?: Record<string, string>;
+  example: string; secret: boolean; value: any; configured: boolean | null; can_edit: boolean; choice_labels?: Record<string, string>; locked_choices?: string[];
 }
 
 const CHANNEL_LABELS: Record<string, string> = { in_app: "In-app", email: "Email", telegram: "Telegram" };
@@ -70,7 +70,10 @@ function Input({ def, value, onChange }: { def: SettingDef; value: any; onChange
       const labels = def.choice_labels || {};
       return (
         <fieldset className="event-list" aria-label={def.label} disabled={disabled}>
-          {def.choices.map((k) => <label key={k} className="check"><input type="checkbox" checked={cur.includes(k)} onChange={(e) => onChange(e.target.checked ? [...cur, k] : cur.filter((x) => x !== k))} /> {labels[k] || k}</label>)}
+          {def.choices.map((k) => {
+            const locked = (def.locked_choices || []).includes(k);
+            return <label key={k} className="check" title={locked ? "Always critical; cannot be turned off" : undefined}><input type="checkbox" checked={locked || cur.includes(k)} disabled={locked} onChange={(e) => onChange(e.target.checked ? [...cur, k] : cur.filter((x) => x !== k))} /> {labels[k] || k}{locked ? " (always)" : ""}</label>;
+          })}
         </fieldset>
       );
     }

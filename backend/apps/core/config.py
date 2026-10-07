@@ -5,7 +5,7 @@ from typing import Any
 
 from . import crypto
 from .models import AppSetting, UserSetting
-from .registry import BY_KEY, GLOBAL, MAIN_ADMIN, SELF, USER, SettingError, coerce
+from .registry import ADMIN, BY_KEY, GLOBAL, MAIN_ADMIN, SELF, USER, SettingError, coerce
 
 
 def get(key: str) -> Any:
@@ -67,6 +67,8 @@ def can_edit(user, key: str) -> bool:
     defn = BY_KEY.get(key)
     if not defn:
         return False
+    if defn.editable_by == ADMIN:
+        return bool(getattr(user, "is_main_admin", False) or getattr(user, "is_admin", False))
     if defn.editable_by == MAIN_ADMIN:
         return bool(getattr(user, "is_main_admin", False))
     return defn.editable_by == SELF

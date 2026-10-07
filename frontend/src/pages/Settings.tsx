@@ -5,13 +5,14 @@ import { ActivityPanel, AuthPanel, ConnectionsPanel, DocumentsPanel, Notificatio
 import FamilyPanel from "./settings/Family";
 import LocalAIPanel from "./settings/LocalAI";
 import OverviewAdminPanel from "./settings/OverviewAdmin";
-import { LoginAuditPanel, SecurityPanel, TrafficPanel } from "./settings/Security";
+import { LoginAuditPanel, TrafficPanel } from "./settings/Security";
+import SecurityCenter from "./settings/SecurityCenter";
 import SettingsForm from "../components/SettingsForm";
 
 const ADMIN_TABS: [string, string][] = [
   ["general", "General"], ["family", "Family & access"], ["documents", "Documents & folders"], ["processing", "OCR & processing"],
   ["notifications", "Notifications"], ["connections", "Connections"], ["authentication", "Authentication"], ["storage", "Storage & backup"],
-  ["security", "Security & access"], ["activity", "Activity & health"], ["ai", "Local AI"], ["overview", "Overview & sign-in"],
+  ["security", "Security"], ["activity", "Activity & health"], ["ai", "Local AI"], ["overview", "Overview & sign-in"],
 ];
 
 export default function SettingsPage() {
@@ -19,7 +20,8 @@ export default function SettingsPage() {
   const { session } = useSession();
   const admin = !!session?.user?.is_main_admin;
   const delegate = (session?.delegations || []).length > 0;
-  const tabs: [string, string][] = [["account", "My account"], ...(admin ? ADMIN_TABS : delegate ? [["family", "Family & access"] as [string, string]] : []), ["help", "Help & documentation"]];
+  const secAdmin = !admin && !!session?.user?.is_admin;  // Administrator role: security and operations only
+  const tabs: [string, string][] = [["account", "My account"], ...(admin ? ADMIN_TABS : [...(delegate ? [["family", "Family & access"] as [string, string]] : []), ...(secAdmin ? [["security", "Security"] as [string, string]] : [])]), ["help", "Help & documentation"]];
   const active = section || (admin ? "general" : "account");
   return (
     <div>
@@ -36,7 +38,7 @@ export default function SettingsPage() {
       {active === "connections" && admin && <ConnectionsPanel />}
       {active === "authentication" && admin && <AuthPanel />}
       {active === "storage" && admin && <StoragePanel />}
-      {active === "security" && admin && <SecurityPanel />}
+      {active === "security" && (admin || secAdmin) && <SecurityCenter />}
       {active === "activity" && admin && <ActivityTabs />}
       {active === "ai" && admin && <LocalAIPanel />}
       {active === "overview" && admin && <OverviewAdminPanel />}

@@ -42,7 +42,9 @@ def notify(user, event: str, *, key: str, title: str, lines=(), facts=(), items=
 def _admins():
     from apps.accounts.models import User
 
-    return User.objects.filter(is_main_admin=True, is_active=True)
+    from django.db.models import Q
+
+    return User.objects.filter(Q(is_main_admin=True) | Q(is_admin=True), is_active=True)
 
 
 def _stamp() -> str:

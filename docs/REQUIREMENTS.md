@@ -211,6 +211,37 @@ Acceptance tests AT-131…AT-137.
 | FAM-4 | Upgrades keep every existing account, folder and document; deactivating or removing a member never silently deletes documents. |
 | FAM-5 | Screenshot and documentation names are demo labels (A. Ansari, Mom, Son1, Son2, Son3, Daughter) added in the optional step, never defaults. |
 
+## Change set M (2026-10): antivirus, authentik, security center, storage health
+
+Acceptance tests AT-138…AT-160.
+
+| ID | Requirement |
+|---|---|
+| ROLE-1 | An **Administrator** role, set only by the main administrator (or by an authentik group mapping), gives access to the security center and administrator security notifications and never grants document or folder access. The "administrators" two-step verification policy covers it. |
+| AV-1 | Every new file is scanned in the background by a local ClamAV daemon over its Unix socket (no TCP); uploads are never held up and each file shows a status (pending, clean, not scanned, size limit, scan failed, threat, quarantined, released). |
+| AV-2 | Fail-open: when ClamAV is unavailable, files stay stored and usable, are marked Not scanned, and administrators get a critical alert. Archives are scanned as one file. |
+| AV-3 | A detected file is moved to a quarantine readable only by the service; preview, download, sharing, export, OCR and Local AI are blocked; metadata stays. |
+| AV-4 | Only the main administrator releases (warning, confirmation, reason of at least 10 characters, audited) or permanently deletes (typed confirmation) a quarantined file; Administrators can view but not release. |
+| AV-5 | Maximum scan size (default 50 MB); larger files are stored and marked Not scanned — size limit exceeded, never Clean. |
+| AV-6 | Library scan with progress, pause, resume and cancel; optional daily, weekly or monthly re-scan (default disabled); files stored before the upgrade are marked Not scanned until scanned. |
+| AV-7 | Automatic signature updates (freshclam) plus Update now through the host helper; stale (2 days) and critically stale (7 days) thresholds; threat, release, unavailable, scan failure, stale and update-failure notifications are critical and cannot be turned off. |
+| AV-8 | Quarantined files are excluded from backups and from integrity "missing" reports; the installer configures clamd (local socket only) and can be skipped with `--without-antivirus`. |
+| AUTHK-1 | authentik as an additional OpenID Connect sign-in (discovery, HTTPS issuer only, PKCE, state, nonce, token signature/issuer/audience checks), with an encrypted client secret, configurable scopes, label and logo, and a connection test. Local sign-in always stays available; enabled two-step verification is still asked. |
+| AUTHK-2 | Accounts are linked only by the signed-in person after recent re-authentication, never by matching email; the main administrator views and revokes links without touching the account or its documents. |
+| AUTHK-3 | Provisioning defaults to existing accounts only; optional automatic provisioning creates member accounts only, never the main administrator. |
+| AUTHK-4 | Optional group-to-role mapping to Member or Administrator only; never changes the main administrator, never grants document permissions; every change audited. |
+| SEC-1 | Deployment exposure (LAN only / Internet); Internet Ready only when HTTPS with a valid certificate, HTTP→HTTPS redirect, Secure cookies, security headers and HSTS pass for the public origin. HSTS is sent for HTTPS origins (`PD_HSTS_SECONDS`, default one year). |
+| SEC-2 | A Basic Internet Security Test started only by an administrator (never during install or upgrade), limited to this application and this host, with categorised findings (Passed/Warning/Failed, severity, remediation), comparison with the previous run and one year of history. |
+| SEC-3 | Warning-only policy: Critical and High findings never block the application, are never shown as a pass, and notify administrators. |
+| SEC-4 | Debian security updates listed and installed on request through a root host helper with fixed actions, after a database and settings backup (failure blocks unless overridden with an audited reason); logs kept; no unattended updates; manual commands shown without the helper. |
+| SEC-5 | Reboot required shown; controlled reboot with preflight warnings (sessions, running jobs), worker and scheduler drained, duplicate requests refused, service health shown afterwards. |
+| SEC-6 | Firewall and listening services are monitored only (ufw/nftables state, unexpected exposure such as ClamAV or PostgreSQL); no control changes firewall rules. |
+| SEC-7 | Administrator-only Security Health score 0–100 (antivirus 20, HTTPS 20, security test 20, OS updates 15, firewall 10, reboot 10, authentik 5) with Healthy/Attention/At Risk bands and forcing conditions that always give At Risk. Not presented as a certification. |
+| SEC-8 | Security records kept for a configurable period (default and minimum 365 days) with nightly cleanup; manual purge with cleanup analysis, confirmation and a 30-day minimum; the purge record, records about quarantined files and the latest test are protected. |
+| STOR-1 | Storage Health with total, used, free and per-category usage, warning (80 %) and critical (90 %) thresholds with notifications. |
+| STOR-2 | Safe cleanup only of regenerable or expired data (temporary files older than 24 hours, orphan previews and OCR copies, expired security records) with analysis and confirmation. Original documents are never deleted by any cleanup, purge, antivirus, update or repair workflow. |
+| OPS-M1 | `personaldocs status` and `doctor` report ClamAV, freshclam, the host helper, signature age, files pending scan, Internet HTTPS, storage thresholds and a pending reboot; install, upgrade and repair install ClamAV and the host helper; `--with-security-tools` adds pip-audit. |
+
 ## Later phases
 
 Personal WhatsApp notifications, native apps, scanning enhancement, in-browser Office editing, DICOM viewing.

@@ -38,6 +38,7 @@ def user_json(u: User, *, full: bool = False) -> dict:
         "avatar_color": u.avatar_color,
         "photo_version": photos.version(u),
         "is_main_admin": u.is_main_admin,
+        "is_admin": u.is_admin or u.is_main_admin,
         "is_active": u.is_active,
         "is_head": u.headed_groups.exists(),
     }
@@ -55,6 +56,7 @@ def user_json(u: User, *, full: bool = False) -> dict:
             "reminder_group": str(u.reminder_group_id) if u.reminder_group_id else None,
             "groups": [str(g) for g in u.memberships.values_list("group_id", flat=True)],
             "google_linked": hasattr(u, "google_identity"),
+            "authentik_linked": u.external_identities.filter(provider="authentik").exists(),
         })
     return data
 
@@ -103,6 +105,10 @@ def session_state(request):
         "login": branding.public(),
         "version": settings.APP_VERSION,
         "google_enabled": bool(config.get("google.enabled")),
+        "authentik": {"enabled": bool(config.get("authentik.enabled") and config.get("authentik.client_id")
+                                      and config.get("authentik.issuer")),
+                      "label": config.get("authentik.button_label") or "Sign in with authentik",
+                      "show_logo": bool(config.get("authentik.show_logo"))},
         "pending_2fa": bool(request.session.get("pending_2fa")),
         "pending_methods": (request.session.get("pending_2fa") or {}).get("methods", []),
         "passkeys_enabled": bool(config.get("auth.allow_passkeys")),
@@ -506,6 +512,10 @@ def member_detail(request, pk):
         u.username = new
     if "is_main_admin" in d:
         u.is_main_admin = bool(d["is_main_admin"])
+    if "is_admin" in d and bool(d["is_admin"]) != u.is_admin:
+        u.is_admin = bool(d["is_admin"])
+        audit.record("family.role_change", request=request, target=u, subject_user=u,
+                     role="administrator" if u.is_admin else "member", source="main_admin")
     if "is_active" in d:
         u.is_active = bool(d["is_active"])
         if not u.is_active:

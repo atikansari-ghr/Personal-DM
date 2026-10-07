@@ -17,6 +17,8 @@ class User(AbstractUser):
     full_name = models.CharField(max_length=150, blank=True)
     role_label = models.CharField(max_length=40, blank=True, help_text="Relationship label, e.g. Dad, Mom, Son1")
     is_main_admin = models.BooleanField(default=False)
+    is_admin = models.BooleanField(default=False, help_text="Administrator: security and operations area (antivirus, "
+                                   "security tests, storage health). The main administrator always has these rights.")
     must_change_password = models.BooleanField(default=False)
     password_changed_at = models.DateTimeField(null=True, blank=True)
     totp_secret_enc = models.TextField(blank=True)
@@ -37,6 +39,11 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.display_name or self.username
+
+    @property
+    def is_administrator(self) -> bool:
+        """Main administrator or Administrator role. Never grants document/folder access by itself."""
+        return bool(self.is_main_admin or self.is_admin)
 
     @property
     def initials(self) -> str:
@@ -170,3 +177,24 @@ class WebAuthnCredential(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
+
+class ExternalIdentity(models.Model):
+    """Link between an external OpenID Connect identity (authentik) and one local account.
+
+    Created only by the signed-in person (Profile → Security → Link authentik account) or by automatic provisioning
+    when the administrator enabled it. Never created because an email address matches."""
+
+    provider = models.CharField(max_length=30, default="authentik")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="external_identities")
+    issuer = models.CharField(max_length=300)
+    subject = models.CharField(max_length=255)
+    email = models.CharField(max_length=254, blank=True)
+    username = models.CharField(max_length=150, blank=True)
+    groups = models.JSONField(default=list, blank=True)
+    provisioned = models.BooleanField(default=False, help_text="Account was created automatically on first sign-in")
+    linked_at = models.DateTimeField(auto_now_add=True)
+    last_login_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = [("issuer", "subject"), ("provider", "user")]

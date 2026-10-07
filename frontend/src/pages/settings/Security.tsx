@@ -299,7 +299,7 @@ export function TrafficPanel() {
     <div className="stack">
       <div className="card">
         <h2>Traffic analytics <HelpTip text="Summarised from the app's privacy-safe access log by GoAccess (or the built-in summary). Nothing is published; only the main administrator sees this." link="/help/security-access#goaccess" /></h2>
-        {!t.data.enabled && <p>Traffic analytics is off. Turn on <strong>Traffic analytics (GoAccess)</strong> in <Link to="/settings/security">Security & access</Link>.</p>}
+        {!t.data.enabled && <p>Traffic analytics is off. Turn on <strong>Traffic analytics (GoAccess)</strong> in <Link to="/settings/security?view=access">Security → Access policy</Link>.</p>}
         <div className="row">
           <span className={`badge ${st.goaccess_installed ? "ok" : "neutral"}`}>{st.goaccess_installed ? "GoAccess installed" : "GoAccess not installed (built-in summary)"}</span>
           <span className={`badge ${st.access_log_exists ? "ok" : "warn"}`}>{st.access_log_exists ? "Access log active" : "No access log yet"}</span>

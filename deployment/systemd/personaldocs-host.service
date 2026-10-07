@@ -1,0 +1,10 @@
+[Unit]
+Description=Run a host security action requested from Personal Documents (inspect, check/install security updates, freshclam, reboot)
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Runs as root: listing listening services, apt and reboot need it. Only fixed actions exist (see host_helper.py);
+# firewall rules are only read, never changed.
+ExecStart=/usr/local/bin/personaldocs host-apply
+TimeoutStartSec=4000

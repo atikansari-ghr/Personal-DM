@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import OcrTypes from "./OcrTypes";
 import { api, formatBytes, formatDateTime } from "../../api";
 import SettingsForm from "../../components/SettingsForm";
+import AuthentikAdmin from "./Authentik";
 import { CopyButton, Icon, Skeleton, useAsync, useToast } from "../../components/ui";
 import type { Meta } from "../../types";
 
@@ -153,6 +154,7 @@ export function AuthPanel() {
           </div>
         )}
       </SettingsForm>
+      <AuthentikAdmin />
     </div>
   );
 }

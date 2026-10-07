@@ -107,6 +107,8 @@ def process_version(job):
     if version is None:
         return {"skipped": "version deleted"}
     doc = version.document
+    if version.av_blocked:
+        return {"skipped": "quarantined"}
     original = storage.resolve_original(version.storage_path)
     if not original.exists():
         raise PermanentFailure("Original file is missing from storage")

@@ -13,12 +13,15 @@ accounts added in the optional setup step for the screenshots; the app never cre
    a recovery code.
 4. If the administrator allows it and you turned it on, **Sign in with a passkey** signs you in with your phone's or
    computer's fingerprint, face or PIN, without a password.
+5. If your family uses authentik, a **Sign in with authentik** button (the label may differ) is shown. It works only
+   after you linked your account (see [your account](#account)). Signing in with your username and password always
+   stays available, also when authentik is down. Two-step verification you turned on is still asked afterwards.
 
 **First sign-in:** use the temporary password the administrator gave you. You are asked to choose your own straight
 away.
 
 **Sign-in page design:** the administrator may choose a wallpaper, title and logo for the sign-in page. The design
-only changes the look; the sign-in methods (password, code, passkey, Google) are the same with every design. See
+only changes the look; the sign-in methods (password, code, passkey, Google, authentik) are the same with every design. See
 [sign-in page designs](guides/login-designs.md).
 
 **Password managers:** the username, password and one-time-code fields are standard, so Bitwarden, 1Password, Apple
@@ -32,7 +35,7 @@ More: [authenticator app and recovery codes](guides/totp-recovery.md), [passkeys
 | Tab | What you can do |
 |---|---|
 | Profile | Name, email (needed for email notifications), [profile photo](guides/getting-started.md#profile-photo) |
-| Password & security | Change password, authenticator app, recovery codes, passkeys, passwordless sign-in, signed-in devices |
+| Password & security | Change password, authenticator app, recovery codes, passkeys, passwordless sign-in, signed-in devices, **Link authentik account** (when the administrator turned authentik on) |
 | Linked accounts | Link Google sign-in (optional) |
 | Appearance | Theme (Green, Blue, Black & White), layout, Overview widgets |
 | Notifications | Critical notifications (read-only), your optional notifications per channel, Telegram link |
@@ -48,6 +51,11 @@ device.
 - passwordless sign-in on or off
 
 Each of these sends you a security notification.
+
+**Linking authentik:** open **My account → Password & security → authentik → Link authentik account**, confirm your
+password, then sign in at authentik. Only you can link your account; it is never linked because an email address
+matches. **Unlink** removes the link again (you need a local password for that). The administrator can also revoke a
+link; your account, password and documents stay as they are. See [authentik](guides/authentik.md#linking).
 
 ## 3. Overview {#dashboard}
 
@@ -100,6 +108,24 @@ More: [getting started](guides/getting-started.md#my-documents), [actions](guide
   Then **Check & preview** shows the exact final folders (*new* or *existing*) before anything is imported. Nested
   folders are kept as they are.
 - Duplicate uploads become separate documents; nothing is overwritten.
+
+**Antivirus check:** if the administrator turned on the antivirus, every new file is checked on your family's own
+server a few seconds after the upload. You can use the file straight away. A small shield shows the result in the
+folder list and in the document's **Versions** tab:
+
+| Badge | Meaning |
+|---|---|
+| Scan pending | Waiting for its check; the file is usable. |
+| Clean | Nothing was found. |
+| Not scanned | The check was not possible (for example the antivirus was not running), or the file was stored before the antivirus existed. The file stays available. |
+| Not scanned — size limit exceeded | The file is larger than the scan limit. It is stored normally, but not reported as clean. |
+| Scan failed | The antivirus reported an error for this file. The file stays available. |
+| Threat detected / Quarantined | Malware was found. The file is blocked (see below). |
+| Released from quarantine | The main administrator checked the file and released it. |
+
+When a file is quarantined, the document shows **"Quarantined by the antivirus"**: preview, download, sharing,
+export, OCR and Local AI are blocked for that file. Its name and details stay visible. Only the main administrator can
+review it, release it or delete it. See [antivirus](guides/antivirus.md#quarantine).
 
 More: [folder imports](guides/folder-imports.md), [phone uploads](guides/mobile-pwa.md#upload).
 
@@ -213,5 +239,8 @@ all your devices. See [themes](guides/themes.md).
 | A move was refused | Read the message; you may lack permission at the destination |
 | Document stuck in Processing or Queued | Wait a few minutes (the administrator may have paused the OCR queue); cancel a queued job or use **Re-run OCR…** in the Text (OCR) tab |
 | Not receiving email/Telegram | My account → Notifications shows what is missing |
+| "Quarantined by the antivirus" on a document | The file is blocked for safety; ask the main administrator to review it |
+| "This authentik account is not linked" | Sign in with your password, then use **Link authentik account** in My account → Password & security |
+| "authentik cannot be reached" | Sign in with your password instead; authentik is optional |
 
 More: [troubleshooting](guides/troubleshooting.md).

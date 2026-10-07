@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for host security requests from Personal Documents (Settings -> Security)
+
+[Path]
+PathChanged=/var/lib/personaldocs/host/request.json
+Unit=personaldocs-host.service
+
+[Install]
+WantedBy=multi-user.target

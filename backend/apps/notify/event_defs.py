@@ -15,6 +15,7 @@ class Event:
     admins_only: bool = False
     default_critical: bool = False
     default_channels: tuple = ("in_app",)
+    always_critical: bool = False  # cannot be removed from the critical list (antivirus and security-health events)
 
 
 EVENTS: dict[str, Event] = {e.key: e for e in [
@@ -35,6 +36,12 @@ EVENTS: dict[str, Event] = {e.key: e for e in [
     Event("security.policy_change", "Access policy changes", "Country policy, trusted/blocked IPs and temporary access created, changed or expired.", "security", admins_only=True, default_critical=True),
     Event("security.auth_policy", "Authentication policy changes", "Changes to sign-in, two-step verification and passkey settings.", "security", admins_only=True, default_critical=True),
     Event("security.health", "GeoIP / traffic report problems", "A GeoIP update or traffic report failed.", "system", admins_only=True, default_channels=("in_app", "email")),
+    # antivirus and security operations: always critical, administrators only
+    Event("antivirus.threat", "Malware detected and quarantined", "ClamAV detected a threat in an uploaded file; it was quarantined.", "security", admins_only=True, default_critical=True, always_critical=True),
+    Event("antivirus.released", "Quarantined file released", "The main administrator released a file from quarantine.", "security", admins_only=True, default_critical=True, always_critical=True),
+    Event("antivirus.unavailable", "Antivirus unavailable or scan failed", "ClamAV could not be reached or a scan failed; files stay usable but are marked Not scanned.", "security", admins_only=True, default_critical=True, always_critical=True),
+    Event("antivirus.definitions", "Antivirus definitions stale or update failed", "Virus signatures are out of date or the signature update failed.", "security", admins_only=True, default_critical=True, always_critical=True),
+    Event("security.operations", "Security operations", "OS security updates, reboots, security-test results with Critical/High findings, storage warnings and log purges.", "security", admins_only=True, default_critical=True),
     Event("backup.failed", "Backup failed", "The scheduled or manual backup did not complete.", "system", admins_only=True, default_critical=True),
     Event("integrity.failed", "Integrity problems", "The storage integrity check found missing or changed files.", "system", admins_only=True, default_critical=True),
     # documents

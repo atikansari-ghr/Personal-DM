@@ -6,6 +6,7 @@ import { Avatar, Icon, Modal, Skeleton, StateBadge, useAsync, useToast } from ".
 import { useSession } from "../session";
 import FileTypeIcon from "../components/FileTypeIcon";
 import { ActivityWidget, CalendarWidget, DateWidget, DocList, HolidaysWidget, SummaryWidget, WeatherWidget } from "../components/OverviewWidgets";
+import { HealthSummary } from "./settings/SecurityCenter";
 import type { DocRow, User, WidgetCfg } from "../types";
 
 function greeting() {
@@ -45,17 +46,18 @@ export const WIDGET_LABELS: Record<string, string> = {
   activity: "Recent activity", review_queue: "Review queue", backup: "Backup status", family: "Family library",
   saved_views: "Saved views", documents: "Documents (count)", members: "Family members (count)",
   expiring: "Expiring in 90 days (count)", storage: "Storage used", review: "Needs review (count)",
+  security: "Security Health",
 };
-export const DEFAULT_WIDGETS = ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity", "review_queue", "backup"];
+export const DEFAULT_WIDGETS = ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity", "review_queue", "backup", "security"];
 const STYLE_LABELS: Record<string, string> = { rect: "Rectangular", compact: "Compact rectangular", circle: "Circular", compact_circle: "Compact circular" };
 const WIDGET_ICON: Record<string, string> = {
   date: "calendar", weather: "cloud-sun", summary: "grid", calendar: "calendar", holidays: "gift", upcoming: "clock", shared: "share",
   recent: "file", activity: "list", review_queue: "eye", backup: "db", family: "users", saved_views: "list",
-  documents: "file", members: "users", expiring: "clock", storage: "db", review: "eye",
+  documents: "file", members: "users", expiring: "clock", storage: "db", review: "eye", security: "shield",
 };
 const LINKS: Record<string, [string, string]> = {
   upcoming: ["/search?expiring_days=90", "View all"], recent: ["/search", "View all"], shared: ["/shared", "View all"],
-  holidays: ["", ""], review_queue: ["/ocr-review", "Open"],
+  holidays: ["", ""], review_queue: ["/ocr-review", "Open"], security: ["/settings/security", "Open"],
 };
 type Limits = Record<string, { min: number; default: number; max: number; circle: boolean; options: string[] }>;
 
@@ -165,6 +167,7 @@ export default function Dashboard() {
       <div className="row">{data.saved_views.map((v: any) => <Link key={v.id} className="btn" to={`/search?${new URLSearchParams(v.query).toString()}`}><Icon name="list" size={16} /> {v.name} <span className="badge neutral">{v.count}</span></Link>)}</div>
     ) : <div className="ov-empty small">Mark a saved view “Show on Overview” to see it here.</div>,
     review_queue: () => data.review.length > 0 ? <DocTable docs={data.review} empty="" /> : (editing ? <div className="ov-empty small">Nothing waits for review.</div> : null),
+    security: () => data.security_health ? <HealthSummary h={data.security_health} compact /> : null,
     backup: () => data.admin ? (
       <div className="row between">
         <div className="row">
@@ -178,7 +181,7 @@ export default function Dashboard() {
     ) : null,
   };
   const shown = order.filter((id) => body[id]);
-  const hidden = Object.keys(WIDGET_LABELS).filter((id) => !shown.includes(id) && body[id] && (id !== "backup" || data.admin));
+  const hidden = Object.keys(WIDGET_LABELS).filter((id) => !shown.includes(id) && body[id] && (id !== "backup" || data.admin) && (id !== "security" || data.security_health !== undefined));
   return (
     <div className="stack" style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
       <div className="page-head">

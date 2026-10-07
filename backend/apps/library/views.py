@@ -672,13 +672,26 @@ def _stream(request, path, content_type, filename, disposition):
 INLINE_SAFE = {"application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp", "text/plain"}
 
 
-def _version_for(request, doc):
+def _version_for(request, doc, *, allow_blocked: bool = False):
     vid = request.query_params.get("version")
     if vid:
-        return get_object_or_404(DocumentVersion, pk=vid, document=doc)
-    if not doc.current_version:
+        v = get_object_or_404(DocumentVersion, pk=vid, document=doc)
+    elif not doc.current_version:
         raise Http404
-    return doc.current_version
+    else:
+        v = doc.current_version
+    if v.av_blocked and not allow_blocked:
+        raise QuarantinedFile()
+    return v
+
+
+class QuarantinedFile(Exception):
+    pass
+
+
+def quarantined_response():
+    return _err("This file is in antivirus quarantine. Preview, download and processing are blocked until the main "
+                "administrator reviews it.", 423, code="quarantined")
 
 
 @api_view(["GET"])
@@ -686,7 +699,10 @@ def _version_for(request, doc):
 def document_file(request, pk):
     download = request.query_params.get("download") == "1"
     doc = get_doc(request, pk, P.DOWNLOAD if download else P.VIEW)
-    v = _version_for(request, doc)
+    try:
+        v = _version_for(request, doc)
+    except QuarantinedFile:
+        return quarantined_response()
     path = storage.resolve_original(v.storage_path)
     if not path.exists():
         return _err("The stored file is missing. Ask the administrator to run the integrity check.", 410)
@@ -703,7 +719,10 @@ def document_file(request, pk):
 @permission_classes([IsActiveAuthenticated])
 def document_preview(request, pk):
     doc = get_doc(request, pk)
-    v = _version_for(request, doc)
+    try:
+        v = _version_for(request, doc)
+    except QuarantinedFile:
+        return quarantined_response()
     rel = v.searchable_path or v.preview_path
     if rel:
         return _stream(request, storage.resolve_derivative(rel), "application/pdf", f"{doc.title}.pdf", "inline")
@@ -717,7 +736,10 @@ def document_preview(request, pk):
 @permission_classes([IsActiveAuthenticated])
 def document_thumbnail(request, pk):
     doc = get_doc(request, pk)
-    v = _version_for(request, doc)
+    try:
+        v = _version_for(request, doc)
+    except QuarantinedFile:
+        raise Http404
     if not v.thumbnail_path:
         raise Http404
     resp = _stream(request, storage.resolve_derivative(v.thumbnail_path), "image/png", "thumb.png", "inline")
@@ -943,6 +965,13 @@ def dashboard(request):
     data["holiday_countries"] = [{"code": c, "name": overview.country_names()[c], "flag": overview.flag(c)} for c in overview.configured_countries()]
     data["weather_enabled"] = bool(cfg.get("weather.enabled"))
     data["layout_limits"] = overview.layout_limits()
+    if request.user.is_main_admin or request.user.is_admin:  # Security Health is for administrators only
+        from apps.security import center
+
+        try:
+            data["security_health"] = center.security_health()
+        except Exception:  # noqa: BLE001 - the Overview must load even if a health source fails
+            data["security_health"] = None
     for v in SavedView.objects.filter(user=request.user, show_on_dashboard=True):
         _rows, total, _ = searchlib.search(ctx, v.query.get("q", ""), v.query, limit=1)
         data["saved_views"].append({**_view_json(v), "count": total})

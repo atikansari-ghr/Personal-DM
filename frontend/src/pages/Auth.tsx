@@ -14,6 +14,12 @@ const GOOGLE_ERRORS: Record<string, string> = {
   google_denied: "Google sign-in was cancelled.",
   google_state: "The Google sign-in attempt expired or was tampered with. Please try again.",
   google_invalid: "Google's response could not be verified. Please try again or contact your administrator.",
+  authentik_disabled: "Sign-in with authentik is not enabled.",
+  authentik_unavailable: "authentik cannot be reached right now. Sign in with your password instead.",
+  authentik_unlinked: "This authentik account is not linked to a family account. Sign in with your password, then link authentik in Settings → My account → Password & security.",
+  authentik_denied: "Sign-in with authentik was cancelled.",
+  authentik_state: "The authentik sign-in attempt expired or was tampered with. Please try again.",
+  authentik_invalid: "authentik's response could not be verified. Please try again or contact your administrator.",
   account_disabled: "This account is disabled. Ask your family administrator.",
   sign_in_first: "Please sign in first.",
 };
@@ -47,6 +53,16 @@ export function AuthFrame({ children }: { children: ReactNode }) {
       <AuthWallpaper b={b} />
       <section className="auth-form">{children}</section>
     </div>
+  );
+}
+
+/** Simple authentik-style mark (local SVG, no external image). */
+export function AuthentikLogo() {
+  return (
+    <svg className="authentik-logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="2" y="2" width="20" height="20" rx="5" fill="#fd4b2d" />
+      <path d="M7 16.5 11.2 6.5h1.6L17 16.5h-2.2l-.9-2.3H10l-.9 2.3H7zm3.7-4.1h2.6L12 9.1l-1.3 3.3z" fill="#fff" />
+    </svg>
   );
 }
 
@@ -137,6 +153,11 @@ export function Login() {
               <Link to="/forgot-password">Forgot password?</Link>
             </div>
             <button className="btn primary" style={{ width: "100%" }} disabled={busy || !username || !password}>Sign in <Icon name="arrow" /></button>
+            {session?.authentik?.enabled && (
+              <a className="btn authentik-btn" style={{ width: "100%", marginTop: "0.7rem" }} href="/api/auth/authentik/start?mode=login">
+                {session.authentik.show_logo && <AuthentikLogo />}{session.authentik.label}
+              </a>
+            )}
             {session?.google_enabled && (
               <a className="btn" style={{ width: "100%", marginTop: "0.7rem" }} href="/api/auth/google/start?mode=login">Sign in with Google</a>
             )}
