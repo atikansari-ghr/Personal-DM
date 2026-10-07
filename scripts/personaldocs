@@ -192,7 +192,7 @@ cmd_antivirus() { # antivirus status|repair|selftest
     repair) with_lock; local rc=0; antivirus_repair || rc=$?
             if [ -L "$CURRENT" ]; then manage antivirus selftest || rc=1; fi
             return $rc;;
-    selftest) python3 "$script" selftest && { [ -L "$CURRENT" ] && manage antivirus selftest; };;
+    selftest) python3 "$script" selftest && { [ ! -L "$CURRENT" ] || manage antivirus selftest; };;
     *) die "usage: personaldocs antivirus status|repair|selftest";;
   esac
 }
