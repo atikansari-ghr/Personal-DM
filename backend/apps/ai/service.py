@@ -194,14 +194,20 @@ def _store_suggestions(doc, data: dict, vocab: dict, folders: dict, job, *, ocr:
         title = str(data.get("title") or "").strip()[:255]
         if title and title != doc.title:
             out.append(("title", title, title, doc.title))
+        from apps.library import doctypes
+
+        allowed = doctypes.allowed_extract_keys(doc)  # a typed document only gets its own template's fields
         for key in ("issue_date", "expiry_date"):
+            if allowed is not None and key not in allowed:
+                continue
             val = _date(data.get(key))
             current = getattr(doc, key)
             if val and val != (current.isoformat() if current else None):
                 out.append((key, val, val, current.isoformat() if current else ""))
         number = re.sub(r"[^A-Za-z0-9\-/ ]", "", str(data.get("document_number") or ""))[:40].strip()
         text = (doc.current_version.text if doc.current_version else "") or ""
-        if number and number.replace(" ", "") in text.replace(" ", ""):  # only numbers that really appear in the text
+        if number and (allowed is None or "document_number" in allowed) \
+                and number.replace(" ", "") in text.replace(" ", ""):  # only numbers that really appear in the text
             out.append(("document_number", number, number, ""))
         summary = str(data.get("summary") or "").strip()[:300]
         if summary:
@@ -254,9 +260,11 @@ def accept(suggestion: AISuggestion, *, user, request=None) -> None:
         if f == "title":
             doc.title, doc.title_is_custom = str(v)[:255], True
             doc.save()
-        elif f == "doc_type":
-            doc.doc_type = DocumentType.objects.filter(name=v).first()
-            doc.save()
+        elif f == "doc_type":  # accepted by a person: same safe change as choosing it by hand (values kept)
+            from apps.library import doctypes
+
+            doctypes.change_type(actor=user, doc=doc, new_type=DocumentType.objects.filter(name=v, archived=False).first(),
+                                 source="ai", request=request)
         elif f == "correspondent":
             doc.correspondent, _ = Correspondent.objects.get_or_create(name=str(v)[:120])
             doc.save()
@@ -265,7 +273,7 @@ def accept(suggestion: AISuggestion, *, user, request=None) -> None:
         elif f == "folder":
             S.move_document(ctx=ctx, actor=user, doc=doc, folder=Folder.objects.get(pk=v))
         elif f in ("issue_date", "expiry_date", "document_number"):
-            S.set_field(actor=user, doc=doc, key=f, value=str(v), confirm=True)  # confirmed by the person accepting it
+            S.set_field(actor=user, doc=doc, key=f, value=str(v), confirm=True, source="ai")  # confirmed by the person accepting it
         elif f == "summary":
             pass  # informational only
         S._history(doc, user, "ai_suggestion_accepted", field=f)

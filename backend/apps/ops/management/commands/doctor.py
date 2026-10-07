@@ -178,5 +178,10 @@ class Command(BaseCommand):
             report("storage below the critical threshold", False, f"{pct:.0f}% used (critical at {crit_pct}%)")
         elif pct >= warn_pct:
             warn("storage", f"{pct:.0f}% used (warning at {warn_pct}%)")
+        from apps.library import doctypes
+
+        r = doctypes.report()
+        info("document types", f"{r['typed']} typed, {r['untyped']} untyped ({r['with_suggestions']} with a suggestion), "
+                               f"{r['unmapped_values']} previous values to review")
         if Path("/run/reboot-required").exists():
             warn("reboot required", "updated system packages need a reboot (Settings → Security → OS updates)")

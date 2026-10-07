@@ -140,7 +140,8 @@ def run_expiry_scan(today: date | None = None) -> dict:
         if doc.renewed_by.filter(archived_at__isnull=True).exists():
             continue
         days = (doc.expiry_date - today).days
-        reached = [t for t in thresholds if days <= t]
+        own = doc.doc_type.reminder_days if doc.doc_type_id and doc.doc_type.reminder_days else None
+        reached = [t for t in (sorted(own) if own else thresholds) if days <= t]  # a type may set its own days
         if not reached:
             continue
         target = min(reached)

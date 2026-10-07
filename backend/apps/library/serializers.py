@@ -56,7 +56,9 @@ def document_row(ctx: P.AccessContext, d: Document, snippet: str | None = None) 
     v = d.current_version
     row = {
         "id": str(d.id), "title": d.title, "folder": str(d.folder_id), "owner": user_mini(d.owner),
-        "type": {"id": d.doc_type_id, "name": d.doc_type.name} if d.doc_type_id else None,
+        "type": {"id": d.doc_type_id, "name": d.doc_type.name, "emoji": d.doc_type.emoji,
+                 "confirmed": d.type_confirmed} if d.doc_type_id else None,
+        "type_suggested": bool(d.type_suggestions) and not d.type_confirmed,
         "state": d.state, "expiry_date": d.expiry_date, "issue_date": d.issue_date, "expiry": expiry_status(d),
         "no_expiry": d.no_expiry, "ocr_state": d.ocr_state, "av_status": v.av_status if v else None,
         "created_at": d.created_at, "archived": d.archived_at is not None,
@@ -69,12 +71,54 @@ def document_row(ctx: P.AccessContext, d: Document, snippet: str | None = None) 
     return row
 
 
-def field_json(f: DocumentField) -> dict:
+def field_json(f: DocumentField, labels: dict | None = None) -> dict:
+    from .doctypes import SOURCE_LABELS, standard_label
+
+    labels = labels or {}
     return {
         "key": f.key, "value": mask(f.key, f.value), "sensitive": f.key in DocumentField.SENSITIVE,
-        "status": f.status, "source": f.source, "confidence": f.confidence, "flags": f.flags,
+        "label": labels.get(f.key) or f.label or standard_label(f.key.removeprefix("custom:")),
+        "status": f.status, "source": f.source, "source_label": SOURCE_LABELS.get(f.source, f.source),
+        "scope": f.scope, "overridden": f.overridden, "previous_type": f.previous_type,
+        "confidence": f.confidence, "flags": f.flags,
         "excerpt": f.source_excerpt, "proposed_value": mask(f.key, f.proposed_value) if f.proposed_value else "",
-        "confirmed_at": f.confirmed_at,
+        "confirmed_at": f.confirmed_at, "updated_at": f.updated_at,
+        "confirmed_by": f.confirmed_by.display_name if f.confirmed_by_id and f.confirmed_by else None,
+    }
+
+
+def _classification(ctx: P.AccessContext, d: Document) -> dict:
+    """Type, its template, values grouped by template / additional / previous, and the Details status."""
+    from . import doctypes
+    from .models import CustomFieldDef
+
+    template = doctypes.active_fields(d.doc_type) if d.doc_type_id else []
+    labels = {f.key: f.label for f in template}
+    labels.update({f"custom:{c.key}": c.label for c in CustomFieldDef.objects.all()})
+    fields = list(d.fields.select_related("confirmed_by").order_by("key"))
+    tkeys = {f.key for f in template}
+    out_fields = []
+    for f in fields:
+        j = field_json(f, labels)
+        if f.scope == DocumentField.UNMAPPED:
+            j["group"] = "unmapped"
+        elif f.scope == DocumentField.TYPE and (f.key in tkeys or not template):
+            j["group"] = "template"
+        else:
+            j["group"] = "additional"
+        out_fields.append(j)
+    order = {f.key: f.order for f in template}
+    out_fields.sort(key=lambda j: (order.get(j["key"], 10_000), j["label"].lower()))
+    is_admin = bool(getattr(ctx.user, "is_main_admin", False))
+    return {
+        "fields": out_fields,
+        "template": [{"key": f.key, "label": f.label, "field_type": f.field_type, "required": f.required,
+                      "help_text": f.help_text, "choices": f.choices, "role": f.role,
+                      "sensitive": f.key in DocumentField.SENSITIVE} for f in template],
+        "type_info": {"source": d.type_source, "source_label": doctypes.SOURCE_LABELS.get(d.type_source, ""),
+                      "confirmed": d.type_confirmed, "suggestions": doctypes.suggestions_json(d)},
+        "details_status": doctypes.details_status(d),
+        "can_manage_types": is_admin,
     }
 
 
@@ -87,7 +131,7 @@ def document_detail(ctx: P.AccessContext, d: Document) -> dict:
         "tags": [{"id": t.id, "name": t.name, "color": t.color} for t in d.tags.all()],
         "review_flags": d.review_flags,
         "inherit_permissions": d.inherit_permissions,
-        "fields": [field_json(f) for f in d.fields.all().order_by("key")],
+        **_classification(ctx, d),
         "versions": [version_json(v) for v in d.versions.select_related("created_by")],
         "current_version": version_json(d.current_version) if d.current_version else None,
         "path": [{"id": str(f.id), "name": f.name, "emoji": f.emoji} for f in _visible_path(ctx, d.folder)],
@@ -132,4 +176,6 @@ def folder_json(ctx: P.AccessContext, f: Folder, counts: dict | None = None, pat
         "path_only": path_only, "count": (counts or {}).get(f.id, 0), "archived": f.archived_at is not None,
         # Identity of a member's personal area (name + avatar) for the tree; never used for authorisation.
         "owner_user": user_mini(f.owner) if f.kind == Folder.PERSONAL_ROOT and f.owner_id else None,
+        "suggested_type": ({"id": f.suggested_type_id, "name": f.suggested_type.name}
+                           if f.suggested_type_id and not path_only else None),
     }

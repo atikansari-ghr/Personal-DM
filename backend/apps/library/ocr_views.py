@@ -104,8 +104,13 @@ def document_ocr_reviewed(request, pk):
 def ocr_review_queue(request):
     """Documents waiting for review that the person may edit. Nothing else is listed or counted."""
     ctx = _ctx(request)
-    qs = (ctx.documents(P.EDIT).filter(Q(ocr_state="needs_review") | Q(ocr_state="failed"))
-          .select_related("owner", "doc_type", "current_version").order_by("-ocr_updated_at")[:200])
+    qs = ctx.documents(P.EDIT).filter(Q(ocr_state="needs_review") | Q(ocr_state="failed"))
+    t = request.query_params.get("type")
+    if t == "none":
+        qs = qs.filter(doc_type__isnull=True)
+    elif t and t.isdigit():
+        qs = qs.filter(doc_type_id=int(t))
+    qs = qs.select_related("owner", "doc_type", "current_version").order_by("-ocr_updated_at")[:200]
     items = []
     for d in qs:
         proposed = list(d.fields.filter(status=DocumentField.PROPOSED).order_by("key"))
@@ -156,6 +161,9 @@ def ocr_types(request):
     if err:
         return _err(err)
     t.save()
+    from . import doctypes
+
+    doctypes.ensure_template(t, extra_keys=t.ocr_fields)
     audit.record("settings.ocr_type_create", request=request, target_type="document_type", target_id=str(t.id), name=name)
     return Response(_type_json(t), status=201)
 
@@ -176,6 +184,13 @@ def _apply_type(t: DocumentType, d) -> str:
         if any(f not in DocumentField.STANDARD for f in fields):
             return "Unknown structured field."
         t.ocr_fields = list(dict.fromkeys(fields))
+        if t.pk:  # the type template is the source of truth: OCR may suggest exactly these fields
+            from . import doctypes
+
+            doctypes.ensure_template(t, extra_keys=t.ocr_fields)
+            t.template_fields.filter(key__in=t.ocr_fields).update(extract=True, enabled=True)
+            t.template_fields.exclude(key__in=t.ocr_fields).filter(key__in=DocumentField.STANDARD).update(extract=False)
+            t.ocr_fields = list(dict.fromkeys(fields))
     if "ocr_ai_allowed" in d:
         t.ocr_ai_allowed = bool(d["ocr_ai_allowed"])
     if "archived" in d:

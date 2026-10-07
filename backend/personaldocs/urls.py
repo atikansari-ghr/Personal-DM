@@ -10,7 +10,7 @@ from apps.security import views_av as avv
 from apps.security import views_center as sc
 from apps.core import overview_views as ov
 from apps.core import views as core
-from apps.library import export, ocr_views as ocrv, views as lib, views_import as imp, views_share as share
+from apps.library import export, ocr_views as ocrv, views as lib, views_import as imp, views_share as share, views_types as vt
 from apps.mailimport import views as mail
 from apps.notify import views as notify
 from apps.ops import views as ops
@@ -143,6 +143,15 @@ api = [
     path("documents/<uuid:pk>/versions/<uuid:vid>/current", lib.document_set_version),
     path("documents/<uuid:pk>/renew", lib.document_renew),
     path("documents/<uuid:pk>/fields", lib.document_fields),
+    path("documents/<uuid:pk>/type", vt.document_type),
+    path("documents/<uuid:pk>/remap-ocr", vt.document_remap_ocr),
+    path("documents/bulk-type", vt.bulk_type),
+    path("document-types", vt.types_list),
+    path("document-types/admin", vt.types_admin),
+    path("document-types/review", vt.type_review),
+    path("document-types/<int:pk>", vt.type_admin_detail),
+    path("document-types/<int:pk>/fields", vt.type_fields),
+    path("document-types/<int:pk>/fields/<int:fid>", vt.type_field_detail),
     path("documents/<uuid:pk>/fields/<str:key>/reveal", lib.field_reveal),
     path("documents/<uuid:pk>/archive", lib.document_archive),
     path("documents/<uuid:pk>/restore", lib.document_restore),
