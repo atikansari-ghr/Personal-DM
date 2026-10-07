@@ -61,3 +61,34 @@ async function receiveShare(request: Request): Promise<Response> {
   }
   return Response.redirect("/upload-shared?received=" + files.length, 303);
 }
+
+// ------------------------------------------------------------------ Web Push (Change Set O)
+// The server sends only a short title/body and an application path; nothing sensitive is shown on the lock screen.
+sw.addEventListener("push", (event) => {
+  let data: { title?: string; body?: string; url?: string; tag?: string; severity?: string } = {};
+  try { data = event.data?.json() ?? {}; } catch { data = { body: event.data?.text() }; }
+  const title = data.title || "Personal Documents";
+  event.waitUntil(sw.registration.showNotification(title, {
+    body: data.body || "Open the app to read the notification.",
+    icon: "/icon-192.png", badge: "/icon-192.png", tag: data.tag || undefined,
+    requireInteraction: data.severity === "critical",
+    data: { url: typeof data.url === "string" && data.url.startsWith("/") && !data.url.startsWith("//") ? data.url : "/notifications" },
+  }));
+});
+
+sw.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const path: string = event.notification.data?.url || "/notifications";
+  const target = new URL(path, sw.location.origin);
+  if (target.origin !== sw.location.origin) return; // only pages of this app; sign-in and permissions apply there
+  event.waitUntil((async () => {
+    const wins = await sw.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const w of wins) {
+      if (new URL(w.url).origin === sw.location.origin && "focus" in w) {
+        await (w as WindowClient).navigate(target.href).catch(() => undefined);
+        return (w as WindowClient).focus();
+      }
+    }
+    return sw.clients.openWindow(target.href);
+  })());
+});

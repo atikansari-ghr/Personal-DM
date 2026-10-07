@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import OcrTypes from "./OcrTypes";
 import DocumentTypesAdmin from "./DocumentTypes";
+import { DeliveryHistory, NotificationTemplates } from "./NotificationTemplates";
 import { api, formatBytes, formatDateTime } from "../../api";
 import SettingsForm from "../../components/SettingsForm";
 import AuthentikAdmin from "./Authentik";
@@ -83,27 +84,18 @@ function DeliveryProblems() {
 
 export function NotificationsAdmin() {
   const toast = useToast();
-  const preview = useAsync(() => api<any>("notifications/preview"), []);
-  const hist = useAsync(() => api<{ deliveries: any[] }>("notifications/deliveries"), []);
   return (
     <div className="stack">
       <SettingsForm section="notifications" title="Notification policy">
         <div className="alert small">Expiry reminders go to the document owner and the head of their reminder group (plus delegates with “receive reminders”), once per threshold, and stop after the expiry day. Only confirmed expiry dates count. Critical notifications cannot be turned off by family members; everything else is chosen by each person under My account → Notifications.</div>
       </SettingsForm>
       <DeliveryProblems />
-      <div className="grid two-col">
-        <div className="card">
-          <h2>Message preview</h2>
-          {preview.data && <><p><strong>{preview.data.subject}</strong></p><pre className="preview-text small">{preview.data.body}</pre><p className="small muted">{preview.data.note}</p></>}
-          <button className="btn" onClick={() => api("notifications/run", { method: "POST" }).then((r) => { toast(`${r.reminders} reminder(s) queued, ${r.sent} delivered`); hist.reload(); })}>Run reminder check now</button>
-        </div>
-        <div className="card">
-          <h2>Delivery history</h2>
-          {hist.data ? hist.data.deliveries.length === 0 ? <p className="muted">No external deliveries yet.</p> : (
-            <table className="responsive"><tbody>{hist.data.deliveries.slice(0, 30).map((d) => <tr key={d.id}><td className="small">{formatDateTime(d.created_at)}<br />{d.user} · {d.channel}</td><td><span className={`badge ${d.status === "sent" ? "ok" : d.status === "failed" ? "danger" : "neutral"}`}>{d.status}</span>{d.error && <div className="small muted">{d.error}</div>}</td></tr>)}</tbody></table>
-          ) : <Skeleton />}
-        </div>
+      <NotificationTemplates />
+      <div className="card row between">
+        <div><h2>Reminder check</h2><p className="small muted">Reminders are checked daily at the send time. Run the check now to queue due reminders and deliver waiting messages.</p></div>
+        <button className="btn" onClick={() => api("notifications/run", { method: "POST" }).then((r) => toast(`${r.reminders} reminder(s) queued, ${r.sent} delivered`))}>Run reminder check now</button>
       </div>
+      <DeliveryHistory />
     </div>
   );
 }
