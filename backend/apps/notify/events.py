@@ -76,7 +76,9 @@ def default_actions(event: str, *, link: str = "", context: dict | None = None) 
         acts.append(Action("ocr_review", "OCR review", "/ocr-review"))
     elif event in ("security.new_ip", "security.new_country", "account.login", "security.passkey_added",
                    "security.passkey_removed", "security.totp_enabled", "security.totp_disabled", "security.recovery_codes",
-                   "security.passwordless", "security.admin_recovery", "security.authentik"):
+                   "security.passwordless", "security.admin_recovery", "security.authentik", "security.google",
+                   "security.password_reset_requested", "security.password_admin_reset", "security.temporary_password",
+                   "security.password_changed", "security.account_locked"):
         acts += [Action("review_activity", "Review Activity", "/settings/account?tab=security", primary=True),
                  Action("sessions", "Manage Sessions", "/settings/account?tab=security"),
                  Action("change_password", "Change Password", "/settings/account?tab=security")]
@@ -274,3 +276,10 @@ def authentik_link_changed(user, *, linked: bool, by_admin: bool = False) -> Non
            summary=("An administrator removed the link. " if by_admin else "")
            + ("You can now sign in with authentik." if linked else "Sign in with your password or passkey."),
            guidance=["If this was not you, change your password and sign out other devices."])
+
+
+def google_link_changed(user, *, linked: bool) -> None:
+    what = "linked to" if linked else "unlinked from"
+    notify(user, "security.google", kind="security", key=f"google:{user.pk}:{linked}:{_stamp()}",
+           title=f"Your account was {what} a Google account", severity="warning",
+           summary="You can now sign in with Google." if linked else "Sign in with your password or passkey.")

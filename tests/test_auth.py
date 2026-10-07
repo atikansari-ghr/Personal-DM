@@ -33,11 +33,16 @@ def test_password_reset_single_use_and_expiring(family):
     son1.email = "son1@example.invalid"
     son1.save()
     sent = {}
-    with mock.patch("apps.notify.mailer.send_mail_now", side_effect=lambda to, s, b: sent.update(body=b)):
+    with mock.patch("apps.notify.mailer.send_mail_now", side_effect=lambda to, s, b, html="": sent.update(body=b, html=html)):
         r = APIClient().post("/api/auth/password/forgot", {"username": "son1"}, format="json")
         r2 = APIClient().post("/api/auth/password/forgot", {"username": "nobody"}, format="json")
     assert r.json() == r2.json()  # no account enumeration
     token = sent["body"].split("token=")[1].split()[0]
+    assert f"token={token}" in sent["html"] and "Reset password" in sent["html"]  # branded HTML part with the button
+    from apps.notify.models import Notification, OutboxMessage
+
+    stored = str(list(Notification.objects.values())) + str(list(OutboxMessage.objects.values()))
+    assert token not in stored  # the link is sent directly, never stored
     c = APIClient()
     assert c.post("/api/auth/password/reset", {"token": token, "password": "Brand-New-Sample-1"}, format="json").status_code == 200
     assert c.post("/api/auth/password/reset", {"token": token, "password": "Other-New-Sample-2"}, format="json").status_code == 400

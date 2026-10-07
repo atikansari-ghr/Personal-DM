@@ -118,11 +118,61 @@ function ReleaseDialog({ f, onClose, onDone }: { f: any; onClose: () => void; on
   );
 }
 
+const AV_STATE_CLASS: Record<string, string> = { healthy: "ok", degraded: "soon", unavailable: "danger", error: "danger", disabled: "neutral" };
+const CHECK_ICON: Record<string, string> = { ok: "✔", warn: "!", fail: "✘", info: "•" };
+
+/** Diagnose (read-only, as the web service account) and Repair (fixed root steps run by the host helper). */
+function AntivirusDiagnose({ onClose }: { onClose: () => void }) {
+  const toast = useToast();
+  const { data, reload, error } = useAsync(() => api<any>("security/antivirus/diagnose"), []);
+  const repairing = ["requested", "running"].includes(data?.repair?.state);
+  usePoll(reload, repairing);
+  const d = data?.diagnosis;
+  const repair = async () => {
+    try { await api("security/antivirus/repair", { method: "POST" }); toast("Repair requested; it can take a few minutes while ClamAV loads its signatures"); reload(); }
+    catch (e: any) { toast(e.message, "error"); }
+  };
+  return (
+    <section className="card" aria-live="polite">
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <h2>Diagnose / Repair antivirus</h2>
+        <button className="icon-btn" aria-label="Close diagnosis" onClick={onClose}><Icon name="x" size={18} /></button>
+      </div>
+      {error && <p className="error-text">{error}</p>}
+      {!d ? <Skeleton lines={6} /> : <>
+        <p>Result: <span className={`badge ${AV_STATE_CLASS[d.status] || "neutral"}`}>{d.status}</span> · socket <code>{d.socket}</code></p>
+        {d.cause && <div className="alert warn"><strong>Detected issue:</strong> {d.cause}</div>}
+        <ul className="plain-list diag-list">
+          {d.checks.map((c: any) => (
+            <li key={c.key} className={`diag-${c.state}`}><span aria-hidden="true">{CHECK_ICON[c.state]}</span> <strong>{c.label}</strong>: <span className="small">{c.detail}</span>
+              {c.fix && c.state !== "ok" && <div className="small muted">Fix: <code>{c.fix}</code></div>}</li>
+          ))}
+        </ul>
+        <p className="small muted">These checks run as the Personal DM service account. Service and journal details need root; the repair below (or <code>{data.manual_fix}</code> on the server) checks those too.</p>
+        <div className="row">
+          <button className="btn small primary" disabled={repairing || !data.helper_installed} onClick={repair}><Icon name="settings" size={16} /> {repairing ? "Repair running…" : "Repair antivirus"}</button>
+          <button className="btn small ghost" onClick={reload}>Diagnose again</button>
+        </div>
+        {!data.helper_installed && <p className="small">The host helper is not installed, so the app cannot run the repair. On the server run: <code>{data.manual_fix}</code></p>}
+        {data.repair?.state && (
+          <div style={{ marginTop: ".8rem" }}>
+            <h3>Last repair <span className={`badge ${data.repair.state === "done" ? "ok" : data.repair.state === "failed" ? "danger" : "soon"}`}>{data.repair.state}</span></h3>
+            {data.repair.finished_at && <p className="small muted">{formatDateTime(data.repair.finished_at)}</p>}
+            {(data.repair.steps || []).length > 0 && <ol className="small">{data.repair.steps.map((s: any, i: number) => <li key={i}>{s.ok ? "✔" : "✘"} {s.step}: {s.detail}</li>)}</ol>}
+            {data.repair.error && <p className="error-text small">{data.repair.error} — if it cannot be repaired automatically, run <code>{data.manual_fix}</code> on the server and see Help → Antivirus.</p>}
+          </div>
+        )}
+      </>}
+    </section>
+  );
+}
+
 function AntivirusView() {
   const toast = useToast();
   const { data, reload } = useAsync(() => api<any>("security/antivirus"), []);
   const [release, setRelease] = useState<any>(null);
   const [del, setDel] = useState<any>(null);
+  const [diag, setDiag] = useState(false);
   const upd = useAsync(() => api<any>("security/antivirus/update/status"), []);
   usePoll(() => { reload(); upd.reload(); }, !!(data?.active_run?.status === "running" || ["requested", "running"].includes(upd.data?.state)));
   if (!data) return <Skeleton lines={8} />;
@@ -134,9 +184,11 @@ function AntivirusView() {
       <section className="card">
         <h2>Antivirus (ClamAV) <HelpTip text="New files are scanned in the background by the local ClamAV daemon. Files stay usable while they are scanned." link="/help/antivirus" /></h2>
         <div className="kv2">
-          <span className="k">Status</span><span>{h.status === "ok" ? <span className="badge ok">Running</span> : h.status === "disabled" ? <span className="badge neutral">Turned off</span> : h.status === "unavailable" ? <span className="badge danger">Unavailable</span> : <span className="badge soon">Definitions out of date</span>} {h.error && <span className="small muted">{h.error}</span>}</span>
-          <span className="k">Engine</span><span>{h.engine || "—"}</span>
+          <span className="k">Status</span><span><span className={`badge ${AV_STATE_CLASS[h.state] || "neutral"}`}>{h.state_label || h.status}</span>{h.state === "degraded" && <span className="small muted"> Definitions out of date</span>} {h.error && <span className="small muted">{h.error}</span>}</span>
+          <span className="k">Socket</span><span><code>{h.socket}</code></span>
+          <span className="k">Engine</span><span>{h.engine || "—"}{h.metadata_stale && h.engine && <span className="small muted"> (last seen {h.last_ok_at ? formatDateTime(h.last_ok_at) : "earlier"}; not proof that scanning works)</span>}</span>
           <span className="k">Signatures</span><span>{data.signatures.version || "—"}{data.signatures.date && <> · {formatDateTime(data.signatures.date)} ({data.signatures.age_days} days old)</>}</span>
+          <span className="k">Self-test</span><span>{h.self_test ? <>{h.self_test.ok ? <span className="badge ok">Passed</span> : <span className="badge danger">Failed</span>} <span className="small muted">{formatDateTime(h.self_test.at)} · {h.self_test.detail}</span></> : <span className="small muted">Not run yet</span>}</span>
           <span className="k">Automatic updates</span><span>{data.signatures.updater}</span>
           <span className="k">Last manual update</span><span>{upd.data?.state ? <>{upd.data.state}{upd.data.finished_at && ` · ${formatDateTime(upd.data.finished_at)}`}{upd.data.error && <span className="error-text small"> {upd.data.error}</span>}</> : "—"}</span>
           <span className="k">Scan size limit</span><span>{data.max_scan_mb} MB</span>
@@ -146,9 +198,12 @@ function AntivirusView() {
           <button className="btn small" onClick={() => act(() => api("security/antivirus/update", { method: "POST" }), "Signature update requested")}><Icon name="refresh" size={16} /> Update now</button>
           <button className="btn small primary" disabled={!!run} onClick={() => act(() => api("security/antivirus/scan", { body: {} }), "Library scan started")}><Icon name="shield" size={16} /> Scan entire existing library</button>
           <button className="btn small ghost" onClick={() => act(() => api("security/antivirus?refresh=1"), "Status refreshed")}>Refresh status</button>
+          <button className="btn small" disabled={h.state === "disabled"} onClick={() => act(async () => { const r = await api<any>("security/antivirus/selftest", { method: "POST" }); if (!r.ok) throw new Error(`Self-test failed: ${r.detail}`); }, "Self-test passed: clean file Clean, EICAR detected")}><Icon name="check" size={16} /> Run self-test</button>
+          <button className={`btn small ${["unavailable", "error"].includes(h.state) ? "primary" : ""}`} onClick={() => setDiag(true)}><Icon name="settings" size={16} /> Diagnose / Repair</button>
         </div>
         <p className="small muted" style={{ marginTop: ".5rem" }}>{data.archive_note}</p>
       </section>
+      {diag && <AntivirusDiagnose onClose={() => { setDiag(false); reload(); }} />}
       {run && (
         <section className="card">
           <h2>Library scan {run.status === "paused" && <span className="badge soon">Paused</span>}</h2>

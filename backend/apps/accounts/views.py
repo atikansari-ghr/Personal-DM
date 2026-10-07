@@ -20,7 +20,7 @@ from apps.security import login_audit
 from . import passkeys as PK
 from . import photos
 from . import services as S
-from .auth import IsActiveAuthenticated, IsMainAdmin
+from .auth import IsActiveAuthenticated, IsAdministrator, IsMainAdmin
 from .models import (DELEGATION_SCOPES, Delegation, FamilyGroup, GroupMembership, PasswordResetToken, SetupState, User,
                      WebAuthnCredential)
 
@@ -112,7 +112,8 @@ def session_state(request):
         "pending_2fa": bool(request.session.get("pending_2fa")),
         "pending_methods": (request.session.get("pending_2fa") or {}).get("methods", []),
         "passkeys_enabled": bool(config.get("auth.allow_passkeys")),
-        "passwordless_enabled": bool(config.get("auth.allow_passkeys") and config.get("auth.allow_passwordless")),
+        "passwordless_enabled": PK.passwordless_allowed(),
+        "passkey_mode": config.get("auth.passkey_mode") if config.get("auth.allow_passkeys") else "off",
         "totp_allowed": bool(config.get("auth.allow_totp")),
         "user": None,
     }
@@ -148,10 +149,18 @@ def login_view(request):
         audit.record("auth.login", request=request, outcome="denied", actor_label=username, reason="rate_limited")
         login_audit.record(request, result="denied", username=username, method="password", reason="rate_limited")
         return _fail("Too many attempts. Please wait a few minutes and try again.", 429)
+    if "@" in username and not User.objects.filter(username=username).exists():
+        by_email = User.objects.filter(email__iexact=username, is_active=True)
+        if by_email.count() == 1:  # email sign-in only when the address is unambiguous
+            username = by_email.first().username
     user = authenticate(request, username=username, password=password)
     if user is None or not user.is_active:
         for b in buckets:
             ratelimit.hit(b)
+        if ratelimit.too_many(buckets[0], limit, 900):
+            from apps.security import alerts
+
+            alerts.account_locked(username, request)
         audit.record("auth.login", request=request, outcome="failure", actor_label=username)
         login_audit.record(request, result="failure", username=username, method="password",
                            reason="disabled_account" if user is not None else "bad_credentials")
@@ -209,7 +218,10 @@ def logout_view(request):
 @api_view(["POST"])
 @permission_classes([IsActiveAuthenticated])
 def change_password(request):
+    from . import password_reset as PR
+
     user = request.user
+    was_temporary = user.must_change_password
     if not user.check_password(request.data.get("current_password") or ""):
         audit.record("auth.password_change", request=request, outcome="failure")
         return _fail("Your current password is incorrect.")
@@ -222,7 +234,8 @@ def change_password(request):
     from django.contrib.auth import update_session_auth_hash
 
     update_session_auth_hash(request, user)
-    audit.record("auth.password_change", request=request)
+    audit.record("auth.password_change", request=request, replaced_temporary=was_temporary)
+    PR.password_changed(user, how="temporary" if was_temporary else "change", request=request)
     return Response({"status": "ok"})
 
 
@@ -232,6 +245,8 @@ change_password.cls.allow_password_change_pending = True
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def forgot_password(request):
+    from . import password_reset as PR
+
     ident = (request.data.get("username") or "").strip().lower()[:254]
     ip = audit.client_ip(request) or "unknown"
     if not ratelimit.too_many(f"forgot:{ip}", 5, 3600) and ident:
@@ -239,18 +254,12 @@ def forgot_password(request):
         user = User.objects.filter(is_active=True).filter(username=ident).first() or \
             User.objects.filter(is_active=True, email__iexact=ident).first()
         if user and user.email and config.get("smtp.enabled"):
-            token = crypto.token_urlsafe(32)
-            PasswordResetToken.objects.create(user=user, token_hash=crypto.hash_token(token),
-                                              expires_at=timezone.now() + timedelta(minutes=int(config.get("auth.reset_token_minutes"))))
-            from apps.notify.mailer import send_mail_now
-
-            link = f"{settings.PUBLIC_ORIGIN}/reset-password?token={token}"
             try:
-                send_mail_now(user.email, f"{config.get('general.app_name')}: password reset",
-                              f"Hello {user.display_name},\n\nUse this link within {config.get('auth.reset_token_minutes')} minutes to set a new password:\n{link}\n\nIf you did not ask for this, ignore this email.")
+                PR.send_reset_email(user)
                 audit.record("auth.reset_requested", request=request, actor=None, target=user, subject_user=user)
-            except Exception:  # noqa: BLE001
-                audit.record("auth.reset_requested", request=request, outcome="failure", target=user, reason="smtp_error")
+            except Exception as exc:  # noqa: BLE001
+                audit.record("auth.reset_requested", request=request, outcome="failure", target=user,
+                             reason="https_required" if "https" in str(exc) else "smtp_error")
     # Always the same answer so accounts cannot be enumerated.
     return Response({"status": "ok", "message": "If the account has a registered email address, a reset link has been sent. Otherwise ask your family administrator for help."})
 
@@ -258,18 +267,22 @@ def forgot_password(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def reset_password(request):
+    from . import password_reset as PR
+
     token = request.data.get("token") or ""
     row = PasswordResetToken.objects.select_related("user").filter(token_hash=crypto.hash_token(token)).first()
     if row is None or not row.valid() or not row.user.is_active:
-        return _fail("This reset link is invalid or has expired.")
+        return _fail("This reset link is invalid, was already used or has expired. Ask for a new one.")
     try:
         with transaction.atomic():
+            # set_password marks every unused token (this one included) as used and signs out other sessions
             S.set_password(row.user, request.data.get("password") or "", temporary=False)
             row.used_at = timezone.now()
             row.save(update_fields=["used_at"])
     except S.AccountError as exc:
         return _fail(str(exc))
     audit.record("auth.password_reset", request=request, actor=row.user, subject_user=row.user)
+    PR.password_changed(row.user, how="reset_link", request=request)
     return Response({"status": "ok"})
 
 
@@ -452,9 +465,9 @@ def _visible_member_ids(user: User):
 @permission_classes([IsActiveAuthenticated])
 def members(request):
     if request.method == "GET":
-        ids = _visible_member_ids(request.user)
+        ids = None if request.user.is_admin else _visible_member_ids(request.user)
         qs = User.objects.all() if ids is None else User.objects.filter(pk__in=ids, is_active=True)
-        full = request.user.is_main_admin
+        full = request.user.is_main_admin or request.user.is_admin  # administrators manage passwords
         return Response({"members": [user_json(u, full=full or u.pk == request.user.pk) for u in qs]})
     if not request.user.is_main_admin:
         raise PermissionDenied("Only the main administrator can add family members.")
@@ -528,16 +541,40 @@ def member_detail(request, pk):
 
 
 @api_view(["POST"])
-@permission_classes([IsMainAdmin])
+@permission_classes([IsAdministrator])
 def member_reset_password(request, pk):
+    """Admin -> Users -> <User> -> Security -> Reset Password.
+
+    method "temporary" (default): a strong temporary password returned ONCE in this response (only its hash is stored;
+    never emailed); the person must change it at the next sign-in; sessions are revoked unless revoke_sessions=false.
+    method "email": send the branded single-use reset link to the person's email address."""
+    from . import password_reset as PR
+
+    if not recently_verified(request):
+        return _fail("Please confirm it's you first.", 403, code="reauth_required")
     u = get_object_or_404(User, pk=pk)
-    password = request.data.get("password") or S.generate_password()
+    method = request.data.get("method") or "temporary"
     try:
-        S.set_password(u, password, temporary=True)
+        if method == "email":
+            PR.admin_send_reset_email(request.user, u, request=request)
+            return Response({"status": "sent", "email": _mask_email(u.email)})
+        if method != "temporary":
+            return _fail("Unknown reset method.")
+        password = PR.admin_temporary_password(request.user, u, request=request)
+    except PR.ResetError as exc:
+        return _fail(str(exc), exc.status)
     except S.AccountError as exc:
         return _fail(str(exc))
-    audit.record("family.password_reset_by_admin", request=request, target=u, subject_user=u)
-    return Response({"temporary_password": password if not request.data.get("password") else None})
+    resp = Response({"temporary_password": password, "shown_once": True, "must_change_at_next_sign_in": True})
+    resp["Cache-Control"] = "no-store"
+    return resp
+
+
+
+
+def _mask_email(addr: str) -> str:
+    name, _, domain = (addr or "").partition("@")
+    return (name[:1] + "•••@" + domain) if domain else ""
 
 
 @api_view(["POST"])
@@ -716,7 +753,7 @@ def _pending_user(request):
 def passkey_login_options(request):
     purpose = request.data.get("purpose", "2fa")
     if purpose == "passwordless":
-        if not (config.get("auth.allow_passkeys") and config.get("auth.allow_passwordless")):
+        if not PK.passwordless_allowed():
             return _fail("Passwordless sign-in is not enabled.", 403)
         return Response(PK.authentication_options(request.session, user=None, purpose="passwordless"))
     user, _pending = _pending_user(request)
@@ -738,7 +775,7 @@ def passkey_login_verify(request):
         login_audit.record(request, result="denied", method="passkey", reason="rate_limited")
         return _fail("Too many attempts. Please wait a few minutes and try again.", 429)
     if purpose == "passwordless":
-        if not (config.get("auth.allow_passkeys") and config.get("auth.allow_passwordless")):
+        if not PK.passwordless_allowed():
             return _fail("Passwordless sign-in is not enabled.", 403)
         try:
             row = PK.authenticate(request.session, credential, purpose="passwordless")
@@ -749,7 +786,10 @@ def passkey_login_verify(request):
         user = row.user
         if not user.is_active or not user.passwordless_enabled:
             login_audit.record(request, result="denied", user=user, method="passkey", reason="passwordless_off")
-            return _fail("Passwordless sign-in is not turned on for this account. Sign in with your password.", 403)
+            return _fail("Passwordless sign-in is turned off for this account. Sign in with your password, then turn it on in "
+                         "My account → Security → Passkeys.", 403)
+        if not row.discoverable:
+            type(row).objects.filter(pk=row.pk).update(discoverable=True)
         _complete_login(request, user, "passkey", True)
         return Response({"status": "ok", "must_change_password": user.must_change_password})
     user, pending = _pending_user(request)
@@ -797,7 +837,7 @@ def my_passkeys(request):
     user = request.user
     if request.method == "GET":
         return Response({"passkeys": [passkey_json(c) for c in PK.active(user)], "rp_id": PK.rp_id(),
-                         "allowed": bool(config.get("auth.allow_passkeys")), "passwordless_allowed": bool(config.get("auth.allow_passwordless")),
+                         "allowed": bool(config.get("auth.allow_passkeys")), "passwordless_allowed": PK.passwordless_allowed(), "passkey_mode": config.get("auth.passkey_mode"),
                          "passwordless_enabled": user.passwordless_enabled})
     if not config.get("auth.allow_passkeys"):
         return _fail("Passkeys are turned off by the administrator.", 403)
@@ -817,7 +857,15 @@ def my_passkeys(request):
     from apps.security import alerts
 
     alerts.account_security(user, f"New passkey “{row.name}” registered", event="passkey_added")
-    return Response({"passkey": passkey_json(row), "recovery_codes": codes}, status=201)
+    # Passwordless mode: a compatible (discoverable) passkey turns passwordless sign-in on for the account by default.
+    # The person can turn it off again in My account → Security → Passkeys.
+    turned_on = False
+    if PK.passwordless_allowed() and row.discoverable and not user.passwordless_enabled:
+        user.passwordless_enabled = turned_on = True
+        user.save(update_fields=["passwordless_enabled"])
+        audit.record("account.passwordless", request=request, enabled=True, reason="passkey_registered")
+    return Response({"passkey": passkey_json(row), "recovery_codes": codes, "passwordless_enabled": user.passwordless_enabled,
+                     "passwordless_turned_on": turned_on}, status=201)
 
 
 my_passkeys.cls.allow_2fa_setup_pending = True
@@ -867,8 +915,8 @@ def my_passwordless(request):
     if not recently_verified(request):
         return _fail("Please confirm it's you first.", 403, code="reauth_required")
     if enabled:
-        if not (config.get("auth.allow_passkeys") and config.get("auth.allow_passwordless")):
-            return _fail("Passwordless sign-in is not allowed in this installation.", 403)
+        if not PK.passwordless_allowed():
+            return _fail("Passwordless sign-in is not allowed in this installation (Password + Passkey mode).", 403)
         if not PK.active(user).filter(discoverable=True).exists():
             return _fail("Register a passkey that supports passwordless sign-in first (most phones and computers do).")
     user.passwordless_enabled = enabled

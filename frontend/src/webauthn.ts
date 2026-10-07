@@ -37,13 +37,23 @@ export async function createPasskey(options: any): Promise<any> {
   };
 }
 
-export async function getPasskey(options: any): Promise<any> {
+/** Browser offers passkeys in the username field's autofill list (WebAuthn conditional mediation). */
+export async function conditionalMediationAvailable(): Promise<boolean> {
+  try {
+    const PKC: any = window.PublicKeyCredential;
+    return !!PKC?.isConditionalMediationAvailable && (await PKC.isConditionalMediationAvailable());
+  } catch {
+    return false;
+  }
+}
+
+export async function getPasskey(options: any, extra: { mediation?: "conditional"; signal?: AbortSignal } = {}): Promise<any> {
   const publicKey: PublicKeyCredentialRequestOptions = {
     ...options,
     challenge: toBuf(options.challenge),
     allowCredentials: (options.allowCredentials || []).map((c: any) => ({ ...c, id: toBuf(c.id) })),
   };
-  const cred = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential;
+  const cred = (await navigator.credentials.get({ publicKey, ...(extra as any) })) as PublicKeyCredential;
   const r = cred.response as AuthenticatorAssertionResponse;
   return {
     id: cred.id, rawId: toB64u(cred.rawId), type: cred.type,

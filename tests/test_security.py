@@ -390,8 +390,10 @@ def test_alerts_are_throttled_and_secret_free(family, settings, geodb):
     config.set_value("security.escalation_failures", 0)
     for _ in range(12):
         login(anon(US), "mom", "Wrong-Secret-9!")
-    alerts = Notification.objects.filter(user=family["dad"], kind="security")
+    alerts = Notification.objects.filter(user=family["dad"], kind="security", event="security.failed_logins")
     assert alerts.count() == 1 and "failed sign-in" in alerts.first().body
+    locked = Notification.objects.filter(event="security.account_locked")  # once per lock window, to mom and the admins
+    assert locked.filter(user=family["mom"]).count() == 1 and locked.filter(user=family["dad"]).count() == 1
     blob = str(list(Notification.objects.values())) + str(list(OutboxMessage.objects.values()))
     assert "Wrong-Secret-9!" not in blob
 

@@ -161,6 +161,9 @@ def handle_callback(request, *, state: str, code: str, error: str = "") -> tuple
         except IntegrityError:
             return ("/settings/account", {"tab": "linked", "error": "google_already_linked"})
         audit.record("auth.google_link", request=request, actor=user, subject_user=user)
+        from apps.notify.events import google_link_changed
+
+        google_link_changed(user, linked=True)
         return ("/settings/account", {"tab": "linked", "linked": "1"})
     ident = GoogleIdentity.objects.select_related("user").filter(issuer=issuer, subject=subject).first()
     if ident is None:
@@ -201,6 +204,9 @@ def my_link(request):
         if ident:
             ident.delete()
             audit.record("auth.google_unlink", request=request)
+            from apps.notify.events import google_link_changed
+
+            google_link_changed(request.user, linked=False)
         return Response({"linked": False})
     return Response({"enabled": enabled(), "linked": bool(ident), "email": ident.email if ident else None,
                      "linked_at": ident.linked_at if ident else None})

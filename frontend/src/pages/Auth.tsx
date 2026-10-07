@@ -1,9 +1,9 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError, safeNext } from "../api";
 import { Icon } from "../components/ui";
 import { useSession } from "../session";
-import { getPasskey, passkeyErrorMessage, passkeysSupported } from "../webauthn";
+import { conditionalMediationAvailable, getPasskey, passkeyErrorMessage, passkeysSupported } from "../webauthn";
 import PasskeysCard from "../components/Passkeys";
 import LoginArt from "../components/LoginArt";
 import { Reauth } from "../components/Reauth";
@@ -81,8 +81,34 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [methods, setMethods] = useState<string[]>(session?.pending_methods || ["totp", "recovery"]);
   const canPasskey = passkeysSupported();
+  const passwordless = !!session?.passwordless_enabled;
+  const autofill = useRef<AbortController | null>(null);
+
+  const stopAutofill = () => { autofill.current?.abort(); autofill.current = null; };
+  // Passkey autofill: the browser lists saved passkeys under the username field (conditional mediation). Picking one
+  // signs in without a password; the explicit button below does the same for browsers without autofill.
+  const startAutofill = async () => {
+    if (!passwordless || !canPasskey || step !== "password" || !(await conditionalMediationAvailable())) return;
+    stopAutofill();
+    const ctrl = new AbortController();
+    autofill.current = ctrl;
+    try {
+      const options = await api("auth/passkey/options", { body: { purpose: "passwordless" } });
+      const credential = await getPasskey(options, { mediation: "conditional", signal: ctrl.signal });
+      setBusy(true);
+      await api("auth/passkey/verify", { body: { purpose: "passwordless", credential } });
+      await done();
+    } catch (err: any) {
+      if (ctrl.signal.aborted || err?.name === "AbortError") return;
+      setError(err instanceof ApiError ? err.message : passkeyErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  useEffect(() => { startAutofill(); return stopAutofill; }, [passwordless, step]);
 
   const passkey = async (purpose: "2fa" | "passwordless") => {
+    stopAutofill();
     setBusy(true);
     setError("");
     try {
@@ -92,6 +118,7 @@ export function Login() {
       await done();
     } catch (err: any) {
       setError(err instanceof ApiError ? err.message : passkeyErrorMessage(err));
+      if (purpose === "passwordless") startAutofill();
     } finally {
       setBusy(false);
     }
@@ -136,8 +163,8 @@ export function Login() {
         {step === "password" ? (
           <>
             <div className="field">
-              <label htmlFor="username">Username</label>
-              <input id="username" type="text" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} required />
+              <label htmlFor="username">Email or username</label>
+              <input id="username" type="text" autoComplete={passwordless && canPasskey ? "username webauthn" : "username"} autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} required />
             </div>
             <div className="field">
               <label htmlFor="password">Password</label>
@@ -153,6 +180,15 @@ export function Login() {
               <Link to="/forgot-password">Forgot password?</Link>
             </div>
             <button className="btn primary" style={{ width: "100%" }} disabled={busy || !username || !password}>Sign in <Icon name="arrow" /></button>
+            {passwordless && (
+              <>
+                <div className="auth-or" aria-hidden="true"><span>or</span></div>
+                <button type="button" className="btn passkey-btn" style={{ width: "100%" }} disabled={busy || !canPasskey} onClick={() => passkey("passwordless")}>
+                  <Icon name="key" /> Sign in with Passkey
+                </button>
+                {!canPasskey && <p className="small muted" style={{ marginTop: ".3rem" }}>Passkeys need the secure HTTPS address of this app.</p>}
+              </>
+            )}
             {session?.authentik?.enabled && (
               <a className="btn authentik-btn" style={{ width: "100%", marginTop: "0.7rem" }} href="/api/auth/authentik/start?mode=login">
                 {session.authentik.show_logo && <AuthentikLogo />}{session.authentik.label}
@@ -161,10 +197,7 @@ export function Login() {
             {session?.google_enabled && (
               <a className="btn" style={{ width: "100%", marginTop: "0.7rem" }} href="/api/auth/google/start?mode=login">Sign in with Google</a>
             )}
-            {session?.passwordless_enabled && canPasskey && (
-              <button type="button" className="btn" style={{ width: "100%", marginTop: "0.7rem" }} disabled={busy} onClick={() => passkey("passwordless")}><Icon name="lock" /> Sign in with a passkey</button>
-            )}
-            <p className="muted small" style={{ textAlign: "center", marginTop: "1rem" }}>Two-factor verification follows if enabled.</p>
+            <p className="muted small" style={{ textAlign: "center", marginTop: "1rem" }}>{passwordless ? "A passkey signs you in on its own. After a password, two-step verification follows if it is set up." : "Two-step verification follows if it is set up."}</p>
           </>
         ) : (
           <>

@@ -104,16 +104,23 @@ def test_passkey_of_another_user_and_tampering_rejected(family, clients):
 
 
 def test_passwordless_policy_and_user_opt_in(family, clients):
+    """AT-196..198 (prompt AT-176..178): passwordless is the default mode; enrolling a compatible passkey turns it on
+    for the account; Password + Passkey (MFA) mode refuses passwordless; the person can opt out."""
+    c = APIClient()
+    assert c.get("/api/session").json()["passwordless_enabled"] is True  # the sign-in page shows the button
+    config.set_value("auth.passkey_mode", "mfa")
+    assert c.post("/api/auth/passkey/options", {"purpose": "passwordless"}, format="json").status_code == 403
+    assert c.get("/api/session").json()["passwordless_enabled"] is False
     auth = SoftAuthenticator(ORIGIN, RP)
     register(clients["mom"], auth)
-    c = APIClient()
-    assert c.post("/api/auth/passkey/options", {"purpose": "passwordless"}, format="json").status_code == 403  # policy off
-    config.set_value("auth.allow_passwordless", True)
+    family["mom"].refresh_from_db()
+    assert family["mom"].passwordless_enabled is False  # MFA mode: enrolment does not turn passwordless on
+    config.set_value("auth.passkey_mode", "passwordless")
     opts = c.post("/api/auth/passkey/options", {"purpose": "passwordless"}, format="json").json()
     assert "allowCredentials" not in opts or not opts["allowCredentials"]
     assert opts["userVerification"] == "required"
     r = c.post("/api/auth/passkey/verify", {"purpose": "passwordless", "credential": auth.assert_(opts)}, format="json")
-    assert r.status_code == 403  # the person has not turned passwordless on
+    assert r.status_code == 403  # this account has passwordless off
     assert clients["mom"].post("/api/me/passwordless", {"enabled": True}, format="json").json()["passwordless_enabled"]
     opts = c.post("/api/auth/passkey/options", {"purpose": "passwordless"}, format="json").json()
     r = c.post("/api/auth/passkey/verify", {"purpose": "passwordless", "credential": auth.assert_(opts)}, format="json")
@@ -122,7 +129,6 @@ def test_passwordless_policy_and_user_opt_in(family, clients):
     # a passkey without user verification cannot be used passwordless
     weak = SoftAuthenticator(ORIGIN, RP, uv=False)
     register(clients["mom"], weak, "No PIN key")
-    opts = APIClient().post("/api/auth/passkey/options", {"purpose": "passwordless"}, format="json")
     c3 = APIClient()
     opts = c3.post("/api/auth/passkey/options", {"purpose": "passwordless"}, format="json").json()
     assert c3.post("/api/auth/passkey/verify", {"purpose": "passwordless", "credential": weak.assert_(opts)}, format="json").status_code == 400

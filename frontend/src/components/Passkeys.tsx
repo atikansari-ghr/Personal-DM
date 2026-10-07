@@ -24,7 +24,7 @@ export default function PasskeysCard() {
     const r = await api("me/passkeys", { body: { credential, name: name || "Passkey" } });
     if (r.recovery_codes) setCodes(r.recovery_codes);
     setName("");
-    toast("Passkey added");
+    toast(r.passwordless_turned_on ? "Passkey added — you can now use Sign in with Passkey on the sign-in page" : "Passkey added");
     data.reload();
     refresh();
   }, setReauth, toast);
@@ -32,7 +32,7 @@ export default function PasskeysCard() {
   const passwordless = (enabled: boolean) => withReauth(async () => { await api("me/passwordless", { body: { enabled } }); toast(enabled ? "Passwordless sign-in turned on" : "Passwordless sign-in turned off"); data.reload(); refresh(); }, setReauth, toast)();
   return (
     <div className="card">
-      <div className="row between"><div><h2>Passkeys <HelpTip text="A passkey is a key stored on your phone, computer, password manager or security key, unlocked with fingerprint, face or PIN. It is used after your password as a second step, or alone if you turn on passwordless sign-in." link="/help/passkeys" /></h2>
+      <div className="row between"><div><h2>Passkeys <HelpTip text="A passkey is a key stored on your phone, computer, password manager or security key, unlocked with fingerprint, face or PIN. Depending on the administrator's policy it signs you in on its own (Sign in with Passkey on the sign-in page) or as the second step after your password." link="/help/passkeys" /></h2>
         <p className="small muted">Works with iPhone/iPad, Android, Windows Hello, macOS, password managers and security keys. Bound to {d.rp_id}.</p></div>
         <span className={`badge ${d.passkeys.length ? "ok" : "soon"}`}>{d.passkeys.length ? `${d.passkeys.length} registered` : "None"}</span></div>
       {d.passkeys.length > 0 && (
@@ -59,14 +59,14 @@ export default function PasskeysCard() {
       ) : (
         <form className="row" onSubmit={(e) => { e.preventDefault(); add(); }}>
           <label htmlFor="pk-name" className="sr-only">Passkey name</label>
-          <input id="pk-name" type="text" placeholder="Name, e.g. My iPhone" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} style={{ maxWidth: 240 }} />
+          <input id="pk-name" type="text" placeholder="Name, e.g. Office Laptop, Personal iPhone, Security Key" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} style={{ maxWidth: 240 }} />
           <button className="btn"><Icon name="plus" size={16} /> Add a passkey</button>
         </form>
       )}
       {d.passwordless_allowed && d.passkeys.length > 0 && (
         <label className="check" style={{ marginTop: ".6rem" }}>
           <input type="checkbox" checked={d.passwordless_enabled} onChange={(e) => passwordless(e.target.checked)} />
-          Allow signing in with a passkey alone (passwordless). <span className="small muted">Your password keeps working.</span>
+          Use Sign in with Passkey without a password (passwordless). <span className="small muted">On by default after you add a passkey; your password keeps working.</span>
         </label>
       )}
       {codes && (

@@ -21,7 +21,7 @@ export default function SettingsPage() {
   const admin = !!session?.user?.is_main_admin;
   const delegate = (session?.delegations || []).length > 0;
   const secAdmin = !admin && !!session?.user?.is_admin;  // Administrator role: security and operations only
-  const tabs: [string, string][] = [["account", "My account"], ...(admin ? ADMIN_TABS : [...(delegate ? [["family", "Family & access"] as [string, string]] : []), ...(secAdmin ? [["security", "Security"] as [string, string]] : [])]), ["help", "Help & documentation"]];
+  const tabs: [string, string][] = [["account", "My account"], ...(admin ? ADMIN_TABS : [...(delegate || secAdmin ? [["family", secAdmin && !delegate ? "Users" : "Family & access"] as [string, string]] : []), ...(secAdmin ? [["security", "Security"] as [string, string]] : [])]), ["help", "Help & documentation"]];
   const active = section || (admin ? "general" : "account");
   return (
     <div>
@@ -31,7 +31,7 @@ export default function SettingsPage() {
       </nav>
       {active === "account" && <AccountSettings />}
       {active === "general" && admin && <SettingsForm section="general" title="General" />}
-      {active === "family" && (admin || delegate) && <FamilyPanel />}
+      {active === "family" && (admin || delegate || secAdmin) && <FamilyPanel />}
       {active === "documents" && admin && <DocumentsPanel />}
       {active === "processing" && admin && <ProcessingPanel />}
       {active === "notifications" && admin && <NotificationsAdmin />}

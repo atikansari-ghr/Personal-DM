@@ -55,7 +55,7 @@ function Editor({ ev, meta, onClose, onSaved }: { ev: any; meta: any; onClose: (
   const [tab, setTab] = useState("email");
   const [err, setErr] = useState("");
   const [testCh, setTestCh] = useState<string[]>(["in_app"]);
-  useEffect(() => { setF({ title: current.title || "", heading: current.heading || "", summary: current.summary || "", icon: current.icon || "", severity: current.severity || "", action_labels: current.action_labels || {} }); }, [channel, ev.key]);
+  useEffect(() => { setF({ title: current.title || "", heading: current.heading || "", summary: current.summary || "", icon: current.icon || "", severity: current.severity || "", action_labels: current.action_labels || {}, brand: current.brand || "", footer: current.footer || "" }); }, [channel, ev.key]);
   useEffect(() => {
     const t = setTimeout(() => api<any>(`notifications/templates/${ev.key}/preview`, { body: { draft: { ...f, channel } } }).then((r) => { setPreview(r); setErr(""); }).catch((e) => setErr(e.message)), 300);
     return () => clearTimeout(t);
@@ -71,7 +71,12 @@ function Editor({ ev, meta, onClose, onSaved }: { ev: any; meta: any; onClose: (
           <div className="field"><label htmlFor="t-ch">Applies to</label><select id="t-ch" value={channel} onChange={(e) => setChannel(e.target.value)}>{["", ...meta.channels].map((c: string) => <option key={c} value={c}>{CH_LABEL[c]}</option>)}</select></div>
           <div className="field"><label htmlFor="t-title">Title / subject <HelpTip text="Leave empty to keep the system wording. Placeholders like {document_type} are filled with real values; names are masked outside the app." /></label><input id="t-title" type="text" value={f.title || ""} onChange={(e) => set("title", e.target.value)} placeholder="System default" /></div>
           <div className="field"><label htmlFor="t-head">Heading</label><input id="t-head" type="text" value={f.heading || ""} onChange={(e) => set("heading", e.target.value)} placeholder="System default" /></div>
-          <div className="field"><label htmlFor="t-sum">Summary</label><textarea id="t-sum" rows={2} value={f.summary || ""} onChange={(e) => set("summary", e.target.value)} placeholder="System default" /></div>
+          <div className="field"><label htmlFor="t-sum">Summary / introduction</label><textarea id="t-sum" rows={2} value={f.summary || ""} onChange={(e) => set("summary", e.target.value)} placeholder="System default" /></div>
+          <div className="grid two">
+            <div className="field"><label htmlFor="t-brand">Branding name <HelpTip text="Shown in the email header instead of the application name." /></label><input id="t-brand" type="text" maxLength={60} value={f.brand || ""} onChange={(e) => set("brand", e.target.value)} placeholder="Application name" /></div>
+            <div className="field"><label htmlFor="t-foot">Footer / help text</label><input id="t-foot" type="text" maxLength={300} value={f.footer || ""} onChange={(e) => set("footer", e.target.value)} placeholder="None" /></div>
+          </div>
+          {!!ev.mandatory?.length && <div className="alert warn small"><strong><Icon name="lock" size={14} /> Mandatory security text (always included, cannot be changed):</strong><ul>{ev.mandatory.map((m: string, i: number) => <li key={i}>{m}</li>)}</ul></div>}
           <div className="grid two">
             <div className="field"><label htmlFor="t-icon">Icon</label><select id="t-icon" value={f.icon || ""} onChange={(e) => set("icon", e.target.value)}><option value="">Default</option>{meta.icons.map((i: any) => <option key={i.key} value={i.key}>{i.emoji} {i.label}</option>)}</select></div>
             <div className="field"><label htmlFor="t-sev">Severity shown</label><select id="t-sev" value={f.severity || ""} onChange={(e) => set("severity", e.target.value)}><option value="">Default ({SEVERITY_LABEL[ev.severity]})</option>{sevChoices.map((s: any) => <option key={s.key} value={s.key}>{s.label}</option>)}</select></div>

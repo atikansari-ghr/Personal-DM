@@ -277,6 +277,7 @@ def verify_second_factor(user: User, code: str = "", recovery_code: str = "") ->
 # ------------------------------------------------------------------ passwords
 
 def set_password(user: User, password: str, *, temporary: bool, keep_device: str | None = None) -> None:
+    """Store only the hash; invalidate unused reset tokens; end the person's other sessions."""
     check_new_password(password, user)
     user.set_password(password)
     user.must_change_password = temporary

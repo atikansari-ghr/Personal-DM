@@ -180,29 +180,124 @@ def scan_path(path: Path) -> tuple[str, str]:
 
 # ------------------------------------------------------------------ health
 
+STATES = {"healthy": "Healthy", "degraded": "Degraded", "unavailable": "Unavailable", "error": "Error", "disabled": "Turned off"}
+
+
+def scan_bytes(data: bytes, timeout: float = 60) -> tuple[str, str]:
+    """INSTREAM a small in-memory buffer (hourly health probe; no file is written)."""
+    sock = _connect(timeout)
+    try:
+        sock.sendall(b"zINSTREAM\0" + struct.pack("!L", len(data)) + data + struct.pack("!L", 0))
+        reply = _recv_all(sock)
+    except (OSError, socket.timeout) as exc:
+        raise ScannerUnavailable(f"ClamAV did not answer the scan ({exc.__class__.__name__}).") from exc
+    finally:
+        sock.close()
+    if reply.endswith("OK") and "FOUND" not in reply:
+        return "clean", ""
+    if reply.endswith("FOUND"):
+        return "threat", reply.split(":", 1)[-1].rsplit("FOUND", 1)[0].strip()
+    raise ScanError(reply[:200] or "empty reply")
+
+
 def health(refresh: bool = False) -> dict:
-    """Reachability and signature age, cached in HealthState('antivirus')."""
+    """Operational state, cached in HealthState('antivirus') for five minutes.
+
+    Healthy needs a real answer to a scan, not only readable metadata: the probe streams a small clean buffer through
+    INSTREAM (the path uploads use). Engine and signature details of the last successful contact stay visible while
+    the daemon is unreachable, but they never make the state look good (``metadata_stale`` marks them)."""
     from .models import HealthState
 
     state = HealthState.get("antivirus")
     if not config.get("antivirus.enabled"):
-        return {**state, "enabled": False, "status": "disabled"}
+        return {**state, "enabled": False, "status": "disabled", "state": "disabled", "state_label": STATES["disabled"],
+                "socket": config.get("antivirus.socket")}
     fresh = state.get("checked_at") and timezone.now() - datetime.fromisoformat(state["checked_at"]) < timedelta(minutes=5)
     if refresh or not fresh:
+        now = timezone.now().isoformat()
         try:
             info = version_info()
-            state = HealthState.put("antivirus", reachable=True, engine=info["engine"], signatures=info["signatures"],
-                                    signatures_date=info["signatures_date"], error="", checked_at=timezone.now().isoformat())
+            try:
+                result, _ = scan_bytes(SELFTEST_CLEAN)
+                probe_ok, probe_error = result == "clean", "" if result == "clean" else "The clean probe was reported as a threat."
+            except ScanError as exc:
+                probe_ok, probe_error = False, f"ClamAV answered but could not scan: {exc}"[:300]
+            state = HealthState.put("antivirus", reachable=True, scan_ok=probe_ok, engine=info["engine"], signatures=info["signatures"],
+                                    signatures_date=info["signatures_date"], error=probe_error, checked_at=now, last_ok_at=now if probe_ok else state.get("last_ok_at"))
         except ScannerUnavailable as exc:
-            state = HealthState.put("antivirus", reachable=False, error=str(exc)[:300], checked_at=timezone.now().isoformat())
+            state = HealthState.put("antivirus", reachable=False, scan_ok=False, error=str(exc)[:300], checked_at=now)
     age_days = None
     if state.get("signatures_date"):
         age_days = (timezone.now() - datetime.fromisoformat(state["signatures_date"])).total_seconds() / 86400
     stale = age_days is not None and age_days > int(config.get("antivirus.stale_days"))
     critical = age_days is not None and age_days > int(config.get("antivirus.critical_stale_days"))
-    status = "unavailable" if not state.get("reachable") else "critical_stale" if critical else "stale" if stale else "ok"
-    return {**state, "enabled": True, "status": status, "signature_age_days": round(age_days, 1) if age_days is not None else None,
-            "stale": stale, "critically_stale": critical}
+    selftest = HealthState.get("antivirus_selftest")
+    selftest_failed = selftest.get("ok") is False  # until a newer self-test passes (hourly check, Run self-test, repair)
+    if not state.get("reachable"):
+        status, op = "unavailable", "unavailable"
+    elif state.get("scan_ok") is False or selftest_failed:
+        status, op = "error", "error"
+    else:
+        status = "critical_stale" if critical else "stale" if stale else "ok"
+        op = "degraded" if stale else "healthy"
+    return {**state, "enabled": True, "status": status, "state": op, "state_label": STATES[op],
+            "signature_age_days": round(age_days, 1) if age_days is not None else None, "stale": stale,
+            "critically_stale": critical, "metadata_stale": not state.get("reachable"), "socket": config.get("antivirus.socket"),
+            "self_test": selftest or None}
+
+
+# The standard EICAR antivirus test string (harmless; not malware). Joined at run time so this source file is not
+# reported by scanners. Used only by the administrator self-test, never stored as a document.
+EICAR = ("X5O!P%@AP[4\\PZX54(P^)7CC)7}$" + "EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*").encode()
+SELFTEST_CLEAN = b"Personal Documents antivirus self-test: this harmless text must be reported as clean.\n"
+
+
+def self_test(actor=None) -> dict:
+    """Administrator self-test through the same file scan path as uploads (scan_path):
+
+    1. a harmless text file must be Clean; 2. the EICAR test file must be detected; 3. both temporary files are
+    removed afterwards (private 0700 directory under the app's temporary directory). Nothing is stored in the library
+    and no quarantine entry is created."""
+    import tempfile
+
+    from .models import HealthState
+
+    out = {"clean": None, "eicar": None, "ok": False, "detail": "", "socket": config.get("antivirus.socket"),
+           "at": timezone.now().isoformat(), "artifacts_removed": False}
+    tmp_root = Path(getattr(settings, "TMP_DIR", "") or tempfile.gettempdir())
+    tmp_root.mkdir(parents=True, exist_ok=True)
+    d = Path(tempfile.mkdtemp(prefix="av-selftest-", dir=tmp_root))
+    try:
+        os.chmod(d, 0o700)
+        clean, eicar = d / "clean.txt", d / "eicar.com.txt"
+        clean.write_bytes(SELFTEST_CLEAN)
+        eicar.write_bytes(EICAR)
+        try:
+            out["clean"] = scan_path(clean)[0] == "clean"
+            res, name = scan_path(eicar)
+            out["eicar"] = res == "threat"
+            out["detail"] = ("Clean file: Clean. " if out["clean"] else "Clean file was NOT reported clean. ") + \
+                (f"EICAR: detected ({name})." if out["eicar"] else "EICAR was NOT detected.")
+        except ScannerUnavailable as exc:
+            out["detail"] = str(exc)
+        except ScanError as exc:
+            out["detail"] = f"ClamAV error: {exc}"
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+        out["artifacts_removed"] = not d.exists()
+    out["ok"] = bool(out["clean"] and out["eicar"] and out["artifacts_removed"])
+    HealthState.put("antivirus_selftest", **out)
+    audit.record("antivirus.self_test", actor=actor, outcome="success" if out["ok"] else "failure",
+                 clean=out["clean"], eicar_detected=out["eicar"])
+    health(refresh=True)
+    return out
+
+
+def diagnose() -> dict:
+    """Read-only diagnosis as the web service account (the identity that must reach the socket)."""
+    from apps.ops.clamav_check import Clamav
+
+    return Clamav(as_root=False).diagnose(self_test=False)
 
 
 def _alert(event: str, key: str, title: str, lines: list[str], link: str = "/settings/security?view=antivirus",
@@ -218,11 +313,18 @@ def _alert(event: str, key: str, title: str, lines: list[str], link: str = "/set
 def check_health_and_alert() -> dict:
     """Hourly from the scheduler: alert administrators (once a day per problem) when clamd or signatures are unhealthy."""
     h = health(refresh=True)
+    if h.get("state") in ("healthy", "degraded", "error") and h.get("enabled"):
+        last = (h.get("self_test") or {}).get("at")
+        if not last or h.get("state") == "error" or timezone.now() - datetime.fromisoformat(last) > timedelta(hours=24):
+            self_test()  # daily clean + EICAR check through the upload scan path (and re-check after a failure)
+            h = health()
     day = timezone.localdate().isoformat()
-    if h["status"] == "unavailable":
+    if h["status"] in ("unavailable", "error"):
         _alert("antivirus.unavailable", f"av_down:{day}", "Antivirus (ClamAV) is unavailable",
-               ["New files are stored and usable but marked Not scanned until ClamAV is back.",
-                "On the server: sudo personaldocs doctor"], cooldown="av_down")
+               [f"Status: {h.get('state_label', 'Unavailable')}. {h.get('error') or ''}".strip(),
+                "New files are stored and usable but marked Not scanned until ClamAV is back.",
+                "Use Settings → Security → Antivirus → Diagnose / Repair, or on the server: sudo personaldocs antivirus repair"],
+               cooldown="av_down")
     elif h["status"] in ("stale", "critical_stale"):
         _alert("antivirus.definitions", f"av_stale:{day}", "Antivirus definitions are out of date",
                [f"Signatures are {h['signature_age_days']} days old.", "Use Update now, or check clamav-freshclam on the server."],

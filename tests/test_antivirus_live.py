@@ -28,3 +28,21 @@ def test_live_clamd_detects_eicar_and_passes_clean_files(family, clients):
     v = DocumentVersion.objects.get(document_id=bad)
     assert v.av_status == "quarantined" and "Eicar" in v.av_signature
     assert son.get(f"/api/documents/{bad}/file").status_code == 423
+
+
+def test_live_self_test_diagnosis_and_health(family, clients, settings, tmp_path):
+    """AT-207/AT-210 against the real engine: clean file Clean, EICAR detected through the upload scan path,
+    temporary files removed, nothing stored as a document; the read-only diagnosis reaches clamd."""
+    from apps.ops.clamav_check import Clamav
+
+    settings.TMP_DIR = tmp_path / "tmp"
+    config.set_value("antivirus.enabled", True)
+    config.set_value("antivirus.socket", SOCKET)
+    n = DocumentVersion.objects.count()
+    res = av.self_test()
+    assert res["ok"] and res["clean"] and res["eicar"] and res["artifacts_removed"], res
+    assert list((tmp_path / "tmp").iterdir()) == [] and DocumentVersion.objects.count() == n
+    h = av.health(refresh=True)
+    assert h["state"] in ("healthy", "degraded") and h["scan_ok"] is True
+    direct = Clamav(as_root=False).self_test(SOCKET)
+    assert direct["ok"], direct

@@ -82,6 +82,9 @@ class Message:
     test: bool = False
     draft: Any = None  # unsaved template override (administrator preview)
     push_title: str = ""  # lock-screen title without names (default: the event's label)
+    mandatory: list = field(default_factory=list)  # protected security warnings: shown on every channel, not editable
+    secret_link: str = ""  # one-off absolute URL with a token (password reset). Email only, sent directly, never stored
+    secret_label: str = "Reset password"
 
     def __post_init__(self):
         ev = EVENTS.get(self.event)
@@ -89,9 +92,13 @@ class Message:
         self.icon = self.icon or (ev.icon if ev else "info")
         self.severity = self.severity if self.severity in icons.SEVERITY else (ev.severity if ev else "info")
         self.when = self.when or timezone.now()
+        if ev and ev.mandatory:  # protected warnings are always part of the message, whatever the caller or a template says
+            self.mandatory = list(dict.fromkeys([*ev.mandatory, *self.mandatory]))
         self.actions = [a for a in self.actions if a and (a.in_app_only or safe_path(a.path))]
         if self.link and not safe_path(self.link):
             self.link = ""
+        if self.secret_link and not self.secret_link.startswith(f"{settings.PUBLIC_ORIGIN}/reset-password?token="):
+            raise ValueError("secret links are only password-reset links of this application")
 
 
 def safe_path(path: str) -> bool:
@@ -149,12 +156,13 @@ def apply_template(msg: Message, channel: str, external: bool) -> dict:
     """Title / heading / summary / icon / severity / action labels after the administrator's overrides."""
     ctx = {"app_name": config.get("general.app_name"), "event_time": templates.local_stamp(msg.when), **msg.context}
     out = {"title": templates.text(msg.title, external), "heading": templates.text(msg.heading, external),
-           "summary": templates.text(msg.summary, external), "icon": msg.icon, "severity": msg.severity, "labels": {}}
+           "summary": templates.text(msg.summary, external), "icon": msg.icon, "severity": msg.severity, "labels": {},
+           "brand": ctx["app_name"], "footer": ""}
     t = msg.draft if msg.draft is not None else (_override(msg.event, channel) if msg.event in EVENTS else None)
     if t is not None:
         ctx["event_title"] = out["title"]
-        for f in ("title", "heading", "summary"):
-            if getattr(t, f):
+        for f in ("title", "heading", "summary", "brand", "footer"):
+            if getattr(t, f, ""):
                 out[f] = fill(getattr(t, f), ctx, external)
         if t.icon in icons.ICONS:
             out["icon"] = t.icon
@@ -219,6 +227,7 @@ def render_in_app(msg: Message) -> dict:
         "actions": [{"key": a.key, "label": a.label, "path": a.path, "primary": a.primary, "in_app": a.in_app_only}
                     for a in _actions(msg, "in_app", t["labels"])],
         "guidance": [templates.text(g, False) for g in msg.guidance],
+        "mandatory": [templates.text(m, False) for m in msg.mandatory], "footer": t["footer"],
         "items": [str(i) for i in msg.items[:templates.MAX_ITEMS]], "items_label": msg.items_label,
         "more": msg.more + max(0, len(msg.items) - templates.MAX_ITEMS), "test": msg.test,
     }
@@ -234,14 +243,19 @@ def render_email(msg: Message, user) -> tuple[str, str, str]:
     subject = templates.subject(("[TEST] " if msg.test else "") + t["title"])
     details = _details(msg, "email")
     actions = _actions(msg, "email", t["labels"])
-    lines = [x for x in (t["heading"], t["summary"]) if x] + [templates.text(g, True) for g in msg.guidance]
+    lines = [x for x in (t["heading"], t["summary"]) if x] + [f"IMPORTANT: {templates.text(m, True)}" for m in msg.mandatory] \
+        + [templates.text(g, True) for g in msg.guidance]
+    if msg.secret_link:
+        lines.append(f"{t['labels'].get('reset_password') or msg.secret_label}: {msg.secret_link}")
     text = templates.render(user=user, title=("[TEST] " if msg.test else "") + f"{sev_label.upper()}: {t['title']}",
                             lines=lines, facts=[(d.label, v) for d, v in details], items=msg.items,
                             items_label=msg.items_label, more=msg.more, link=msg.link)
     extra = [a for a in actions if a.path and a.path != msg.link]
     if extra:
         text += "\n" + "\n".join(f"{a.label}: {_url(a.path)}" for a in extra)
-    text += f"\n\nThis is an automated notification from {app}. Please do not reply."
+    if t["footer"]:
+        text += f"\n\n{t['footer']}"
+    text += f"\n\nThis is an automated notification from {t['brand']}. Please do not reply."
 
     rows = "".join(
         f'<tr><td style="padding:6px 10px 6px 0;color:#5b6b62;font-size:14px;white-space:nowrap;vertical-align:top">'
@@ -261,6 +275,13 @@ def render_email(msg: Message, user) -> tuple[str, str, str]:
         + ("background:#1e6b3a;color:#ffffff;border:1px solid #1e6b3a" if a.primary else "background:#ffffff;color:#1e6b3a;border:1px solid #9cc5ab")
         + f'">{_e(a.label)}</a>' for a in actions if a.path)
     guidance = "".join(f'<li dir="auto">{_e(templates.text(g, True))}</li>' for g in msg.guidance)
+    mandatory = "".join(f'<p dir="auto" style="margin:0 0 6px">⚠️ {_e(templates.text(m, True))}</p>' for m in msg.mandatory)
+    if msg.secret_link:  # one-off token link (password reset): primary button + the address written out
+        secret_label = t["labels"].get("reset_password") or msg.secret_label
+        buttons = (f'<a href="{_e(msg.secret_link)}" style="display:inline-block;margin:4px 6px 4px 0;padding:11px 18px;border-radius:8px;'
+                   f'font-size:15px;font-weight:700;text-decoration:none;background:#1e6b3a;color:#ffffff;border:1px solid #1e6b3a">'
+                   f'{_e(secret_label)}</a>' + buttons
+                   + f'<p style="font-size:12px;color:#5b6b62;word-break:break-all">If the button does not work, copy this address: {_e(msg.secret_link)}</p>')
     test_banner = ('<tr><td style="background:#5b2d91;color:#fff;padding:8px 24px;font-size:13px;font-weight:700">'
                    'TEST — sample notification, no real event happened</td></tr>' if msg.test else "")
     html_doc = f"""<!doctype html>
@@ -273,7 +294,7 @@ def render_email(msg: Message, user) -> tuple[str, str, str]:
 {test_banner}
 <tr><td style="padding:18px 24px;border-bottom:1px solid #e3ebe6">
   <table role="presentation" width="100%"><tr>
-    <td style="font-size:17px;font-weight:700;color:#1e6b3a">🔒 {_e(app)}</td>
+    <td style="font-size:17px;font-weight:700;color:#1e6b3a">🔒 {_e(t['brand'])}</td>
     <td align="right"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:{bg};color:{fg};border:1px solid {border};font-size:12px;font-weight:700">{sev_emoji} {_e(sev_label)} · {_e(icons.CATEGORY_LABELS.get(msg.category, msg.category))}</span></td>
   </tr></table>
 </td></tr>
@@ -286,9 +307,11 @@ def render_email(msg: Message, user) -> tuple[str, str, str]:
   {f'<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">{rows}</table>' if rows else ''}
   {items}
   {f'<div style="margin:18px 0 6px">{buttons}</div>' if buttons else ''}
+  {f'<div style="margin:14px 0 0;padding:12px 14px;background:#fdecea;border:1px solid #f1b5ae;border-radius:8px;font-size:14px;line-height:1.5;color:#7a1f16">{mandatory}</div>' if mandatory else ''}
   {f'<ul style="margin:14px 0 0;padding:12px 12px 12px 30px;background:#fff8e6;border-radius:8px;font-size:14px;line-height:1.5">{guidance}</ul>' if guidance else ''}
 </td></tr>
 <tr><td style="padding:14px 24px 20px;border-top:1px solid #e3ebe6;font-size:12px;line-height:1.5;color:#5b6b62">
+  {f'<p dir="auto" style="margin:0 0 8px;color:#33443a">{_e(t["footer"])}</p>' if t["footer"] else ''}
   Sent {_e(templates.local_stamp(msg.when))} to {_e(user.display_name or user.username)}. Links open {_e(app)}; you sign in and your normal permissions apply.<br>
   This is an automated notification. Please do not reply.
 </td></tr>
@@ -322,9 +345,14 @@ def render_telegram(msg: Message, user) -> dict:
         extra_n = msg.more + max(0, len(msg.items) - templates.MAX_ITEMS)
         if extra_n:
             out.append(f"… and {extra_n} more (see the report)")
+    if msg.mandatory:
+        out.append("")
+        out += [f"⚠️ <b>{_e(templates.text(m, True))}</b>" for m in msg.mandatory]
     for g in msg.guidance:
         out.append(f"💡 {_e(templates.text(g, True))}")
     out += ["", f"⏱️ {_e(templates.local_stamp(msg.when))}"]
+    if t["footer"]:
+        out.append(f"<i>{_e(t['footer'])}</i>")
     actions = [a for a in _actions(msg, "telegram", t["labels"]) if a.path]
     payload: dict = {"parse_mode": "HTML", "disable_web_page_preview": True}
     if actions and settings.PUBLIC_ORIGIN.startswith("https://"):
@@ -433,6 +461,18 @@ def sample(event: str, recipient_name: str = "Sample Person") -> Message:
         details = [Detail("Folder", templates.Name("Identity > Residence permit"), "folder"), Detail("Count", "3", "document")]
     elif event.startswith(("processing.", "document.")):
         details = [Detail("Document", templates.Name("Sample residence permit"), "document"), Detail("Folder", templates.Name("Identity"), "folder")]
+    elif event.startswith("security.password") or event in ("security.temporary_password", "security.account_locked"):
+        details = [Detail("Account", "sample.person", "user"), Detail("Date/time", templates.local_stamp(), "time")]
+        if event in ("security.password_admin_reset", "security.temporary_password"):
+            details.append(Detail("Changed by", "Sample Administrator", "shield"))
+        if event == "security.password_reset_requested":
+            details.append(Detail("Link valid for", "30 minutes", "time"))
+            msg = Message(event=event, title=ev.label, heading="Reset your password", summary=ev.description,
+                          details=details, context=ctx, link="", test=True,
+                          actions=[Action("reset_password", "Reset password", "/reset-password", primary=True)])
+            return msg
+        if event == "security.account_locked":
+            details = login
     elif event in ("security.operations", "backup.failed", "integrity.failed", "security.health"):
         details = [Detail("Server", "Debian 13 (sample)", "system"), Detail("Status", "Needs attention", "health")]
     return Message(event=event, title=ev.label, heading=ev.label, summary=summary, details=details, context=ctx,

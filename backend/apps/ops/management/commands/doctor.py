@@ -146,8 +146,13 @@ class Command(BaseCommand):
 
         if config.get("antivirus.enabled"):
             h = antivirus.health(refresh=True)
-            report("ClamAV daemon reachable", h.get("status") != "unavailable",
-                   h.get("engine") or h.get("error") or "")
+            info("ClamAV socket used by the app", str(h.get("socket")))
+            report("ClamAV scanner operational (reachable and scans)", h.get("state") in ("healthy", "degraded"),
+                   f"{h.get('state_label')}: " + (h.get("error") or h.get("engine") or "")
+                   + ("" if h.get("state") in ("healthy", "degraded") else " → sudo personaldocs antivirus repair"))
+            if h.get("state") in ("healthy", "degraded"):
+                st = antivirus.self_test()
+                report("ClamAV self-test (clean file + EICAR, temporary files removed)", st["ok"], st["detail"])
             if h.get("signatures_date"):
                 detail = f"version {h.get('signatures')}, {h.get('signature_age_days')} days old"
                 if h.get("critically_stale"):

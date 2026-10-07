@@ -1,5 +1,5 @@
 [Unit]
-Description=Run a host security action requested from Personal Documents (inspect, check/install security updates, freshclam, reboot)
+Description=Run a host security action requested from Personal Documents (inspect, check/install security updates, freshclam, antivirus repair, reboot)
 After=network-online.target
 
 [Service]

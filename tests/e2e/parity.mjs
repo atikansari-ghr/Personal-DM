@@ -783,6 +783,55 @@ await step("AT-146 authentik settings and sign-in button", async () => {
   await anon.close();
 });
 
+await step("AT-196 Sign in with Passkey on the first sign-in screen", async () => {
+  const anon = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const lp = await anon.newPage();
+  await lp.goto(BASE + "/login");
+  const btn = lp.locator("button:has-text('Sign in with Passkey')");
+  await btn.waitFor();
+  expect(await btn.isEnabled(), "passkey button enabled on a secure origin");
+  expect((await lp.getAttribute("#username", "autocomplete")).includes("webauthn"), "passkey autofill hint on the username field");
+  expect(await lp.locator("#password").isVisible(), "password sign-in stays available");
+  await lp.screenshot({ path: `${SHOTS}/login-passkey.png` });
+  await anon.close();
+});
+
+await step("AT-200/201 administrator resets a password: temporary password shown once", async () => {
+  const members = (await api(page, "/api/family/members")).data.members;
+  const target = members.filter((m) => !m.is_main_admin && !m.is_admin && m.is_active).pop();
+  expect(target, "a family member to reset");
+  await page.goto(BASE + "/settings/family");
+  await page.click(`tr:has-text('${target.display_name}') button:has-text('Reset password…')`);
+  await page.waitForSelector(".modal:has-text('Generate temporary password')");
+  await page.screenshot({ path: `${SHOTS}/admin-reset-password.png` });
+  await page.click(".modal button:has-text('Generate temporary password')");
+  const reauth = page.locator(".modal:has-text('Confirm it') #rp");
+  if (await reauth.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await reauth.fill(PW);
+    await page.click(".modal button:has-text('Confirm with password')");
+  }
+  const pw = page.locator("[data-testid=temp-password]");
+  await pw.waitFor();
+  const shown = await pw.textContent();
+  expect(shown && shown.length >= 16, "strong temporary password shown");
+  await page.click(".modal button:has-text('Done')");
+  const again = (await api(page, "/api/family/members")).data.members.find((m) => m.id === target.id);
+  expect(again.must_change_password === true, "must change at next sign-in");
+  expect(!JSON.stringify(again).includes(shown), "never shown again");
+});
+
+await step("AT-205..207 antivirus: Diagnose / Repair panel and clean + EICAR self-test", async () => {
+  await page.goto(BASE + "/settings/security?view=antivirus");
+  await page.waitForSelector("text=Antivirus (ClamAV)");
+  await page.click("button:has-text('Run self-test')");
+  await page.waitForSelector(".toast:has-text('Self-test passed')");
+  await page.click("button:has-text('Diagnose / Repair')");
+  await page.waitForSelector("text=Diagnose / Repair antivirus");
+  await page.waitForSelector("text=Effective socket path");
+  await page.locator("h2:has-text('Diagnose / Repair antivirus')").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${SHOTS}/security-antivirus-diagnose.png` });
+});
+
 await step("screens for the README (desktop)", async () => {
   await page.goto(`${BASE}/folders/${ids.parity}/${ids["Sample policy (3 pages)"]}`);
   await page.waitForSelector(".detail-pane .viewer canvas");

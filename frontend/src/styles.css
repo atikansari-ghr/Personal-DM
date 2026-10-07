@@ -647,3 +647,19 @@ i.c0 { background: #1f8a4c; } i.c1 { background: #e07b00; } i.c2 { background: #
 .ph-list { columns: 2; padding-left: 1rem; }
 @media (max-width: 900px) { .tmpl-editor { grid-template-columns: 1fr; } .email-preview { height: 440px; } .ph-list { columns: 1; } }
 @media (max-width: 640px) { .note-card { padding: 0.75rem; gap: 0.6rem; } .note-icon { width: 32px; height: 32px; } .note-details dl { grid-template-columns: 1fr; } }
+
+/* Antivirus diagnosis (Change Set P) */
+.diag-list li { padding: .3rem 0; border-bottom: 1px solid var(--border); }
+.diag-list li > span[aria-hidden] { display: inline-block; width: 1.2rem; font-weight: 700; }
+.diag-list li.diag-ok > span[aria-hidden] { color: var(--ok, #1e6b3a); }
+.diag-list li.diag-warn > span[aria-hidden] { color: var(--warn, #8a5a00); }
+.diag-list li.diag-fail > span[aria-hidden] { color: var(--danger, #b3261e); }
+.diag-list code, .kv2 code { word-break: break-all; }
+
+/* Sign-in page: passkey as a first-step method (Change Set P) */
+.auth-or { display: flex; align-items: center; gap: .6rem; margin: .9rem 0 .6rem; color: var(--muted); font-size: .85rem; }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.btn.passkey-btn { gap: .5rem; font-weight: 600; }
+code.temp-password { font-size: 1.15rem; padding: .4rem .6rem; letter-spacing: .04em; user-select: all; word-break: break-all; }
+.note-mandatory { margin: .4rem 0; padding: .45rem .6rem; border-radius: 8px; background: var(--danger-bg, #fdecea); color: var(--danger-ink, #7a1f16); }
+.note-mandatory p { margin: .15rem 0; display: flex; gap: .35rem; align-items: flex-start; }
