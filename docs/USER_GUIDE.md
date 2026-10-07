@@ -172,8 +172,8 @@ Moving a document never changes its type, and changing the type never moves it.
   or **⋮ → Set document type…** in Folders and **More actions** on the document page; or choose it in the upload
   dialog, where a folder's suggested type is preselected (*Suggested by this folder*). Viewers see the type
   read-only.
-- **Details:** the type decides the fields shown under **<Type> details**, in order. Empty fields show **+**. The
-  status badge says *Details confirmed*, *Incomplete: <fields>* or *Needs review*; **Confirm as incomplete** accepts
+- **Details:** the type decides the fields shown under **… details** heading (for example *Passport details*), in order. Empty fields show **+**. The
+  status badge says *Details confirmed*, *Incomplete: …* (naming the empty required fields) or *Needs review*; **Confirm as incomplete** accepts
   empty required fields on purpose.
 - **Where a value came from:** *Suggested* (not yet confirmed) or *Edited* (you replaced an OCR/AI value), and a
   source chip: Manual, OCR, OCR (MRZ), Local AI, Imported, System or Migrated. Only confirmed values count for the

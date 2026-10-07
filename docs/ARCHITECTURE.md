@@ -165,3 +165,43 @@ See [ADR 0012](adr/0012-antivirus-authentik-security-center.md).
 - **HTTPS:** `SECURE_HSTS_SECONDS` from `PD_HSTS_SECONDS` (default one year for https origins), sent only on requests
   Django sees as HTTPS (`PD_BEHIND_PROXY` and `X-Forwarded-Proto`).
 - Migrations `accounts.0005`, `accounts.0006`, `library.0008`, `security.0002`, `security.0003`.
+
+## Change set N (2026-10): document types and metadata templates
+
+See [ADR 0013](adr/0013-document-types-templates.md) and the [document types guide](guides/document-types.md).
+
+- **Data model** (migration `library.0009_document_type_templates`):
+  - `DocumentType` (seeded by `seed_defaults`, editable): name, icon, `description`, `sort_order`, expiry awareness,
+    `reminder_days` (empty = global schedule), archived, plus the OCR policy fields of change set K.
+  - `DocumentTypeField` (the template): stable `key`, `label`, `field_type` (text, long_text, date, number, boolean,
+    select, country, person, identifier), `enabled`, `required`, `order`, `help_text`, `extract`, `searchable`,
+    `role` (expiry, issue, no_expiry), `choices`, `validation` (pattern, min, max, max_length).
+  - `Document`: `doc_type`, `type_source` (manual, folder, ocr, ai, import, system, migrated), `type_confirmed`,
+    `type_suggestions` (pending suggestions with source, reason, confidence), `details_incomplete_ok`.
+  - `DocumentField` (a value): `key`, `label`, `value`, status (suggested/confirmed), `source` (manual, ocr, mrz, ai,
+    import, system, migrated), `scope` (type = template field, custom = one-off detail, unmapped = previous detail
+    after a type change), `overridden`, `previous_type`, `updated_at`.
+  - `Folder.suggested_type`: a suggestion for uploads, inherited by sub-folders; never applied to existing documents.
+- **Folder and type are orthogonal.** Moves (`library/services.py`) never touch `doc_type`; type changes never touch
+  `folder` or storage.
+- **`library/doctypes.py`** is the single place for type logic: template defaults and `ensure_template`,
+  `validate_value` / `check_value`, `role_keys` (which keys have the expiry / issue / no-expiry roles),
+  `details_status`, `allowed_extract_keys` and `store_proposals` (OCR/AI proposals limited to extractable template
+  fields, never over confirmed values), `guess_type` / `suggest_from_text` / `folder_suggestion` /
+  `add_suggestion`, `plan_change` and `change_type` (preview and apply: matching keys kept, others become
+  `unmapped`, expiry re-derived, history and audit written), `resolve_unmapped` (map / keep / remove), `remap_ocr`
+  (proposals from stored OCR text, no new OCR job), `promote` and `report`. The bulk `set_type` action and
+  `DELETE /api/document-types/<id>` with `reassign_to` go through `change_type`.
+- **Reminders:** `services.apply_confirmed_fields` derives issue and expiry dates only from confirmed values of the
+  role fields in the template scope (not custom or unmapped values); `notify/expiry.py` uses the type's
+  `reminder_days` when set.
+- **Search:** `library/search.py` indexes values of searchable template fields; identifiers are not searchable by
+  default. `ocr_views.ocr_review_queue` filters by `type` (including untyped).
+- **API:** `library/views_types.py` serves `/api/documents/<id>/type`, `/api/documents/<id>/remap-ocr`,
+  `/api/documents/bulk-type`, `/api/document-types` (active types for any signed-in user), and the main-administrator
+  routes `/api/document-types/admin`, `/<id>`, `/<id>/fields`, `/<id>/fields/<fid>` and `/review`.
+- **Frontend:** `components/DocumentDetails.tsx` (Details panel, type change and bulk dialogs, folder suggestion),
+  `components/UploadDialog.tsx` (folder-suggested type), `pages/settings/DocumentTypes.tsx` (types, template editor
+  with preview, review of untyped documents), `pages/OcrReview.tsx` (type filter).
+- **Ops:** `manage.py document_types report` (`personaldocs manage document_types report`) and an info line in
+  `doctor`.

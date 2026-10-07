@@ -431,3 +431,28 @@ def test_at174_migration_keeps_data_and_does_not_guess_types(family, clients):
     assert any(t["name"] == "Passport" for t in r["types"])
     report = doctypes.report()
     assert report["typed"] >= 1 and report["untyped"] >= 1
+
+
+def test_at172_bulk_type_preview_and_confirmed_types_are_protected(family, clients):
+    son = clients["son1"]
+    root = personal_root(family["son1"])
+    visa = DocumentType.objects.get(name="Visa")
+    untyped = _doc(son, root, name="a.pdf")
+    confirmed = _doc(son, root, name="b.pdf", doc_type=visa.id)
+    already = _doc(son, root, name="c.pdf", doc_type=_passport().id)
+    ids = [str(untyped.id), str(confirmed.id), str(already.id)]
+    prev = son.post("/api/documents/bulk-type", {"ids": ids, "type": _passport().id, "preview": True}, format="json").json()
+    assert prev["allowed"] == 3 and prev["confirmed_other"] == 1 and prev["already"] == 1
+    assert prev["current"] == {"Not assigned": 1, "Visa": 1, "Passport": 1}
+    assert Document.objects.get(pk=untyped.pk).doc_type is None  # preview changed nothing
+    r = son.post("/api/documents/bulk-type", {"ids": ids, "type": _passport().id}, format="json").json()
+    assert r["changed"] == 1 and r["skipped"] == 2
+    assert Document.objects.get(pk=confirmed.pk).doc_type == visa  # confirmed type not overwritten
+    assert Document.objects.get(pk=untyped.pk).doc_type == _passport()
+    r = son.post("/api/documents/bulk-type", {"ids": ids, "type": _passport().id, "overwrite_confirmed": True},
+                 format="json").json()
+    assert r["changed"] == 1 and Document.objects.get(pk=confirmed.pk).doc_type == _passport()
+    # the older bulk endpoint follows the same rule
+    r = son.post("/api/documents/bulk", {"ids": [str(confirmed.id)], "action": "set_type", "value": visa.id},
+                 format="json").json()
+    assert r["failed"] == 1 and Document.objects.get(pk=confirmed.pk).doc_type == _passport()

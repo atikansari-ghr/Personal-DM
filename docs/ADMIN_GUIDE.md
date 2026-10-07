@@ -151,7 +151,7 @@ Guides: [OCR and corrections](guides/ocr-corrections.md#selective), [Office and 
   searchable, help text, choices and format (regular expression, maximum length). The preview shows the Details
   panel. A field with values cannot be deleted, only turned off. Only the confirmed value of the **expiry-role**
   field drives reminders.
-- **Promotion:** **Add to <Type> template…** on a document's additional detail adds the field to the template; only
+- **Promotion:** **Add to … template…** (for example *Add to Passport template…*) on a document's additional detail adds the field to the template; only
   that document's value moves.
 - **Review untyped documents:** untyped documents with their folder and OCR suggestions; nothing is applied until you
   confirm, and conflicts start unselected. `sudo personaldocs manage document_types report` and `doctor` print the

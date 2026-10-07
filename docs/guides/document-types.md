@@ -39,7 +39,7 @@ Open a document and look at **Details**:
   or **Change…**. Viewers see the type read-only. The main administrator also sees **Manage**, which opens
   Settings → Documents & folders → Document types at this type.
 - **Details status** (see [status](#status)).
-- **<Type> details**: the fields of the type's template in their configured order. Empty fields show **+** to add a
+- **Passport details** (the heading is named after the type): the fields of the type's template in their configured order. Empty fields show **+** to add a
   value.
 - **Additional details**: one-off details of this document only (see [additional details](#custom-details)).
 - **Previous details — needs review**: values kept after a type change (see [changing a type](#change-type)).
@@ -84,7 +84,7 @@ Confirm a suggestion with ✓, edit it, or use **Confirm all**. Rules:
 | Status | Meaning |
 |---|---|
 | **Details confirmed** | Every required field has a confirmed value and nothing is waiting. |
-| **Incomplete: <fields>** | Required fields are empty, for example *Incomplete: Expiry date*. |
+| **Incomplete: …** | Required fields are empty; the badge names them, for example *Incomplete: Expiry date*. |
 | **Needs review** | Something waits for a decision: *n suggested* values, *n previous* details or a *type suggested*. |
 
 Some documents really lack a required value (an old card without an expiry date). **Confirm as incomplete** records
@@ -159,7 +159,7 @@ fields from that text, without a new OCR scan. The proposals are *Suggested*; co
 ### Promoting a detail to the template {#promote}
 
 When a one-off detail turns out to be useful for every document of the type, the main administrator can choose
-**Add to <Type> template…** on it. After a confirmation the field is added to the template; only this document's
+**Add to … template…** on it (for example *Add to Passport template…*). After a confirmation the field is added to the template; only this document's
 value moves into the new field, and other documents of the type just show the new field empty.
 
 ## Bulk classification {#bulk}

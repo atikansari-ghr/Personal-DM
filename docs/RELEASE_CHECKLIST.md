@@ -6,6 +6,7 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] `scripts/verify.sh` passes locally (compile, checks, migrations, settings reference, shell, pytest incl. OCR/LibreOffice tests, frontend build, hygiene)
 - [ ] CI green on the release commit
 - [ ] `scripts/e2e.sh` passes against a fresh database (flow, accessibility 0 serious/blocking, parity all steps)
+- [ ] `scripts/e2e.sh` run with the local ClamAV daemon running (one earlier Change Set N run with clamd stopped had two desktop drag/move parity failures)
 - [ ] `sudo bash tests/installer/test_personal_dm.sh` (one-line installer lifecycle, stubbed) passes
 - [ ] OCR benchmark re-run if `ocr.py`/`extraction.py` changed (`scripts/ocr_benchmark.py`), `docs/OCR_BENCHMARK.md` updated
 - [ ] `npm audit --omit=dev` in `frontend/` reports no high/critical issues
@@ -35,6 +36,8 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Basic Internet Security Test run and reviewed: no unresolved Critical findings; High findings understood (the test is a baseline, not a penetration test)
 - [ ] Firewall active on the host (Settings → Security → Firewall); ClamAV 3310 and PostgreSQL 5432 not exposed
 - [ ] Security Health not *At Risk*; Storage below the warning threshold
+- [ ] After an upgrade across Change Set N: `sudo personaldocs manage document_types report` (and the `doctor` info line) shows the expected typed/untyped counts; typed documents kept their type (source *Migrated*), expiry dates and reminders unchanged
+- [ ] Settings → Documents & folders → Document types: templates and reminder days of the types in use reviewed; **Review untyped documents** done or consciously deferred
 
 ## Integrations (when configured)
 - [ ] SMTP test email and a real expiry reminder (no document number in the message)
@@ -56,6 +59,7 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] `docs/TRACEABILITY.md` statuses current
 - [ ] `docs/IMPLEMENTATION_STATUS.md` updated
 - [ ] Screenshots refreshed if the UI changed
+- [ ] Document type screenshots (`document-details-type.png`, `type-change-review.png`, `document-details-previous.png`, `settings-document-types.png`, `mobile-details.png`) show only synthetic names and values
 - [ ] Screenshot and documentation names are demo labels only (A. Ansari, Mom, Son1, Son2, Son3, Daughter), described as added in the optional setup step
 
 ## Public repository (only when the owner decides to publish)

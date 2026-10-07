@@ -4,18 +4,18 @@ Last updated: 2026-10-07 · Version 0.1.0 (pre-release)
 
 ## Summary
 
-Every internal build stage (1–8) is implemented, plus change set 2026-10 (profile photos, optional Local AI, login audit, real client IP, GeoIP, country/IP access policy, security alerts, traffic analytics, passkeys and authentication policy) change sets H/I (UI, import destinations, critical/optional notifications, backup schedules, drag and drop and Move to, full-page viewer, mobile/PWA parity, public-release readiness) and change set J (portal overflow menus with rename/archive/permanent delete, folder icons, List/Thumbnails/Details views with sorting, desktop file-and-folder drop with hierarchy, own library first, measured OCR preprocessing with confidence and re-run, "No expiry", the public title, the one-line installer `personal-DM.sh` and a LinkedIn-ready README), change set K (selective multilingual OCR with a policy per document type, source/page/language selection, OCR review queue and Remove OCR data; the customizable Overview with Today/Hijri, weather, month calendar and holidays; sign-in page designs and custom wallpaper) change set L (setup creates only the Main Administrator, optional family members) and change set M (ClamAV antivirus with quarantine, authentik sign-in, the Administrator role, the security center with Internet Ready, the Basic Internet Security Test, OS security updates and controlled reboot through a root host helper, firewall monitoring, the Security Health score, security record retention and Storage Health): data model, settings registry, setup, accounts, permissions, delegation, authentication (password, TOTP, Google linking, console recovery), storage, versions, renewals, archive, imports, OCR/previews/extraction, search, UI/PWA/themes, offline/export, reminders over three channels, sharing, IMAP import, audit, backup/restore/integrity, native operations tooling, CI and documentation.
+Every internal build stage (1–8) is implemented, plus change set 2026-10 (profile photos, optional Local AI, login audit, real client IP, GeoIP, country/IP access policy, security alerts, traffic analytics, passkeys and authentication policy) change sets H/I (UI, import destinations, critical/optional notifications, backup schedules, drag and drop and Move to, full-page viewer, mobile/PWA parity, public-release readiness) and change set J (portal overflow menus with rename/archive/permanent delete, folder icons, List/Thumbnails/Details views with sorting, desktop file-and-folder drop with hierarchy, own library first, measured OCR preprocessing with confidence and re-run, "No expiry", the public title, the one-line installer `personal-DM.sh` and a LinkedIn-ready README), change set K (selective multilingual OCR with a policy per document type, source/page/language selection, OCR review queue and Remove OCR data; the customizable Overview with Today/Hijri, weather, month calendar and holidays; sign-in page designs and custom wallpaper) change set L (setup creates only the Main Administrator, optional family members) and change set M (ClamAV antivirus with quarantine, authentik sign-in, the Administrator role, the security center with Internet Ready, the Basic Internet Security Test, OS security updates and controlled reboot through a root host helper, firewall monitoring, the Security Health score, security record retention and Storage Health) and change set N (document types as editable data with metadata templates, value provenance, type suggestions, safe type changes with previous details, re-mapping of existing OCR data, one-off details and promotion, bulk classification, folder suggested types and the review of untyped documents): data model, settings registry, setup, accounts, permissions, delegation, authentication (password, TOTP, Google linking, console recovery), storage, versions, renewals, archive, imports, OCR/previews/extraction, search, UI/PWA/themes, offline/export, reminders over three channels, sharing, IMAP import, audit, backup/restore/integrity, native operations tooling, CI and documentation.
 
 **Release readiness: not yet approved for family production use.** The code and its automated tests are complete for the initial scope. The remaining release gates need environments that were not available in the build container (see Blockers). Per the release rules, the first family release should wait until AT-26 (Debian 13 install/upgrade) and AT-24 (restore on a clean LXC) have been validated on the real Proxmox host.
 
-**Acceptance scenarios AT-01…AT-160** (150 scenarios; the numbers AT-51…AT-60 were never assigned). The status of
+**Acceptance scenarios AT-01…AT-175** (165 scenarios; the numbers AT-51…AT-60 were never assigned). The status of
 each one is in [TRACEABILITY.md](TRACEABILITY.md). Summary, based on the latest recorded runs in
 [TEST_REPORT.md](TEST_REPORT.md):
 
 | Result | Count | Scenarios |
 |---|---|---|
-| Passed (automated tests, or for AT-136 a documented review) | 116 | all scenarios not listed below |
-| Passed in automated tests; real-environment validation still pending | 28 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155 |
+| Passed (automated tests, or for AT-136 a documented review) | 129 | all scenarios not listed below |
+| Passed in automated tests; real-environment validation still pending | 30 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175 |
 | Blocked (external environment) | 5 | AT-14, AT-26 (Pending-env); AT-24, AT-27, AT-30 (Partial: the remaining part needs a real Debian 13 LXC) |
 | Not run (manual steps, not automated) | 1 | AT-15 |
 
@@ -23,6 +23,15 @@ The pending real-environment parts (real hardware, real providers or credentials
 are not reported as passed.
 
 ## Completed (with evidence)
+
+- Change set N (2026-10-07): `tests/test_document_types.py` (16 tests, AT-161…AT-174): all passed. Full backend
+  suite: **312 passed**. `scripts/e2e.sh`: **55 PASS, 0 FAIL**, adding the desktop step *AT-161..175 document
+  types: set from Details, suggestion, safe change, custom detail, templates* and `AT-175 <viewport>: Details, type selection and previous values work by touch without clipping`
+  for tablet, mobile-portrait and mobile-landscape;
+  the accessibility audit now includes `/settings/documents` (no serious or critical violations). In one earlier run
+  with the local ClamAV daemon stopped, two desktop drag/move parity steps failed; they passed in the full rerun with
+  the daemon running. Not run: the installed PWA on real iOS/Android devices and an upgrade of a real Debian 13 /
+  Proxmox installation with production data. Details: [Change set N](#change-set-n).
 
 - Change set M (2026-10-07): new backend tests `tests/test_antivirus.py` (9, fake clamd with the EICAR test string,
   AT-138…AT-145, AT-160), `tests/test_antivirus_live.py` (1, executed against a **real ClamAV 1.5.4 daemon** in the
@@ -44,8 +53,56 @@ are not reported as passed.
 - Backend: 232 automated tests passing (incl. `test_security` 30, `test_ai` 15, `test_passkeys` 14, `test_photos` 9, `test_browser_moves` 11, `test_browsing_v3` 7, `test_ocr_quality` 6, `test_notification_policy` 7, `test_backup_schedule` 3, `test_preferences` 3). Frontend: 17 unit tests (vitest). One-line installer: 18 stubbed lifecycle checks. OCR benchmark: mean F1 0.61 → 0.97. (`docs/TEST_REPORT.md`).
 - Frontend: type-checked production build; browser end-to-end flow (`tests/e2e/flow.mjs`) and parity/viewer/browsing checks (`tests/e2e/parity.mjs`; 48 PASS, 0 FAIL in `scripts/e2e.sh` on 2026-10-06; 31/31 at change set J) at desktop, tablet, phone portrait and landscape; accessibility audit with 0 serious/critical violations in 3 themes; README screenshots in `docs/images/screenshots/`.
 - Tooling: one-line installer `personal-DM.sh` (menu + commands, delegates to the tools below); guided installers `scripts/proxmox-create-lxc.sh` (Proxmox host: creates the container) and `scripts/easy-install.sh` (inside the LXC: asks all parameters and installs, configures, connects the NAS, backs up and checks); `scripts/personaldocs` (install, upgrade, rollback, repair, status, doctor, backup, restore, integrity, recover-admin, setup-token, logs, manage, nas-apply), systemd units, `scripts/verify.sh`, GitHub Actions CI with prebuilt frontend release asset.
-- New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center` — applied by `personaldocs upgrade`.
-- Documentation: 35 bundled guides (new: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 12 ADRs, generated settings reference, test report, release checklist, changelog.
+- New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated) — applied by `personaldocs upgrade`.
+- Documentation: 36 bundled guides (new in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 12 ADRs, generated settings reference, test report, release checklist, changelog.
+
+## Change set N: document types and metadata templates {#change-set-n}
+
+**Root cause of the reported defect.** The Details panel (`frontend/src/components/DocumentPanel.tsx`) rendered
+"Type" as a hard-coded read-only row ("—" when unset); the type could only be changed through the hidden
+"Rename / edit details…" dialog. Detail rows came from a fixed frontend label list (`FIELD_LABELS`) and from
+`DocumentField` rows written by OCR extraction regardless of type. Uploads without a chosen type stayed untyped, so
+OCR details appeared with Type "—". Two further defects were found and fixed: the old bulk `set_type` action could
+overwrite confirmed types, and the older `DELETE /api/metadata/type/<id>` endpoint could hard-delete a type in use,
+silently untyping its documents.
+
+**Data model** (migration `library.0009_document_type_templates`):
+
+- `DocumentType`: `description`, `sort_order`, `reminder_days` (empty = global setting). Types are seeded editable
+  data (`seed_defaults`), not code constants.
+- `DocumentTypeField` (template field): stable `key`, `label`, `field_type` (text, long_text, date, number, boolean,
+  select, country, person, identifier), `enabled`, `required`, `order`, `help_text`, `extract`, `searchable`, `role`
+  (expiry, issue, no_expiry), `choices`, `validation` (pattern, min, max, max_length).
+- `Document`: `type_source` (manual, folder, ocr, ai, import, system, migrated), `type_confirmed`,
+  `type_suggestions` (pending, with source, reason and confidence), `details_incomplete_ok`.
+- `DocumentField`: `label`, `scope` (type, custom, unmapped), `overridden`, `previous_type`, `updated_at`; sources
+  manual, ocr, mrz, ai, import, system, migrated.
+- `Folder.suggested_type` (a suggestion only; inherited by sub-folders).
+
+**Migration behaviour.** Every type gets its template (the defaults of its starting template plus the fields its OCR
+policy listed). Typed documents keep their type, marked confirmed with source *migrated*. Untyped documents stay
+untyped; no type is guessed from field names. Values of typed documents outside the template become additional
+details (scope *custom*), except confirmed issue, expiry and no-expiry values, whose field is added to the template
+so dates and reminders keep working. Nothing is deleted.
+
+**Behaviour.** `library/doctypes.py` holds templates, validation, details status, suggestions (folder, OCR text,
+Local AI), the type-change plan and change, previous-value resolution, OCR re-mapping, promotion and the report;
+`library/views_types.py` serves `/api/documents/<id>/type`, `/remap-ocr`, `/api/documents/bulk-type`,
+`/api/document-types` (and `/admin`, `/<id>`, `/<id>/fields`, `/review`). Frontend: `components/DocumentDetails.tsx`
+(Details panel, type dialogs, bulk dialog, folder suggestion), `pages/settings/DocumentTypes.tsx` (types, template
+editor, review of untyped documents), `components/UploadDialog.tsx`. Only confirmed values of the expiry-role field
+drive the expiry date and reminders; per-type reminder days override the global schedule. Local AI extraction for a
+typed document proposes only template fields marked extractable. `personaldocs manage document_types report` and
+`personaldocs doctor` report the counts.
+
+**Tests.** `tests/test_document_types.py`: 16 tests (AT-161…AT-174), all passed. Parity: the desktop document types
+step and the AT-175 touch steps (tablet, mobile-portrait, mobile-landscape), all passed; full `scripts/e2e.sh`
+55 PASS, 0 FAIL. Not automated: the bulk skip of documents with another confirmed type and the bulk preview counts.
+Pending (not run): installed PWA on real iOS/Android devices; upgrade of a real Debian 13 / Proxmox installation with
+existing production data.
+
+**Limitations.** Type suggestions from OCR text are keyword and MRZ rules, not a classifier; a document with unusual
+wording gets no suggestion and stays *Not assigned* until someone sets the type.
 
 ## Blockers (external validation)
 
@@ -117,6 +174,15 @@ None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT
 8. Public release (owner decisions): enable GitHub private vulnerability reporting, run `scripts/privacy_check.sh --history`, then change the repository visibility in GitHub settings.
 
 ## Session log
+
+- 2026-10-07 (change set N): document types as editable data with metadata templates (field types, roles,
+  required, OCR/AI and searchable flags, validation, order), the Details panel with the type row, status, template
+  fields, additional and previous details, value provenance, type suggestions from folders, OCR text and Local AI,
+  safe type changes with preview and map/keep/remove, re-mapping of existing OCR data, one-off details and
+  promotion, bulk Set type…, folder suggested types, Settings → Documents & folders → Document types with the review
+  of untyped documents, per-type reminder days and the `document_types report` command. Fixed: the read-only Type row
+  (root cause above), bulk `set_type` overwriting confirmed types, and the metadata delete endpoint untyping
+  documents.
 
 - 2026-10-07 (change set M): ClamAV antivirus (background scan over the local clamd socket, fail-open, statuses,
   quarantine with main-administrator release and delete, size limit, library scan with pause/resume/cancel and

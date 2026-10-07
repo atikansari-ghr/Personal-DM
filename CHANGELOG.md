@@ -4,6 +4,32 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-07) — document types, metadata templates, field sources and type assignment (Change Set N)
+- **Document types as editable data** (Settings → Documents & folders → Document types, main administrator): list with document counts; add from a standard template (passport, visa, residence permit / iqama, national ID, driving licence, employee ID, insurance, certificate, generic) or a copy of another type; edit name, icon, description, expiry awareness and **per-type reminder days**; archive/restore; delete only when unused or after moving its documents to another type.
+- **Metadata templates** per type: fields with stable key, label, field type (text, long text, date, number, yes/no, select, country, person, identifier), shown, required, order (↑/↓, keyboard accessible), help text, *OCR / Local AI may suggest*, searchable, role (expiry, issue, no expiry), choices and validation (pattern, min, max, max length), with a preview of the Details panel.
+- **Details panel**: Owner, Document type with **Set type** / **Change…** (read-only for viewers, *Not assigned* when empty, **Manage** for the main administrator), a details status (*Details confirmed*, *Incomplete: …*, *Needs review: …*) with **Confirm as incomplete**, the template fields, **Additional details** and **Previous details — needs review**.
+- **Value provenance**: *Suggested* / *Edited* badges and source chips (Manual, OCR, OCR (MRZ), Local AI, Imported, System, Migrated) with who and when confirmed.
+- **Type suggestions** from the folder, from OCR text (MRZ or wording, with reason and confidence) and from the local AI, with Accept… / Change… / Ignore; conflicts shown, never decided automatically.
+- **Safe type change** with a preview (kept values, previous details with reason, additional details, new empty fields, expiry warning); previous details can be mapped, kept or removed; **Re-map existing OCR data** without a new OCR scan.
+- **Additional details** (*New detail for this document…*) and promotion to the template (**Add to … template…**, main administrator).
+- Type assignment in the upload dialog, the Details panel, the document ⋮ menu / More actions and **bulk Set type…** (preview, confirmed types protected unless explicitly overridden); folder ⋮ **Suggested document type…**; **Review untyped documents** for the main administrator.
+- OCR review queue filter by document type; searchable template fields indexed (identifiers not by default).
+- API: `/api/documents/<id>/type`, `/api/documents/<id>/remap-ocr`, `/api/documents/bulk-type`, `/api/document-types` (`/admin`, `/<id>`, `/<id>/fields`, `/review`); `PATCH /api/folders/<id>` accepts `suggested_type`.
+- `personaldocs manage document_types report`; `personaldocs doctor` prints typed / untyped / suggested counts.
+- Migration `library.0009_document_type_templates`; guide document types; ADR 0013; new screenshots (synthetic data).
+
+### Changed (2026-10-07) — Change Set N
+- Detail rows come from the document type's template instead of a fixed frontend label list; OCR and the local AI propose only template fields marked extractable for typed documents.
+- Only the confirmed value of the template field with the expiry role drives the expiry date and reminders; a type's reminder days override the global schedule; a type change re-derives the expiry date.
+- Folder and document type are explicitly independent: moving never changes the type, changing the type never moves the file.
+- On upgrade every type gets a template, typed documents keep their type (confirmed, source *Migrated*), untyped documents stay untyped, and values outside a template become additional details. Nothing is deleted.
+- Settings → OCR & processing → *OCR by document type* stays in sync with the templates' OCR/AI flags.
+
+### Fixed (2026-10-07) — Change Set N
+- The Details panel showed **Type** as a hard-coded read-only row ("—" when unset), changeable only through the hidden "Rename / edit details…" dialog, so documents with OCR details appeared untyped with no visible way to set the type.
+- The bulk `set_type` action could overwrite confirmed types; it now follows the same safe rules as a single change.
+- The older `DELETE /api/metadata/type/<id>` endpoint could hard-delete a type in use and silently untype its documents; deleting a type in use is now refused.
+
 ### Added (2026-10-07) — antivirus, authentik, security center, storage health (Change Set M)
 - **ClamAV antivirus:** every new file is scanned in the background through the local clamd socket `/run/clamav/clamd.ctl` (no TCP port); statuses Scan pending, Clean, Not scanned, Not scanned — size limit exceeded, Scan failed, Threat detected, Quarantined and Released from quarantine; fail-open when ClamAV is down.
 - Quarantine in `<data>/quarantine`: preview, download, sharing, export, OCR and Local AI blocked; only the main administrator can release (warning, confirmation, reason, audited) or delete (type DELETE). Quarantined files are excluded from backups and from integrity "missing" reports.
