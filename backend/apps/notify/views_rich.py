@@ -94,7 +94,10 @@ def notification_action(request, pk):
     doc = Document.objects.filter(pk=n.document_id, archived_at__isnull=True).first()
     if doc is None or not P.AccessContext.build(request.user).can(doc, P.VIEW):
         return _err("Not found.", 404)
-    days = 7
+    try:
+        days = max(1, min(int(request.data.get("days") or 7), 30))
+    except (TypeError, ValueError):
+        days = 7
     until = timezone.localdate() + timedelta(days=days)
     ExpirySnooze.objects.update_or_create(user=request.user, document=doc, defaults={"until": until})
     Notification.objects.filter(pk=n.pk).update(read_at=timezone.now())
