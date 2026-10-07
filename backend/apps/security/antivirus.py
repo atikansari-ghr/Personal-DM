@@ -158,7 +158,14 @@ def scan_path(path: Path) -> tuple[str, str]:
         sock.sendall(struct.pack("!L", 0))
         reply = _recv_all(sock)
     except (OSError, socket.timeout) as exc:
-        raise ScannerUnavailable(f"The connection to ClamAV broke during the scan ({exc.__class__.__name__}).") from exc
+        # clamd answers "INSTREAM size limit exceeded" and closes while we are still sending: read that answer
+        reply = ""
+        try:
+            reply = _recv_all(sock)
+        except OSError:
+            pass
+        if not reply:
+            raise ScannerUnavailable(f"The connection to ClamAV broke during the scan ({exc.__class__.__name__}).") from exc
     finally:
         sock.close()
     if reply.endswith("OK") and "FOUND" not in reply:
