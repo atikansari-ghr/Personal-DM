@@ -24,7 +24,7 @@ A LAN-only installation may use plain HTTP but is never shown as Internet Ready.
 | Framework & configuration | debug mode off, allowed host names, strong secret key, `manage.py check --deploy` |
 | Authentication & access control | protected pages refuse anonymous access, a member cannot open another member's private document, administrators use two-step verification, failed sign-ins are blocked |
 | Web baseline (OWASP-style) | no exposed `.env`/`.git`/settings files or path traversal, no open redirect, TRACE disabled, no permissive CORS, server version hidden |
-| Upload security | ClamAV running with fresh signatures |
+| Upload security | ClamAV reachable and scanning (not Unavailable or Error) with fresh signatures |
 | Dependencies | `pip-audit` (install with `sudo personaldocs repair --with-security-tools`) and `npm audit` when available |
 | Secrets & file permissions | no private keys or tokens in the application files; keys and documents not readable by other users |
 | Host | firewall active, no unexpected listening services, ClamAV/PostgreSQL not exposed, reboot pending, security updates pending, service hardening |
@@ -41,7 +41,7 @@ The **OS updates** view lists pending **Debian security updates** (checked throu
 
 **Reboot server…** lists what would be interrupted (signed-in sessions, OCR/antivirus/AI jobs), stops the worker and scheduler (the current job finishes first) and reboots. Duplicate reboot requests are refused. After the restart the page shows whether the database, worker, scheduler and antivirus are back. If the host helper is not installed, the page says so and shows the commands to run on the server (`sudo apt-get update && sudo apt-get upgrade && sudo reboot`).
 
-The **host helper** is a small root service (`personaldocs-host.path`) installed by `personaldocs install/upgrade/repair`. It accepts only fixed actions: inspect, check updates, install security updates, update ClamAV signatures, reboot.
+The **host helper** is a small root service (`personaldocs-host.path`) installed by `personaldocs install/upgrade/repair`. It accepts only fixed actions: inspect, check updates, install security updates, update ClamAV signatures, repair antivirus (`antivirus_repair`, the fixed steps of [Diagnose / Repair](antivirus.md#repair)), reboot.
 
 ## Firewall monitoring {#firewall}
 
@@ -60,7 +60,7 @@ The **Security Health** widget (administrators only, also on the Overview) shows
 
 | Component | Points | Full points when |
 | --- | --- | --- |
-| Antivirus | 20 | ClamAV running with current signatures (stale 12, critically stale 5, off/unavailable 0) |
+| Antivirus | 20 | ClamAV **Healthy**: reachable and a real scan succeeds, with current signatures (Degraded/stale 12, critically stale 5, off, **Unavailable** or **Error** 0) |
 | HTTPS / TLS | 20 | Internet Ready (LAN only: 15) |
 | Internet security test | 20 | passed within 90 days (warnings 12, High findings 5, Critical 0, never run 5) |
 | Debian security updates | 15 | none pending (not checked 7, pending 5) |
@@ -68,7 +68,9 @@ The **Security Health** widget (administrators only, also on the Overview) shows
 | Reboot status | 10 | no reboot needed (required 3) |
 | authentik | 5 | not used, or reachable (unreachable 1) |
 
-It is a summary for your own installation, not an industry certification. **These conditions force At Risk regardless of the score**, and the reason is shown prominently: malware in quarantine (or a detected threat), failed HTTPS on an Internet-facing deployment, an inactive firewall on an Internet-facing deployment, critically stale antivirus definitions, and unresolved Critical findings in the latest security test.
+It is a summary for your own installation, not an industry certification. **These conditions force At Risk regardless of the score**, and the reason is shown prominently: malware in quarantine (or a detected threat), failed HTTPS on an Internet-facing deployment, an inactive firewall on an Internet-facing deployment, critically stale antivirus definitions, unresolved Critical findings in the latest security test, and antivirus **Unavailable** or **Error** ("Antivirus is not scanning: …").
+
+The antivirus state comes from what ClamAV does now: the daemon must answer **and** scan a small clean test buffer, and the last [self-test](antivirus.md#self-test) must have passed. Engine and signature versions cached from an earlier contact do not count. See [status and health states](antivirus.md#status).
 
 ## Security records: retention and purge {#retention}
 

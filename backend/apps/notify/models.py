@@ -120,6 +120,8 @@ class NotificationTemplate(models.Model):
     icon = models.CharField(max_length=30, blank=True)
     severity = models.CharField(max_length=10, blank=True)
     action_labels = models.JSONField(default=dict, blank=True)
+    brand = models.CharField(max_length=60, blank=True, help_text="Header name in email (default: the application name)")
+    footer = models.CharField(max_length=300, blank=True, help_text="Footer / help text")
     updated_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     updated_at = models.DateTimeField(auto_now=True)
 

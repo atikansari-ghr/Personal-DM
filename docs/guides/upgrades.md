@@ -14,6 +14,77 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to Change Set P (passkey sign-in, password reset, ClamAV repair) {#change-set-p}
+
+```
+sudo personaldocs upgrade
+# or: bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)" -- upgrade
+sudo personaldocs antivirus status   # every ClamAV check and the likely cause of any problem
+sudo personaldocs doctor             # starts with the same ClamAV diagnosis, then the app checks
+```
+
+(The change prompt for this release called it "Change Set O" with tests AT-176..AT-190. Those numbers were already
+used by the rich notifications release, so in this repository it is **Change Set P** with tests **AT-196..AT-210**:
+prompt AT-176 is AT-196, AT-177 is AT-197, and so on up to AT-190, which is AT-210.)
+
+No new system packages and no new Python packages. This release adds **two database migrations**, applied
+automatically after the verified backup:
+
+- `accounts.0007_passkey_mode`: replaces the on/off setting `auth.allow_passwordless` with **Passkey sign-in mode**
+  (`auth.passkey_mode`). An explicit earlier choice is kept: saved *off* becomes **Password + Passkey**, saved *on*
+  becomes **Passwordless**, never chosen becomes **Passwordless** (the new default). In passwordless mode it also turns
+  passwordless sign-in on for accounts that already have a discoverable passkey. See
+  [passkeys after upgrading](passkeys.md#upgrade).
+- `notify.0003_template_brand_footer`: **Branding name** and **Footer / help text** for notification templates.
+
+**The ClamAV repair runs automatically.** The post-upgrade step (which `personaldocs upgrade` and the one-line
+upgrade run for you) now runs the [antivirus repair](antivirus.md#repair) instead of assuming that installed packages
+mean antivirus works. It:
+
+- rewrites `LocalSocket` in `/etc/clamav/clamd.conf` to the systemd socket path `/run/clamav/clamd.ctl` (the original
+  is backed up once as `/etc/clamav/clamd.conf.personaldocs-backup`) and removes any TCP listener;
+- installs the restart drop-in `/etc/systemd/system/clamav-daemon.service.d/50-personaldocs.conf` and the tmpfiles
+  entry `/etc/tmpfiles.d/personaldocs-clamav.conf`;
+- downloads missing signatures, starts the socket and the daemon in the right order, and runs a clean + EICAR
+  self-test.
+
+This can take **a few minutes** (up to 4 minutes of waiting) while clamd loads its signatures. It fixes the
+"Unavailable … `/run/clamav/clamd.ctl` (FileNotFoundError)" state described in
+[antivirus troubleshooting](antivirus.md#socket-missing). If it reports a problem, the upgrade itself still
+completes; run `sudo personaldocs antivirus repair` again after fixing the cause (for example too little memory).
+
+What changes:
+
+- **Passwordless is the default** unless it was explicitly turned off before. The sign-in page shows **Sign in with
+  Passkey** before the password, and people who already have a discoverable passkey can use it straight away. See
+  [the sign-in screen](passkeys.md#sign-in-screen).
+- People can sign in with their **email address** instead of the username (when it belongs to exactly one active
+  account).
+- **Administrators** (the Administrator role) can now reset the passwords of accounts that are not main
+  administrators, in Settings → Users. See [password reset](password-reset.md).
+- A **temporary password reset always signs the person out** on every device.
+- New security notifications (password reset requested, administrator reset, temporary password issued, password
+  reset completed, account locked, Google linked or removed) with [mandatory security text](notifications.md#security-templates).
+- The Antivirus page shows **Healthy / Degraded / Unavailable / Error** based on a real scan, and **Run self-test** and
+  **Diagnose / Repair**. Unavailable and Error now put Security Health **At Risk**.
+
+Check by hand after upgrading:
+
+1. Settings → Security → Antivirus shows **Healthy** and **Run self-test** passes.
+2. **Reboot the LXC once** (or `pct reboot <id>` on the Proxmox host) and check the Antivirus page again; reboot
+   persistence has not been tested on a real host yet.
+3. Sign in with **Sign in with Passkey** on each device and browser you use.
+4. Send a password reset email to yourself (Forgot password? on the sign-in page) and check that it arrives and the
+   link works once.
+5. If you prefer passkeys only after the password, set Settings → Authentication → **Passkey sign-in mode** to
+   *Password + Passkey*.
+
+To go back, restore the pre-upgrade backup: this release adds migrations, so `sudo personaldocs rollback` is refused
+unless the previous release knows them (see [Rollback](#rollback)). The ClamAV changes are host configuration and stay
+in place; they also work with the previous release. To restore Debian's ClamAV configuration, copy
+`/etc/clamav/clamd.conf.personaldocs-backup` back to `/etc/clamav/clamd.conf` and restart `clamav-daemon`. The drop-in
+and tmpfiles files can stay.
+
 ## Upgrading to the rich notifications release (Change Set O) {#change-set-o}
 
 ```

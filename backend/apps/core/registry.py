@@ -383,10 +383,13 @@ SETTINGS: list[SettingDef] = [
                "People may register passkeys (phone, computer, password manager or security key) as a second step after the password.",
                "bool", True, "authentication", effect="Turning it off only stops new registrations; existing passkeys keep working until removed.",
                help="passkeys#enable"),
-    SettingDef("auth.allow_passwordless", "Allow passwordless passkey sign-in",
-               "People who turn it on for their own account can sign in with a passkey alone (the passkey verifies them with fingerprint, face or PIN).",
-               "bool", False, "authentication", depends_on=("auth.allow_passkeys",),
-               effect="Turning it off stops passwordless sign-in immediately; everyone can still use their password.",
+    SettingDef("auth.passkey_mode", "Passkey sign-in mode",
+               "Passwordless: the sign-in page offers Sign in with Passkey before any password, and a passkey (verified with "
+               "fingerprint, face or PIN) signs the person in on its own. Password + Passkey: passkeys are only used as the "
+               "second step after the password.",
+               "choice", "passwordless", "authentication", choices=("passwordless", "mfa"), depends_on=("auth.allow_passkeys",),
+               effect="Switching to Password + Passkey stops passwordless sign-in immediately; everyone can still use their password. "
+                      "The main administrator's password and recovery codes always keep working.",
                help="passkeys#passwordless"),
     SettingDef("auth.require_2fa", "Require two-step verification",
                "Who must use a second step (passkey or authenticator app). People without one are asked to set it up right after signing in.",

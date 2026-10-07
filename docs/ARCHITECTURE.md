@@ -44,8 +44,9 @@ Middleware order: `AccessLogMiddleware` (privacy-safe access log) → `LocalAcce
 (refuses blocked networks before sessions, CSRF and authentication) → Django security, sessions, CSRF, authentication →
 `AccountStateMiddleware`. The SPA (React/TS, built by Vite into `frontend/dist`) is served by WhiteNoise. API calls use the session cookie plus `X-CSRFToken`. `AccountStateMiddleware` ends sessions for disabled accounts and after a session-epoch bump (password reset, console recovery, "sign out everywhere"). `IsActiveAuthenticated` blocks the whole API, apart from password change, while a temporary password is pending, and
 (when the policy requires two-step verification) apart from the passkey/authenticator setup views until one is configured.
-Sign-in: password → optional second step (TOTP, passkey via WebAuthn, recovery code) → session; optional passwordless passkey
-sign-in. Every outcome is written to `LoginEvent`.
+Sign-in: password (username, or an email address that belongs to exactly one active account) → optional second step
+(TOTP, passkey via WebAuthn, recovery code) → session; or, in the default `auth.passkey_mode` *passwordless*, **Sign in
+with Passkey** (discoverable credential, user verification required) directly. Every outcome is written to `LoginEvent`.
 
 ## Processing pipeline
 
@@ -253,3 +254,64 @@ dispatch (expiry.py): recipients → channels (catalog.channels_for: preferences
   (poll every 60 s and on navigation), `pages/settings/NotificationTemplates.tsx` (Template Manager, Delivery history),
   the push section of My account → Notifications.
 - Migration `notify.0002_rich_notifications`; new tables `PushSubscription`, `NotificationTemplate`, `ExpirySnooze`.
+
+## Change set P (2026-10): passkey sign-in mode, password reset, security templates, ClamAV repair
+
+See [ADR 0015](adr/0015-passkey-signin-password-reset-clamav-repair.md).
+
+- **Passkey mode.** `auth.passkey_mode` (`passwordless` default, `mfa`) replaces `auth.allow_passwordless`
+  (migration `accounts.0007_passkey_mode`). `accounts/views.py::session_state` tells `pages/Auth.tsx` which methods to
+  offer; the page shows password, "or", **Sign in with Passkey**, then authentik/Google, and starts WebAuthn
+  conditional mediation (`webauthn.ts`) for passkey autofill in the username field. `passkey_login_verify` uses
+  `py_webauthn` with user verification required, a single-use challenge, and the origin and RP ID of
+  `PD_PUBLIC_ORIGIN`. Registering a discoverable passkey in passwordless mode sets the account's passwordless flag;
+  `my_passwordless` turns it off again (recent confirmation, audited, notified). In `mfa` mode passkeys are only the
+  second step.
+- **Password reset** (`accounts/password_reset.py`, one module for every entry point):
+
+```
+Forgot password? ──┐
+Admin "Send reset email" ─┤ can_reset (admin, not self, main admin protected, active)
+                         ▼
+               new_token: 32 random bytes, hash stored, older unused tokens invalidated,
+               expires after auth.reset_token_minutes
+                         ▼
+               send_reset_email: rich.Message(secret_link=…/reset-password?token=…) → render_email
+               → mailer.send_mail_now (direct SMTP; never OutboxMessage, Notification, Telegram, push or logs)
+                         ▼
+               POST /api/auth/password/reset: hash lookup, valid + unused → set_password → token used
+               → password_changed → "Password reset completed"
+
+Admin "Generate temporary password" → can_reset → generate_password(16) → set_password(temporary=True)
+   (hash only; must_change; invalidates tokens; the changed hash ends every Django session)
+   → response once with Cache-Control: no-store → audit family.password_reset_by_admin (method, never the value)
+   → notify security.temporary_password (person) + security.password_admin_reset (other main administrators)
+```
+
+- **Security templates.** `notify/event_defs.py` gives security events a `mandatory` tuple; `rich.Message` always
+  merges it in, and `render_email` (red box, `IMPORTANT:` lines in plain text), `render_telegram` (bold ⚠️ lines) and
+  `render_in_app` (`mandatory` in the card data) render it outside the template fields, so an override cannot remove
+  it. `NotificationTemplate.brand` and `.footer` (migration `notify.0003_template_brand_footer`) go through the same
+  `check_template_text` and escaping. `Message.secret_link` is accepted only for this application's
+  `/reset-password?token=` address and is rendered only by `render_email`.
+- **ClamAV diagnosis and repair.** `ops/clamav_check.py` (standard library only) is shared by three callers:
+
+```
+sudo personaldocs antivirus status|repair|selftest ─┐
+personaldocs install / post-upgrade / repair ───────┼─▶ python3 clamav_check.py (root)
+host helper action antivirus_repair (ops/host_helper.py)┘      diagnose(): systemd units, socket unit Listen vs
+                                                               clamd.conf LocalSocket, /run/clamav, socket file,
+web app (personaldocs user):                                   runuser PING as personaldocs, VERSION, INSTREAM
+  security/antivirus.py::diagnose, self_test ─────────────▶   self-test, memory, journal → root_cause()
+  security/views_av.py  /api/security/antivirus/diagnose      repair(): packages, clamd.conf, drop-in, tmpfiles,
+                        /selftest, /repair (→ host helper)    freshclam, enable/start socket + daemon, wait PONG,
+                                                               final diagnose + self-test
+```
+
+  The web app never runs root commands: **Repair antivirus** writes the fixed action `antivirus_repair` to the host
+  helper request file. After a repair the installer runs `manage antivirus sync-socket PATH` so `antivirus.socket`
+  matches the socket clamd really serves. `security/antivirus.py` derives the health state (Healthy, Degraded,
+  Unavailable, Error, disabled) from a live `PING` plus a small clean `INSTREAM` scan and the last self-test result;
+  `security/center.py::security_health` gives Unavailable and Error 0 points and forces At Risk. The hourly check runs
+  `self_test` once a day and after a failure. `doctor` prints the root diagnosis before the app checks.
+- Migrations `accounts.0007_passkey_mode`, `notify.0003_template_brand_footer`. No new dependencies.

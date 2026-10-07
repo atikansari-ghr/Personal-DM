@@ -162,7 +162,7 @@ def _template_json(t: NotificationTemplate | None) -> dict | None:
     if t is None:
         return None
     return {"channel": t.channel, "title": t.title, "heading": t.heading, "summary": t.summary, "icon": t.icon,
-            "severity": t.severity, "action_labels": t.action_labels, "updated_at": t.updated_at,
+            "severity": t.severity, "action_labels": t.action_labels, "brand": t.brand, "footer": t.footer, "updated_at": t.updated_at,
             "updated_by": t.updated_by.display_name if t.updated_by_id and t.updated_by else None}
 
 
@@ -180,6 +180,7 @@ def templates_list(request):
                        "always_critical": ev.always_critical, "admins_only": ev.admins_only,
                        "locked_channels": catalog.locked_channels(key),
                        "actions": [{"key": a.key, "label": a.label, "in_app_only": a.in_app_only} for a in s.actions],
+                       "mandatory": list(s.mandatory),
                        "overrides": overrides.get(key, [])})
     return Response({"events": events, "placeholders": rich.PLACEHOLDERS,
                      "icons": [{"key": k, "emoji": v[0], "svg": v[1], "label": v[2]} for k, v in icons.ICONS.items()],
@@ -193,6 +194,7 @@ class _Draft:
     def __init__(self, data):
         self.title, self.heading, self.summary = data["title"], data["heading"], data["summary"]
         self.icon, self.severity, self.action_labels = data["icon"], data["severity"], data["action_labels"]
+        self.brand, self.footer = data.get("brand", ""), data.get("footer", "")
 
 
 def _clean_template(event: str, d) -> dict:
@@ -201,7 +203,9 @@ def _clean_template(event: str, d) -> dict:
         raise rich.TemplateError("Unknown channel.")
     out["title"] = rich.check_template_text(d.get("title", ""), field_name="Title / subject", limit=200)
     out["heading"] = rich.check_template_text(d.get("heading", ""), field_name="Heading", limit=200)
-    out["summary"] = rich.check_template_text(d.get("summary", ""), field_name="Summary", limit=500)
+    out["summary"] = rich.check_template_text(d.get("summary", ""), field_name="Summary / introduction", limit=500)
+    out["brand"] = rich.check_template_text(d.get("brand", ""), field_name="Branding name", limit=60)
+    out["footer"] = rich.check_template_text(d.get("footer", ""), field_name="Footer / help text", limit=300)
     icon = d.get("icon") or ""
     if icon and icon not in icons.ICONS:
         raise rich.TemplateError("Choose an icon from the list.")
@@ -244,7 +248,7 @@ def template_detail(request, event):
         clean = _clean_template(event, request.data)
     except rich.TemplateError as exc:
         return _err(str(exc))
-    if not any(clean[k] for k in ("title", "heading", "summary", "icon", "severity")) and not clean["action_labels"]:
+    if not any(clean[k] for k in ("title", "heading", "summary", "icon", "severity", "brand", "footer")) and not clean["action_labels"]:
         NotificationTemplate.objects.filter(event=event, channel=clean["channel"]).delete()
         return Response({"reset": True})
     NotificationTemplate.objects.update_or_create(event=event, channel=clean["channel"], defaults={

@@ -8,6 +8,7 @@ Started by personaldocs-host.service (via `personaldocs host-apply`) when the we
 * ``check_updates``    — refresh the package lists and list pending Debian security updates (simulation only).
 * ``install_updates``  — install the pending *security* updates found by a fresh check (never other upgrades).
 * ``freshclam``        — update ClamAV signatures now.
+* ``antivirus_repair`` — diagnose and repair the local ClamAV daemon/socket (clamav_check.py; fixed steps only).
 * ``reboot``           — drain the Personal DM services and reboot the host (once; duplicates are ignored).
 
 Firewall rules are never changed. Every run writes <data-dir>/host/<action>.json (status) and a log file.
@@ -25,7 +26,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ACTIONS = ("inspect", "check_updates", "install_updates", "freshclam", "reboot")
+ACTIONS = ("inspect", "check_updates", "install_updates", "freshclam", "antivirus_repair", "reboot")
 SERVICE_USER = "personaldocs"
 PKG_RX = re.compile(r"^[a-z0-9][a-z0-9+.\-]{0,99}$")
 INST_RX = re.compile(r"^Inst (\S+) (?:\[(\S+)\] )?\((\S+) ([^)]*)\)")
@@ -179,6 +180,20 @@ class HostHelper:
         ok = p.returncode == 0
         return {"state": "done" if ok else "failed", "ok": ok, "log": logname,
                 "error": "" if ok else (p.stderr or p.stdout)[-300:]}
+
+    # ---------------------------------------------------------- ClamAV daemon repair
+    def antivirus_repair(self, req: dict) -> dict:
+        try:
+            from .clamav_check import Clamav
+        except ImportError:  # run as a script by personaldocs host-apply
+            from clamav_check import Clamav
+        out = Clamav(run=self.run).repair()
+        log = "\n".join(f"{'OK  ' if s['ok'] else 'FAIL'} {s['step']}: {s['detail']}" for s in out["steps"])
+        logname = self._log(req["id"], log + "\n")
+        res = out["result"]
+        ok = res["status"] in ("healthy", "degraded")
+        return {"state": "done" if ok else "failed", "ok": ok, "log": logname, "steps": out["steps"], "diagnosis": res,
+                "error": "" if ok else (res.get("cause") or "ClamAV is still not working; see the steps.")}
 
     # ---------------------------------------------------------- reboot
     def reboot(self, req: dict) -> dict:

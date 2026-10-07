@@ -298,8 +298,9 @@ def _check_uploads(f: _Findings):
     if h.get("status") == "disabled":
         f.add(cat, "Antivirus scanning of uploads", "warn", "high" if _internet() else "medium", "ClamAV scanning is turned off.",
               "Turn on Settings → Security → Antivirus.")
-    elif h.get("status") == "unavailable":
-        f.add(cat, "Antivirus scanning of uploads", "fail", "high", h.get("error", ""), "sudo personaldocs repair; check clamav-daemon.")
+    elif h.get("status") in ("unavailable", "error"):
+        f.add(cat, "Antivirus scanning of uploads", "fail", "high", h.get("error", ""),
+              "Settings → Security → Antivirus → Diagnose / Repair, or on the server: sudo personaldocs antivirus repair")
     elif h.get("critically_stale"):
         f.add(cat, "Antivirus scanning of uploads", "fail", "high", f"Signatures {h.get('signature_age_days')} days old.",
               "Use Update now; check clamav-freshclam.")
@@ -670,7 +671,11 @@ def security_health() -> dict:
     if av.get("status") == "disabled":
         put("antivirus", 0, "bad", "Antivirus scanning is off", av_link)
     elif av.get("status") == "unavailable":
-        put("antivirus", 0, "bad", "ClamAV is unavailable", av_link)
+        put("antivirus", 0, "bad", "ClamAV is unavailable (scanner not reachable)", av_link)
+        forced.append("Antivirus is not scanning: ClamAV cannot be reached.")
+    elif av.get("status") == "error":
+        put("antivirus", 0, "bad", "ClamAV answers but cannot scan", av_link)
+        forced.append("Antivirus is not scanning: the scan self-test failed.")
     elif av.get("critically_stale"):
         put("antivirus", 5, "bad", f"Signatures {av.get('signature_age_days')} days old", av_link)
         forced.append("Antivirus definitions are critically out of date.")

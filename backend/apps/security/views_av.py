@@ -164,3 +164,36 @@ def freshclam_status(request):
             av._alert("antivirus.definitions", f"av_update_fail:{st.get('id')}", "Antivirus signature update failed",
                       [f"Error: {str(st.get('error') or 'unknown')[:200]}"])
     return Response({**st, "log": host.log_text(st.get("log", ""), 20_000) if st.get("log") else ""})
+
+
+@api_view(["GET"])
+@permission_classes([IsAdministrator])
+def diagnose(request):
+    """Read-only diagnosis as the web service account, plus the last root repair (if any)."""
+    diag = av.diagnose()
+    st = host.status("antivirus_repair")
+    return Response({"diagnosis": diag, "health": av.health(refresh=True), "repair": {
+        **{k: st.get(k) for k in ("id", "state", "started_at", "finished_at", "error", "steps", "requested_at")},
+        "diagnosis": st.get("diagnosis"), "log": host.log_text(st.get("log", ""), 20_000) if st.get("log") else ""},
+        "helper_installed": host.installed(),
+        "manual_fix": "sudo personaldocs antivirus repair"})
+
+
+@api_view(["POST"])
+@permission_classes([IsAdministrator])
+def selftest(request):
+    """Clean file + EICAR test pattern through the upload scan path; temporary files are removed."""
+    if not config.get("antivirus.enabled"):
+        return _err("Antivirus scanning is turned off in Settings → Security → Antivirus.")
+    return Response(av.self_test(actor=request.user))
+
+
+@api_view(["POST"])
+@permission_classes([IsAdministrator])
+def repair(request):
+    """Ask the root host helper to run the fixed ClamAV repair steps (no browser-supplied commands)."""
+    try:
+        req = host.request("antivirus_repair", actor=request.user, request_obj=request)
+    except host.HostError as exc:
+        return _err(str(exc), 409, manual_fix="sudo personaldocs antivirus repair")
+    return Response({"requested": req["id"]}, status=202)

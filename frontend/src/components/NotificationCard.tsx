@@ -11,7 +11,7 @@ export interface NoteDetail { label: string; value: string; icon: string; emphas
 export interface NoteAction { key: string; label: string; path: string; primary?: boolean; in_app?: boolean }
 export interface Note {
   id?: number; event?: string; category: string; severity: string; icon: string; title: string; summary?: string;
-  created_at?: string; read?: boolean; test?: boolean; details?: NoteDetail[]; actions?: NoteAction[]; guidance?: string[];
+  created_at?: string; read?: boolean; test?: boolean; details?: NoteDetail[]; actions?: NoteAction[]; guidance?: string[]; mandatory?: string[]; footer?: string;
   items?: string[]; items_label?: string; more?: number; link?: string; icon_label?: string;
 }
 
@@ -40,6 +40,7 @@ export default function NotificationCard({ n, onOpen, onToggleRead, onAction, pr
         </div>
         <h3 className="note-title" dir="auto">{n.title}</h3>
         {n.summary && <p className="note-summary" dir="auto">{n.summary}</p>}
+        {!!n.mandatory?.length && <div className="note-mandatory small" role="note">{n.mandatory.map((m, i) => <p key={i} dir="auto"><Icon name="alert" size={14} /> {m}</p>)}</div>}
         {hasMore && (
           <>
             <button type="button" className="btn ghost small note-more" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide details" : "Show details"}</button>
@@ -48,6 +49,7 @@ export default function NotificationCard({ n, onOpen, onToggleRead, onAction, pr
                 {!!n.details?.length && <dl>{n.details.map((d, i) => <div key={i} className={d.emphasis ? "em" : ""}><dt><Icon name={d.icon} size={14} /> {d.label}</dt><dd dir="auto">{d.value}</dd></div>)}</dl>}
                 {!!n.items?.length && <><div className="small strong">{n.items_label || "Files"}</div><ol className="small">{n.items.map((x, i) => <li key={i} dir="auto">{x}</li>)}</ol>{!!n.more && <div className="small muted">… and {n.more} more</div>}</>}
                 {!!n.guidance?.length && <ul className="small note-guidance">{n.guidance.map((g, i) => <li key={i}>{g}</li>)}</ul>}
+                {n.footer && <p className="small muted" dir="auto">{n.footer}</p>}
               </div>
             )}
           </>

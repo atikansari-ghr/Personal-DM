@@ -21,7 +21,7 @@ Only the latest commit on `main` (pre-release 0.1.x) receives fixes.
 
 ## Scope and design
 
-In scope: authentication (passwords, TOTP, passkeys, recovery, Google and authentik linking), session handling,
+In scope: authentication (passwords, administrator and email password resets, TOTP, passkeys, recovery, Google and authentik linking), session handling,
 permissions (including AI retrieval and the Administrator role), share links, file handling and previews, antivirus
 quarantine and release, notification rendering, templates and Web Push subscriptions, the country/IP access policy and trusted-proxy IP handling, the installer/upgrade scripts,
 the NAS helper and the host helper.
@@ -44,7 +44,7 @@ Design points (details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs
 - authentik sign-in uses OpenID Connect with PKCE, state and nonce; accounts are linked only by their owner, never by
   matching email, and authentik never grants document permissions.
 - The Administrator role gives access to the security center, not to documents.
-- Root actions from the web interface (OS security updates, signature updates, reboot) go through a host helper that
+- Root actions from the web interface (OS security updates, signature updates, antivirus repair, reboot) go through a host helper that
   accepts only a fixed list of actions; the web application never runs `sudo`.
 - **Notification rendering is a security boundary.** Document, folder and person names, OCR-derived values and
   administrator template text are untrusted input: each channel renderer escapes them for its own format (HTML email,
@@ -55,6 +55,21 @@ Design points (details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs
   sign-in and the normal permission checks, so a forwarded message grants nothing. Paths to the API and quarantine
   releases are never offered as actions. Document numbers are left out unless the administrator allows a masked
   number, and never appear in push notifications.
+- **Password resets.** A temporary password from an administrator is shown to that administrator once
+  (`Cache-Control: no-store`), stored only as a password hash, never emailed and never written to notifications, logs
+  or audit records; the person must change it and every one of their sessions ends. Reset links use a random token
+  whose hash is stored, work once, expire after 30 minutes by default (`auth.reset_token_minutes`) and stop working
+  after a newer request or any password change; they are sent directly by email and never stored in the
+  notification outbox, in-app history, Telegram, push or logs. On Internet deployments they are only sent for an
+  https address. An Administrator cannot reset a main administrator's password.
+- **Passkeys.** Passwordless sign-in requires a discoverable credential with user verification, a single-use
+  challenge and matching origin and relying party ID.
+- **Mandatory security text.** The security warnings of security notifications are fixed in the code and shown on
+  every channel; templates cannot remove or change them.
+- **ClamAV only on a Unix socket, repaired with fixed actions.** The antivirus repair keeps clamd on the local Unix
+  socket, removes any `TCPSocket`/`TCPAddr` and never opens a TCP port. **Repair antivirus** in the web app sends only
+  the fixed host-helper action `antivirus_repair`; no command from the browser is executed. The self-test uses the
+  harmless EICAR test string in a private temporary directory, never live malware, and creates no document.
 - **Push endpoint allowlist.** Web Push subscriptions are accepted only for HTTPS endpoints on the known push
   services (Apple, Google, Mozilla, Microsoft); internal addresses, other hosts and URLs with credentials are refused,
   so a subscription cannot make the server call into the local network. Payloads are encrypted for the receiving
@@ -72,7 +87,7 @@ and vulnerabilities in third-party platforms (Proxmox, NPM, Pangolin, browsers) 
 
 - Keep the server patched (Settings → Security → OS updates, or `apt-get upgrade` on the host) and run
   `sudo personaldocs upgrade` regularly.
-- Keep ClamAV running with fresh signatures, set the deployment exposure correctly, and for Internet deployments keep
+- Keep ClamAV running with fresh signatures (Settings → Security → Antivirus shows **Healthy** and **Run self-test** passes; otherwise `sudo personaldocs antivirus repair`), set the deployment exposure correctly, and for Internet deployments keep
   **Internet Ready** green and the host firewall active.
 - Run the Basic Internet Security Test after configuration changes and resolve Critical findings.
 - Require two-step verification at least for administrators.

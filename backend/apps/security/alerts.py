@@ -150,3 +150,21 @@ def account_security(user, what: str, *, actor=None, event: str = "admin_recover
     recipients = {user} | (set(_admins()) if by_admin else set())
     _send(recipients, event=f"security.{event}" if event in ACCOUNT_EVENTS else "security.admin_recovery",
           key=f"sec:acct:{user.pk}:{stamp}", subject=f"Account security: {what}", body=body, link="/settings/account")
+
+
+def account_locked(username: str, request=None) -> None:
+    """The per-account failed sign-in limit was just reached: tell the person and the administrators (once per
+    lock window). Never includes the attempted password."""
+    from apps.accounts.models import User
+
+    user = User.objects.filter(username=username, is_active=True).first()
+    if user is None or _throttled(f"locked:{user.pk}", 900):
+        return
+    from apps.core import audit
+
+    ip = audit.client_ip(request) if request is not None else ""
+    facts = [("Account", user.username), ("IP address", ip or "unknown")]
+    _send({user, *_admins()}, event="security.account_locked", key=f"sec:locked:{user.pk}:{timezone.now():%Y%m%d%H%M}",
+          subject="Account locked after repeated failed sign-ins",
+          body=f"Sign-in to the account '{user.username}' is paused for 15 minutes after {config.get('auth.login_rate_limit')} failed attempts.",
+          facts=facts, link="/settings/account?tab=security")

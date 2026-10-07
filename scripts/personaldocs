@@ -10,6 +10,7 @@
 #   personaldocs status | doctor | backup | integrity [...] | logs [web|worker|scheduler]
 #   personaldocs restore BACKUP_DIR [--verify-only] [--no-key]
 #   personaldocs recover-admin USERNAME [--generate] [--reset-totp]
+#   personaldocs antivirus status|repair|selftest  (ClamAV daemon/socket diagnosis, repair and clean + EICAR self-test)
 #   personaldocs nas-apply [--from-settings]   (mount the NAS configured in Settings → Storage & backup)
 #   personaldocs host-apply                    (run the host security action requested in Settings → Security)
 #   personaldocs setup-token
@@ -156,28 +157,44 @@ install_antivirus() { # ClamAV daemon on a local Unix socket only + automatic si
   log "antivirus: ClamAV daemon and freshclam"
   apt-get install -y -q --no-install-recommends clamav clamav-daemon clamav-freshclam >/dev/null 2>&1 \
     || { c_warn "ClamAV could not be installed; uploads are stored but marked Not scanned until it is installed (sudo personaldocs repair)."; return 0; }
-  local conf=/etc/clamav/clamd.conf
-  if [ -f "$conf" ]; then
-    # never listen on the network; stream limit high enough for the app's own (lower) scan limit; no double memory on reload
-    sed -i -E '/^\s*TCPSocket\b/d; /^\s*TCPAddr\b/d' "$conf"
-    grep -q '^LocalSocket ' "$conf" || echo 'LocalSocket /run/clamav/clamd.ctl' >>"$conf"
-    grep -q '^LocalSocketMode ' "$conf" && sed -i -E 's/^LocalSocketMode .*/LocalSocketMode 666/' "$conf" || echo 'LocalSocketMode 666' >>"$conf"
-    grep -q '^StreamMaxLength ' "$conf" && sed -i -E 's/^StreamMaxLength .*/StreamMaxLength 1100M/' "$conf" || echo 'StreamMaxLength 1100M' >>"$conf"
-    grep -q '^ConcurrentDatabaseReload ' "$conf" && sed -i -E 's/^ConcurrentDatabaseReload .*/ConcurrentDatabaseReload no/' "$conf" || echo 'ConcurrentDatabaseReload no' >>"$conf"
-    # the app reads the engine and signature version with VERSION (Debian ships it disabled)
-    grep -q '^EnableVersionCommand ' "$conf" && sed -i -E 's/^EnableVersionCommand .*/EnableVersionCommand true/' "$conf" || echo 'EnableVersionCommand true' >>"$conf"
-  fi
-  systemctl enable --now clamav-freshclam >/dev/null 2>&1 || true
-  if ! ls /var/lib/clamav/*.c[vl]d >/dev/null 2>&1; then
-    log "antivirus: first signature download (can take a few minutes)"
-    systemctl stop clamav-freshclam >/dev/null 2>&1 || true
-    timeout 900 freshclam --quiet >/dev/null 2>&1 || c_warn "The first ClamAV signature download failed; freshclam retries automatically every hour."
-    systemctl start clamav-freshclam >/dev/null 2>&1 || true
-  fi
-  systemctl enable clamav-daemon >/dev/null 2>&1 || true
-  systemctl restart clamav-daemon >/dev/null 2>&1 || c_warn "clamav-daemon did not start yet (it needs signatures); check: systemctl status clamav-daemon"
+  # Installed packages and readable signatures do not prove scanning works: configure the daemon, start the socket
+  # unit and the daemon, wait for the socket, check the service account can connect and run the clean + EICAR
+  # self-test (clamav_check.py; the same code the Antivirus page's Diagnose / Repair uses).
+  antivirus_repair "${1:-}" || c_warn "ClamAV is installed but not working yet; see the steps above. Retry with: sudo personaldocs antivirus repair"
   local mem; mem=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
   [ "$mem" -ge 3500 ] || c_warn "ClamAV needs about 1.2 GB of memory; this server has ${mem} MB. Consider 4 GB or install with --without-antivirus."
+}
+
+clamav_script() { # path of clamav_check.py in the given release, the active release or this script's checkout
+  local d here; here=$(cd "$(dirname "$(readlink -f "$0")")/.." 2>/dev/null && pwd)
+  for d in "${1:-}" "$CURRENT" "$here"; do
+    [ -n "$d" ] && [ -f "$d/backend/apps/ops/clamav_check.py" ] && { readlink -f "$d/backend/apps/ops/clamav_check.py"; return 0; }
+  done
+  return 1
+}
+
+antivirus_repair() { # antivirus_repair [RELEASE_DIR] — idempotent ClamAV repair with a real scan self-test
+  local script; script=$(clamav_script "${1:-}") || { c_warn "clamav_check.py not found; antivirus is configured after the release is active."; return 0; }
+  log "antivirus: diagnose and repair (daemon, socket, service-account access, self-test)"
+  local rc=0
+  python3 "$script" repair 2>&1 | tee -a "$LOG" || rc=$?
+  # the app connects to the socket clamd really serves (systemd socket unit, not a hard-coded guess)
+  local sock; sock=$(python3 "$script" socket 2>/dev/null || true)
+  if [ -n "$sock" ] && [ -L "$CURRENT" ]; then manage antivirus sync-socket "$sock" >/dev/null 2>&1 || true; fi
+  return "$rc"
+}
+
+cmd_antivirus() { # antivirus status|repair|selftest
+  need_root; load_env
+  local script; script=$(clamav_script) || die "clamav_check.py not found (is Personal Documents installed?)"
+  case "${1:-status}" in
+    status) python3 "$script" status;;
+    repair) with_lock; local rc=0; antivirus_repair || rc=$?
+            if [ -L "$CURRENT" ]; then manage antivirus selftest || rc=1; fi
+            return $rc;;
+    selftest) python3 "$script" selftest && { [ ! -L "$CURRENT" ] || manage antivirus selftest; };;
+    *) die "usage: personaldocs antivirus status|repair|selftest";;
+  esac
 }
 
 install_security_tools() { # install_security_tools RELEASE_DIR — optional pip-audit for the Basic Internet Security Test
@@ -558,6 +575,7 @@ cmd_install() {
   install_units "$dir"
   install_security_tools "$dir"
   for u in "${UNITS[@]}"; do systemctl enable --now "$u" >/dev/null; systemctl restart "$u"; done
+  if [ "${OPT_NO_ANTIVIRUS:-0}" != 1 ] && [ "${PD_NO_ANTIVIRUS:-0}" != 1 ]; then antivirus_repair "$dir" || true; fi
   health || { show_web_failure; die "the web service did not become healthy; see: journalctl -u personaldocs-web -n 50"; }
   prune_releases
   log "=== install complete: $(version_of "$dir") ($REV)"
@@ -825,7 +843,10 @@ case "$CMD" in
   post-upgrade) cmd_post_upgrade;;
   repair) cmd_repair;;
   status) cmd_status;;
-  doctor) need_root; load_env; manage doctor || exit 1;;   # failed checks are listed above; not a script error
+  doctor) need_root; load_env
+          if [ "${PD_NO_ANTIVIRUS:-0}" != 1 ] && script=$(clamav_script); then echo "== ClamAV (as root: services, socket, service-account access, self-test)"; python3 "$script" status || true; echo; fi
+          manage doctor || exit 1;;   # failed checks are listed above; not a script error
+  antivirus) cmd_antivirus "${ARGS[@]}" || exit 1;;
   backup) need_root; load_env; manage backup;;
   integrity) need_root; load_env; manage integrity "${ARGS[@]}";;
   restore)

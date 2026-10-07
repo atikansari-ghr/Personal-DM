@@ -4,6 +4,55 @@ import { Avatar, HelpTip, Modal, Skeleton, useAsync, useToast } from "../../comp
 import { useSession } from "../../session";
 import type { Group, User } from "../../types";
 import PhotoEditor from "../../components/PhotoEditor";
+import { Reauth, withReauth } from "../../components/Reauth";
+
+/** Admin → Users → <User> → Security → Reset Password. The temporary password is shown here once and never again. */
+function ResetPasswordDialog({ member, onClose, onDone }: { member: User; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const [temp, setTemp] = useState("");
+  const [sent, setSent] = useState("");
+  const [reauth, setReauth] = useState<(() => void) | null>(null);
+  const [busy, setBusy] = useState(false);
+  const run = (method: "temporary" | "email") => withReauth(async () => {
+    setBusy(true);
+    try {
+      const r = await api<any>(`family/members/${member.id}/reset-password`, { body: { method } });
+      if (method === "temporary") setTemp(r.temporary_password); else setSent(r.email || "their email address");
+      onDone();
+    } finally { setBusy(false); }
+  }, setReauth, toast)();
+  const close = () => { setTemp(""); onClose(); };
+  return (
+    <Modal title={`Reset password — ${member.display_name}`} onClose={close}>
+      {temp ? (
+        <div className="stack">
+          <div className="alert warn" role="status"><strong>Temporary password — shown once.</strong> It is not stored in readable form and cannot be shown again. Give it to {member.display_name} in person or through another secure channel; never by email.</div>
+          <div className="row"><code className="temp-password" data-testid="temp-password">{temp}</code>
+            <button className="btn small" onClick={() => navigator.clipboard?.writeText(temp).then(() => toast("Copied")).catch(() => toast("Copy failed — select the text instead", "error"))}>Copy</button></div>
+          <p className="small muted">{member.display_name} was signed out on every device and must choose a new password at the next sign-in. They receive a notice that an administrator reset the password (without the password).</p>
+          <button className="btn primary" onClick={close}>Done — I have passed it on</button>
+        </div>
+      ) : sent ? (
+        <div className="stack"><div className="alert ok" role="status">Password reset email sent to {sent}. The link works once and expires in the time set under Authentication.</div><button className="btn primary" onClick={close}>Done</button></div>
+      ) : (
+        <div className="stack">
+          <section className="card">
+            <h3>Generate temporary password</h3>
+            <p className="small">A strong random password is shown to you once. {member.display_name} is signed out on every device and must change it at the next sign-in. Earlier reset links stop working.</p>
+            <button className="btn primary" disabled={busy} onClick={() => run("temporary")}>Generate temporary password</button>
+          </section>
+          <section className="card">
+            <h3>Send password reset email</h3>
+            <p className="small">A branded email with a single-use link, valid for a short time. {member.display_name} chooses the new password; you never see it.</p>
+            <button className="btn" disabled={busy || !member.email} onClick={() => run("email")}>Send password reset email</button>
+            {!member.email && <p className="small muted">No email address on this account — add one with Edit, or use a temporary password.</p>}
+          </section>
+        </div>
+      )}
+      {reauth && <Reauth onDone={reauth} onClose={() => setReauth(null)} />}
+    </Modal>
+  );
+}
 
 const SCOPE_LABELS: Record<string, string> = {
   documents: "Manage documents of group members",
@@ -54,6 +103,8 @@ export default function FamilyPanel() {
   const { session } = useSession();
   const toast = useToast();
   const admin = !!session?.user?.is_main_admin;
+  const administrator = admin || !!session?.user?.is_admin;
+  const canReset = (m: User) => administrator && m.id !== session?.user?.id && m.is_active && (!m.is_main_admin || admin);
   const members = useAsync(() => api<{ members: User[] }>("family/members"), []);
   const groups = useAsync(() => api<{ groups: Group[]; scopes: string[] }>("family/groups"), []);
   const [dialog, setDialog] = useState<any>(null);
@@ -67,19 +118,20 @@ export default function FamilyPanel() {
     <div className="stack">
       <div className="card">
         <h2>Members {admin && <button className="btn small primary" onClick={() => setDialog({ kind: "member" })}>Add member</button>}</h2>
-        <table className="responsive"><thead><tr><th>Person</th><th className="hide-mobile">Username</th><th className="hide-mobile">Last sign-in</th><th>Status</th>{admin && <th />}</tr></thead><tbody>
+        <table className="responsive"><thead><tr><th>Person</th><th className="hide-mobile">Username</th><th className="hide-mobile">Last sign-in</th><th>Status</th>{administrator && <th />}</tr></thead><tbody>
           {members.data.members.map((m) => (
             <tr key={m.id}>
               <td><div className="row"><Avatar user={m} size="sm" /><div><strong>{m.display_name}</strong><div className="small muted">{m.role_label}{m.is_main_admin ? " · Main administrator" : m.is_admin ? " · Administrator" : ""}{m.is_head ? " · Family head" : ""}</div></div></div></td>
               <td className="hide-mobile">{m.username}</td>
               <td className="hide-mobile small">{m.last_login ? formatDateTime(m.last_login) : "Never"}</td>
               <td>{m.is_active ? <span className="badge ok">Active</span> : <span className="badge neutral">Disabled</span>}{(m.totp_enabled || (m.passkey_count || 0) > 0) && <span className="badge neutral">2FA{(m.passkey_count || 0) > 0 ? ` · ${m.passkey_count} passkey${m.passkey_count === 1 ? "" : "s"}` : ""}</span>}{m.must_change_password && <span className="badge soon">Temp password</span>}</td>
-              {admin && (
+              {administrator && (
                 <td className="row">
-                  <button className="btn small" onClick={() => setDialog({ kind: "member", member: m })}>Edit</button>
-                  <button className="btn small" onClick={async () => { const r = await api(`family/members/${m.id}/reset-password`, { body: {} }); setDialog({ kind: "temp", value: r.temporary_password, name: m.display_name }); }}>Reset password</button>
-                  {(m.totp_enabled || (m.passkey_count || 0) > 0) && <button className="btn small" title="Removes the authenticator app, all passkeys and recovery codes, and signs the person out. They are notified." onClick={() => { if (confirm(`Reset two-step verification for ${m.display_name}? Their authenticator app, passkeys and recovery codes are removed and they are signed out everywhere.`)) api(`family/members/${m.id}/reset-2fa`, { body: {} }).then(() => { toast("Two-step verification reset"); reload(); }).catch((x) => toast(x.message, "error")); }}>Reset 2FA</button>}
-                  {m.id !== session?.user?.id && <button className="btn small" onClick={() => api(`family/members/${m.id}`, { method: "PATCH", body: { is_active: !m.is_active } }).then(reload).catch((e) => toast(e.message, "error"))}>{m.is_active ? "Disable" : "Enable"}</button>}
+                  {admin && <button className="btn small" onClick={() => setDialog({ kind: "member", member: m })}>Edit</button>}
+                  {canReset(m) && <button className="btn small" onClick={() => setDialog({ kind: "reset", member: m })}>Reset password…</button>}
+                  {!admin && m.is_main_admin && <span className="small muted" title="Only a main administrator can reset a main administrator's password.">Protected</span>}
+                  {admin && (m.totp_enabled || (m.passkey_count || 0) > 0) && <button className="btn small" title="Removes the authenticator app, all passkeys and recovery codes, and signs the person out. They are notified." onClick={() => { if (confirm(`Reset two-step verification for ${m.display_name}? Their authenticator app, passkeys and recovery codes are removed and they are signed out everywhere.`)) api(`family/members/${m.id}/reset-2fa`, { body: {} }).then(() => { toast("Two-step verification reset"); reload(); }).catch((x) => toast(x.message, "error")); }}>Reset 2FA</button>}
+                  {admin && m.id !== session?.user?.id && <button className="btn small" onClick={() => api(`family/members/${m.id}`, { method: "PATCH", body: { is_active: !m.is_active } }).then(reload).catch((e) => toast(e.message, "error"))}>{m.is_active ? "Disable" : "Enable"}</button>}
                 </td>
               )}
             </tr>
@@ -124,7 +176,7 @@ export default function FamilyPanel() {
         </div>
       )}
       {dialog?.kind === "member" && <MemberDialog member={dialog.member} groups={groups.data.groups} onClose={() => setDialog(null)} onDone={() => { setDialog(null); reload(); }} />}
-      {dialog?.kind === "temp" && <Modal title="Temporary password" onClose={() => setDialog(null)}><div className="alert warn">New temporary password for {dialog.name}: <code>{dialog.value}</code>. Shown once. Their other sessions were signed out.</div></Modal>}
+      {dialog?.kind === "reset" && <ResetPasswordDialog member={dialog.member} onClose={() => setDialog(null)} onDone={reload} />}
     </div>
   );
 }

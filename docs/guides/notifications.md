@@ -29,7 +29,7 @@ colour, so they never depend on colour alone.
 | Documents | Documents added, archived, deleted, moved, restored, re-typed or confirmed by someone else |
 | Expiry & renewal | Expiry reminders |
 | OCR & Local AI | Text recognition and Local AI processing finished or failed |
-| Security | Sign-ins, passkeys, authenticator app, recovery codes, authentik links, antivirus, access policy, security test |
+| Security | Sign-ins, passwords and password resets, locked accounts, passkeys, authenticator app, recovery codes, authentik and Google links, antivirus, access policy, security test |
 | System | Backups, integrity, storage, OS updates, reboot, imports |
 | Sharing & access | Access given to you, shares |
 
@@ -134,7 +134,8 @@ Notifications carry buttons that open the right place in the app:
 |---|---|
 | Expiry reminder | **Open Document**, **Go to Folder**, **View Expiry Reminders**, **Snooze 7 days** (in-app only) |
 | Documents added or changed | **View Document**, **Go to Folder** |
-| Sign-in and account security (new address or country, passkeys, authenticator app, recovery codes, authentik) | **Review Activity**, **Manage Sessions**, **Change Password** |
+| Sign-in and account security (new address or country, passkeys, authenticator app, recovery codes, authentik, Google, passwords, account locked) | **Review Activity**, **Manage Sessions**, **Change Password** |
+| Password reset email | **Reset password** (the single-use link; email only, see [security templates](#security-templates)) |
 | Repeated failed sign-ins | **Review Activity**, **Access policy** |
 | Antivirus (threat, scanner unavailable, signatures) | **View Security Event**, **Security Health** |
 | OS updates, reboot | **View System Status**, **View Update Details** |
@@ -144,7 +145,9 @@ Notifications carry buttons that open the right place in the app:
 
 Rules:
 
-- Every action is a page of this application. Links never contain a token or a password; opening one still requires
+- Every action is a page of this application. Links never contain a token or a password (the one exception is the
+  password reset email, whose single-use link is sent directly by email and never stored; see
+  [security templates](#security-templates)); opening one still requires
   signing in and the normal permission checks, so a forwarded email gives nobody access.
 - **Releasing a file from quarantine is never offered in a message.** Release stays inside the app, in Settings →
   Security → Antivirus, for the main administrator only (see [quarantine](antivirus.md#quarantine)). Actions that
@@ -168,6 +171,22 @@ New events in this release:
 
 **Push** is a fourth channel next to in-app, email and Telegram. It is never switched on for anyone automatically:
 you turn it on per device, then tick it for the events you want.
+
+New security events in Change Set P (all **critical by default**, category Security, sent to the person whose account
+it is):
+
+| Event | Name shown | When |
+|---|---|---|
+| `security.password_reset_requested` | Password reset requested | A reset link was sent by email (Forgot password? or an administrator) |
+| `security.password_admin_reset` | Administrator reset your password | An administrator started a reset; other main administrators are also told about temporary passwords |
+| `security.temporary_password` | Temporary password issued | An administrator issued a temporary password (the message never contains it) |
+| `security.password_changed` | Password reset completed | The password was changed, reset with a link, or a temporary password was replaced |
+| `security.account_locked` | Account locked | The per-account failed sign-in limit was reached; sent to the person and the administrators once per lock window, never with the attempted password |
+| `security.google` | Google account linked or removed | A Google sign-in was linked or removed |
+
+Renamed: `account.login` is now **New sign-in**, `security.new_country` **Unusual sign-in (new country)** and
+`security.authentik` **authentik account linked or removed**. The passkey added/removed and authenticator app on/off
+events are unchanged.
 
 ## Push notifications on your devices {#push}
 
@@ -211,10 +230,16 @@ page inside the app; it never opens another site.
 for all channels at once). You can change:
 
 - **Title / subject** and **Heading**,
-- **Summary** (plain text with the placeholders below),
-- **Icon** (from the central icon list),
+- **Summary / introduction** (plain text with the placeholders below),
+- **Branding name**: shown in the email header instead of the application name (up to 60 characters),
+- **Footer / help text**: an extra line in the footer of email and Telegram and under the in-app card (up to 300
+  characters), for example "Questions? Ask A. Ansari.",
+- **Icon** (from the central, approved local icon list),
 - **Severity shown** (critical events can never be shown below Warning),
-- **Action labels** (plain text, no placeholders).
+- **Action labels** (plain text, no placeholders). For the password reset email, the button label is the
+  `reset_password` action label.
+
+Branding name and footer were added in Change Set P (migration `notify.0003_template_brand_footer`).
 
 ### Placeholders {#placeholders}
 
@@ -246,9 +271,43 @@ A placeholder that does not apply to an event stays empty.
   from the event itself and from the [notification settings](expiry-rules.md#critical).
 - Sensitive values (document numbers, codes, tokens) are not available as placeholders.
 - A critical event cannot be shown below Warning.
+- The [mandatory security text](#security-templates) of security events is shown as locked and cannot be removed or
+  changed.
+- An HTML email always keeps its plain-text part.
 
 **Reset to default** removes the override for that event and channel. Every save and reset is recorded in the audit
 log (`notifications.template_update`, `notifications.template_reset`).
+
+### Security templates and mandatory text {#security-templates}
+
+Every security event carries **mandatory security text**: one or more fixed warnings that are part of the message on
+every channel. Examples:
+
+- "If this was not you, change your password and sign out other devices in My account → Password & security, and tell the family
+  administrator." (sign-ins, passkeys, authenticator app, recovery codes, passwordless)
+- "The temporary password is never sent in this message. You must choose a new password when you next sign in."
+  (Temporary password issued)
+- "If you did not ask for a password reset, ignore the link — your password stays the same — and tell the family
+  administrator." and "The reset link works once and expires soon. Never forward it." (Password reset requested)
+- "This message never contains a password, code or reset token, and the administrators will never ask you for one."
+  (Administrator reset your password)
+
+How it is shown:
+
+| Channel | Mandatory text |
+|---|---|
+| Email (HTML) | A red box under the buttons, each line with ⚠️ |
+| Email (plain text) | Lines starting with `IMPORTANT:` |
+| Telegram | Bold lines with ⚠️ |
+| In-app | A red note on the card |
+
+A template can change the title, heading, summary, branding name, footer, icon, severity shown and action labels of a
+security event, but it can **neither remove nor change** the mandatory text. The Template Manager shows it as locked.
+
+**The password reset email** is sent directly by email (HTML and plain text) with a **Reset password** button and the
+address written out underneath. The single-use link is never stored in the notification outbox, the in-app history,
+Telegram, push or any log, and the event's other channels (in-app) show the notice without the link. See
+[password reset](password-reset.md).
 
 ### Preview and TEST {#preview}
 
@@ -310,7 +369,8 @@ last four characters (for example `•••••1234`). It is never sent by pu
 
 ## Privacy and security {#privacy}
 
-- **Never included:** passwords, one-time codes, TOTP seeds, recovery codes, passkey material, tokens, API keys,
+- **Never included:** passwords (including temporary passwords and attempted passwords), reset links outside the
+  reset email itself, one-time codes, TOTP seeds, recovery codes, passkey material, tokens, API keys,
   file contents, unconfirmed OCR or AI values, or anything about documents the recipient cannot open.
 - **Document numbers** only masked and only when `notifications.include_document_number` is on; never in push.
 - **Names** in email and Telegram follow **Include names in email/Telegram** (see
@@ -337,5 +397,7 @@ last four characters (for example `•••••1234`). It is never sent by pu
 | Email shows plain text only | Some mail programs, or settings such as "show as plain text", show the plain-text part. Nothing is missing: it holds the same details and links |
 | Banners do not appear | Banners are only for new warning, critical and success notifications and are hidden while the Notification Center is open; information notifications are only in the Notification Center |
 | A recurring alert did not come again | It is inside the [repeat cooldown](#noise); the condition is still shown in the app |
-| A template cannot be saved | It contains an unknown placeholder or other braces, or an action label with a placeholder. Use only the [placeholders](#placeholders) listed above |
+| A template cannot be saved | It contains an unknown placeholder or other braces, or an action label with a placeholder, or the branding name (60) or footer (300) is too long. Use only the [placeholders](#placeholders) listed above |
+| A security warning cannot be edited | It is [mandatory security text](#security-templates); it is always shown and locked |
+| Password reset email not received | See [password reset troubleshooting](password-reset.md#troubleshooting) |
 | Delivery history shows **Skipped** | The reason says what is missing (no email address, Telegram not linked, push not on). See [channels](expiry-rules.md#channels) |

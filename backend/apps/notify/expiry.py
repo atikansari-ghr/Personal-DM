@@ -156,6 +156,8 @@ def dispatch(user, message, *, kind: str, key: str, document=None, group: str = 
     Returns {channel: "in-app" | "queued" | "skipped: <reason>"}."""
     from . import rich, templates
 
+    if message.secret_link:  # a token link must never reach the outbox, in-app history or chat channels
+        raise ValueError("messages with a secret link are sent directly (send_direct_email), not dispatched")
     event = message.event
     result = {}
     for channel in channels_for(user, event):

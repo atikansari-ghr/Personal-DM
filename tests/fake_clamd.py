@@ -22,7 +22,8 @@ class FakeClamd:
     def __init__(self, path: str, *, stream_max: int = 100 * 1024 * 1024, signatures_date: datetime | None = None):
         self.path, self.stream_max = path, stream_max
         self.signatures_date = signatures_date or datetime.now(timezone.utc)
-        self.scans = 0
+        self.scans = 0  # document scans (the app's health probe and self-test files are counted in self.probes)
+        self.probes = 0
         self.fail_next = False
         if os.path.exists(path):
             os.unlink(path)
@@ -81,7 +82,10 @@ class FakeClamd:
                         conn.sendall(b"INSTREAM size limit exceeded. ERROR\0")
                         return
                     data += chunk
-                self.scans += 1
+                if data.startswith(b"Personal Documents antivirus self-test") or data == EICAR:
+                    self.probes += 1
+                else:
+                    self.scans += 1
                 if self.fail_next:
                     self.fail_next = False
                     conn.sendall(b"stream: lstat() failed: Permission denied. ERROR\0")

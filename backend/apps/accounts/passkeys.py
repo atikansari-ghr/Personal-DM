@@ -109,7 +109,10 @@ def register(session, user: User, credential: dict, name: str) -> WebAuthnCreden
         user=user, credential_id=cred_id, public_key=verified.credential_public_key, sign_count=verified.sign_count,
         transports=[t for t in ((credential.get("response") or {}).get("transports") or []) if isinstance(t, str)][:6],
         aaguid=str(verified.aaguid or "")[:40], device_type=str(getattr(verified.credential_device_type, "value", ""))[:20],
-        backed_up=bool(verified.credential_backed_up), discoverable=bool(ext.get("rk", False)),
+        # credProps.rk tells whether the passkey is discoverable (usable without typing a username). Browsers that do
+        # not report it create discoverable passkeys for this request (residentKey "preferred"); a passwordless sign-in
+        # with it proves it either way.
+        backed_up=bool(verified.credential_backed_up), discoverable=bool(ext["rk"]) if "rk" in ext else True,
         name=(name or "Passkey").strip()[:80] or "Passkey")
 
 
@@ -154,6 +157,11 @@ def authenticate(session, credential: dict, *, purpose: str, user: User | None =
 
 
 # ------------------------------------------------------------------ policy helpers
+
+def passwordless_allowed() -> bool:
+    """Administrator policy: passkeys on and the sign-in mode is Passwordless (not Password + Passkey)."""
+    return bool(config.get("auth.allow_passkeys")) and config.get("auth.passkey_mode") == "passwordless"
+
 
 def has_second_factor(user: User) -> bool:
     return bool(user.totp_enabled) or active(user).exists()

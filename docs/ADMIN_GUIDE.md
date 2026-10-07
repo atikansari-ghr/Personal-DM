@@ -34,7 +34,23 @@ Guides: [installation](guides/installation.md), [setup](guides/setup.md), [priva
 **Settings → Family & access**:
 - Add or deactivate members. Deactivating never deletes the person's documents; they stay in their library, where
   you can move them. Members cannot be deleted from the web interface.
-- Reset passwords.
+- **Reset password…** on a member's row (also in **Settings → Users** for the Administrator role), after a recent
+  confirmation (password or passkey):
+  - **Generate temporary password**: 16 random characters, shown to you **once** with **Copy**; only its hash is
+    stored and it is never emailed. The person must choose a new password at the next sign-in and is signed out on
+    every device; earlier reset links stop working. Pass it on in person or another safe channel, then click **Done —
+    I have passed it on**.
+  - **Send password reset email**: a branded email with a single-use link, valid for `auth.reset_token_minutes`
+    (default 30). Needs SMTP and an email address on the account; on an Internet deployment only over `https://`.
+  - **Main Administrator protection:** an Administrator cannot reset a main administrator's password (the row shows
+    **Protected**); only another main administrator can, or the console with `sudo personaldocs recover-admin
+    USERNAME`. Nobody resets their own password here (use My account → Password & security).
+  - Audited as `family.password_reset_by_admin` (method `temporary_password`, never the password) or
+    `family.password_reset_email`; the person is notified (never with the password).
+
+  ![Reset password dialog (synthetic data)](images/screenshots/admin-reset-password.png)
+
+  Guide: [password reset](guides/password-reset.md).
 - Reset 2FA (removes the authenticator app, passkeys and recovery codes; audited, and the person is notified).
 - Manage profile photos.
 - Optional folder templates.
@@ -56,7 +72,15 @@ Guides: [setup](guides/setup.md), [extended family](guides/extended-family.md).
 ## 3. Authentication policy {#authentication}
 
 **Settings → Authentication**:
-- Allow authenticator apps (TOTP), passkeys, and passwordless passkey sign-in (off by default).
+- Allow authenticator apps (TOTP) and passkeys.
+- **Passkey sign-in mode** (`auth.passkey_mode`): **Passwordless** (default) shows **Sign in with Passkey** on the
+  first sign-in screen, and a passkey verified with fingerprint, face or PIN signs the person in on its own;
+  **Password + Passkey** uses passkeys only after the password. It replaces *Allow passwordless passkey sign-in*; on
+  upgrade an explicit earlier choice is kept (saved off → Password + Passkey). After adding a discoverable passkey in
+  passwordless mode, passwordless is turned on for that account; each person can turn it off under Passkeys. The main
+  administrator's password, recovery codes and `sudo personaldocs recover-admin USERNAME` keep working in both modes.
+- People may sign in with their email address instead of the username when it belongs to exactly one active
+  account.
 - **Require two-step verification** for nobody, administrators or everyone. *Administrators* covers the main
   administrator and every account with the Administrator role. People without one are guided to set it up; nobody is
   locked out.
@@ -113,7 +137,12 @@ Guides: [SMTP](guides/smtp.md), [Telegram](guides/telegram.md).
   events never below Warning) and action labels. No code or HTML is accepted. Live previews show Email (desktop and
   mobile), Telegram, In-app, Push and Plain text; **Reset to default** removes an override. **Send a TEST message to
   yourself** sends the draft with sample data, marked TEST, on the channels you choose and creates no real event.
-  Saves, resets and TEST sends are audited.
+  Saves, resets and TEST sends are audited. **Branding name** (email header, up to 60 characters) and **Footer / help
+  text** (up to 300 characters) can be set per event and channel too. Security events (sign-ins, passkeys,
+  authenticator app, password reset requested, administrator reset, temporary password issued, password reset
+  completed, account locked, Google and authentik links) carry **mandatory security text** that is always shown (red
+  box in email, `IMPORTANT:` lines in plain text, bold ⚠️ lines in Telegram, a red note in-app) and is locked in the
+  editor. See [security templates](guides/notifications.md#security-templates).
 - Members choose everything else themselves, per event and channel, and turn on push per device. Push is never added
   to anyone's channels automatically; add it to *Channels for critical notifications* only if you want critical
   events on push too.
@@ -281,6 +310,26 @@ Guides: [security & access](guides/security-access.md), [reverse proxy](guides/r
 - Threats, releases, ClamAV unavailable or scan failures, and stale definitions or failed updates are **critical
   administrator notifications that cannot be turned off**.
 - On a small machine, install with `--without-antivirus` and turn scanning off here.
+- **Status:** **Healthy** (reachable and a real scan works), **Degraded** (scans, but for example stale signatures),
+  **Unavailable** (socket or daemon cannot be reached), **Error** (reachable but cannot scan, or the last self-test
+  failed), **Turned off**. Unavailable and Error put Security Health **At Risk**. A shown engine version is only the
+  last value seen when ClamAV is unreachable, never proof that scanning works.
+- **Run self-test** scans a harmless text file and the EICAR test file in a private temporary directory, deletes
+  them and never creates a document or quarantine entry (audited `antivirus.self_test`). It also runs daily and after
+  a failure.
+- **Diagnose / Repair** lists every check (packages, signatures, daemon and socket units, restart policy, effective
+  socket path versus `LocalSocket`, no TCP listener, `/run/clamav`, socket file, stale pid, access by the
+  `personaldocs` service account, version, self-test, memory, journal hints) with the detected issue and the fix.
+  **Repair antivirus** runs the fixed repair steps through the host helper (`antivirus_repair`) and shows each step
+  and the final status; without the host helper, run `sudo personaldocs antivirus repair`.
+
+  ![Antivirus Diagnose / Repair (synthetic data)](images/screenshots/security-antivirus-diagnose.png)
+
+- **Command line:** `sudo personaldocs antivirus status` (diagnosis as root), `sudo personaldocs antivirus repair`
+  (repair and the app's own self-test), `sudo personaldocs antivirus selftest`. The repair rewrites `LocalSocket` to
+  the systemd socket path, installs a restart drop-in and a tmpfiles entry for `/run/clamav`, and syncs
+  `antivirus.socket`. For "Unavailable … /run/clamav/clamd.ctl (FileNotFoundError)" see
+  [socket missing](guides/antivirus.md#socket-missing).
 
 Guide: [antivirus](guides/antivirus.md#overview).
 
@@ -321,7 +370,8 @@ Guide: [antivirus](guides/antivirus.md#overview).
   antivirus, update or repair workflow. See [storage](guides/security-center.md#storage).
 
 The **host helper** (`personaldocs-host.path`, installed by install, upgrade and repair) is a root service that
-accepts only fixed actions: inspect, check updates, install security updates, update ClamAV signatures and reboot.
+accepts only fixed actions: inspect, check updates, install security updates, update ClamAV signatures, repair
+antivirus and reboot.
 
 Guide: [security center](guides/security-center.md).
 
@@ -359,6 +409,8 @@ Guide: [backup & restore](guides/backup-restore.md).
 |---|---|
 | Main administrator locked out | `sudo personaldocs recover-admin <username> --generate` (`--reset-2fa` if all second factors are lost) |
 | A member lost their phone/passkeys | Settings → Family & access → **Reset 2FA** (audited, member notified) |
+| A member forgot their password | **Reset password…** → temporary password (shown once) or reset email ([password reset](guides/password-reset.md)) |
+| Antivirus Unavailable or Error | Settings → Security → Antivirus → **Diagnose / Repair**, or `sudo personaldocs antivirus repair` |
 | Country policy locked everyone out | `sudo personaldocs access-policy off` (or `rollback`) |
 | Services broken after a failed change | `sudo personaldocs repair` |
 | Bad upgrade | `sudo personaldocs rollback` (when the schema allows) or restore the pre-upgrade backup |
@@ -373,7 +425,11 @@ sudo personaldocs repair      # safe; also applies installer steps added in newe
 sudo personaldocs doctor      # proxy trust, GeoIP, passkey origin, AI profiles, OCR language packs, storage, services, GoAccess,
                               # ClamAV, signature age, files pending scan, host helper, Internet HTTPS, storage thresholds, reboot
 sudo personaldocs status      # services incl. clamav-daemon, clamav-freshclam, personaldocs-host.path; "Reboot required"
+sudo personaldocs antivirus status | repair | selftest   # ClamAV diagnosis as root, safe repair, clean + EICAR self-test
 ```
+
+`doctor` starts with the root ClamAV diagnosis, then lists the app checks *ClamAV socket used by the app*, *ClamAV
+scanner operational (reachable and scans)* and *ClamAV self-test (clean file + EICAR, temporary files removed)*.
 
 The one-line installer offers the same actions as a menu (install, upgrade, repair, doctor, status, backup,
 restore, recover-admin): `bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)"`.
@@ -405,6 +461,14 @@ schedules are kept; push is not added to anyone's channels. Email becomes HTML w
 formatting and buttons (buttons need the `https://` address) and the in-app list becomes the Notification Center.
 Afterwards, optionally review Settings → Notifications → Templates and send yourself a TEST. See
 [Change Set O](guides/upgrades.md#change-set-o).
+
+**Upgrading to the passkey sign-in, password reset and ClamAV repair release (Change Set P):** two migrations
+(`accounts.0007_passkey_mode`, `notify.0003_template_brand_footer`), no new packages. The post-upgrade step runs the
+ClamAV repair automatically (it can take a few minutes while clamd loads its signatures). Passwordless passkey
+sign-in becomes the default unless it was explicitly turned off before; Administrators can reset the passwords of
+accounts that are not main administrators. Afterwards run `sudo personaldocs antivirus status` and `sudo personaldocs
+doctor`, check that the Antivirus page shows **Healthy**, reboot the container once and check again, and try **Sign
+in with Passkey** on each device. See [Change Set P](guides/upgrades.md#change-set-p).
 
 Guide: [upgrades](guides/upgrades.md#change-set-m) (with notes for each change set).
 

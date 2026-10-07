@@ -359,8 +359,8 @@ Channels people cannot turn off for expiry reminders. In-app is always on.
 
 Events people cannot turn off. They always arrive in-app and on the critical channels below.
 
-- **Default:** `['security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.failed_logins', 'security.authentik', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'antivirus.threat', 'antivirus.released', 'antivirus.unavailable', 'antivirus.definitions', 'security.operations', 'backup.failed', 'integrity.failed']`
-- **Allowed values:** security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, account.login, security.failed_logins, security.authentik, security.policy_exception, security.policy_change, security.auth_policy, security.health, antivirus.threat, antivirus.released, antivirus.unavailable, antivirus.definitions, security.operations, backup.failed, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, document.changed, import.finished, processing.completed, processing.failed
+- **Default:** `['security.password_reset_requested', 'security.password_admin_reset', 'security.temporary_password', 'security.password_changed', 'security.account_locked', 'security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.failed_logins', 'security.authentik', 'security.google', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'antivirus.threat', 'antivirus.released', 'antivirus.unavailable', 'antivirus.definitions', 'security.operations', 'backup.failed', 'integrity.failed']`
+- **Allowed values:** security.password_reset_requested, security.password_admin_reset, security.temporary_password, security.password_changed, security.account_locked, security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, account.login, security.failed_logins, security.authentik, security.google, security.policy_exception, security.policy_change, security.auth_policy, security.health, antivirus.threat, antivirus.released, antivirus.unavailable, antivirus.definitions, security.operations, backup.failed, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, document.changed, import.finished, processing.completed, processing.failed
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
 - **Effect of changing:** Applies to the next notification; people see these locked on.
@@ -626,15 +626,15 @@ People may register passkeys (phone, computer, password manager or security key)
 - **Restart needed:** no
 - **Learn more:** [passkeys#enable](guides/passkeys.md#enable)
 
-### Allow passwordless passkey sign-in (`auth.allow_passwordless`)
+### Passkey sign-in mode (`auth.passkey_mode`)
 
-People who turn it on for their own account can sign in with a passkey alone (the passkey verifies them with fingerprint, face or PIN).
+Passwordless: the sign-in page offers Sign in with Passkey before any password, and a passkey (verified with fingerprint, face or PIN) signs the person in on its own. Password + Passkey: passkeys are only used as the second step after the password.
 
-- **Default:** `False`
-- **Allowed values:** bool
+- **Default:** `'passwordless'`
+- **Allowed values:** passwordless, mfa
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** auth.allow_passkeys
-- **Effect of changing:** Turning it off stops passwordless sign-in immediately; everyone can still use their password.
+- **Effect of changing:** Switching to Password + Passkey stops passwordless sign-in immediately; everyone can still use their password. The main administrator's password and recovery codes always keep working.
 - **Restart needed:** no
 - **Learn more:** [passkeys#passwordless](guides/passkeys.md#passwordless)
 

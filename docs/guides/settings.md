@@ -26,11 +26,22 @@ Administrators only: holiday countries and corrections, Hijri date adjustment, t
 
 ## Notifications and connections {#notifications}
 
-Reminder days and time, recipients, default and required channels for reminders, **critical notifications** and their channels, names in external messages, **Include document numbers in email/Telegram** (`notifications.include_document_number`, default off), **Push notifications (PWA)** (`notifications.push_enabled`, default on), **Repeat cooldown for recurring conditions** (`notifications.repeat_cooldown_hours`, default 24), delivery problems, **Templates** (wording, icon, severity shown and action labels per event and channel, with previews and TEST sends; main administrator), **Delivery history**; SMTP and Telegram setup with tests; WhatsApp status (planned). Each person chooses optional notifications per event and channel (in-app, email, Telegram, push) under My account → Notifications, turns on push per device and sets the **Push notification detail** (`me.push_preview`: Minimal, Standard, Detailed). See [notifications](notifications.md) and [critical and optional notifications](expiry-rules.md#critical).
+Reminder days and time, recipients, default and required channels for reminders, **critical notifications** and their channels, names in external messages, **Include document numbers in email/Telegram** (`notifications.include_document_number`, default off), **Push notifications (PWA)** (`notifications.push_enabled`, default on), **Repeat cooldown for recurring conditions** (`notifications.repeat_cooldown_hours`, default 24), delivery problems, **Templates** (wording, branding name, footer / help text, icon, severity shown and action labels per event and channel, with previews and TEST sends; the mandatory text of security events is locked; main administrator), **Delivery history**; SMTP and Telegram setup with tests; WhatsApp status (planned). Each person chooses optional notifications per event and channel (in-app, email, Telegram, push) under My account → Notifications, turns on push per device and sets the **Push notification detail** (`me.push_preview`: Minimal, Standard, Detailed). See [notifications](notifications.md) and [critical and optional notifications](expiry-rules.md#critical).
 
 ## Authentication {#authentication}
 
-Session length, reset-link lifetime, sign-in rate limit, Google sign-in with diagnostics, and **External identity providers**.
+Session length, reset-link lifetime (`auth.reset_token_minutes`, default 30, 5–1440), sign-in rate limit, authenticator apps, passkeys, **Passkey sign-in mode**, required two-step verification, the re-confirmation window, Google sign-in with diagnostics, and **External identity providers**.
+
+**Passkey sign-in mode** (`auth.passkey_mode`, Change Set P) replaces the earlier *Allow passwordless passkey sign-in* (`auth.allow_passwordless`):
+
+| Value | Effect |
+|---|---|
+| **Passwordless** (default) | The sign-in page offers **Sign in with Passkey** before the password; a passkey verified with fingerprint, face or PIN signs the person in on its own |
+| **Password + Passkey** (`mfa`) | Passkeys are only used as the second step after the password; switching to it stops passwordless sign-in at once |
+
+The main administrator's password and recovery codes keep working in both modes. On upgrade an explicit earlier choice is kept. See [passkeys](passkeys.md#policy).
+
+Password resets for members are not a setting: use **Reset password…** in Family & access or Users. See [password reset](password-reset.md).
 
 ### External identity providers {#external-idp}
 
@@ -59,7 +70,7 @@ see [Local AI](local-ai.md).
 
 ### Antivirus {#antivirus}
 
-**Settings → Security → Antivirus**: scanning on/off (`antivirus.enabled`), the clamd socket (`/run/clamav/clamd.ctl`), maximum scan size (`antivirus.max_scan_mb`, default 50 MB), library re-scan schedule (Disabled, Daily, Weekly, Monthly; default Disabled), *Definitions out of date after* (2 days) and *critically stale* (7 days), the quarantine and **Update now**. See [Antivirus](antivirus.md).
+**Settings → Security → Antivirus**: the status (Healthy, Degraded, Unavailable, Error, Turned off), **Run self-test** and **Diagnose / Repair**, scanning on/off (`antivirus.enabled`), the clamd socket (`antivirus.socket`, `/run/clamav/clamd.ctl`; `personaldocs antivirus repair` sets it to the socket clamd really serves), maximum scan size (`antivirus.max_scan_mb`, default 50 MB), library re-scan schedule (Disabled, Daily, Weekly, Monthly; default Disabled), *Definitions out of date after* (2 days) and *critically stale* (7 days), the quarantine and **Update now**. See [Antivirus](antivirus.md).
 
 ### Access policy {#access-policy}
 
