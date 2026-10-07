@@ -19,6 +19,10 @@ def check(verify_checksums: bool = True, limit_report: int = 500) -> dict:
     for v in DocumentVersion.objects.all().iterator():
         referenced.add(v.storage_path)
         p = Path(settings.ORIGINALS_DIR) / v.storage_path
+        if v.av_status == "quarantined":  # moved to <data>/quarantine on purpose
+            if v.av_quarantine_path and not (Path(settings.DATA_DIR) / "quarantine" / v.av_quarantine_path).exists():
+                problems.append({"type": "missing_quarantine", "version": str(v.id), "document": str(v.document_id)})
+            continue
         if not p.exists():
             problems.append({"type": "missing_original", "version": str(v.id), "document": str(v.document_id), "path": v.storage_path})
         elif p.stat().st_size != v.size:

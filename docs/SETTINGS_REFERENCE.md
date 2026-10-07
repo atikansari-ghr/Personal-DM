@@ -359,8 +359,8 @@ Channels people cannot turn off for expiry reminders. In-app is always on.
 
 Events people cannot turn off. They always arrive in-app and on the critical channels below.
 
-- **Default:** `['security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.failed_logins', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'backup.failed', 'integrity.failed']`
-- **Allowed values:** security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, account.login, security.failed_logins, security.policy_exception, security.policy_change, security.auth_policy, security.health, backup.failed, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, import.finished, processing.completed, processing.failed
+- **Default:** `['security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.failed_logins', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'antivirus.threat', 'antivirus.released', 'antivirus.unavailable', 'antivirus.definitions', 'security.operations', 'backup.failed', 'integrity.failed']`
+- **Allowed values:** security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, account.login, security.failed_logins, security.policy_exception, security.policy_change, security.auth_policy, security.health, antivirus.threat, antivirus.released, antivirus.unavailable, antivirus.definitions, security.operations, backup.failed, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, import.finished, processing.completed, processing.failed
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
 - **Effect of changing:** Applies to the next notification; people see these locked on.
@@ -1394,6 +1394,341 @@ Set by uploading a logo.
 - **Restart needed:** no
 - **Learn more:** [login-designs#branding](guides/login-designs.md#branding)
 
+## Section: antivirus
+
+### Antivirus scanning (ClamAV) (`antivirus.enabled`)
+
+Scan every new file in the background with the local ClamAV daemon. Files stay usable while they are scanned; a detected threat is quarantined.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [antivirus#overview](guides/antivirus.md#overview)
+
+### ClamAV socket (`antivirus.socket`)
+
+Local Unix socket of clamd. ClamAV is never contacted over the network.
+
+- **Default:** `'/run/clamav/clamd.ctl'`
+- **Allowed values:** path
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** antivirus.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [antivirus#install](guides/antivirus.md#install)
+- **Example:** /run/clamav/clamd.ctl
+
+### Maximum scan size (MB) (`antivirus.max_scan_mb`)
+
+Larger files are stored normally but marked Not scanned — size limit exceeded. Above 200 MB a scan can use a lot of memory on a 4 GB server.
+
+- **Default:** `50`
+- **Allowed values:** 1–1024
+- **Scope:** global · **Editable by:** each user
+- **Depends on:** antivirus.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [antivirus#size](guides/antivirus.md#size)
+
+### Re-scan the whole library (`antivirus.scan_frequency`)
+
+Scheduled re-scan of every stored file with the newest signatures.
+
+- **Default:** `'disabled'`
+- **Allowed values:** disabled, daily, weekly, monthly
+- **Scope:** global · **Editable by:** each user
+- **Depends on:** antivirus.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [antivirus#schedule](guides/antivirus.md#schedule)
+
+### Re-scan time (`antivirus.scan_time`)
+
+Local time (installation timezone) when a scheduled re-scan starts.
+
+- **Default:** `'02:30'`
+- **Allowed values:** time
+- **Scope:** global · **Editable by:** each user
+- **Depends on:** antivirus.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [antivirus#schedule](guides/antivirus.md#schedule)
+
+### Re-scan day of week (`antivirus.scan_weekday`)
+
+Used by the weekly schedule.
+
+- **Default:** `'sun'`
+- **Allowed values:** mon, tue, wed, thu, fri, sat, sun
+- **Scope:** global · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [antivirus#schedule](guides/antivirus.md#schedule)
+
+### Re-scan day of month (`antivirus.scan_month_day`)
+
+Used by the monthly schedule; 29–31 run on the last day of shorter months.
+
+- **Default:** `1`
+- **Allowed values:** 1–31
+- **Scope:** global · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [antivirus#schedule](guides/antivirus.md#schedule)
+
+### Definitions out of date after (days) (`antivirus.stale_days`)
+
+Signatures older than this show a warning and alert administrators.
+
+- **Default:** `2`
+- **Allowed values:** 1–30
+- **Scope:** global · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [antivirus#signatures](guides/antivirus.md#signatures)
+
+### Definitions critically stale after (days) (`antivirus.critical_stale_days`)
+
+Signatures older than this put Security Health at risk.
+
+- **Default:** `7`
+- **Allowed values:** 2–90
+- **Scope:** global · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [antivirus#signatures](guides/antivirus.md#signatures)
+
+## Section: identity
+
+### Sign in with authentik (`authentik.enabled`)
+
+Offer sign-in through your authentik server (OpenID Connect). Local sign-in always stays available.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#setup](guides/authentik.md#setup)
+
+### Issuer / discovery URL (`authentik.issuer`)
+
+The provider's issuer URL; /.well-known/openid-configuration is read from it.
+
+- **Default:** `''`
+- **Allowed values:** –300
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** authentik.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#setup](guides/authentik.md#setup)
+- **Example:** https://auth.example.com/application/o/personal-dm/
+
+### Client ID (`authentik.client_id`)
+
+From the authentik OAuth2/OpenID provider.
+
+- **Default:** `''`
+- **Allowed values:** –200
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** authentik.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#setup](guides/authentik.md#setup)
+
+### Client secret (`authentik.client_secret`)
+
+Stored encrypted and never shown again.
+
+- **Default:** (secret, not shown)
+- **Allowed values:** secret
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** authentik.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#setup](guides/authentik.md#setup)
+
+### Scopes (`authentik.scopes`)
+
+Requested scopes; openid is always included.
+
+- **Default:** `'openid profile email'`
+- **Allowed values:** –200
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** authentik.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#setup](guides/authentik.md#setup)
+
+### Button label (`authentik.button_label`)
+
+Text of the sign-in button.
+
+- **Default:** `'Sign in with authentik'`
+- **Allowed values:** –60
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** authentik.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#button](guides/authentik.md#button)
+
+### Show authentik logo (`authentik.show_logo`)
+
+Show the authentik mark on the sign-in button.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** authentik.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#button](guides/authentik.md#button)
+
+### Account provisioning (`authentik.provisioning`)
+
+Existing accounts only: people link authentik from their own account first. Automatic: unknown authentik users get a new member account (never the main administrator).
+
+- **Default:** `'existing_only'`
+- **Allowed values:** existing_only, auto
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** authentik.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#provisioning](guides/authentik.md#provisioning)
+
+### Username claim (`authentik.username_claim`)
+
+Claim used as the username of automatically created accounts.
+
+- **Default:** `'preferred_username'`
+- **Allowed values:** –60
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#claims](guides/authentik.md#claims)
+
+### Display name claim (`authentik.name_claim`)
+
+Claim used as the display name of new accounts.
+
+- **Default:** `'name'`
+- **Allowed values:** –60
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#claims](guides/authentik.md#claims)
+
+### Email claim (`authentik.email_claim`)
+
+Shown on the link; never used to link accounts automatically.
+
+- **Default:** `'email'`
+- **Allowed values:** –60
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#claims](guides/authentik.md#claims)
+
+### Groups claim (`authentik.groups_claim`)
+
+Claim that lists the person's authentik groups.
+
+- **Default:** `'groups'`
+- **Allowed values:** –60
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#groups](guides/authentik.md#groups)
+
+### Map authentik groups to roles (`authentik.group_mapping_enabled`)
+
+Off by default. Groups only set the Member/Administrator role; document and folder access never comes from groups.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** authentik.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#groups](guides/authentik.md#groups)
+
+## Section: identity_hidden
+
+### Group-to-role mapping (`authentik.group_mapping`)
+
+authentik group name → Member or Administrator.
+
+- **Default:** `{}`
+- **Allowed values:** json
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [authentik#groups](guides/authentik.md#groups)
+- **Example:** {"pdm-admins": "administrator"}
+
+## Section: security_center
+
+### Deployment exposure (`security.deployment`)
+
+Internet-facing deployments must pass the HTTPS checks to be reported as Internet Ready.
+
+- **Default:** `'lan'`
+- **Allowed values:** lan, internet
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-center#internet-ready](guides/security-center.md#internet-ready)
+
+### Security record retention (days) (`security.log_retention_days`)
+
+Antivirus events, security tests, OS update runs, authentik and security alerts are kept at least one year.
+
+- **Default:** `365`
+- **Allowed values:** 365–3650
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-center#retention](guides/security-center.md#retention)
+
+### Storage warning at (% used) (`storage.warn_percent`)
+
+Show a warning and notify administrators.
+
+- **Default:** `80`
+- **Allowed values:** 50–99
+- **Scope:** global · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-center#storage](guides/security-center.md#storage)
+
+### Storage critical at (% used) (`storage.critical_percent`)
+
+Critical storage alert.
+
+- **Default:** `90`
+- **Allowed values:** 51–100
+- **Scope:** global · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-center#storage](guides/security-center.md#storage)
+
 ## Section: appearance
 
 ### Theme (`me.theme`)
@@ -1488,8 +1823,8 @@ Also send access, import and (for administrators) backup and integrity alerts to
 
 Choose what your Overview shows and in which order. Saved to your account, so every device shows the same. Use Customize Overview for sizes and styles.
 
-- **Default:** `['date', 'weather', 'summary', 'calendar', 'holidays', 'upcoming', 'shared', 'recent', 'activity', 'review_queue', 'backup']`
-- **Allowed values:** documents, members, expiring, storage, review, family, saved_views, recent, upcoming, review_queue, backup, date, weather, summary, calendar, holidays, shared, activity
+- **Default:** `['date', 'weather', 'summary', 'calendar', 'holidays', 'upcoming', 'shared', 'recent', 'activity', 'review_queue', 'backup', 'security']`
+- **Allowed values:** documents, members, expiring, storage, review, family, saved_views, recent, upcoming, review_queue, backup, date, weather, summary, calendar, holidays, shared, activity, security
 - **Scope:** user · **Editable by:** each user
 - **Depends on:** nothing
 - **Effect of changing:** Applies on all your devices.

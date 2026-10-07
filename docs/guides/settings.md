@@ -28,7 +28,11 @@ Reminder days and time, recipients, default and required channels for reminders,
 
 ## Authentication {#authentication}
 
-Session length, reset-link lifetime, sign-in rate limit, Google sign-in with diagnostics.
+Session length, reset-link lifetime, sign-in rate limit, Google sign-in with diagnostics, and **External identity providers**.
+
+### External identity providers {#external-idp}
+
+authentik over OpenID Connect: enable switch, issuer, client ID and secret (encrypted), scopes, button label and logo, account provisioning (default *Existing Personal DM accounts only*), claim names, optional group-to-role mapping (Member or Administrator), **Test connection** and the list of linked accounts with **Revoke**. See [authentik](authentik.md).
 
 ## Storage & backup {#storage}
 
@@ -47,9 +51,17 @@ Passwords and tokens are stored encrypted and never displayed again. Leave a sec
 **WhatsApp** notifications are planned; no provider is integrated yet. Local AI, which used to be listed here, is now available:
 see [Local AI](local-ai.md).
 
-## Security & access {#security}
+## Security center {#security}
 
-Login audit retention, failed-sign-in protection, GeoIP (MaxMind) credentials, traffic analytics and security alerts, plus the
+**Settings → Security**, for the main administrator and Administrators: Overview with Security Health, Internet Ready and **Deployment exposure** (`security.deployment`, default LAN only), Security test, OS updates and reboot, Firewall (monitoring only), Security records (`security.log_retention_days`, default 365, minimum 365; cleanup analysis and purge), Storage (`storage.warn_percent` 80, `storage.critical_percent` 90; safe cleanup). See [Security center](security-center.md).
+
+### Antivirus {#antivirus}
+
+**Settings → Security → Antivirus**: scanning on/off (`antivirus.enabled`), the clamd socket (`/run/clamav/clamd.ctl`), maximum scan size (`antivirus.max_scan_mb`, default 50 MB), library re-scan schedule (Disabled, Daily, Weekly, Monthly; default Disabled), *Definitions out of date after* (2 days) and *critically stale* (7 days), the quarantine and **Update now**. See [Antivirus](antivirus.md).
+
+### Access policy {#access-policy}
+
+**Settings → Security → Access policy** (main administrator; formerly *Security & access*): login audit retention, failed-sign-in protection, GeoIP (MaxMind) credentials, traffic analytics and security alerts, plus the
 country/IP access policy. See [Security & access](security-access.md).
 
 ## Local AI {#local-ai}

@@ -21,9 +21,10 @@ Only the latest commit on `main` (pre-release 0.1.x) receives fixes.
 
 ## Scope and design
 
-In scope: authentication (passwords, TOTP, passkeys, recovery, Google linking), session handling, permissions
-(including AI retrieval), share links, file handling and previews, the country/IP access policy and trusted-proxy IP
-handling, the installer/upgrade scripts and the NAS helper.
+In scope: authentication (passwords, TOTP, passkeys, recovery, Google and authentik linking), session handling,
+permissions (including AI retrieval and the Administrator role), share links, file handling and previews, antivirus
+quarantine and release, the country/IP access policy and trusted-proxy IP handling, the installer/upgrade scripts,
+the NAS helper and the host helper.
 
 Design points (details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/adr/](docs/adr/)):
 - Default-deny permissions checked on the server for every request, preview, search result, export, notification
@@ -36,14 +37,33 @@ Design points (details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs
 - The access policy runs before authentication; there is no anonymous bypass. Recovery needs shell access.
 - Documents are never sent to third-party services; optional Local AI only talks to the configured endpoint and
   never falls back to a cloud service.
+- New files are scanned by a local ClamAV daemon over a Unix socket (no network port, no cloud scanner). Scanning is
+  fail-open: when ClamAV is unavailable, files stay usable and are marked *Not scanned*. Detected files are
+  quarantined and blocked; only the main administrator can release them. A *Clean* result only means ClamAV's current
+  signatures found nothing, and archives are scanned as one file.
+- authentik sign-in uses OpenID Connect with PKCE, state and nonce; accounts are linked only by their owner, never by
+  matching email, and authentik never grants document permissions.
+- The Administrator role gives access to the security center, not to documents.
+- Root actions from the web interface (OS security updates, signature updates, reboot) go through a host helper that
+  accepts only a fixed list of actions; the web application never runs `sudo`.
+
+**Limits of the built-in checks.** The Basic Internet Security Test in Settings → Security is a baseline of this
+application and this server. It is not a penetration test, it does not scan other devices, and passing it does not
+prove the absence of vulnerabilities. The Security Health score is a summary for your own installation, not a
+certification. The firewall view only monitors ufw/nftables and listening services; it cannot change rules.
 
 Out of scope: attacks that need root on the server or physical access to it, social engineering of family members,
 and vulnerabilities in third-party platforms (Proxmox, NPM, Pangolin, browsers) — report those upstream.
 
 ## For operators
 
-- Keep the server patched and run `sudo personaldocs upgrade` regularly.
+- Keep the server patched (Settings → Security → OS updates, or `apt-get upgrade` on the host) and run
+  `sudo personaldocs upgrade` regularly.
+- Keep ClamAV running with fresh signatures, set the deployment exposure correctly, and for Internet deployments keep
+  **Internet Ready** green and the host firewall active.
+- Run the Basic Internet Security Test after configuration changes and resolve Critical findings.
 - Require two-step verification at least for administrators.
 - Test restores. Protect the backup share: backups can include the encryption key.
-- If you suspect a compromise: rotate the passwords, Telegram bot token, SMTP and MaxMind credentials; reset 2FA for
-  affected accounts; review the login audit and audit log.
+- If you suspect a compromise: rotate the passwords, Telegram bot token, SMTP, MaxMind and authentik client
+  credentials; revoke authentik links and reset 2FA for affected accounts; review the login audit, audit log and
+  security records.

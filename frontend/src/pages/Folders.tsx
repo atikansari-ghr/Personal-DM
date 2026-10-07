@@ -10,6 +10,7 @@ import PermissionsDialog from "../components/PermissionsDialog";
 import UploadDialog from "../components/UploadDialog";
 import FileTypeIcon from "../components/FileTypeIcon";
 import FolderPicker, { descendantIds, FolderIcon, folderChildren, folderLabel } from "../components/FolderPicker";
+import { AvBadge } from "./settings/SecurityCenter";
 import { Avatar, Confirm, EmojiPicker, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useToast } from "../components/ui";
 import { useSession } from "../session";
 import type { DocRow, FolderNode } from "../types";
@@ -378,7 +379,7 @@ export default function FoldersPage() {
               {check(d)}
               <FileTypeIcon kind={d.file_kind} label={d.file_label} />
               <div className="grow">{openBtn(d)}<div className="small muted">{d.file_label} · {formatBytes(d.size)} · {formatDate(d.created_at)}</div></div>
-              <StateBadge state={d.state} />{d.expiry && d.expiry.level !== "ok" && <ExpiryBadge expiry={d.expiry} />}
+              <StateBadge state={d.state} /><AvBadge status={d.av_status} compact />{d.expiry && d.expiry.level !== "ok" && <ExpiryBadge expiry={d.expiry} />}
               {rowMenu(d)}
             </div>
           )) : view === "thumbnails" ? (
@@ -411,7 +412,7 @@ export default function FoldersPage() {
                   <td className="opt">{formatBytes(d.size)}</td>
                   <td>{d.expiry_date ? <>{formatDate(d.expiry_date)} {d.expiry && d.expiry.level !== "ok" && <ExpiryBadge expiry={d.expiry} />}</> : d.expiry?.level === "none" ? <ExpiryBadge expiry={d.expiry} /> : "—"}</td>
                   <td className="opt">{formatDate(d.created_at)}</td>
-                  <td className="opt"><StateBadge state={d.state} /></td>
+                  <td className="opt"><StateBadge state={d.state} /><AvBadge status={d.av_status} compact /></td>
                   <td>{rowMenu(d)}</td>
                 </tr>
               ))}</tbody>

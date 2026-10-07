@@ -16,54 +16,69 @@ WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 WEEKDAY_NAMES = {d: calendar.day_name[i] for i, d in enumerate(WEEKDAYS)}
 
 
-def _at() -> time | None:
-    hhmm = config.get("backup.schedule_time")
-    if not hhmm or not config.get("backup.enabled"):
+# Settings behind each schedule. The antivirus library re-scan uses the same rules as backups.
+KINDS = {
+    "backup": {"enabled": "backup.enabled", "time": "backup.schedule_time", "frequency": "backup.frequency",
+               "weekday": "backup.weekday", "month_day": "backup.month_day"},
+    "antivirus": {"enabled": None, "time": "antivirus.scan_time", "frequency": "antivirus.scan_frequency",
+                  "weekday": "antivirus.scan_weekday", "month_day": "antivirus.scan_month_day"},
+}
+
+
+def _get(kind: str, field: str):
+    key = KINDS[kind][field]
+    return config.get(key) if key else None
+
+
+def _at(kind: str = "backup") -> time | None:
+    hhmm = _get(kind, "time")
+    enabled = _get(kind, "enabled") if KINDS[kind]["enabled"] else _get(kind, "frequency") not in (None, "disabled")
+    if not hhmm or not enabled:
         return None
     h, m = (int(x) for x in hhmm.split(":"))
     return time(h, m)
 
 
-def runs_on(day: date) -> bool:
-    freq = config.get("backup.frequency")
+def runs_on(day: date, kind: str = "backup") -> bool:
+    freq = _get(kind, "frequency")
     if freq == "weekly":
-        return WEEKDAYS[day.weekday()] == config.get("backup.weekday")
+        return WEEKDAYS[day.weekday()] == _get(kind, "weekday")
     if freq == "monthly":
-        wanted = int(config.get("backup.month_day"))
+        wanted = int(_get(kind, "month_day"))
         return day.day == min(wanted, calendar.monthrange(day.year, day.month)[1])
     return True
 
 
-def last_occurrence(now_local: datetime) -> datetime | None:
+def last_occurrence(now_local: datetime, kind: str = "backup") -> datetime | None:
     """Most recent scheduled moment at or before ``now_local`` (looks back up to ~2 months)."""
-    at = _at()
+    at = _at(kind)
     if at is None:
         return None
     day = now_local.date()
     for _ in range(64):
         moment = datetime.combine(day, at, tzinfo=now_local.tzinfo)
-        if moment <= now_local and runs_on(day):
+        if moment <= now_local and runs_on(day, kind):
             return moment
         day -= timedelta(days=1)
     return None
 
 
-def next_occurrence(now_local: datetime) -> datetime | None:
-    at = _at()
+def next_occurrence(now_local: datetime, kind: str = "backup") -> datetime | None:
+    at = _at(kind)
     if at is None:
         return None
     day = now_local.date()
     for _ in range(64):
         moment = datetime.combine(day, at, tzinfo=now_local.tzinfo)
-        if moment > now_local and runs_on(day):
+        if moment > now_local and runs_on(day, kind):
             return moment
         day += timedelta(days=1)
     return None
 
 
-def due(now_local: datetime, last_run_at: datetime | None) -> datetime | None:
-    """The occurrence to run now, or None. ``last_run_at`` is when the previous scheduled backup was started."""
-    occ = last_occurrence(now_local)
+def due(now_local: datetime, last_run_at: datetime | None, kind: str = "backup") -> datetime | None:
+    """The occurrence to run now, or None. ``last_run_at`` is when the previous scheduled run was started."""
+    occ = last_occurrence(now_local, kind)
     if occ is None or (last_run_at is not None and last_run_at >= occ):
         return None
     if last_run_at is None and occ.date() != now_local.date():

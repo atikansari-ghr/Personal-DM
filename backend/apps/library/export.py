@@ -89,6 +89,9 @@ def _zip_stream(entries, part_no: int, part_total: int):
     with zipfile.ZipFile(sink, mode="w", compression=zipfile.ZIP_STORED, allowZip64=True) as zf:
         for e in entries:
             v = e["version"]
+            if v.av_blocked:
+                manifest["files"].append({"path": e["arc"], "quarantined": True, "document_id": str(e["doc"].id)})
+                continue
             path = storage.resolve_original(v.storage_path)
             if not path.exists():
                 manifest["files"].append({"path": e["arc"], "missing": True, "document_id": str(e["doc"].id)})

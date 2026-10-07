@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, formatDate, formatDateTime } from "../api";
 import DocumentPanel from "../components/DocumentPanel";
+import { AvBadge } from "./settings/SecurityCenter";
 import { Avatar, Confirm, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useAsync, useToast } from "../components/ui";
 import type { DocRow, Meta, User } from "../types";
 import FileTypeIcon from "../components/FileTypeIcon";
@@ -24,7 +25,7 @@ export function DocList({ docs }: { docs: DocRow[] }) {
             <div className="small muted">{d.owner.display_name} · {d.type?.name || d.file_label} · added {formatDate(d.created_at)}</div>
             {d.snippet && <Snippet text={d.snippet} />}
           </div>
-          <StateBadge state={d.state} />
+          <StateBadge state={d.state} /><AvBadge status={d.av_status} compact />
           <ExpiryBadge expiry={d.expiry} />
         </Link>
       ))}

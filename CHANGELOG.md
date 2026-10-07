@@ -4,6 +4,30 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-07) — antivirus, authentik, security center, storage health (Change Set M)
+- **ClamAV antivirus:** every new file is scanned in the background through the local clamd socket `/run/clamav/clamd.ctl` (no TCP port); statuses Scan pending, Clean, Not scanned, Not scanned — size limit exceeded, Scan failed, Threat detected, Quarantined and Released from quarantine; fail-open when ClamAV is down.
+- Quarantine in `<data>/quarantine`: preview, download, sharing, export, OCR and Local AI blocked; only the main administrator can release (warning, confirmation, reason, audited) or delete (type DELETE). Quarantined files are excluded from backups and from integrity "missing" reports.
+- Maximum scan size (default 50 MB), **Scan entire existing library** with progress, pause, resume and cancel, optional daily/weekly/monthly re-scan, automatic freshclam updates and **Update now**, stale (2 days) and critically stale (7 days) signatures; critical administrator notifications for threats, releases, scanner problems and stale or failed signature updates.
+- **authentik** sign-in (Settings → Authentication → External identity providers): OpenID Connect with PKCE, state and nonce, HTTPS issuers only, encrypted client secret, button label and logo, connection test. Links made only by the person (My account → Password & security → Link authentik account), never by email; revocable by the main administrator. Provisioning "existing accounts only" by default, optional automatic member accounts, optional group → role mapping (Member or Administrator), all audited. Local sign-in always stays available.
+- **Administrator** role (Settings → Family & access → Edit): access to Settings → Security and administrator security notifications, without any document or folder access.
+- **Security center** (Settings → Security): Overview, Antivirus, Security test, OS updates, Firewall, Security records, Storage and Access policy. Deployment exposure (LAN only / Internet) and **Internet Ready** HTTPS checks; HSTS for https origins (`PD_HSTS_SECONDS`, default one year).
+- **Basic Internet Security Test**, started manually only: baseline checks of this application and this host, Passed/Warning/Failed with severities and fixes, comparison with the previous run, one year of history; Critical and High findings warn but never block. Optional `pip-audit` with `--with-security-tools`.
+- **OS security updates** through a root host helper (`personaldocs-host.path`, `personaldocs host-apply`, fixed actions only): list and install Debian security updates after a local database and settings backup (`<data>/pre-update-backups`, newest 3), logs, *Reboot required*, and a controlled **Reboot server** with preflight warnings and service health afterwards. No unattended updates.
+- **Firewall monitoring** (ufw/nftables state, listening services, unexpected exposure); no controls change rules.
+- **Security Health** score (0–100, Healthy / Attention / At Risk, forcing conditions) for administrators on the Overview and in the security center.
+- **Security records** retention (default 365 days, nightly cleanup) and a manual purge with cleanup analysis; **Storage Health** with categories, 80 % / 90 % thresholds and a safe cleanup. Original documents are never deleted by any of these workflows.
+- Installer: `clamav`, `clamav-daemon` and `clamav-freshclam` with a local-socket-only configuration (`--without-antivirus` to skip; about 1.2 GB of memory), the host helper, and `--with-security-tools`. `personaldocs status` and `doctor` report ClamAV, freshclam, the host helper, signature age, files pending scan, Internet HTTPS, storage thresholds and a pending reboot.
+- Migrations `accounts.0005_administrator_role`, `accounts.0006_external_identity`, `library.0008_antivirus`, `security.0002_antivirus`, `security.0003_security_center`; guides antivirus, authentik and security center; ADR 0012.
+
+### Changed (2026-10-07) — Change Set M
+- `personaldocs post-upgrade` runs the setup steps a new release adds (ClamAV, host helper units, optional security tools); `personaldocs upgrade` and `personal-DM.sh -- upgrade` call it, so the new components are installed during upgrades.
+- Settings → Security reorganised into the security center; the country/IP access policy, GeoIP, alerts and traffic analytics moved to **Settings → Security → Access policy** (main administrator only). Values are unchanged.
+- Files stored before this release are marked *Not scanned* until **Scan entire existing library** runs.
+- HTTPS installations now send `Strict-Transport-Security` (one year; `PD_HSTS_SECONDS=0` turns it off).
+
+### Fixed (2026-10-07) — Change Set M
+- The "administrators" two-step verification policy now also covers accounts with the Administrator role.
+
 ### Added (2026-10-06) — selective OCR, Overview, sign-in designs, admin-only setup (Change Sets K and L)
 - Selective OCR: a policy per document type (Disabled, Manual, Automatic) with default languages, expected fields and whether the local AI may read the text; custom types can be added and archived (built-in and in-use types are never deleted).
 - **Run OCR…** with chosen source files (front and back via **⋮ → Add another side or copy…** as one job), pages and ranges (`1-2, 5`) and languages; English, Arabic and Hindi offered by default; missing Tesseract packs reported by `personaldocs doctor` and installed by install, upgrade and repair.

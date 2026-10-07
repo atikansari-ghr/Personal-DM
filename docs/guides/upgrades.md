@@ -14,6 +14,56 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to the antivirus, authentik and security center release (Change Set M) {#change-set-m}
+
+```
+sudo personaldocs upgrade
+sudo personaldocs post-upgrade   # once, when coming from an older release: installs ClamAV and the host helper
+sudo personaldocs status     # clamav-daemon, clamav-freshclam and personaldocs-host.path should be active
+sudo personaldocs doctor     # ClamAV, signature age, host helper, HTTPS, storage thresholds, pending reboot
+```
+
+The upgrade is run by the previously installed `personaldocs` command, which does not know the new installer steps
+yet; `post-upgrade` then runs the steps of the new command (ClamAV, host helper units, optional security tools). It is
+safe to repeat, keeps all data, keys and accounts, and `sudo personaldocs repair` does the same and more. The one-line
+`personal-DM.sh -- upgrade` runs `post-upgrade` for you, and from this release on `personaldocs upgrade` calls it
+itself, so later upgrades need no extra step.
+
+This release adds **five database migrations**, applied automatically after the verified backup:
+
+- `accounts.0005_administrator_role`: the **Administrator** role (`is_admin`). No existing account gets it.
+- `accounts.0006_external_identity`: authentik account links.
+- `library.0008_antivirus`: the scan status per file. Every existing file is marked *Not scanned* ("Stored before
+  antivirus scanning was added").
+- `security.0002_antivirus` and `security.0003_security_center`: library scan runs, security test history, OS update
+  and reboot records, and security records.
+
+After upgrading:
+
+- **Antivirus:** `clamav`, `clamav-daemon` and `clamav-freshclam` are installed and clamd listens only on the local
+  socket `/run/clamav/clamd.ctl`. ClamAV needs about **1.2 GB of memory**; on a smaller machine use
+  `sudo personaldocs repair --without-antivirus` and turn scanning off in Settings → Security → Antivirus. The first
+  signature download can take a few minutes. Then run **Scan entire existing library** in Settings → Security →
+  Antivirus so older files get a real status. See [antivirus](antivirus.md#install).
+- **Host helper:** `personaldocs-host.path` is installed, so Settings → Security can check and install Debian
+  security updates, update ClamAV signatures, inspect the firewall and reboot. Nothing is installed automatically.
+  See [OS updates](security-center.md#updates).
+- **HSTS:** for an `https://` public origin the app now sends `Strict-Transport-Security` (one year). Set
+  `PD_HSTS_SECONDS=0` in `/etc/personaldocs/personaldocs.env` to turn it off, or a smaller value while testing. See
+  [reverse proxy](reverse-proxy.md#hsts).
+- **Settings → Security reorganised:** it is now the security center (Overview, Antivirus, Security test, OS updates,
+  Firewall, Security records, Storage). The country/IP access policy, GeoIP, alerts and traffic analytics moved to
+  **Settings → Security → Access policy**; their values are unchanged.
+- **Deployment exposure** starts as *LAN only*. If the site is published on the Internet, change it and check
+  **Internet Ready**. See [Internet Ready](security-center.md#internet-ready).
+- **authentik** stays off until you configure it. See [authentik](authentik.md#setup).
+- **Nothing is deleted:** existing accounts, folders, documents, versions and records are kept. Security records are
+  kept for one year by default.
+
+To go back, restore the pre-upgrade backup: this release adds migrations, so `sudo personaldocs rollback` is refused
+unless the previous release knows them (see [Rollback](#rollback)). ClamAV stays installed; remove it with
+`apt-get remove clamav-daemon clamav-freshclam` if wanted.
+
 ## Upgrading to the selective OCR / Overview release (Change Sets K and L) {#selective-ocr-overview}
 
 ```
@@ -122,7 +172,7 @@ Nothing changes for existing users until you switch features on:
 - passwordless sign-in is off
 
 Afterwards, optionally:
-1. Settings → Security & access: enter MaxMind credentials and **Update now** for GeoIP; review alerts; enable traffic analytics.
+1. Settings → Security & access (since Change Set M: Settings → Security → Access policy): enter MaxMind credentials and **Update now** for GeoIP; review alerts; enable traffic analytics.
 2. Settings → Authentication: decide on passkeys / passwordless / required two-step verification.
 3. Settings → Local AI: add a profile pointing at your LAN AI server.
 4. `sudo personaldocs doctor` to confirm the real client IP, GeoIP, passkey origin and AI checks.

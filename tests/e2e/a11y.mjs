@@ -28,12 +28,16 @@ const PAGES = [
   ["help", "/help/getting-started", true],
   ["my-notifications", "/settings/account?tab=notifications", true],
   ["appearance-widgets", "/settings/account?tab=appearance", true],
-  ["access-security", "/settings/security", true],
+  ["access-security", "/settings/security?view=access", true],
   ["local-ai", "/settings/ai", true],
   ["login-audit", "/settings/activity?view=logins", true],
   ["import", "/imports/new", true],
   ["ocr-review", "/ocr-review", true],
   ["settings-overview-sign-in", "/settings/overview", true],
+  ["security-overview", "/settings/security", true],
+  ["security-antivirus", "/settings/security?view=antivirus", true],
+  ["security-test", "/settings/security?view=test", true],
+  ["security-storage", "/settings/security?view=storage", true],
 ];
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });

@@ -19,7 +19,7 @@ def critical_events() -> set[str]:
 
 
 def is_critical(key: str) -> bool:
-    return key in critical_events()
+    return key in critical_events() or EVENTS[key].always_critical
 
 
 def _legacy(user, key):
@@ -80,7 +80,7 @@ def channel_issue(user, channel: str) -> str | None:
 
 
 def applies_to(user, key: str) -> bool:
-    return not EVENTS[key].admins_only or user.is_main_admin
+    return not EVENTS[key].admins_only or user.is_main_admin or getattr(user, "is_admin", False)
 
 
 def channel_configured(channel: str) -> bool:

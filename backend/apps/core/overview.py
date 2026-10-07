@@ -30,7 +30,7 @@ SIZES = {
     "date": (1, 1, 2), "weather": (1, 1, 2), "summary": (2, 2, 4), "calendar": (1, 2, 2), "holidays": (1, 2, 4),
     "shared": (1, 2, 4), "activity": (1, 2, 4), "recent": (2, 2, 4), "upcoming": (1, 2, 4), "review_queue": (2, 4, 4),
     "backup": (2, 4, 4), "family": (2, 4, 4), "saved_views": (2, 4, 4),
-    "documents": (1, 1, 2), "members": (1, 1, 2), "expiring": (1, 1, 2), "storage": (1, 1, 2), "review": (1, 1, 2),
+    "security": (2, 2, 4), "documents": (1, 1, 2), "members": (1, 1, 2), "expiring": (1, 1, 2), "storage": (1, 1, 2), "review": (1, 1, 2),
 }
 # Lists, tables and calendars stay rectangular; a circle only fits a single value.
 CIRCLE_OK = {"date", "weather", "documents", "members", "expiring", "storage", "review"}

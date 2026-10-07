@@ -75,9 +75,39 @@ def tick(now_local, due_daily, mark) -> dict:
         fresh = summary and summary.get("generated_at", "") > (timezone.now() - timedelta(minutes=55)).isoformat()
         if not fresh:
             jobs.enqueue("goaccess_report", {}, max_attempts=1, idempotency_key=f"goaccess:{timezone.now():%Y%m%d%H}")
+    out.update(operations_tick(now_local))
     if due_daily("security_maintenance", "03:40", now_local):
         out["login_events_removed"] = retention()
+        from . import center
+
+        out["security_records_removed"] = center.apply_retention()
         if config.get("geoip.auto_update") and config.is_set("geoip.license_key") and now_local.weekday() == 2:
             jobs.enqueue("geoip_update", {}, max_attempts=2, idempotency_key=f"geoip:{now_local:%Y%m%d}")
         mark("security_maintenance", now_local)
+    return out
+
+
+def _hourly(name: str) -> bool:
+    from apps.notify.models import SchedulerRun
+
+    row, _ = SchedulerRun.objects.get_or_create(name=name)
+    if row.last_run_at and timezone.now() - row.last_run_at < timedelta(minutes=60):
+        return False
+    SchedulerRun.objects.filter(name=name).update(last_run_at=timezone.now())
+    return True
+
+
+def operations_tick(now_local) -> dict:
+    """Antivirus health and schedule, storage thresholds (hourly checks; each alert at most once a day)."""
+    out = {}
+    from . import antivirus, center
+
+    if config.get("antivirus.enabled"):
+        if _hourly("av_health"):
+            out["antivirus"] = antivirus.check_health_and_alert().get("status")
+        started = antivirus.scheduled_scan_tick(now_local)
+        if started:
+            out["av_scheduled_scan"] = started
+    if _hourly("storage_health"):
+        out["storage"] = center.storage_alerts()
     return out

@@ -183,10 +183,26 @@ class DocumentVersion(models.Model):
     error = models.TextField(blank=True)
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
+    # antivirus (ClamAV); the file stays usable while the scan is pending or could not run
+    AV_STATES = ("pending", "clean", "not_scanned", "size_limit", "failed", "threat", "quarantined", "released")
+    av_status = models.CharField(max_length=16, default="not_scanned", db_index=True)
+    av_signature = models.CharField(max_length=200, blank=True, help_text="Detection name reported by ClamAV")
+    av_engine = models.CharField(max_length=120, blank=True, help_text="Engine and signature version used")
+    av_detail = models.CharField(max_length=300, blank=True, help_text="Why a file was not scanned / scan error")
+    av_scanned_at = models.DateTimeField(null=True, blank=True)
+    av_quarantine_path = models.CharField(max_length=300, blank=True, help_text="Relative to QUARANTINE_DIR")
+    av_released_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    av_released_at = models.DateTimeField(null=True, blank=True)
+    av_release_reason = models.CharField(max_length=500, blank=True)
 
     class Meta:
         ordering = ["-number"]
         unique_together = [("document", "number")]
+
+    @property
+    def av_blocked(self) -> bool:
+        """Threat detected or quarantined: no preview, download, OCR or AI on this file."""
+        return self.av_status in ("threat", "quarantined")
 
 
 class DocumentField(models.Model):

@@ -8,6 +8,7 @@ export interface UserMini {
 export interface User extends UserMini {
   role_label: string;
   is_main_admin: boolean;
+  is_admin?: boolean;
   is_active: boolean;
   is_head: boolean;
   username?: string;
@@ -19,6 +20,7 @@ export interface User extends UserMini {
   reminder_group?: string | null;
   groups?: string[];
   google_linked?: boolean;
+  authentik_linked?: boolean;
   passkey_count?: number;
   passwordless_enabled?: boolean;
   two_factor_setup_required?: boolean;
@@ -29,6 +31,7 @@ export interface Session {
   login?: import("./pages/Auth").LoginBranding;
   version: string;
   google_enabled: boolean;
+  authentik?: { enabled: boolean; label: string; show_logo: boolean };
   pending_2fa: boolean;
   pending_methods?: string[];
   passkeys_enabled?: boolean;
@@ -56,6 +59,7 @@ export interface DocRow {
   issue_date: string | null;
   expiry: Expiry | null;
   ocr_state?: string;
+  av_status?: string | null;
   created_at: string;
   archived: boolean;
   size: number | null;
@@ -69,6 +73,7 @@ export interface DocRow {
 }
 export interface Version {
   id: string;
+  antivirus?: { status: string; signature: string; engine: string; detail: string; scanned_at: string | null; blocked: boolean; released_at: string | null };
   number: number;
   original_name: string;
   size: number;

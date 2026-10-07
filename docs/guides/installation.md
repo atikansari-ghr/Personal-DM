@@ -13,7 +13,7 @@
 `personaldocs install` is idempotent and resumable (rerun it after any failure; it continues safely and never wipes data or keys):
 
 1. Checks OS, architecture, RAM, disk, systemd, DNS/network and port availability.
-2. Installs packages: Python 3, PostgreSQL, Tesseract (English, Arabic, Hindi and orientation detection; packs for any other offered OCR language are installed too), OCRmyPDF, Ghostscript, qpdf, poppler-utils, LibreOffice (headless Writer/Calc/Impress), Node.js (only if the frontend must be built), git.
+2. Installs packages: Python 3, PostgreSQL, Tesseract (English, Arabic, Hindi and orientation detection; packs for any other offered OCR language are installed too), OCRmyPDF, Ghostscript, qpdf, poppler-utils, LibreOffice (headless Writer/Calc/Impress), Node.js (only if the frontend must be built), git, and the **ClamAV antivirus** (`clamav`, `clamav-daemon`, `clamav-freshclam`; see [Antivirus](#antivirus)).
 3. Creates the `personaldocs` system user, the PostgreSQL role/database (local socket only), and directories:
 
 | Path | Contents |
@@ -25,7 +25,7 @@
 | `/var/log/personaldocs/install.log` | Redacted installer log |
 
 4. Builds/installs the release, runs database migrations and collects static files.
-5. Installs systemd units `personaldocs-web` (gunicorn), `personaldocs-worker` and `personaldocs-scheduler`, then starts them and runs a health check.
+5. Installs systemd units `personaldocs-web` (gunicorn), `personaldocs-worker` and `personaldocs-scheduler`, plus the root **host helper** `personaldocs-host.path` / `personaldocs-host.service` (see [Host helper](#host-helper)), then starts them and runs a health check.
 6. Prints a one-time setup code.
 
 ## One-line install (recommended) {#one-line}
@@ -127,22 +127,40 @@ git -c credential.helper='!f(){ echo username=x-access-token; echo password=$(ca
 
 Replace `OWNER/REPO` with your private repository and the origin with your public HTTPS address. The token is never put in the URL, process arguments or logs.
 
-Useful options: `--bind 0.0.0.0:8000` (when the proxy runs on another host), `--ref v0.1.0` (install a tag), `--build-frontend` (force a local frontend build).
+Useful options: `--bind 0.0.0.0:8000` (when the proxy runs on another host), `--ref v0.1.0` (install a tag), `--build-frontend` (force a local frontend build), `--without-antivirus` (skip ClamAV, for machines with less memory), `--with-security-tools` (also install `pip-audit` for the dependency check of the [security test](security-center.md#test); `repair` accepts it too).
+
+## Antivirus (ClamAV) {#antivirus}
+
+Install, upgrade and repair install `clamav`, `clamav-daemon` and `clamav-freshclam` and adjust `/etc/clamav/clamd.conf`:
+
+- `LocalSocket /run/clamav/clamd.ctl` and **no** `TCPSocket` (clamd never listens on the network);
+- `StreamMaxLength 1100M` (the app's own *Maximum scan size*, default 50 MB, decides what is scanned);
+- `ConcurrentDatabaseReload no` (avoids holding two signature sets in memory during a reload);
+- `EnableVersionCommand true` (Debian ships it off; the app reads the engine and signature version with it).
+
+The first signature download can take a few minutes; `clamav-freshclam` then checks for updates automatically. ClamAV 1.5 also downloads `.cvd.sign` files, which it needs to load the signatures (FIPS mode); let freshclam fetch them rather than copying `.cvd` files by hand.
+
+**Memory:** ClamAV needs about **1.2 GB of RAM** for its signatures. The recommended 4 GB container has room for it; the installer warns below about 3.5 GB. On smaller machines install with `--without-antivirus` and turn scanning off in Settings → Security → Antivirus, otherwise new files show *Not scanned*. See [antivirus](antivirus.md#install).
+
+## Host helper {#host-helper}
+
+`personaldocs-host.path` watches `/var/lib/personaldocs/host/request.json` and runs `personaldocs host-apply` as root. It accepts only fixed actions: inspect (firewall and listening services), check updates, install Debian security updates, update ClamAV signatures and reboot. The web app itself never runs `sudo`. Without the helper, Settings → Security → OS updates shows the commands to run by hand. See [OS updates](security-center.md#updates).
 
 ## After installing {#after}
 
 1. Configure the reverse proxy and open the public address.
 2. Enter the setup code (`personaldocs setup-token` prints a new one) and create the **Main Administrator** (your name, username and password). Only this one account is created. In the next step, **Add family members (optional)**, add members now or choose **Skip for now** and add them later in Settings → Family & access. See [setup](setup.md#main-admin).
 3. Connect the NAS and check the backup destination (Settings → Storage & backup → **Connect NAS**), then run **Back up now** (the guided installer already did this if you answered the NAS questions).
-4. Optionally configure SMTP, Telegram, Google sign-in.
-5. Run `personaldocs doctor`.
+4. Optionally configure SMTP, Telegram, Google or authentik sign-in.
+5. In Settings → Security, set **Deployment exposure** (LAN only or Published on the Internet) and run **Scan entire existing library** if you imported files before ClamAV had its signatures.
+6. Run `personaldocs doctor`.
 
 ## Commands {#commands}
 
 | Command | Purpose |
 |---|---|
-| `personaldocs status` | Service state, version, health |
-| `personaldocs doctor` | Read-only diagnostics (redacted), including missing OCR language packs |
+| `personaldocs status` | Service state (also `clamav-daemon`, `clamav-freshclam`, `personaldocs-host.path`), version, health, "Reboot required" |
+| `personaldocs doctor` | Read-only diagnostics (redacted), including missing OCR language packs, ClamAV and signature age, files pending scan, host helper, HTTPS for Internet deployments, storage thresholds and a pending reboot |
 | `personaldocs upgrade [--ref TAG]` | Back up, update, migrate, restart, verify |
 | `personaldocs rollback` | Return to the previous release when the schema is compatible |
 | `personaldocs repair` | Safe repairs (packages, permissions, services, migrations, stuck jobs) |
@@ -151,9 +169,10 @@ Useful options: `--bind 0.0.0.0:8000` (when the proxy runs on another host), `--
 | `personaldocs integrity [--repair [--confirm]]` | Storage integrity check |
 | `personaldocs recover-admin USER` | Console recovery for the main administrator |
 | `personaldocs setup-token` | One-time code for the setup wizard |
+| `personaldocs host-apply` | Run the host action requested in Settings → Security (normally started by `personaldocs-host.path`) |
 | `personaldocs logs [web|worker|scheduler]` | Follow service logs |
 | `personaldocs manage ...` | Run a Django management command as the service user |
 
 ## Resources {#resources}
 
-The default is one OCR/conversion job at a time, which keeps a 2 vCPU / 4 GB container responsive. Each converter is limited in time and memory. The 10 GB of source documents will grow: previews, versions, thumbnails and the database add space. Watch **Activity & health → Disk** and plan for growth.
+The default is one OCR/conversion job at a time, which keeps a 2 vCPU / 4 GB container responsive. ClamAV uses about 1.2 GB of that memory. Each converter is limited in time and memory. The 10 GB of source documents will grow: previews, versions, thumbnails and the database add space. Watch **Activity & health → Disk** and plan for growth.

@@ -242,6 +242,8 @@ def document_analyze(request, pk):
 
     if not ocr_policy.ai_allowed(doc):
         raise PermissionDenied("Local AI is not allowed for this document type (Settings → OCR & processing).")
+    if doc.current_version_id and doc.current_version.av_blocked:
+        raise PermissionDenied("This file is in antivirus quarantine; Local AI cannot read it.")
     job = ai_jobs.queue(AIJob.ANALYZE, document=doc, user=request.user)
     audit.record("ai.analyze_requested", request=request, target=doc, subject_user=doc.owner)
     return Response({"job": str(job.id), "status": "queued"}, status=202)

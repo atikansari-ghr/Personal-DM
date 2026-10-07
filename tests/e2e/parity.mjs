@@ -550,13 +550,102 @@ await step("AT-63/64 import into a chosen sub-folder with the exact final hierar
   expect(old && f.some((x) => x.name === "Address Update 22July2026" && x.parent === old.id), "hierarchy recreated under Parity / Old");
 });
 
+await step("AT-138/140/141 antivirus: background scan, quarantine and release (EICAR test string)", async () => {
+  // the EICAR anti-virus test string (harmless); assembled in two halves so this file itself is not flagged
+  const eicar = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS" + "-TEST-FILE!$H+H*";
+  const up = await page.evaluate(async ([folder, text]) => {
+    const csrf = (document.cookie.match(/pd_csrftoken=([^;]+)/) || [])[1] || "";
+    const fd = new FormData();
+    fd.append("folder", folder);
+    fd.append("files", new Blob([text], { type: "text/plain" }), "eicar-test.txt");
+    const r = await fetch("/api/documents", { method: "POST", body: fd, headers: { "X-CSRFToken": decodeURIComponent(csrf) } });
+    return { status: r.status, data: await r.json() };
+  }, [ids.parity, eicar]);
+  expect(up.status === 201, `upload ${up.status}`);
+  const id = up.data.documents[0].id;
+  ids.eicar = id;
+  let status = "";
+  for (let i = 0; i < 60 && status !== "quarantined"; i++) {
+    status = (await api(page, `/api/documents/${id}`)).data.current_version.antivirus.status;
+    if (status !== "quarantined") await page.waitForTimeout(1000);
+  }
+  expect(status === "quarantined", `antivirus status ${status}`);
+  const file = await page.evaluate(async (u) => (await fetch(u)).status, `/api/documents/${id}/file`);
+  expect(file === 423, `quarantined file served with ${file}`);
+  await page.goto(`${BASE}/documents/${id}`);
+  await page.waitForSelector("text=Quarantined by the antivirus");
+  await page.goto(BASE + "/settings/security?view=antivirus");
+  await page.waitForSelector("td:has-text('eicar-test.txt')");
+  await page.waitForSelector(".badge:has-text('Eicar')");
+  await page.screenshot({ path: `${SHOTS}/security-antivirus.png` });
+  await page.click("tr:has-text('eicar-test.txt') button:has-text('Release…')");
+  await page.waitForSelector(".modal:has-text('ClamAV detected malware')");
+  expect(await page.locator(".modal button:has-text('Release file')").isDisabled(), "release needs confirmation and a reason");
+  await page.fill("#rel-reason", "Synthetic EICAR test file used by the browser tests");
+  await page.check(".modal input[type=checkbox]");
+  await page.click(".modal button:has-text('Release file')");
+  await page.waitForSelector(".toast:has-text('released')");
+  expect((await api(page, `/api/documents/${id}`)).data.current_version.antivirus.status === "released", "released");
+});
+
+await step("AT-149/150/156/159 security center: health score, Internet test, storage", async () => {
+  await page.goto(BASE + "/settings/security");
+  await page.waitForSelector(".score-ring");
+  await page.waitForSelector("text=Internet exposure");
+  await page.screenshot({ path: `${SHOTS}/security-overview.png` });
+  await page.goto(BASE + "/settings/security?view=test");
+  await page.click("button:has-text('Run Security Test')");
+  await page.waitForSelector(".toast:has-text('Security test started')");
+  for (let i = 0; i < 120; i++) {
+    const runs = (await api(page, "/api/security/tests")).data.runs;
+    if (runs[0] && runs[0].status !== "running") break;
+    await page.waitForTimeout(2000);
+  }
+  await page.reload();
+  await page.waitForSelector("text=Latest result");
+  expect(await page.locator(".finding-group").count() >= 6, "finding categories shown");
+  await page.screenshot({ path: `${SHOTS}/security-test.png` });
+  await page.goto(BASE + "/settings/security?view=storage");
+  await page.waitForSelector("text=Storage Health");
+  await page.waitForSelector("text=Documents (originals)");
+  await page.screenshot({ path: `${SHOTS}/security-storage.png` });
+  for (const [view, text] of [["updates", "Debian security updates"], ["firewall", "Firewall status"], ["records", "Security records"]]) {
+    await page.goto(`${BASE}/settings/security?view=${view}`);
+    await page.waitForSelector(`h2:has-text('${text}')`);
+  }
+  expect(await page.locator("button:has-text('Enable firewall'), button:has-text('Open port')").count() === 0, "no firewall controls");
+  const prefs = (await api(page, "/api/session")).data.preferences.dashboard_widgets;
+  await api(page, "/api/settings", { method: "PUT", body: { values: { "me.dashboard_widgets": [...prefs.filter((w) => w !== "security"), "security"] } } });
+  await page.goto(BASE + "/");
+  await page.waitForSelector("[data-widget=security] .score-ring");
+});
+
+await step("AT-146 authentik settings and sign-in button", async () => {
+  await api(page, "/api/settings", { method: "PUT", body: { values: { "authentik.enabled": true, "authentik.issuer": "https://auth.example.test/application/o/personal-dm/",
+    "authentik.client_id": "personal-dm-demo", "authentik.client_secret": "demo-secret-not-real" } } });
+  await page.goto(BASE + "/settings/authentication");
+  await page.waitForSelector("text=External identity providers — authentik");
+  await page.locator("h2:has-text('External identity providers — authentik')").evaluate((el) => {
+    el.scrollIntoView({ block: "start" });
+    window.scrollBy(0, -90); // keep the heading below the sticky top bar
+  });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/settings-authentik.png` });
+  const anon = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const lp = await anon.newPage();
+  await lp.goto(BASE + "/login");
+  await lp.waitForSelector("a:has-text('Sign in with authentik')");
+  expect(await lp.locator("#password").isVisible(), "local sign-in stays available");
+  await anon.close();
+});
+
 await step("screens for the README (desktop)", async () => {
   await page.goto(`${BASE}/folders/${ids.parity}/${ids["Sample policy (3 pages)"]}`);
   await page.waitForSelector(".detail-pane .viewer canvas");
   await page.screenshot({ path: `${SHOTS}/folders-preview.png` });
   for (const [file, url, wait] of [["settings-security-passkeys.png", "/settings/account?tab=security", "text=Passkeys"],
     ["local-ai.png", "/settings/ai", "text=Local AI"], ["login-audit.png", "/settings/activity?view=logins", "text=Login audit"],
-    ["security-access.png", "/settings/security", "text=Geographic access control"]]) {
+    ["security-access.png", "/settings/security?view=access", "text=Geographic access control"]]) {
     await page.goto(BASE + url);
     await page.waitForSelector(wait);
     await page.waitForTimeout(500);
@@ -598,7 +687,7 @@ await step("AT-128/130 every sign-in design keeps the same sign-in methods (desk
 });
 
 // ------------------------------------------------------------------ tablet / mobile parity
-const ROUTES = ["/", "/ocr-review", "/settings/overview", "/folders", `/folders/${ids.parity}`, `/documents/${ids["Sample policy (3 pages)"]}`, "/search?q=sample", "/shared",
+const ROUTES = ["/", "/ocr-review", "/settings/overview", "/settings/security", "/settings/security?view=antivirus", "/settings/security?view=test", "/settings/security?view=storage", "/folders", `/folders/${ids.parity}`, `/documents/${ids["Sample policy (3 pages)"]}`, "/search?q=sample", "/shared",
   "/offline", "/notifications", "/archive", "/settings/account", "/settings/account?tab=security", "/settings/account?tab=appearance",
   "/settings/account?tab=notifications", "/settings/family", "/settings/notifications", "/settings/storage", "/settings/security",
   "/settings/ai", "/settings/activity?view=logins", "/assistant", "/imports/new", "/help/getting-started"];

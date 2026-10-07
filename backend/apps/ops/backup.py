@@ -149,7 +149,9 @@ def _do_backup(target: Path) -> dict:
     total = 0
     verified = True
     with connection.cursor() as cur:
-        cur.execute("SELECT storage_path, sha256, size, preview_path, searchable_path, thumbnail_path FROM library_documentversion")
+        # quarantined files (antivirus) are not copied into backups
+        cur.execute("SELECT storage_path, sha256, size, preview_path, searchable_path, thumbnail_path FROM library_documentversion "
+                    "WHERE av_status <> 'quarantined'")
         rows = cur.fetchall()
     for rel, sha, size, preview, searchable, thumb in rows:
         src = Path(settings.ORIGINALS_DIR) / rel

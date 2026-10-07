@@ -78,6 +78,8 @@ def family(db):
     DocumentType.objects.update(ocr_mode="automatic", ocr_ai_allowed=True)
     config.set_value("processing.ocr_untyped_mode", "automatic")
     config.set_value("processing.ocr_untyped_ai_allowed", True)
+    # No ClamAV in the test environment: antivirus tests switch it on with a fake clamd (tests/fake_clamd.py).
+    config.set_value("antivirus.enabled", False)
     for u in users.values():
         u.refresh_from_db()
     return users

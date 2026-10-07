@@ -2,13 +2,16 @@
 # personaldocs — install, upgrade, rollback, repair and operate Personal Documents Management System on Debian 13 (native, no Docker).
 #
 #   personaldocs install [--public-origin URL] [--bind ADDR:PORT] [--ref REF] [--repo URL] [--build-frontend] [--with-verapdf]
+#                        [--without-antivirus] [--with-security-tools]
 #   personaldocs upgrade [--ref REF] [--skip-backup]
+#   personaldocs post-upgrade                  (set up components a new release adds: ClamAV, host helper; safe to repeat)
 #   personaldocs rollback
 #   personaldocs repair
 #   personaldocs status | doctor | backup | integrity [...] | logs [web|worker|scheduler]
 #   personaldocs restore BACKUP_DIR [--verify-only] [--no-key]
 #   personaldocs recover-admin USERNAME [--generate] [--reset-totp]
 #   personaldocs nas-apply [--from-settings]   (mount the NAS configured in Settings → Storage & backup)
+#   personaldocs host-apply                    (run the host security action requested in Settings → Security)
 #   personaldocs setup-token
 #   personaldocs check-access                   (why the app is not reachable through the reverse proxy)
 #   personaldocs local-access on|off|status     (also open the app at http://<container-ip>:<port> on the home network)
@@ -137,10 +140,53 @@ preflight() {
 }
 
 install_optional_packages() { # never fatal: the app works without them
-  log "optional packages (GoAccess traffic analytics, OCR language packs)"
+  log "optional packages (GoAccess traffic analytics, OCR language packs, ClamAV antivirus)"
   export DEBIAN_FRONTEND=noninteractive
   apt-get install -y -q --no-install-recommends goaccess >/dev/null 2>&1 || c_warn "GoAccess could not be installed; traffic analytics will use the built-in summary."
   install_ocr_languages
+  install_antivirus
+}
+
+install_antivirus() { # ClamAV daemon on a local Unix socket only + automatic signature updates (freshclam)
+  if [ "${OPT_NO_ANTIVIRUS:-0}" = 1 ] || [ "${PD_NO_ANTIVIRUS:-0}" = 1 ]; then
+    c_warn "Antivirus skipped (--without-antivirus). Turn scanning off in Settings → Security → Antivirus to avoid 'Not scanned' warnings."
+    env_set PD_NO_ANTIVIRUS 1 2>/dev/null || true
+    return 0
+  fi
+  log "antivirus: ClamAV daemon and freshclam"
+  apt-get install -y -q --no-install-recommends clamav clamav-daemon clamav-freshclam >/dev/null 2>&1 \
+    || { c_warn "ClamAV could not be installed; uploads are stored but marked Not scanned until it is installed (sudo personaldocs repair)."; return 0; }
+  local conf=/etc/clamav/clamd.conf
+  if [ -f "$conf" ]; then
+    # never listen on the network; stream limit high enough for the app's own (lower) scan limit; no double memory on reload
+    sed -i -E '/^\s*TCPSocket\b/d; /^\s*TCPAddr\b/d' "$conf"
+    grep -q '^LocalSocket ' "$conf" || echo 'LocalSocket /run/clamav/clamd.ctl' >>"$conf"
+    grep -q '^LocalSocketMode ' "$conf" && sed -i -E 's/^LocalSocketMode .*/LocalSocketMode 666/' "$conf" || echo 'LocalSocketMode 666' >>"$conf"
+    grep -q '^StreamMaxLength ' "$conf" && sed -i -E 's/^StreamMaxLength .*/StreamMaxLength 1100M/' "$conf" || echo 'StreamMaxLength 1100M' >>"$conf"
+    grep -q '^ConcurrentDatabaseReload ' "$conf" && sed -i -E 's/^ConcurrentDatabaseReload .*/ConcurrentDatabaseReload no/' "$conf" || echo 'ConcurrentDatabaseReload no' >>"$conf"
+    # the app reads the engine and signature version with VERSION (Debian ships it disabled)
+    grep -q '^EnableVersionCommand ' "$conf" && sed -i -E 's/^EnableVersionCommand .*/EnableVersionCommand true/' "$conf" || echo 'EnableVersionCommand true' >>"$conf"
+  fi
+  systemctl enable --now clamav-freshclam >/dev/null 2>&1 || true
+  if ! ls /var/lib/clamav/*.c[vl]d >/dev/null 2>&1; then
+    log "antivirus: first signature download (can take a few minutes)"
+    systemctl stop clamav-freshclam >/dev/null 2>&1 || true
+    timeout 900 freshclam --quiet >/dev/null 2>&1 || c_warn "The first ClamAV signature download failed; freshclam retries automatically every hour."
+    systemctl start clamav-freshclam >/dev/null 2>&1 || true
+  fi
+  systemctl enable clamav-daemon >/dev/null 2>&1 || true
+  systemctl restart clamav-daemon >/dev/null 2>&1 || c_warn "clamav-daemon did not start yet (it needs signatures); check: systemctl status clamav-daemon"
+  local mem; mem=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+  [ "$mem" -ge 3500 ] || c_warn "ClamAV needs about 1.2 GB of memory; this server has ${mem} MB. Consider 4 GB or install with --without-antivirus."
+}
+
+install_security_tools() { # install_security_tools RELEASE_DIR — optional pip-audit for the Basic Internet Security Test
+  local dir=${1:-$CURRENT}
+  if [ "${OPT_SECURITY_TOOLS:-0}" = 1 ]; then env_set PD_SECURITY_TOOLS 1; PD_SECURITY_TOOLS=1; fi
+  [ "${PD_SECURITY_TOOLS:-0}" = 1 ] || return 0
+  log "security tools: pip-audit"
+  "$dir/.venv/bin/python" -m pip install --quiet --no-cache-dir "pip-audit>=2.7,<3" >/dev/null 2>&1 \
+    || c_warn "pip-audit could not be installed; the security test reports the dependency audit as unavailable."
 }
 
 install_ocr_languages() { # Tesseract packs for the languages offered in Settings -> OCR & processing
@@ -394,8 +440,23 @@ install_units() {
     install -m 0644 "$src/personaldocs-nas.path" "$src/personaldocs-nas.service" /etc/systemd/system/
     install -d -m 0750 -o $APP -g $APP "$DATA_DIR/nas"
   fi
+  # Host security actions from Settings → Security (inspect, OS security updates, freshclam, reboot)
+  if [ -f "$src/personaldocs-host.path" ]; then
+    install -m 0644 "$src/personaldocs-host.path" "$src/personaldocs-host.service" /etc/systemd/system/
+    install -d -m 0750 -o $APP -g $APP "$DATA_DIR/host"
+  fi
   systemctl daemon-reload
   [ -f /etc/systemd/system/personaldocs-nas.path ] && systemctl enable --now personaldocs-nas.path >/dev/null 2>&1 || true
+  if [ -f /etc/systemd/system/personaldocs-host.path ] && systemctl enable --now personaldocs-host.path >/dev/null 2>&1; then
+    "${1:-$CURRENT}/.venv/bin/python" "${1:-$CURRENT}/backend/apps/ops/host_helper.py" --data-dir "$DATA_DIR" --mark-installed >/dev/null 2>&1 || true
+  fi
+}
+
+cmd_host_apply() { # root: run the host action the app requested (fixed list in host_helper.py)
+  need_root; load_env
+  [ -L "$CURRENT" ] || die "not installed"
+  [ -f "$DATA_DIR/host/request.json" ] || { echo "no host request pending"; return 0; }
+  "$CURRENT/.venv/bin/python" "$CURRENT/backend/apps/ops/host_helper.py" --data-dir "$DATA_DIR" --apply
 }
 
 show_web_failure() { # print the last service messages so the cause is visible without a second command
@@ -495,6 +556,7 @@ cmd_install() {
   activate "$dir"
   install -m 0755 "$dir/scripts/personaldocs" /usr/local/bin/personaldocs
   install_units "$dir"
+  install_security_tools "$dir"
   for u in "${UNITS[@]}"; do systemctl enable --now "$u" >/dev/null; systemctl restart "$u"; done
   health || { show_web_failure; die "the web service did not become healthy; see: journalctl -u personaldocs-web -n 50"; }
   prune_releases
@@ -545,6 +607,9 @@ cmd_upgrade() {
   activate "$new"
   install -m 0755 "$new/scripts/personaldocs" /usr/local/bin/personaldocs
   install_units "$new"
+  install_security_tools "$new"
+  # finish with the NEW release's own setup steps (this function is still the old script's code)
+  PD_LOCK_HELD=1 PD_NO_RESTART=1 /usr/local/bin/personaldocs post-upgrade || c_warn "post-upgrade steps reported a problem; run: sudo personaldocs repair"
   for u in "${UNITS[@]}"; do systemctl restart "$u"; done
   if ! health; then
     c_err "Health check failed after upgrade."; show_web_failure
@@ -557,6 +622,24 @@ cmd_upgrade() {
   prune_releases
   log "=== upgrade complete: $(basename "$old") -> $(basename "$new")"
   c_ok "Upgraded $(version_of "$old") -> $(version_of "$new") ($(cat "$new/REVISION" | cut -c1-10))."
+}
+
+cmd_post_upgrade() { # setup steps a new release adds (ClamAV, host helper, units); safe to run again
+  need_root; load_env
+  [ "${PD_LOCK_HELD:-0}" = 1 ] || with_lock
+  [ -L "$CURRENT" ] || die "not installed (run personaldocs install)"
+  local rel rev; rel=$(readlink -f "$CURRENT"); rev=$(cat "$rel/REVISION" 2>/dev/null || echo unknown)
+  if [ "$(cat "$STATE/post-upgrade" 2>/dev/null || true)" = "$rev" ]; then c_ok "Post-upgrade steps already done for $(basename "$rel")."; return 0; fi
+  log "=== post-upgrade steps for $(basename "$rel")"
+  install_optional_packages
+  install_units "$rel"
+  install_security_tools "$rel"
+  if [ "${PD_NO_RESTART:-0}" != 1 ]; then
+    for u in "${UNITS[@]}"; do systemctl restart "$u"; done
+    health || { show_web_failure; die "web service unhealthy after the post-upgrade steps; run: sudo personaldocs repair"; }
+  fi
+  echo "$rev" >"$STATE/post-upgrade"
+  c_ok "Post-upgrade steps complete (antivirus, host helper, services)."
 }
 
 cmd_rollback() {
@@ -586,6 +669,7 @@ cmd_repair() {
   chown -R $APP:$APP "$DATA_DIR"
   find "$DATA_DIR/storage/originals" -type f -exec chmod 0440 {} + 2>/dev/null || true
   install_units
+  install_security_tools
   manage migrate --noinput
   manage shell -c "from apps.core.models import Job; from django.utils import timezone; print('requeued', Job.objects.filter(status='running', locked_until__lt=timezone.now()).update(status='queued'))"
   manage reindex
@@ -597,7 +681,8 @@ cmd_repair() {
 cmd_status() {
   load_env
   echo "Version:  $(version_of "$(readlink -f "$CURRENT" 2>/dev/null || echo /nonexistent)") ($(cat "$CURRENT/REVISION" 2>/dev/null | cut -c1-10))"
-  for u in "${UNITS[@]}"; do printf '%-26s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"; done
+  for u in "${UNITS[@]}" clamav-daemon clamav-freshclam personaldocs-host.path; do printf '%-26s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"; done
+  [ -f /run/reboot-required ] && c_warn "Reboot required (updated system packages)."
   if health; then c_ok "Health:   OK ($PD_BIND)"; else c_err "Health:   FAILED"; fi
 }
 
@@ -727,6 +812,8 @@ while [ $# -gt 0 ]; do
     --skip-backup) OPT_SKIP_BACKUP=1; shift;;
     --build-frontend) OPT_BUILD_FRONTEND=1; shift;;
     --with-verapdf) OPT_VERAPDF=1; shift;;
+    --without-antivirus) OPT_NO_ANTIVIRUS=1; shift;;
+    --with-security-tools) OPT_SECURITY_TOOLS=1; shift;;
     *) ARGS+=("$1"); shift;;
   esac
 done
@@ -735,6 +822,7 @@ case "$CMD" in
   install) cmd_install;;
   upgrade) cmd_upgrade;;
   rollback) cmd_rollback;;
+  post-upgrade) cmd_post_upgrade;;
   repair) cmd_repair;;
   status) cmd_status;;
   doctor) need_root; load_env; manage doctor || exit 1;;   # failed checks are listed above; not a script error
@@ -753,6 +841,7 @@ case "$CMD" in
     health && c_ok "Restore complete and healthy." || die "restored, but the web service is unhealthy";;
   recover-admin) need_root; load_env; manage recover_admin "${ARGS[@]}";;
   nas-apply) cmd_nas_apply "${ARGS[@]}";;
+  host-apply) cmd_host_apply;;
   setup-token) need_root; load_env; manage setup_token;;
   check-access) need_root; cmd_check_access || exit 1;;
   local-access) cmd_local_access "${ARGS[@]}";;

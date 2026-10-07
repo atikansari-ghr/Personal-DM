@@ -25,7 +25,9 @@ SECTIONS = [
     ("notifications", "Notifications"), ("connections", "Connections"), ("authentication", "Authentication"),
     ("storage", "Storage & Backup"), ("security", "Security & Access"), ("activity", "Activity & Health"), ("appearance", "Appearance"),
     ("my_notifications", "My notifications"), ("ai", "Local AI"), ("overview", "Overview widgets"), ("login", "Sign-in page"),
+    ("antivirus", "Antivirus"), ("identity", "External identity providers"), ("security_center", "Security center"),
 ]
+ADMIN_SECTIONS = ("antivirus", "security_center")  # visible (read, and editable where allowed) to Administrators
 
 
 def _setting_json(defn, user):
@@ -40,6 +42,7 @@ def _setting_json(defn, user):
         extra["choice_labels"] = registry.WIDGETS
     elif defn.type == "event_list":
         extra["choice_labels"] = {k: e.label for k, e in registry.NOTIFY_EVENTS.items()}
+        extra["locked_choices"] = [k for k, e in registry.NOTIFY_EVENTS.items() if e.always_critical]
     elif defn.type == "country_list":
         from . import overview
 
@@ -80,9 +83,11 @@ def settings_api(request):
                                    link="/settings/authentication")
         if errors:
             return Response({"error": "Some settings were not saved.", "fields": errors, "saved": changed}, status=400)
-    visible = [s for s in SETTINGS if s.scope == USER or user.is_main_admin or s.section in ("general",)]
+    visible = [s for s in SETTINGS if s.scope == USER or user.is_main_admin or s.section in ("general",)
+               or (user.is_admin and s.section in ADMIN_SECTIONS)]
     if not user.is_main_admin:
-        visible = [s for s in visible if s.scope == USER or s.key in ("general.app_name", "general.timezone", "general.date_format")]
+        visible = [s for s in visible if s.scope == USER or s.key in ("general.app_name", "general.timezone", "general.date_format")
+                   or (user.is_admin and s.section in ADMIN_SECTIONS)]
     return Response({"sections": [{"id": sid, "label": label} for sid, label in SECTIONS],
                      "settings": [_setting_json(s, user) for s in visible]})
 

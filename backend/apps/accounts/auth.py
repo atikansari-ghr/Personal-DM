@@ -30,3 +30,12 @@ class IsMainAdmin(IsActiveAuthenticated):
 
     def has_permission(self, request, view):
         return super().has_permission(request, view) and bool(request.user.is_main_admin)
+
+
+class IsAdministrator(IsActiveAuthenticated):
+    """Main administrator or an account with the Administrator role (security and operations area)."""
+
+    message = "Only administrators can do this."
+
+    def has_permission(self, request, view):
+        return super().has_permission(request, view) and bool(request.user.is_main_admin or request.user.is_admin)

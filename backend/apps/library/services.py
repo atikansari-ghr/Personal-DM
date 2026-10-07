@@ -227,6 +227,9 @@ def _commit_version(*, actor, doc: Document, staged: storage.Staged, number: int
     except Exception:
         storage.remove_file(final)
         raise
+    from apps.security import antivirus
+
+    antivirus.on_new_version(version)  # background ClamAV scan; never blocks the upload
     return version
 
 
@@ -417,7 +420,8 @@ def purge_document(*, actor, doc: Document, request=None) -> None:
     if doc.archived_at is None:
         raise DomainError("Only archived documents can be permanently deleted.")
     files = []
-    for v in doc.versions.all():
+    versions = list(doc.versions.all())
+    for v in versions:
         files.append(storage.resolve_original(v.storage_path))
         files.append(storage.derivative_dir(v.id))
     doc_id, owner, title_len = doc.id, doc.owner, len(doc.title)
@@ -430,6 +434,9 @@ def purge_document(*, actor, doc: Document, request=None) -> None:
         def _cleanup():
             import shutil
 
+            from apps.security import antivirus
+
+            antivirus.delete_quarantined_files(versions)  # quarantined copies go with the deleted document
             for f in files:
                 if f.is_dir():
                     shutil.rmtree(f, ignore_errors=True)

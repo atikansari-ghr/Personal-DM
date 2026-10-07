@@ -170,6 +170,11 @@ do_upgrade() {
   ensure_tools
   step "Upgrading (a backup is taken first; on failure the previous version is restored)"
   run personaldocs upgrade --ref "$REF"
+  # releases that add system components (e.g. ClamAV, host helper) finish their setup here
+  if grep -q 'post-upgrade)' "$(command -v personaldocs)" 2>/dev/null; then
+    step "Setting up new components (antivirus, host helper)"
+    run personaldocs post-upgrade
+  fi
   step "Health check"
   run personaldocs doctor || fail "The upgrade finished but some checks failed (listed above). Run 'repair', or 'personaldocs rollback' to go back."
   ok "Upgrade complete."

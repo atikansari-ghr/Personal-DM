@@ -20,7 +20,9 @@ log = logging.getLogger("personaldocs.security")
 def _admins():
     from apps.accounts.models import User
 
-    return User.objects.filter(is_main_admin=True, is_active=True)
+    from django.db.models import Q
+
+    return User.objects.filter(Q(is_main_admin=True) | Q(is_admin=True), is_active=True)
 
 
 def _throttled(bucket: str, window_seconds: int) -> bool:
@@ -118,14 +120,14 @@ def _check_escalation(event) -> None:
             _send(_admins(), event="security.failed_logins", key=f"sec:esc:{ip}:{now:%Y%m%d%H}",
                   subject="Address temporarily blocked after failed sign-ins",
                   body=f"{n} failed sign-ins within an hour. The address is blocked for {minutes} minutes.",
-                  facts=_login_facts(event), link="/settings/security")
+                  facts=_login_facts(event), link="/settings/security?view=access")
 
 
 ADMIN_EVENT = {"alerts.policy_changes": "security.policy_change", "alerts.health": "security.health",
                "alerts.auth_policy": "security.auth_policy"}
 
 
-def admin_event(kind_setting: str, subject: str, body: str, key: str, link: str = "/settings/security") -> None:
+def admin_event(kind_setting: str, subject: str, body: str, key: str, link: str = "/settings/security?view=access") -> None:
     """Policy/trusted-IP/temporary-access/health changes, sent to administrators."""
     if kind_setting in BY_KEY_SETTINGS and not config.get(kind_setting):
         return

@@ -14,7 +14,7 @@ from apps.notify.event_defs import DEFAULT_CRITICAL
 from apps.notify.event_defs import EVENTS as NOTIFY_EVENTS
 
 GLOBAL, USER = "global", "user"
-MAIN_ADMIN, SELF = "main_admin", "self"
+MAIN_ADMIN, SELF, ADMIN = "main_admin", "self", "admin"  # ADMIN: main administrator or Administrator role
 
 
 class SettingError(ValueError):
@@ -99,11 +99,24 @@ WIDGETS = {
     "holidays": "Upcoming holidays",
     "shared": "Shared with me",
     "activity": "Recent activity",
+    "security": "Security Health (administrators)",
 }
 # What a new account sees first (existing accounts keep the widgets they chose).
 DEFAULT_WIDGETS = ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity",
-                   "review_queue", "backup"]
+                   "review_queue", "backup", "security"]
 STAT_WIDGETS = ("documents", "members", "expiring", "storage", "review")
+
+
+def _validate_group_mapping(value):
+    if value in (None, ""):
+        return
+    if not isinstance(value, dict) or len(value) > 50:
+        raise SettingError("Map authentik group names to a role.")
+    for group, role in value.items():
+        if not isinstance(group, str) or not group.strip() or len(group) > 120:
+            raise SettingError("Group names must be non-empty text.")
+        if role not in ("member", "administrator"):
+            raise SettingError("Groups can only map to the Member or Administrator role (never Main administrator).")
 
 
 def normalize_widgets(value) -> list[str]:
@@ -535,6 +548,84 @@ SETTINGS: list[SettingDef] = [
                max=80, help="login-designs#custom"),
     SettingDef("login.logo_file", "Logo file", "Set by uploading a logo.", "str", "", "login_hidden", max=80,
                help="login-designs#branding"),
+    # ---- Antivirus (ClamAV)
+    SettingDef("antivirus.enabled", "Antivirus scanning (ClamAV)",
+               "Scan every new file in the background with the local ClamAV daemon. Files stay usable while they are scanned; "
+               "a detected threat is quarantined.", "bool", True, "antivirus", editable_by=ADMIN, help="antivirus#overview"),
+    SettingDef("antivirus.socket", "ClamAV socket", "Local Unix socket of clamd. ClamAV is never contacted over the network.",
+               "path", "/run/clamav/clamd.ctl", "antivirus", depends_on=("antivirus.enabled",), help="antivirus#install",
+               example="/run/clamav/clamd.ctl"),
+    SettingDef("antivirus.max_scan_mb", "Maximum scan size (MB)",
+               "Larger files are stored normally but marked Not scanned — size limit exceeded. Above 200 MB a scan can use "
+               "a lot of memory on a 4 GB server.", "int", 50, "antivirus", min=1, max=1024, editable_by=ADMIN,
+               depends_on=("antivirus.enabled",), help="antivirus#size"),
+    SettingDef("antivirus.scan_frequency", "Re-scan the whole library", "Scheduled re-scan of every stored file with the newest signatures.",
+               "choice", "disabled", "antivirus", choices=("disabled", "daily", "weekly", "monthly"), editable_by=ADMIN,
+               choice_labels={"disabled": "Disabled", "daily": "Daily", "weekly": "Weekly", "monthly": "Monthly"},
+               depends_on=("antivirus.enabled",), help="antivirus#schedule"),
+    SettingDef("antivirus.scan_time", "Re-scan time", "Local time (installation timezone) when a scheduled re-scan starts.",
+               "time", "02:30", "antivirus", editable_by=ADMIN, depends_on=("antivirus.enabled",), help="antivirus#schedule"),
+    SettingDef("antivirus.scan_weekday", "Re-scan day of week", "Used by the weekly schedule.", "choice", "sun", "antivirus",
+               choices=("mon", "tue", "wed", "thu", "fri", "sat", "sun"), editable_by=ADMIN,
+               choice_labels={"mon": "Monday", "tue": "Tuesday", "wed": "Wednesday", "thu": "Thursday", "fri": "Friday",
+                              "sat": "Saturday", "sun": "Sunday"}, help="antivirus#schedule"),
+    SettingDef("antivirus.scan_month_day", "Re-scan day of month", "Used by the monthly schedule; 29–31 run on the last day of shorter months.",
+               "int", 1, "antivirus", min=1, max=31, editable_by=ADMIN, help="antivirus#schedule"),
+    SettingDef("antivirus.stale_days", "Definitions out of date after (days)",
+               "Signatures older than this show a warning and alert administrators.", "int", 2, "antivirus", min=1, max=30,
+               editable_by=ADMIN, help="antivirus#signatures"),
+    SettingDef("antivirus.critical_stale_days", "Definitions critically stale after (days)",
+               "Signatures older than this put Security Health at risk.", "int", 7, "antivirus", min=2, max=90,
+               editable_by=ADMIN, help="antivirus#signatures"),
+    # ---- External identity provider (authentik)
+    SettingDef("authentik.enabled", "Sign in with authentik", "Offer sign-in through your authentik server (OpenID Connect). "
+               "Local sign-in always stays available.", "bool", False, "identity", help="authentik#setup"),
+    SettingDef("authentik.issuer", "Issuer / discovery URL",
+               "The provider's issuer URL; /.well-known/openid-configuration is read from it.", "url", "", "identity", max=300,
+               depends_on=("authentik.enabled",), help="authentik#setup",
+               example="https://auth.example.com/application/o/personal-dm/"),
+    SettingDef("authentik.client_id", "Client ID", "From the authentik OAuth2/OpenID provider.", "str", "", "identity", max=200,
+               depends_on=("authentik.enabled",), help="authentik#setup"),
+    SettingDef("authentik.client_secret", "Client secret", "Stored encrypted and never shown again.", "secret", "", "identity",
+               depends_on=("authentik.enabled",), help="authentik#setup"),
+    SettingDef("authentik.scopes", "Scopes", "Requested scopes; openid is always included.", "str", "openid profile email",
+               "identity", max=200, depends_on=("authentik.enabled",), help="authentik#setup"),
+    SettingDef("authentik.button_label", "Button label", "Text of the sign-in button.", "str", "Sign in with authentik",
+               "identity", max=60, depends_on=("authentik.enabled",), help="authentik#button"),
+    SettingDef("authentik.show_logo", "Show authentik logo", "Show the authentik mark on the sign-in button.", "bool", True,
+               "identity", depends_on=("authentik.enabled",), help="authentik#button"),
+    SettingDef("authentik.provisioning", "Account provisioning",
+               "Existing accounts only: people link authentik from their own account first. Automatic: unknown authentik "
+               "users get a new member account (never the main administrator).", "choice", "existing_only", "identity",
+               choices=("existing_only", "auto"), depends_on=("authentik.enabled",),
+               choice_labels={"existing_only": "Existing Personal DM accounts only (default)", "auto": "Create accounts automatically"},
+               help="authentik#provisioning"),
+    SettingDef("authentik.username_claim", "Username claim", "Claim used as the username of automatically created accounts.",
+               "str", "preferred_username", "identity", max=60, validator=_validate_plain, help="authentik#claims"),
+    SettingDef("authentik.name_claim", "Display name claim", "Claim used as the display name of new accounts.", "str", "name",
+               "identity", max=60, validator=_validate_plain, help="authentik#claims"),
+    SettingDef("authentik.email_claim", "Email claim", "Shown on the link; never used to link accounts automatically.",
+               "str", "email", "identity", max=60, validator=_validate_plain, help="authentik#claims"),
+    SettingDef("authentik.groups_claim", "Groups claim", "Claim that lists the person's authentik groups.", "str", "groups",
+               "identity", max=60, validator=_validate_plain, help="authentik#groups"),
+    SettingDef("authentik.group_mapping_enabled", "Map authentik groups to roles",
+               "Off by default. Groups only set the Member/Administrator role; document and folder access never comes from groups.",
+               "bool", False, "identity", depends_on=("authentik.enabled",), help="authentik#groups"),
+    SettingDef("authentik.group_mapping", "Group-to-role mapping", "authentik group name → Member or Administrator.", "json", {},
+               "identity_hidden", validator=_validate_group_mapping, help="authentik#groups", example='{"pdm-admins": "administrator"}'),
+    # ---- Security center
+    SettingDef("security.deployment", "Deployment exposure",
+               "Internet-facing deployments must pass the HTTPS checks to be reported as Internet Ready.", "choice", "lan",
+               "security_center", choices=("lan", "internet"),
+               choice_labels={"lan": "LAN only (home network / VPN)", "internet": "Published on the Internet"},
+               help="security-center#internet-ready"),
+    SettingDef("security.log_retention_days", "Security record retention (days)",
+               "Antivirus events, security tests, OS update runs, authentik and security alerts are kept at least one year.",
+               "int", 365, "security_center", min=365, max=3650, help="security-center#retention"),
+    SettingDef("storage.warn_percent", "Storage warning at (% used)", "Show a warning and notify administrators.", "int", 80,
+               "security_center", min=50, max=99, editable_by=ADMIN, help="security-center#storage"),
+    SettingDef("storage.critical_percent", "Storage critical at (% used)", "Critical storage alert.", "int", 90, "security_center",
+               min=51, max=100, editable_by=ADMIN, help="security-center#storage"),
     # ---- Per-user
     SettingDef("me.theme", "Theme", "Colour theme for your account on every device.", "choice", "green", "appearance",
                scope=USER, editable_by=SELF, choices=THEMES, effect="Applies immediately on all your devices.",
@@ -615,6 +706,8 @@ def coerce(defn: SettingDef, value: Any) -> Any:
     elif t == "event_list":
         if not isinstance(value, list) or any(v not in NOTIFY_EVENTS for v in value):
             raise SettingError("Unknown notification event.")
+        if defn.key == "notifications.critical_events":  # some security events can never be made optional
+            value = list(value) + [k for k, e in NOTIFY_EVENTS.items() if e.always_critical]
         value = [k for k in NOTIFY_EVENTS if k in value]
     elif t == "event_matrix":
         from apps.notify.catalog import coerce_prefs

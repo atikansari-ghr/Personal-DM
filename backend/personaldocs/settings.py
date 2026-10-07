@@ -88,6 +88,9 @@ SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "SAMEORIGIN"
+# HSTS for HTTPS deployments (sent only on requests that arrived over HTTPS). PD_HSTS_SECONDS=0 turns it off.
+SECURE_HSTS_SECONDS = int(env("HSTS_SECONDS", "31536000" if SECURE_COOKIES else "0") or 0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("HSTS_INCLUDE_SUBDOMAINS", False)
 
 INSTALLED_APPS = [
     "django.contrib.auth",

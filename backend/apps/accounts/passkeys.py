@@ -161,7 +161,7 @@ def has_second_factor(user: User) -> bool:
 
 def requires_2fa(user: User) -> bool:
     policy = config.get("auth.require_2fa")
-    return policy == "all" or (policy == "admins" and user.is_main_admin)
+    return policy == "all" or (policy == "admins" and (user.is_main_admin or user.is_admin))
 
 
 def methods_for(user: User) -> list[str]:
