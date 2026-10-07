@@ -239,8 +239,10 @@ def test_at204_security_templates_render_with_protected_content(family, clients)
         assert r.status_code == 200, (ev, r.content)
         p = r.json()
         must = EVENTS[ev].mandatory[0]
-        assert must in p["email"]["text"] and must.replace("'", "&#x27;") in p["email"]["html"], ev
-        assert must.replace("'", "&#x27;") in p["telegram"]["text"] and must in p["in_app"]["mandatory"], ev
+        import html as _html
+
+        assert must in p["email"]["text"] and _html.escape(must, quote=True) in p["email"]["html"], ev
+        assert _html.escape(must, quote=True) in p["telegram"]["text"] and must in p["in_app"]["mandatory"], ev
         assert p["push"]["title"] and "TEST" in p["push"]["title"]
     # customisation: branding, title, introduction, icon, button label, footer — but mandatory text stays
     ev = "security.temporary_password"

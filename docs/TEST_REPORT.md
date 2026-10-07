@@ -1,6 +1,6 @@
 # Test report
 
-Date: 2026-10-03, updated 2026-10-06 (change sets K and L) and 2026-10-07 (change sets M, N and O). Revision: the branch head at the commit that adds this file.
+Date: 2026-10-03, updated 2026-10-06 (change sets K and L) and 2026-10-07 (change sets M, N, O and P). Revision: the branch head at the commit that adds this file.
 
 ## Environment actually used
 
@@ -12,7 +12,7 @@ Date: 2026-10-03, updated 2026-10-06 (change sets K and L) and 2026-10-07 (chang
 | Tesseract / OCRmyPDF | 5.3.4 / 15.2.0 (Ubuntu packages, run via `python3.12 -m ocrmypdf`) |
 | LibreOffice | 24.2 (Writer/Calc/Impress) |
 | Node / browser | Node 22, Chromium (Playwright 1.56) |
-| ClamAV (change set M) | 1.5.4 daemon in the development container, used only by `tests/test_antivirus_live.py` |
+| ClamAV (change sets M and P) | 1.5.4 daemon in the development container, used only by `tests/test_antivirus_live.py` and by running the change set P diagnosis tool against it. Debian 13 ClamAV packaging (`clamav-daemon` / `clamav-freshclam` 1.4.3+dfsg-1) was checked from the package unit files and reproduced by a simulated host in `tests/test_auth_password_clamav.py`; no real Debian 13 systemd host was available |
 
 ## Commands and results
 
@@ -21,6 +21,8 @@ Date: 2026-10-03, updated 2026-10-06 (change sets K and L) and 2026-10-07 (chang
 | `scripts/verify.sh` (compile, `manage.py check`, `makemigrations --check`, settings reference, `bash -n` + shellcheck, pytest, `tsc` + `vite build`, repository hygiene) | **All passed** |
 | `pytest` (`tests/`) | **232 passed**, 0 failed, 0 skipped (OCR and LibreOffice tests ran; 2026-10-05, change set J: `test_browsing_v3` 7, `test_ocr_quality` 6) |
 | Change sets K and L (`tests/test_selective_ocr.py` 11, `tests/test_overview.py` 15, `tests/test_family_setup.py`; full `pytest tests` run on 2026-10-06) | **All passed**; full backend suite: 264 tests passed (`scripts/verify.sh`, which also ran the 18 stubbed installer checks, 17 frontend unit tests, type check, build and privacy check). Selective OCR policy, custom/archived types (409 for built-in or in-use types), source and page selection, front and back as one job, primary source, Remove OCR data and search, re-runs keep confirmed values, English/Arabic/Hindi with missing packs reported, states, review queue permissions, limits, cancel and pause, AI only for permitted types; Overview widgets, layout limits and styles, Gregorian/Hijri in the installation timezone, calendar, Saudi and Indian holidays with status and source, countries and corrections, weather off by default and against a **fake local weather server** (cache, stale, unavailable), sign-in presets, wallpaper upload/rejections/removal, identical sign-in methods; setup with only the Main Administrator, optional members, members added later, earlier six-account installations kept, deactivation keeps documents (DELETE 405) |
+| Change set P (`tests/test_auth_password_clamav.py` 18, AT-196…AT-210; `tests/test_antivirus_live.py`; 2026-10-07) | **All 18 passed**; live ClamAV tests **passed** against a real clamd 1.5.4; earlier tests updated (passkey policy in `test_passkeys.py`, the HTML password reset email in `test_auth.py`, the account-locked alert in `test_security.py`); full backend suite: **350 passed** (fresh test database, including the live ClamAV tests). Covered with a software WebAuthn authenticator, mocked SMTP and a **simulated Debian 13 host** (fake `systemctl`, `dpkg`, `clamconf`, `freshclam`, `runuser` and a fake clamd on the socket): Sign in with Passkey offered before the password, passwordless without username or password (user verification required, replay refused), both passkey modes and main administrator recovery, audited passkey management, temporary password shown once / hash only / never sent / forced change / sessions ended, branded single-use expiring reset email never stored in the outbox, Main Administrator protection, security templates with protected mandatory text, account-locked and link events, the missing-socket / LocalSocket-mismatch state and the skipped-start-condition state diagnosed by cause and not by cached metadata, repair (clamd.conf, drop-in, tmpfiles, unit order, idempotency, service-account access, self-test), the host-helper action, persistence configuration, clean + EICAR self-test without artifacts, admin-only endpoints, upload/quarantine after repair, Security Health from the operational state |
+| `scripts/e2e.sh` (2026-10-07, change set P: browser flow, accessibility audit, parity checks) | **62 PASS, 0 FAIL** (no serious or critical accessibility violations). New steps: *AT-196 Sign in with Passkey on the first sign-in screen*, *AT-200/201 administrator resets a password: temporary password shown once* and *AT-205..207 antivirus: Diagnose / Repair panel and clean + EICAR self-test*. New screenshots: `login-passkey.png`, `admin-reset-password.png`, `security-antivirus-diagnose.png` |
 | Change set O (`tests/test_rich_notifications.py` 19, AT-176…AT-193 and AT-195; 2026-10-07) | **All 19 passed**; the affected earlier suites (expiry, events, notification policy, security, antivirus, passkeys, auth, security center, document types, authentik): **125 passed** after the change; full backend suite: **331 passed** (330 in the full run plus the live ClamAV test re-run once the local daemon was started). Covered with mocked SMTP, Telegram and push service: one event rendered for every channel, multipart email (no scripts, images or tracking, `dir="auto"`), Telegram HTML with escaping, buttons only on https and plain-text fallback, Notification Center filters, unread and cursor, critical notifications kept, push payload encrypted (decrypted with the subscriber key in the test) with lock-screen privacy and an endpoint allowlist (`http://`, `127.0.0.1`, unknown hosts and URLs with credentials refused), event-specific actions, quarantine release never in a message, Template Manager, injection payloads (`<script>`, `<img onerror>`, Markdown, Telegram markup) escaped, previews and TEST sends (only the audit entry `notifications.test_sent`), critical never below Warning, repeat cooldown, Unicode/RTL/time zone/date format, delivery history states with redacted errors, document type and masked document number, security event severity and audience, links never granting access, existing configuration kept by the migration |
 | `scripts/e2e.sh` (2026-10-07, change set O: browser flow, accessibility audit, parity checks) | **59 PASS, 0 FAIL**. New steps: *AT-176..186 rich notifications: TEST messages, Notification Center, banners, template manager* (desktop) and `AT-194 <viewport>: Notification Center cards, filters and actions by touch without clipping` for tablet, mobile-portrait and mobile-landscape; `/notifications` and `/settings/notifications` in the overflow route list and the accessibility audit. Screenshots regenerated: `notification-center.png`, `notification-banner.png`, `notification-template-email.png`, `notification-template-telegram.png`, `mobile-notifications.png` |
 | Change set N (`tests/test_document_types.py` 16, AT-161…AT-174; 2026-10-07) | **All 16 passed**; full backend suite: **312 passed**. Covered: an untyped document with OCR details can be typed and keeps its type after a reload (the original defect), folder and type independent, type administration with delete refused while in use and reassignment (the older `DELETE /api/metadata/type/<id>` no longer untypes documents), template fields configuring the Details panel, the Passport template and value validation, folder suggested type as a suggestion only, OCR type suggestion with Accept / Change / Ignore and the confirmed type kept, value provenance and protection of confirmed values, type change with kept / previous / new fields and map / keep / remove, expiry role lost stops reminders only after review, re-map of existing OCR text without a new scan, one-off details and administrator-only promotion, permissions (viewer, editor, main administrator, no access → 404, bulk skips documents the person may not edit), search / OCR review type filter / expiry-role reminders with per-type reminder days, and the migration (no data lost, untyped documents not guessed, report counts). Not covered by a dedicated test: the bulk skip of documents with another confirmed type and the bulk preview counts |
@@ -48,14 +50,14 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
-## Acceptance summary (AT-01…AT-195) {#summary}
+## Acceptance summary (AT-01…AT-210) {#summary}
 
-185 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
+200 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
 
 | Result | Count | Scenarios |
 |---|---|---|
-| Passed (automated tests, or for AT-136 a documented review) | 144 | all scenarios not listed below |
-| Passed in automated tests; real-environment validation pending | 35 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195 |
+| Passed (automated tests, or for AT-136 a documented review) | 154 | all scenarios not listed below |
+| Passed in automated tests; real-environment validation pending | 40 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195, 197, 202, 205, 206, 208 |
 | Blocked (external environment) | 5 | AT-14, AT-26; AT-24, AT-27, AT-30 (partly automated, the rest needs a real Debian 13 LXC) |
 | Not run (manual steps, not automated) | 1 | AT-15 |
 
@@ -72,6 +74,77 @@ validations (none reported as passed): real SMTP delivery and HTML rendering in 
 (AT-177); a real Telegram bot with inline buttons on an https address (AT-178); real Web Push on Android/Chrome, the
 iOS/iPadOS Home Screen app, Firefox and Windows (AT-181); the installed PWA on real devices (AT-194); an upgrade of a
 real Debian 13 installation (AT-195).
+
+Change set P: see [below](#change-set-p). Pending external validations (none reported as passed): real passkey
+platforms (AT-197), real SMTP delivery of the reset email (AT-202), a real Debian 13 / Proxmox LXC upgrade and repair
+(AT-205, AT-206) and reboot persistence on a real host (AT-208).
+
+## Change set P: passkey sign-in, password reset, security templates, ClamAV repair {#change-set-p}
+
+The change prompt numbered the acceptance tests AT-176…AT-190; in this repository they are **AT-196…AT-210** (prompt
+AT-176 → AT-196 … AT-190 → AT-210), because AT-176…AT-195 belong to Change Set O.
+
+**Results.** `tests/test_auth_password_clamav.py`: **18 passed**. `tests/test_antivirus_live.py` (real clamd 1.5.4):
+**passed**. Full backend suite: **350 passed**. Browser suite (`scripts/e2e.sh`): **62 PASS, 0 FAIL** (no serious or critical accessibility violations).
+
+| AT | Prompt AT | Scenario | Status |
+|---|---|---|---|
+| AT-196 | AT-176 | Sign in with Passkey on the first sign-in screen | Passed (automated; e2e step AT-196) |
+| AT-197 | AT-177 | Passwordless sign-in without username or password | Passed with a software authenticator — real platforms Not Run |
+| AT-198 | AT-178 | Passwordless / Password + Passkey modes; main administrator recovery | Passed |
+| AT-199 | AT-179 | Passkey enrolment, rename, removal audited and notified | Passed (automated) |
+| AT-200 | AT-180 | Temporary password shown once, forced change, sessions end | Passed (automated; e2e step AT-200/201) |
+| AT-201 | AT-181 | Temporary password never stored or sent | Passed (automated; e2e step AT-200/201) |
+| AT-202 | AT-182 | Branded, single-use, expiring reset email | Passed (automated, mocked SMTP) — real SMTP and mail clients Not Run |
+| AT-203 | AT-183 | Main Administrator protection | Passed (automated) |
+| AT-204 | AT-184 | Security templates with mandatory text, branding and footer; account-locked and link events | Passed (automated) |
+| AT-205 | AT-185 | Diagnosis finds the socket cause, not cached metadata | Passed on a simulated Debian host and a real clamd — real Debian 13 LXC Not Run |
+| AT-206 | AT-186 | Repair restores daemon, socket and service-account access; host-helper action | Passed on a simulated Debian host and a real clamd — real Debian 13 LXC Not Run |
+| AT-207 | AT-187 | Clean + EICAR self-test without artifacts; admin-only endpoints | Passed (automated, real clamd; e2e step AT-205..207) |
+| AT-208 | AT-188 | Repair persistence | Passed for configuration only — real reboot / LXC restart Not Run |
+| AT-209 | AT-189 | Upload scan and quarantine after repair | Passed (automated) |
+| AT-210 | AT-190 | Security Health from the operational state | Passed (automated) |
+
+**Handover evidence.**
+
+1. **Root cause of "passkey only after the password".** Passwordless sign-in was gated by `auth.allow_passwordless`
+   (off by default) plus a per-person opt-in, so passkeys were only offered as the second step and the "Sign in with
+   a passkey" button stayed hidden. Replaced by `auth.passkey_mode` (Passwordless by default) and migration
+   `accounts.0007_passkey_mode`.
+2. **Root cause of the ClamAV socket failure.** The most likely cause is the `LocalSocket` mismatch with socket
+   activation: Debian's `LocalSocket /var/run/clamav/clamd.ctl` differs as a string from the socket unit's
+   `/run/clamav/clamd.ctl`, so clamd binds its own socket file and removes it when it stops or restarts. Other causes
+   found in the Debian 13 units: a start skipped by `ConditionPathExistsGlob` when signatures are missing, and an
+   out-of-memory kill without `Restart=`. The diagnosis on the host names which applies; it was not run on the
+   affected real host.
+3. **Effective socket path after repair:** `/run/clamav/clamd.ctl`, the path of the systemd socket unit
+   `clamav-daemon.socket`; `LocalSocket` is set to the same string and `antivirus.socket` is synced to it.
+4. **Daemon and freshclam service evidence:** only from the simulated Debian host (fake `systemctl`) and the real
+   clamd in the development container (no systemd). A real `clamav-daemon` restart and freshclam update under systemd:
+   Not Run.
+5. **Service identity access:** checked by the repair with `runuser` as `personaldocs` (`PING` → `PONG`) and by the
+   web app's own diagnosis connecting as the service account (simulated host and real clamd).
+6. **Self-test results:** real clamd 1.5.4 — clean text *Clean*, EICAR detected, temporary files removed, no document
+   or quarantine entry created. The diagnosis tool against the real daemon stopped: *Unavailable* with
+   `FileNotFoundError` reported; running: self-test PASSED.
+7. **Persistence:** the drop-in (`Restart=on-failure`, `RestartSec=15s`) and the tmpfiles entry
+   (`d /run/clamav 0755 clamav clamav -`) are written and verified as configuration; a real reboot: Not Run.
+8. **Password-reset security results:** temporary password 16 characters, stored only as a hash, shown once with
+   `Cache-Control: no-store`, never emailed and never written to logs, notifications or the audit record, forced change, every session ended, older
+   tokens invalidated; reset email single-use, expires after `auth.reset_token_minutes`, older links invalidated, never
+   in the outbox, in-app history, Telegram, push or logs, https required on Internet deployments; an Administrator
+   cannot reset a main administrator (403). All passed.
+9. **Passkey results per platform:** software authenticator only (`tests/soft_authenticator.py`, and the browser
+   suite). iPhone/iPad Safari, Android Chrome, Windows Hello, macOS, Bitwarden/1Password and hardware security keys:
+   Not Run.
+10. **Per-AT statuses:** the table above.
+11. **Regression results:** full backend suite **350 passed**; updated earlier tests (passkey policy, HTML reset email,
+    account-locked alert) passed; upload scan and quarantine unchanged (AT-209); browser suite
+    **62 PASS, 0 FAIL** (no serious or critical accessibility violations).
+12. **Not executed:** a real Debian 13 / Proxmox LXC upgrade and repair; reboot / LXC restart persistence on a real
+    host; `clamav-daemon` restart and freshclam update on a real systemd host; real passkey sign-in on physical
+    platforms, browsers, password managers and hardware security keys; real SMTP delivery of the reset email to real
+    mail clients.
 
 ## Processing measurement (indicative)
 

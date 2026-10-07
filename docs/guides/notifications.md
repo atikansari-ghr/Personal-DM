@@ -283,7 +283,7 @@ log (`notifications.template_update`, `notifications.template_reset`).
 Every security event carries **mandatory security text**: one or more fixed warnings that are part of the message on
 every channel. Examples:
 
-- "If this was not you, change your password and sign out other devices in My account → Security, and tell the family
+- "If this was not you, change your password and sign out other devices in My account → Password & security, and tell the family
   administrator." (sign-ins, passkeys, authenticator app, recovery codes, passwordless)
 - "The temporary password is never sent in this message. You must choose a new password when you next sign in."
   (Temporary password issued)

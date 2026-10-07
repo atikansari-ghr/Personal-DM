@@ -38,7 +38,7 @@ def can_reset(actor: User, target: User) -> None:
     if not (actor.is_main_admin or actor.is_admin):
         raise ResetError("Only administrators can reset passwords.", 403)
     if target.pk == actor.pk:
-        raise ResetError("Use My account → Security → Change password for your own account.", 400)
+        raise ResetError("Use My account → Password & security → Change password for your own account.", 400)
     if target.is_main_admin and not actor.is_main_admin:
         raise ResetError("Only a main administrator can reset a main administrator's password. If no main administrator "
                          "can sign in, use the server console: sudo personaldocs recover-admin USERNAME", 403)

@@ -787,7 +787,7 @@ def passkey_login_verify(request):
         if not user.is_active or not user.passwordless_enabled:
             login_audit.record(request, result="denied", user=user, method="passkey", reason="passwordless_off")
             return _fail("Passwordless sign-in is turned off for this account. Sign in with your password, then turn it on in "
-                         "My account → Security → Passkeys.", 403)
+                         "My account → Password & security → Passkeys.", 403)
         if not row.discoverable:
             type(row).objects.filter(pk=row.pk).update(discoverable=True)
         _complete_login(request, user, "passkey", True)
@@ -858,7 +858,7 @@ def my_passkeys(request):
 
     alerts.account_security(user, f"New passkey “{row.name}” registered", event="passkey_added")
     # Passwordless mode: a compatible (discoverable) passkey turns passwordless sign-in on for the account by default.
-    # The person can turn it off again in My account → Security → Passkeys.
+    # The person can turn it off again in My account → Password & security → Passkeys.
     turned_on = False
     if PK.passwordless_allowed() and row.discoverable and not user.passwordless_enabled:
         user.passwordless_enabled = turned_on = True

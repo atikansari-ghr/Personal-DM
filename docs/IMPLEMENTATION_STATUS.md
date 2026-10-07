@@ -4,25 +4,40 @@ Last updated: 2026-10-07 · Version 0.1.0 (pre-release)
 
 ## Summary
 
-Every internal build stage (1–8) is implemented, plus change set 2026-10 (profile photos, optional Local AI, login audit, real client IP, GeoIP, country/IP access policy, security alerts, traffic analytics, passkeys and authentication policy) change sets H/I (UI, import destinations, critical/optional notifications, backup schedules, drag and drop and Move to, full-page viewer, mobile/PWA parity, public-release readiness) and change set J (portal overflow menus with rename/archive/permanent delete, folder icons, List/Thumbnails/Details views with sorting, desktop file-and-folder drop with hierarchy, own library first, measured OCR preprocessing with confidence and re-run, "No expiry", the public title, the one-line installer `personal-DM.sh` and a LinkedIn-ready README), change set K (selective multilingual OCR with a policy per document type, source/page/language selection, OCR review queue and Remove OCR data; the customizable Overview with Today/Hijri, weather, month calendar and holidays; sign-in page designs and custom wallpaper) change set L (setup creates only the Main Administrator, optional family members) and change set M (ClamAV antivirus with quarantine, authentik sign-in, the Administrator role, the security center with Internet Ready, the Basic Internet Security Test, OS security updates and controlled reboot through a root host helper, firewall monitoring, the Security Health score, security record retention and Storage Health) and change set N (document types as editable data with metadata templates, value provenance, type suggestions, safe type changes with previous details, re-mapping of existing OCR data, one-off details and promotion, bulk classification, folder suggested types and the review of untyped documents) and change set O (rich notifications: one structured message rendered for in-app, HTML email with a plain-text part, Telegram with buttons and Web Push; the Notification Center with banners; event-specific actions; the Template Manager with previews and TEST sends; delivery history; noise control): data model, settings registry, setup, accounts, permissions, delegation, authentication (password, TOTP, Google linking, console recovery), storage, versions, renewals, archive, imports, OCR/previews/extraction, search, UI/PWA/themes, offline/export, reminders over four channels (in-app, email, Telegram, Web Push), sharing, IMAP import, audit, backup/restore/integrity, native operations tooling, CI and documentation.
+Every internal build stage (1–8) is implemented, plus change set 2026-10 (profile photos, optional Local AI, login audit, real client IP, GeoIP, country/IP access policy, security alerts, traffic analytics, passkeys and authentication policy) change sets H/I (UI, import destinations, critical/optional notifications, backup schedules, drag and drop and Move to, full-page viewer, mobile/PWA parity, public-release readiness) and change set J (portal overflow menus with rename/archive/permanent delete, folder icons, List/Thumbnails/Details views with sorting, desktop file-and-folder drop with hierarchy, own library first, measured OCR preprocessing with confidence and re-run, "No expiry", the public title, the one-line installer `personal-DM.sh` and a LinkedIn-ready README), change set K (selective multilingual OCR with a policy per document type, source/page/language selection, OCR review queue and Remove OCR data; the customizable Overview with Today/Hijri, weather, month calendar and holidays; sign-in page designs and custom wallpaper) change set L (setup creates only the Main Administrator, optional family members) and change set M (ClamAV antivirus with quarantine, authentik sign-in, the Administrator role, the security center with Internet Ready, the Basic Internet Security Test, OS security updates and controlled reboot through a root host helper, firewall monitoring, the Security Health score, security record retention and Storage Health) and change set N (document types as editable data with metadata templates, value provenance, type suggestions, safe type changes with previous details, re-mapping of existing OCR data, one-off details and promotion, bulk classification, folder suggested types and the review of untyped documents) and change set O (rich notifications: one structured message rendered for in-app, HTML email with a plain-text part, Telegram with buttons and Web Push; the Notification Center with banners; event-specific actions; the Template Manager with previews and TEST sends; delivery history; noise control) and change set P (Sign in with Passkey on the first sign-in screen with passkey autofill and the Passwordless / Password + Passkey mode; administrator password reset with a one-time temporary password or a branded reset email and Main Administrator protection; security notification templates with mandatory security text, branding and footer; ClamAV diagnosis, repair and self-test with operational health states): data model, settings registry, setup, accounts, permissions, delegation, authentication (password, TOTP, Google linking, console recovery), storage, versions, renewals, archive, imports, OCR/previews/extraction, search, UI/PWA/themes, offline/export, reminders over four channels (in-app, email, Telegram, Web Push), sharing, IMAP import, audit, backup/restore/integrity, native operations tooling, CI and documentation.
 
 **Release readiness: not yet approved for family production use.** The code and its automated tests are complete for the initial scope. The remaining release gates need environments that were not available in the build container (see Blockers). Per the release rules, the first family release should wait until AT-26 (Debian 13 install/upgrade) and AT-24 (restore on a clean LXC) have been validated on the real Proxmox host.
 
-**Acceptance scenarios AT-01…AT-195** (185 scenarios; the numbers AT-51…AT-60 were never assigned). The status of
+**Acceptance scenarios AT-01…AT-210** (200 scenarios; the numbers AT-51…AT-60 were never assigned). The status of
 each one is in [TRACEABILITY.md](TRACEABILITY.md). Summary, based on the latest recorded runs in
 [TEST_REPORT.md](TEST_REPORT.md):
 
 | Result | Count | Scenarios |
 |---|---|---|
-| Passed (automated tests, or for AT-136 a documented review) | 144 | all scenarios not listed below |
-| Passed in automated tests; real-environment validation still pending | 35 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195 |
+| Passed (automated tests, or for AT-136 a documented review) | 154 | all scenarios not listed below |
+| Passed in automated tests; real-environment validation still pending | 40 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195, 197, 202, 205, 206, 208 |
 | Blocked (external environment) | 5 | AT-14, AT-26 (Pending-env); AT-24, AT-27, AT-30 (Partial: the remaining part needs a real Debian 13 LXC) |
 | Not run (manual steps, not automated) | 1 | AT-15 |
 
 The pending real-environment parts (real hardware, real providers or credentials) are listed under Blockers below and
 are not reported as passed. AT-194 is counted from the parity steps of the browser suite: **59 PASS, 0 FAIL**
+(Change Set O run). Browser suite after Change Set P: **62 PASS, 0 FAIL** (no serious or critical accessibility violations)
 
 ## Completed (with evidence)
+
+- Change set P (2026-10-07): `tests/test_auth_password_clamav.py` (18 tests, AT-196…AT-210): all passed, including a
+  simulated Debian 13 host (fake `systemctl`, `dpkg`, `clamconf`, `freshclam`, `runuser` and a fake clamd) that
+  reproduces the missing-socket / LocalSocket-mismatch state and the skipped-start-condition state and checks the
+  repair. `tests/test_antivirus_live.py::test_live_self_test_diagnosis_and_health` passed against a **real clamd
+  (ClamAV 1.5.4)** in the development container (clean = Clean, EICAR detected, temporary files removed, no document
+  stored); the diagnosis tool was also run against that daemon stopped (Unavailable, `FileNotFoundError` reported) and
+  running (self-test PASSED). Earlier tests updated: passkey policy, the password reset email (now HTML) and the
+  account-locked alert. Full backend suite: **350 passed** (fresh test database, including the live ClamAV tests).
+  `scripts/e2e.sh` with the new steps *AT-196 Sign in with Passkey on the first sign-in screen*, *AT-200/201
+  administrator resets a password: temporary password shown once* and *AT-205..207 antivirus: Diagnose / Repair panel
+  and clean + EICAR self-test*: **62 PASS, 0 FAIL** (no serious or critical accessibility violations). Not run: a real Debian 13 / Proxmox LXC upgrade and repair,
+  reboot persistence on a real host, real passkey platforms and real SMTP delivery. Details:
+  [Change set P](#change-set-p).
 
 - Change set O (2026-10-07): `tests/test_rich_notifications.py` (19 tests, AT-176…AT-193 and AT-195): all passed.
   The affected earlier suites (expiry, events, notification policy, security, antivirus, passkeys, auth, security
@@ -63,8 +78,76 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - Backend: 232 automated tests passing (incl. `test_security` 30, `test_ai` 15, `test_passkeys` 14, `test_photos` 9, `test_browser_moves` 11, `test_browsing_v3` 7, `test_ocr_quality` 6, `test_notification_policy` 7, `test_backup_schedule` 3, `test_preferences` 3). Frontend: 17 unit tests (vitest). One-line installer: 18 stubbed lifecycle checks. OCR benchmark: mean F1 0.61 → 0.97. (`docs/TEST_REPORT.md`).
 - Frontend: type-checked production build; browser end-to-end flow (`tests/e2e/flow.mjs`) and parity/viewer/browsing checks (`tests/e2e/parity.mjs`; 48 PASS, 0 FAIL in `scripts/e2e.sh` on 2026-10-06; 31/31 at change set J) at desktop, tablet, phone portrait and landscape; accessibility audit with 0 serious/critical violations in 3 themes; README screenshots in `docs/images/screenshots/`.
 - Tooling: one-line installer `personal-DM.sh` (menu + commands, delegates to the tools below); guided installers `scripts/proxmox-create-lxc.sh` (Proxmox host: creates the container) and `scripts/easy-install.sh` (inside the LXC: asks all parameters and installs, configures, connects the NAS, backs up and checks); `scripts/personaldocs` (install, upgrade, rollback, repair, status, doctor, backup, restore, integrity, recover-admin, setup-token, logs, manage, nas-apply), systemd units, `scripts/verify.sh`, GitHub Actions CI with prebuilt frontend release asset.
-- New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged) — applied by `personaldocs upgrade`.
-- Documentation: 37 bundled guides (new in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 14 ADRs, generated settings reference, test report, release checklist, changelog.
+- New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
+- Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
+
+## Change set P: passkey sign-in, password reset, security templates, ClamAV repair {#change-set-p}
+
+**Numbering.** The change prompt called this "Change Set O" with AT-176…AT-190; those numbers already belonged to the
+rich notifications change set, so it is **Change Set P** with **AT-196…AT-210** (prompt AT-176 → AT-196 … AT-190 →
+AT-210; full mapping in [TRACEABILITY.md](TRACEABILITY.md)).
+
+**Root cause: passkey only after the password.** Passwordless sign-in was gated by `auth.allow_passwordless`, which
+defaulted to off, plus a per-person opt-in. So passkeys were only offered as the second step after the password, and
+the old "Sign in with a passkey" button stayed hidden. Fixed with `auth.passkey_mode` (Passwordless by default,
+Password + Passkey as the alternative), migration `accounts.0007_passkey_mode` (keeps an explicit earlier choice and
+turns passwordless on for accounts with a discoverable passkey), the sign-in page order password → "or" → **Sign in
+with Passkey** → authentik/Google, passkey autofill (`autocomplete="username webauthn"`, conditional mediation), and
+passwordless turned on automatically after enrolling a discoverable passkey. Sign-in also accepts an email address
+that belongs to exactly one active account.
+
+**Root cause: ClamAV "Unavailable … /run/clamav/clamd.ctl (FileNotFoundError)".** Verified against the Debian 13
+packages `clamav-daemon` / `clamav-freshclam` 1.4.3+dfsg-1: `clamav-daemon.service` is socket-activated
+(`Requires=clamav-daemon.socket`; the socket unit listens on `/run/clamav/clamd.ctl` with `RemoveOnStop=True`); both
+units have a `ConditionPathExistsGlob` on the `main` and `daily` signatures, so without signatures they are skipped
+with no error and nothing starts them later; the service has no `Restart=`, so a clamd killed by the out-of-memory
+killer stays down; and Debian's `LocalSocket /var/run/clamav/clamd.ctl` is a different string from the socket unit's
+`/run/clamav/clamd.ctl`. The earlier installer kept that line (it only added `LocalSocket` when missing). When the
+strings differ, clamd does not adopt the systemd socket, binds its own file and deletes it when it stops or restarts,
+leaving the app's path missing. The engine version and signature date on the page were cached from the last
+successful contact and were not proof that scanning worked. Which cause applies on a given host is shown by the new
+diagnosis; the most likely one for the reported upgrade is the LocalSocket mismatch.
+
+**Implemented.**
+
+- `backend/apps/ops/clamav_check.py` (standard library only): diagnosis and repair shared by the `personaldocs`
+  command, the root host helper (`antivirus_repair`) and the web app. Repair: packages, clamd.conf (`LocalSocket` =
+  socket unit path, no TCP, `LocalSocketMode 666`, `FixStaleSocket true`, `StreamMaxLength 1100M`,
+  `ConcurrentDatabaseReload no`, `EnableVersionCommand true`, one-time backup `clamd.conf.personaldocs-backup`,
+  `clamconf` validation), restart drop-in `50-personaldocs.conf`, tmpfiles `personaldocs-clamav.conf`, signatures,
+  unit order, stale pid, wait for `PONG` (up to 4 minutes), access by the `personaldocs` account (`runuser`), final
+  diagnosis and self-test; success only for Healthy/Degraded; never a TCP port.
+- `personaldocs antivirus status|repair|selftest`; install, upgrade (post-upgrade), post-upgrade and repair run the
+  repair; `antivirus.socket` synced with `manage antivirus sync-socket`; `doctor` starts with the root diagnosis and
+  adds three app checks. Django command `antivirus status|selftest|sync-socket PATH`.
+- Antivirus page: Healthy / Degraded / Unavailable / Error / Turned off, Socket row, "last seen … not proof" for the
+  engine, Self-test row, **Run self-test**, **Diagnose / Repair** with **Repair antivirus**. Security Health: 0 points
+  and At Risk for Unavailable and Error. Daily self-test in the hourly check. API `GET /api/security/antivirus/diagnose`,
+  `POST /api/security/antivirus/selftest`, `POST /api/security/antivirus/repair`.
+- `backend/apps/accounts/password_reset.py`: temporary password (16 characters, hash only, shown once, never emailed,
+  forced change, all sessions end, tokens invalidated) and branded single-use reset email (`auth.reset_token_minutes`,
+  newer request invalidates older links, never in the outbox, in-app history, Telegram, push or logs, https on
+  Internet deployments); Main Administrator protection; `POST /api/family/members/<id>/reset-password`; **Reset
+  password…** dialog in `pages/settings/Family.tsx`.
+- Security events `security.password_reset_requested`, `security.password_admin_reset`, `security.temporary_password`,
+  `security.password_changed`, `security.account_locked`, `security.google` (critical by default); mandatory security
+  text on every security event; template **Branding name** and **Footer / help text** (migration
+  `notify.0003_template_brand_footer`).
+
+**Handover evidence.** See [TEST_REPORT.md](TEST_REPORT.md#change-set-p) for the effective socket path after repair
+(`/run/clamav/clamd.ctl`), service identity access, self-test results, password-reset security results and the
+per-AT statuses.
+
+**Not executed (must be done on real systems).** A real Debian 13 / Proxmox LXC upgrade and `personaldocs antivirus
+repair`; reboot / LXC restart persistence on a real host; `clamav-daemon` restart and freshclam updates on a real
+systemd host; real passkey sign-in on iPhone/iPad Safari, Android Chrome, Windows Hello, macOS, Bitwarden/1Password
+and hardware security keys (the automated tests used a software authenticator); real SMTP delivery of the reset email
+to real mail clients.
+
+**Next steps.** On the Proxmox LXC: `sudo personaldocs upgrade`, then `sudo personaldocs antivirus status` and
+`sudo personaldocs doctor`; check the Antivirus page shows Healthy and **Run self-test** passes; reboot the LXC and
+check again; sign in with a passkey on each device; send a reset email to yourself. Record the results in
+`TEST_REPORT.md`.
 
 ## Change set O: rich notifications {#change-set-o}
 
@@ -211,6 +294,8 @@ wording gets no suggestion and stays *Not assigned* until someone sets the type.
 | AT-153..155 real host helper | Debian 13 with systemd: `personaldocs-host.path` as root installing apt security updates, rebooting and inspecting ufw/nftables (tested with stubbed commands only) |
 | AT-140/142 ClamAV on Debian 13 | `clamav-daemon` and automatic `clamav-freshclam` updates on Debian 13 (the live scan test ran against ClamAV 1.5.4 in the development container; freshclam updates were not exercised) |
 | Change set O real channels | SMTP to Gmail/Outlook/Apple Mail (HTML rendering), a Telegram bot on the https address (inline buttons), Web Push on Android/Chrome, an iPhone/iPad Home Screen app, Firefox and Windows; upgrade of a real Debian 13 installation (tested with mocked providers only) |
+| Change set P on a real host | A real Debian 13 / Proxmox LXC upgrade with `personaldocs antivirus repair` (verified only on a simulated Debian host and against a real clamd in the development container); a reboot / LXC restart to confirm the drop-in and tmpfiles persistence; `clamav-daemon` restart and freshclam updates under real systemd |
+| Change set P passkeys and email | Sign in with Passkey on iPhone/iPad Safari, Android Chrome, Windows Hello, macOS, Bitwarden/1Password and hardware security keys (software authenticator only); the reset email through a real SMTP server in real mail clients (mocked SMTP only) |
 | Change set M install/upgrade | A real Proxmox/LXC install and an upgrade from the previous release: ClamAV memory use on 4 GB, `--without-antivirus`, host helper installation, `status`/`doctor` output |
 
 None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT.md`.
@@ -236,6 +321,9 @@ None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT
 - The Basic Internet Security Test is a baseline of this application and this host only. It is not a penetration test
   and does not prove the system is free of vulnerabilities. The Security Health score is a summary, not a certification.
 - Firewall support is monitoring only; rules are changed on the host.
+- The ClamAV repair (Change Set P) was verified on a simulated Debian 13 host and against a real clamd (ClamAV 1.5.4)
+  in a development container, not yet on a real Debian 13 Proxmox LXC; administrators must run
+  `sudo personaldocs antivirus repair` (or the upgrade) and check the result.
 - The new `personaldocs doctor` and `status` checks (ClamAV, signatures, host helper, Internet HTTPS, storage
   thresholds, pending reboot) have no dedicated automated test; they are covered only by the pending Debian 13 run.
 
@@ -249,10 +337,23 @@ None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT
    **Check for updates** and the **Basic Internet Security Test**, and connect a test authentik provider; record the
    results in `TEST_REPORT.md`.
 6. Run `scripts/bench_processing.py` on the LXC with realistic scans. Tune `processing.heavy_concurrency` and `PD_PROCESS_MEMORY_LIMIT_MB`.
-7. Tag `v0.1.0` once the gates pass (`docs/RELEASE_CHECKLIST.md`).
-8. Public release (owner decisions): enable GitHub private vulnerability reporting, run `scripts/privacy_check.sh --history`, then change the repository visibility in GitHub settings.
+7. Change Set P on the LXC: `sudo personaldocs upgrade`, `sudo personaldocs antivirus status`, Antivirus page
+   **Healthy** and **Run self-test** passed, reboot the LXC and check again, **Sign in with Passkey** on each device,
+   a reset email to yourself; record the results in `TEST_REPORT.md`.
+8. Tag `v0.1.0` once the gates pass (`docs/RELEASE_CHECKLIST.md`).
+9. Public release (owner decisions): enable GitHub private vulnerability reporting, run `scripts/privacy_check.sh --history`, then change the repository visibility in GitHub settings.
 
 ## Session log
+
+- 2026-10-07 (change set P): Sign in with Passkey on the first sign-in screen with passkey autofill, Passkey sign-in
+  mode (Passwordless default / Password + Passkey) replacing `auth.allow_passwordless`, passwordless turned on after
+  enrolling a discoverable passkey, email-or-username sign-in; administrator **Reset password…** with a temporary
+  password shown once or a branded single-use reset email, Main Administrator protection; security events for
+  password resets, account locked and Google links with mandatory security text, template branding and footer;
+  ClamAV diagnosis, repair and self-test (`clamav_check.py`, `personaldocs antivirus`, host-helper
+  `antivirus_repair`, Diagnose / Repair, Healthy / Degraded / Unavailable / Error in Security Health). Fixed: passkeys
+  only after the password (root cause above) and ClamAV "Unavailable … /run/clamav/clamd.ctl (FileNotFoundError)"
+  after upgrade (root cause above).
 
 - 2026-10-07 (change set O): rich notifications — one structured message with severity, category, icons, details,
   actions and guidance rendered for in-app, HTML email with a plain-text part, Telegram (HTML, buttons, plain-text

@@ -109,6 +109,18 @@
  ],
  [
   "PASS",
+  "AT-196 Sign in with Passkey on the first sign-in screen"
+ ],
+ [
+  "PASS",
+  "AT-200/201 administrator resets a password: temporary password shown once"
+ ],
+ [
+  "PASS",
+  "AT-205..207 antivirus: Diagnose / Repair panel and clean + EICAR self-test"
+ ],
+ [
+  "PASS",
   "screens for the README (desktop)"
  ],
  [

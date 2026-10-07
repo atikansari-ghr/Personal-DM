@@ -24,7 +24,7 @@ class Event:
     mandatory: tuple = ()  # protected security warnings: always shown, a template cannot remove or change them
 
 
-NOT_YOU = "If this was not you, change your password and sign out other devices in My account → Security, and tell the family administrator."
+NOT_YOU = "If this was not you, change your password and sign out other devices in My account → Password & security, and tell the family administrator."
 NO_SECRETS = "This message never contains a password, code or reset token, and the administrators will never ask you for one."
 
 EVENTS: dict[str, Event] = {e.key: e for e in [

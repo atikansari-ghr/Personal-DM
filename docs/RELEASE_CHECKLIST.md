@@ -39,6 +39,13 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] After an upgrade across Change Set N: `sudo personaldocs manage document_types report` (and the `doctor` info line) shows the expected typed/untyped counts; typed documents kept their type (source *Migrated*), expiry dates and reminders unchanged
 - [ ] Settings → Documents & folders → Document types: templates and reminder days of the types in use reviewed; **Review untyped documents** done or consciously deferred
 - [ ] After an upgrade across Change Set O: migration `notify.0002_rich_notifications` applied, `http-ece` and `py-vapid` installed; SMTP/Telegram settings, preferences, critical events and expiry schedules unchanged; old notifications still listed
+- [ ] After an upgrade across Change Set P: migrations `accounts.0007_passkey_mode` and `notify.0003_template_brand_footer` applied; **Passkey sign-in mode** shows the expected value (Password + Passkey if passwordless had been turned off before, otherwise Passwordless)
+- [ ] `sudo personaldocs antivirus status`: every check ✔ (or understood warnings); `grep LocalSocket /etc/clamav/clamd.conf` and `systemctl show -p Listen clamav-daemon.socket` both show `/run/clamav/clamd.ctl`; `ls -l /run/clamav/` shows the socket
+- [ ] Settings → Security → Antivirus shows **Healthy** and **Run self-test** passes (clean file Clean, EICAR detected); **Diagnose / Repair** lists no ✘
+- [ ] **Reboot the LXC** (or `pct reboot <id>`), then the Antivirus page is still **Healthy** and the self-test passes (drop-in `50-personaldocs.conf` and tmpfiles `personaldocs-clamav.conf` present)
+- [ ] `systemctl restart clamav-daemon` and `systemctl start clamav-freshclam` on the real host: the socket comes back and the status returns to Healthy
+- [ ] Upload a synthetic file → *Clean*; upload the EICAR test string → *Quarantined*; `systemctl stop clamav-daemon` → new upload *Not scanned* with a critical alert; start it again → re-scan works
+- [ ] `sudo personaldocs doctor` starts with the ClamAV diagnosis and its three app ClamAV checks pass
 - [ ] Settings → Notifications: **Include document numbers in email/Telegram**, **Push notifications (PWA)** and the repeat cooldown set as intended; Templates reviewed (customised events still read correctly)
 
 ## Integrations (when configured)
@@ -55,6 +62,11 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Access policy applied with lock-out confirmation; `personaldocs access-policy off|rollback` recovers
 - [ ] Traffic analytics report generated on the LXC
 - [ ] Passkey registration and sign-in (2FA and passwordless) on at least one phone and one desktop; TOTP autofill from a password manager
+- [ ] **Sign in with Passkey** on the first sign-in screen (no username, no password) on iPhone/iPad Safari, Android Chrome, Windows Hello, macOS, a password manager (Bitwarden or 1Password) and a hardware security key, as far as available; passkey autofill offered in the username field where the browser supports it; button greyed out on `http://<ip>:8000`
+- [ ] *Password + Passkey* mode: passkey asked only after the password; main administrator password and a recovery code still work
+- [ ] **Reset password…** → **Generate temporary password**: shown once, sign-in forces a new password, the person's other devices are signed out, the notice contains no password; an Administrator sees **Protected** on the main administrator
+- [ ] **Reset password…** → **Send password reset email** and **Forgot password?**: the branded email arrives in at least Gmail, Outlook and Apple Mail (HTML and plain text), the link works once, an older link stops working after a newer request, **Password reset completed** arrives
+- [ ] Security notices (temporary password issued, password reset completed, account locked) show the red mandatory text in email and in-app and the bold ⚠️ lines in Telegram
 - [ ] Weather stays off unless the family wants it; if enabled, **Test connection** succeeds and only city coordinates are sent
 - [ ] Local AI profile test, analysis, assistant and semantic search against a LAN AI server; AI server off → core features unaffected
 
@@ -66,6 +78,7 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Screenshots refreshed if the UI changed
 - [ ] Document type screenshots (`document-details-type.png`, `type-change-review.png`, `document-details-previous.png`, `settings-document-types.png`, `mobile-details.png`) show only synthetic names and values
 - [ ] Notification screenshots (`notification-center.png`, `notification-banner.png`, `notification-template-email.png`, `notification-template-telegram.png`, `mobile-notifications.png`) show only synthetic names, documents and 203.0.113.x addresses
+- [ ] Change Set P screenshots (`login-passkey.png`, `admin-reset-password.png`, `security-antivirus-diagnose.png`) show only synthetic names; the reset dialog shows no real password
 - [ ] Screenshot and documentation names are demo labels only (A. Ansari, Mom, Son1, Son2, Son3, Daughter), described as added in the optional setup step
 
 ## Public repository (only when the owner decides to publish)

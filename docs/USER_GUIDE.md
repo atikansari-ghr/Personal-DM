@@ -8,17 +8,27 @@ accounts added in the optional setup step for the screenshots; the app never cre
 ## 1. Signing in {#sign-in}
 
 1. Open your family's address, for example `https://docs.example.com`.
-2. Enter your username and password, then **Sign in**.
+2. Enter your username (or your email address) and password, then **Sign in**.
 3. If you set up two-step verification, the app asks for the 6-digit code from your authenticator app, a passkey, or
    a recovery code.
-4. If the administrator allows it and you turned it on, **Sign in with a passkey** signs you in with your phone's or
-   computer's fingerprint, face or PIN, without a password.
+4. **Or** click **Sign in with Passkey** below the password: your phone or computer asks for your fingerprint, face or
+   PIN and signs you in without a username or password. Your browser may also offer your passkey right in the
+   username field. The button is greyed out on a plain `http://` address; use the `https://` address. If your
+   administrator chose *Password + Passkey*, the passkey is asked after the password instead.
 5. If your family uses authentik, a **Sign in with authentik** button (the label may differ) is shown. It works only
    after you linked your account (see [your account](#account)). Signing in with your username and password always
    stays available, also when authentik is down. Two-step verification you turned on is still asked afterwards.
 
-**First sign-in:** use the temporary password the administrator gave you. You are asked to choose your own straight
-away.
+![Sign-in page with Sign in with Passkey (synthetic data)](images/screenshots/login-passkey.png)
+
+**First sign-in, or a temporary password from your administrator:** sign in with the temporary password the
+administrator gave you (in person or another safe channel; it is never emailed). You are asked to choose your own
+straight away. When an administrator issues a temporary password you are signed out on every device and get the
+notice **Temporary password issued**, which never contains the password.
+
+**Forgot your password?** Click **Forgot password?** on the sign-in page. If your account has an email address, you
+get an email **Reset your password** with a button that works once, for 30 minutes by default. Your administrator can
+also send you this email. See [password reset](guides/password-reset.md).
 
 **Sign-in page design:** the administrator may choose a wallpaper, title and logo for the sign-in page. The design
 only changes the look; the sign-in methods (password, code, passkey, Google, authentik) are the same with every design. See
@@ -26,7 +36,8 @@ only changes the look; the sign-in methods (password, code, passkey, Google, aut
 
 **Password managers:** the username, password and one-time-code fields are standard, so Bitwarden, 1Password, Apple
 Passwords and browser password managers can fill them. You can paste the code, and typing it always works.
-More: [authenticator app and recovery codes](guides/totp-recovery.md), [passkeys](guides/passkeys.md).
+More: [authenticator app and recovery codes](guides/totp-recovery.md), [passkeys](guides/passkeys.md),
+[password reset](guides/password-reset.md).
 
 ## 2. Your account {#account}
 
@@ -51,6 +62,10 @@ device.
 - passwordless sign-in on or off
 
 Each of these sends you a security notification.
+
+**Adding a passkey:** under **Passkeys**, type a name (for example "Personal iPhone" or "Office Laptop") and click
+**Add a passkey**. In passwordless mode this turns on **Use Sign in with Passkey without a password** for you
+automatically; untick it if you want the passkey only after your password. Rename or remove passkeys there too.
 
 **Linking authentik:** open **My account → Password & security → authentik → Link authentik account**, confirm your
 password, then sign in at authentik. Only you can link your account; it is never linked because an email address
@@ -221,6 +236,12 @@ See [sharing](guides/sharing.md).
 **Critical notifications** are set by the administrator and always reach you. Examples: a new passkey on your
 account, two-step verification turned off, a sign-in from a new country.
 
+**Security notices you may get:** New sign-in, Unusual sign-in (new country), New passkey registered, Passkey removed,
+Authenticator app turned on or off, Password reset requested, Administrator reset your password, Temporary password
+issued, Password reset completed, Account locked, and Google or authentik account linked or removed. Each has a
+highlighted warning such as *"If this was not you, change your password and sign out other devices…"*, shown in red
+in the app and in email and in bold in Telegram. These warnings are always included.
+
 **Optional notifications** are yours to choose per event and channel (in-app, email, Telegram, push) under
 **My account → Notifications**. Examples:
 - documents added to your folders
@@ -279,7 +300,9 @@ all your devices. See [themes](guides/themes.md).
 
 | Problem | Try |
 |---|---|
-| Forgot password | Ask the administrator to reset it (or use "Forgot password" if email is configured) |
+| Forgot password | Use **Forgot password?** if your account has an email address, or ask the administrator for a temporary password or a reset email. See [password reset](guides/password-reset.md) |
+| **Sign in with Passkey** is greyed out | Open the `https://` address of the app, not `http://…` |
+| Reset email did not arrive | Check spam; only the newest link works, for 30 minutes; ask the administrator |
 | Lost phone with authenticator / passkey | Sign in with a recovery code or another passkey; otherwise ask the administrator to **Reset 2FA** |
 | "Access not allowed" page | You are outside the allowed countries; ask the administrator for temporary travel access |
 | A move was refused | Read the message; you may lack permission at the destination |

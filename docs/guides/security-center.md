@@ -24,7 +24,7 @@ A LAN-only installation may use plain HTTP but is never shown as Internet Ready.
 | Framework & configuration | debug mode off, allowed host names, strong secret key, `manage.py check --deploy` |
 | Authentication & access control | protected pages refuse anonymous access, a member cannot open another member's private document, administrators use two-step verification, failed sign-ins are blocked |
 | Web baseline (OWASP-style) | no exposed `.env`/`.git`/settings files or path traversal, no open redirect, TRACE disabled, no permissive CORS, server version hidden |
-| Upload security | ClamAV running with fresh signatures |
+| Upload security | ClamAV reachable and scanning (not Unavailable or Error) with fresh signatures |
 | Dependencies | `pip-audit` (install with `sudo personaldocs repair --with-security-tools`) and `npm audit` when available |
 | Secrets & file permissions | no private keys or tokens in the application files; keys and documents not readable by other users |
 | Host | firewall active, no unexpected listening services, ClamAV/PostgreSQL not exposed, reboot pending, security updates pending, service hardening |
