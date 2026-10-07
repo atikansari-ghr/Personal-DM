@@ -50,6 +50,10 @@ const paths: Record<string, string> = {
   right: "M9 18l6-6-6-6",
   minus: "M5 12h14",
   pin: "M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12zM12 11.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
+  alert: "M12 3l9.5 17H2.5zM12 10v4M12 17.5h.01",
+  globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.8 3.8 5.8 3.8 9s-1.3 6.2-3.8 9c-2.5-2.8-3.8-5.8-3.8-9s1.3-6.2 3.8-9z",
+  key: "M15 7a4 4 0 1 1-3.9 5H8v3H5v-3H3V9h8.1A4 4 0 0 1 15 7zM15.5 10.5h.01",
+  monitor: "M3 4h18v12H3zM8 20h8M12 16v4",
 };
 export function Icon({ name, size = 20, className }: { name: string; size?: number; className?: string }) {
   return (

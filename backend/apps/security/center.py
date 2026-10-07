@@ -506,7 +506,7 @@ def run_security_test(run: SecurityTestRun) -> SecurityTestRun:
 
         for admin in events._admins():
             events.notify(admin, "security.operations", kind="security.operations", key=f"sectest:{run.id}",
-                          title="Security test found Critical/High issues",
+                          title="Security test found Critical/High issues", severity="critical", icon="health",
                           lines=[f"{summary['counts']['critical']} critical, {summary['counts']['high']} high finding(s).",
                                  "Deployment is not blocked, but the issues stay listed until they are resolved."],
                           link="/settings/security?view=test")
@@ -565,6 +565,20 @@ def pre_update_backup(actor=None) -> dict:
     return {"ok": True, "detail": str(dest)}
 
 
+def _notify_update(run) -> None:
+    from apps.notify import events
+
+    ok = run.status == "done"
+    for admin in events._admins():
+        events.notify(admin, "security.operations", kind="security.operations", key=f"osupdate:{run.id}",
+                      title="Security updates installed" if ok else "Security update installation failed",
+                      severity="success" if ok and not run.reboot_required else "warning" if ok else "critical",
+                      icon="system" if ok else "failure",
+                      summary=(f"{len(run.packages)} package(s) updated." if ok else (run.error or "See the update log.")[:300]),
+                      facts=[("Packages", len(run.packages)), ("Reboot required", "yes" if run.reboot_required else "no")],
+                      link="/settings/security?view=updates")
+
+
 def sync_os_runs() -> None:
     """Copy finished helper results into OsUpdateRun rows (called when the page is viewed)."""
     from apps.ops import host
@@ -584,6 +598,7 @@ def sync_os_runs() -> None:
             if run.action == "install_updates":
                 audit.record("security.os_updates_finished", target_type="os_update", target_id=str(run.id), status=run.status,
                              packages=len(run.packages))
+                _notify_update(run)
         elif st.get("state") == "running" and run.status != "running":
             OsUpdateRun.objects.filter(pk=run.pk).update(status="running")
     # a reboot is complete once the host booted after it was requested
@@ -910,11 +925,16 @@ def storage_alerts() -> str:
     h = storage_health(refresh=True)
     if h["status"] in ("warning", "critical"):
         from apps.notify import events
+        from apps.notify.rich import Action
 
         day = timezone.localdate().isoformat()
         for admin in events._admins():
             events.notify(admin, "security.operations", kind="security.operations", key=f"storage:{h['status']}:{day}",
-                          title=f"Storage {h['status']}: {h['percent']}% used",
+                          title=f"Storage {h['status']}: {h['percent']}% used", icon="storage",
+                          severity="critical" if h["status"] == "critical" else "warning",
+                          cooldown_group=f"storage:{h['status']}",
+                          actions=[Action("storage", "Open Storage Health", "/settings/security?view=storage", primary=True),
+                                   Action("cleanup", "Run Cleanup Analysis", "/settings/security?view=storage&analyze=1")],
                           lines=[f"{h['free'] // (1024 ** 3)} GB free. Review Storage Health for safe cleanup options.",
                                  "Original documents are never deleted automatically."],
                           link="/settings/security?view=storage")

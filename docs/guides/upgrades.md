@@ -14,6 +14,49 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to the rich notifications release (Change Set O) {#change-set-o}
+
+```
+sudo personaldocs upgrade
+# or: bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)" -- upgrade
+```
+
+No extra post-upgrade step is needed for this release. If you are coming from a release **before Change Set M**,
+the `sudo personaldocs post-upgrade` step described [below](#change-set-m) still applies once. No new system packages
+are installed; two small Python packages for Web Push, `http-ece` 1.2.1 and `py-vapid` 1.9.4, are installed
+automatically with the release.
+
+This release adds **one database migration**, applied automatically after the verified backup:
+
+- `notify.0002_rich_notifications`: event, category, severity, icon, summary, details and a TEST flag on in-app
+  notifications; event, severity, the HTML part, the push payload, the provider's message id and a TEST flag on
+  outgoing messages; new tables for push subscriptions, notification templates and expiry snoozes. Its data step
+  sorts existing in-app notifications into categories by their kind; their title, text, links and read state are
+  unchanged.
+
+What changes and what stays:
+
+- Existing SMTP and Telegram configuration, everyone's preferences, the critical events and their channels and the
+  expiry schedules are unchanged.
+- Email becomes an HTML message with a plain-text part; Telegram messages get formatting and buttons (buttons only on
+  an `https://` address); the in-app list becomes the Notification Center with banners.
+- Push is a new channel. It is **never added to anyone's channels automatically**; it needs the `https://` address.
+- The keys for signing push messages are created on first use, stored encrypted in the database and included in
+  backups.
+
+After upgrading (optional):
+
+1. **Settings → Notifications → Templates**: review the wording of the events you care about and use
+   **Send a TEST message to yourself** to see the email, Telegram, in-app and push versions. See
+   [templates](notifications.md#templates).
+2. Decide on **Include document numbers in email/Telegram** (off by default) and the **repeat cooldown** (24 hours).
+   See [privacy](notifications.md#privacy) and [noise control](notifications.md#noise).
+3. Family members who want push turn it on **per device** in My account → Notifications → *Push notifications on
+   this device* (on iPhone/iPad after adding the app to the Home Screen). See [push](notifications.md#push).
+
+To go back, restore the pre-upgrade backup: this release adds a migration, so `sudo personaldocs rollback` is refused
+unless the previous release knows it (see [Rollback](#rollback)).
+
 ## Upgrading to the document types release (Change Set N) {#change-set-n}
 
 ```

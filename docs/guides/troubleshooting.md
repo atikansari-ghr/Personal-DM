@@ -34,6 +34,11 @@
 | A move is refused | The message says why: no permission at the destination, a folder into its own sub-folder, a same-named folder already there, an archived destination, or the move would give more people access (needs "manage permissions"). Nothing was changed. |
 | Drag and drop does nothing on a phone | Use the ⋮ menu → **Move to…**; touch screens do not support dragging files |
 | PDF does not display in the viewer | The viewer offers **Download** and, for PDFs, **Use the browser's PDF viewer**. Re-run OCR from the Text (OCR) tab, or re-run the preview from the document menu |
+| Push notifications not offered on a device | Push needs the HTTPS address in `PD_PUBLIC_ORIGIN`; on iPhone/iPad the app must be added to the Home Screen first; notifications must be allowed in the browser; only the Apple, Google, Mozilla and Microsoft push services are accepted; **Push notifications (PWA)** must be on in Settings → Notifications. See [push](notifications.md#push) |
+| Telegram messages have no buttons | Buttons need an `https://` address; on an `http://` address the links are written into the text instead. See [Telegram](notifications.md#channels) |
+| Email shows only plain text | Some mail programs show the plain-text part; it contains the same details and links |
+| A recurring alert (antivirus unavailable, storage) was not repeated | It is within the repeat cooldown (`notifications.repeat_cooldown_hours`, default 24). See [noise control](notifications.md#noise) |
+| A notification template cannot be saved | Unknown placeholder, other braces, or a placeholder in an action label. See [placeholders](notifications.md#placeholders) |
 | Red "Some required notifications cannot reach you" | Add an email address under Profile or link Telegram; the administrator decides which channels are required |
 | Weekly/monthly backup did not run | Check *Automatic backups* is on and the NAS is mounted; the Backup status card shows the next run and the last error |
 | "ClamAV unavailable" / new files *Not scanned* | `systemctl status clamav-daemon`; it does not start without signatures or with too little memory (about 1.2 GB needed). `sudo personaldocs repair` reinstalls and reconfigures it. Then re-scan in Settings → Security → Antivirus. See [antivirus](antivirus.md#install) |

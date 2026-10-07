@@ -38,10 +38,15 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Security Health not *At Risk*; Storage below the warning threshold
 - [ ] After an upgrade across Change Set N: `sudo personaldocs manage document_types report` (and the `doctor` info line) shows the expected typed/untyped counts; typed documents kept their type (source *Migrated*), expiry dates and reminders unchanged
 - [ ] Settings → Documents & folders → Document types: templates and reminder days of the types in use reviewed; **Review untyped documents** done or consciously deferred
+- [ ] After an upgrade across Change Set O: migration `notify.0002_rich_notifications` applied, `http-ece` and `py-vapid` installed; SMTP/Telegram settings, preferences, critical events and expiry schedules unchanged; old notifications still listed
+- [ ] Settings → Notifications: **Include document numbers in email/Telegram**, **Push notifications (PWA)** and the repeat cooldown set as intended; Templates reviewed (customised events still read correctly)
 
 ## Integrations (when configured)
 - [ ] SMTP test email and a real expiry reminder (no document number in the message)
 - [ ] Telegram link and reminder
+- [ ] Template Manager **Send a TEST message to yourself** on email, Telegram, in-app and push: marked TEST, rich email readable in at least Gmail, Outlook and Apple Mail (and its plain-text part), Telegram buttons present on the https address
+- [ ] Web Push turned on and **Send test push** received on at least one Android phone and one iPhone/iPad (Home Screen app); lock-screen detail Minimal/Standard/Detailed checked; no document number on the lock screen
+- [ ] Delivery history shows the TEST rows with the right states; no credentials in errors
 - [ ] IMAP import idempotent across two polls
 - [ ] Google link, sign-in, unlink; unknown account refused
 - [ ] authentik: **Test connection**, link from My account, sign-in, unlinked user refused, local sign-in still works, revoke
@@ -60,6 +65,7 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] `docs/IMPLEMENTATION_STATUS.md` updated
 - [ ] Screenshots refreshed if the UI changed
 - [ ] Document type screenshots (`document-details-type.png`, `type-change-review.png`, `document-details-previous.png`, `settings-document-types.png`, `mobile-details.png`) show only synthetic names and values
+- [ ] Notification screenshots (`notification-center.png`, `notification-banner.png`, `notification-template-email.png`, `notification-template-telegram.png`, `mobile-notifications.png`) show only synthetic names, documents and 203.0.113.x addresses
 - [ ] Screenshot and documentation names are demo labels only (A. Ansari, Mom, Son1, Son2, Son3, Daughter), described as added in the optional setup step
 
 ## Public repository (only when the owner decides to publish)

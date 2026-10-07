@@ -38,7 +38,7 @@ More: [authenticator app and recovery codes](guides/totp-recovery.md), [passkeys
 | Password & security | Change password, authenticator app, recovery codes, passkeys, passwordless sign-in, signed-in devices, **Link authentik account** (when the administrator turned authentik on) |
 | Linked accounts | Link Google sign-in (optional) |
 | Appearance | Theme (Green, Blue, Black & White), layout, Overview widgets |
-| Notifications | Critical notifications (read-only), your optional notifications per channel, Telegram link |
+| Notifications | Critical notifications (read-only), your optional notifications per channel, Telegram link, push notifications on this device and their lock-screen detail |
 | Email imports | Import attachments from your own mailbox by rule |
 
 Your theme, Overview, layout and notification choices are saved to your account, so they are the same on every
@@ -221,7 +221,7 @@ See [sharing](guides/sharing.md).
 **Critical notifications** are set by the administrator and always reach you. Examples: a new passkey on your
 account, two-step verification turned off, a sign-in from a new country.
 
-**Optional notifications** are yours to choose per event and channel (in-app, email, Telegram) under
+**Optional notifications** are yours to choose per event and channel (in-app, email, Telegram, push) under
 **My account → Notifications**. Examples:
 - documents added to your folders
 - documents archived or deleted
@@ -229,14 +229,32 @@ account, two-step verification turned off, a sign-in from a new country.
 - import finished
 - OCR finished or failed
 - sign-ins
+- your documents moved, restored, re-typed or confirmed by someone else
 
 If a required channel cannot reach you (no email address, Telegram not linked), a red message tells you what to fix.
 
 **Expiry reminders** go to the owner and the family head at 90/60/30/7/0 days, by default.
 
 Messages show what happened, when, the account, and, for sign-ins, the IP, country, method and device. Large
-imports arrive as one summary. Messages never contain passwords, codes or document numbers.
-See [notifications](guides/expiry-rules.md#critical).
+imports arrive as one summary. Messages never contain passwords or codes; document numbers are hidden unless the
+administrator allows a masked number, and never appear in push notifications.
+
+**Notification Center.** Open **Notifications** (the bell) to see your notifications as cards with an icon, the
+severity (Critical, Warning, Success, Information) and category as text, a summary and buttons such as **Open
+Document**, **Go to Folder** or **Review Activity**. **Show details** lists the details and what to do. Filter by
+unread, category or severity, and use **Mark read** / **Mark all read**. New warning, critical and success
+notifications also appear briefly as a banner at the top of the app. Expiry reminders offer **Snooze 7 days**.
+
+**Email and Telegram** messages have the same content with icons and buttons. Links open the app and still need
+you to sign in.
+
+**Push notifications** on your phone or computer: open the app through its HTTPS address (on iPhone and iPad, from
+the Home Screen), go to **My account → Notifications → Push notifications on this device**, choose **Turn on for this
+device** and **Send test push**, then tick **Push** for the events you want. **Lock-screen detail** decides what the
+lock screen shows (Minimal, Standard or Detailed). Repeat on each device.
+
+See [notifications](guides/notifications.md), [push](guides/notifications.md#push) and
+[critical and optional notifications](guides/expiry-rules.md#critical).
 
 ## 12. Archive {#archive}
 
@@ -267,6 +285,7 @@ all your devices. See [themes](guides/themes.md).
 | A move was refused | Read the message; you may lack permission at the destination |
 | Document stuck in Processing or Queued | Wait a few minutes (the administrator may have paused the OCR queue); cancel a queued job or use **Re-run OCR…** in the Text (OCR) tab |
 | Not receiving email/Telegram | My account → Notifications shows what is missing |
+| No push notifications offered | Use the HTTPS address; on iPhone/iPad add the app to the Home Screen first; allow notifications in the browser. See [push troubleshooting](guides/notifications.md#troubleshooting) |
 | "Quarantined by the antivirus" on a document | The file is blocked for safety; ask the main administrator to review it |
 | "This authentik account is not linked" | Sign in with your password, then use **Link authentik account** in My account → Password & security |
 | "authentik cannot be reached" | Sign in with your password instead; authentik is optional |

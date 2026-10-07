@@ -5,6 +5,7 @@ import { onSignOut } from "../offline";
 import { useSession } from "../session";
 import { Avatar, Icon } from "./ui";
 import { useAiStatus } from "../ai";
+import NotificationBanners from "./NotificationBanners";
 
 const NAV = [
   ["/", "home", "Overview"],
@@ -75,8 +76,12 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   useEffect(() => setOpen(false), [loc.pathname]);
   useEffect(() => {
+    const h = (e: Event) => setUnread((e as CustomEvent).detail);
+    window.addEventListener("pd-notifications", h);
+    return () => window.removeEventListener("pd-notifications", h);
+  }, []);
+  useEffect(() => {
     if (offline) return;
-    api<{ unread: number }>("notifications", { query: { unread: 1 } }).then((r) => setUnread(r.unread)).catch(() => undefined);
     api<{ views: any[] }>("views").then((r) => setViews(r.views.filter((v) => v.show_in_sidebar))).catch(() => undefined);
   }, [loc.pathname, offline]);
 
@@ -143,7 +148,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </header>
         {offline && <div className="alert warn" style={{ margin: "0.8rem 1.4rem 0" }}>You are offline. Only files you saved for offline use on this device are available.</div>}
-        <main className="content" id="main">{children}</main>
+        <main className="content" id="main">{user && !offline && <NotificationBanners userId={user.id} onUnread={setUnread} />}{children}</main>
       </div>
       {open && <div className="modal-backdrop" style={{ zIndex: 50, background: "rgba(0,0,0,.25)" }} onClick={() => setOpen(false)} />}
     </div>

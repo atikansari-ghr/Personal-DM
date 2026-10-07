@@ -446,6 +446,9 @@ def restore_document(*, actor, doc: Document, request=None) -> None:
     doc.save(update_fields=["archived_at", "archived_by", "updated_at"])
     _history(doc, actor, "restored")
     audit.record("document.restore", request=request, actor=actor, target=doc, subject_user=doc.owner)
+    from apps.notify.events import documents_changed
+
+    documents_changed(actor=actor, doc=doc, change="restored")
 
 
 def purge_document(*, actor, doc: Document, request=None) -> None:
@@ -579,6 +582,9 @@ def move_document(*, ctx: P.AccessContext, actor, doc: Document, folder: Folder,
         doc.save(update_fields=["folder", "updated_at"])
         _history(doc, actor, "moved", folder=str(folder.id), source=str(source))
         audit.record("document.move", request=request, actor=actor, target=doc, source=str(source), destination=str(folder.id))
+    from apps.notify.events import documents_changed
+
+    transaction.on_commit(lambda: documents_changed(actor=actor, doc=doc, change="moved"))
     return True
 
 

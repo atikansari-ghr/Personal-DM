@@ -205,3 +205,51 @@ See [ADR 0013](adr/0013-document-types-templates.md) and the [document types gui
   with preview, review of untyped documents), `pages/OcrReview.tsx` (type filter).
 - **Ops:** `manage.py document_types report` (`personaldocs manage document_types report`) and an info line in
   `doctor`.
+
+## Change set O (2026-10): notification pipeline
+
+See [ADR 0014](adr/0014-rich-notifications.md) and the [notifications guide](guides/notifications.md).
+
+```
+event source (notify/events.py, notify/expiry.py, security/alerts.py, security/antivirus.py,
+              security/center.py, security/views_center.py, passkey / TOTP / recovery / authentik)
+   │  builds a structured Message (rich.py): event, severity, category, icon, title, heading, summary,
+   │  details (+ sensitive flag), actions, guidance, items, link, placeholder context, TEST flag
+   ▼
+dispatch (expiry.py): recipients → channels (catalog.channels_for: preferences + critical/required channels)
+   │  idempotency key per event, repeat cooldown for recurring conditions (events.notify cooldown_group)
+   ├─ in_app   → rich.render_in_app   → Notification (title, summary, severity, category, icon, data = card)
+   ├─ email    → rich.render_email    → OutboxMessage (subject, plain text, html)        ┐
+   ├─ telegram → rich.render_telegram → OutboxMessage (HTML text, inline URL buttons)    ├─ worker: deliver_outbox
+   └─ push     → rich.render_push     → OutboxMessage (payload: title, body, url, tag)   ┘   retry/backoff, provider_ref
+```
+
+- **Templates.** `rich.apply_template` applies a `NotificationTemplate` override (per event and channel, or all
+  channels) before rendering: `check_template_text` accepts plain text with allowlisted placeholders only, `fill`
+  substitutes escaped values (names masked outside the app per `notifications.include_names`), and `floor_severity`
+  keeps critical events at Warning or above. The event's details, action targets, recipients and channels are not
+  templated.
+- **Escaping.** Every renderer escapes for its own output (HTML for email and Telegram, plain text elsewhere); the
+  admin preview of email renders in a sandboxed iframe. Values never become markup.
+- **Actions.** `events.default_actions` and the expiry message define actions as application paths; `rich.safe_path`
+  refuses API paths and anything containing `release`. Links carry no tokens; opening one goes through the normal
+  sign-in and permission checks. In-app-only actions (Snooze) go through `POST /api/notifications/<id>/action`.
+- **Sensitive details.** A detail marked sensitive (the document number) is left out unless
+  `notifications.include_document_number` is on, then masked to the last four characters; it is never rendered for
+  push. Long digit runs are masked in external channels.
+- **Web Push** (`notify/webpush.py`): a VAPID key pair is created on first use and stored encrypted in the database
+  (so it is in backups). Subscriptions (`PushSubscription`) are accepted only for HTTPS endpoints on the known push
+  services (`fcm.googleapis.com`, `android.googleapis.com`, `*.push.services.mozilla.com`, `web.push.apple.com`,
+  `*.push.apple.com`, `*.notify.windows.com`), never for internal addresses or URLs with credentials. Payloads are
+  encrypted with aes128gcm (`http-ece`) and signed with VAPID (`py-vapid`); 404/410 responses remove the
+  subscription. `render_push` follows the recipient's `me.push_preview`. The service worker (`sw.ts`) shows the
+  notification and on click opens only same-origin pages.
+- **Delivery states.** `OutboxMessage` moves through pending (queued / retrying with the next attempt time), sent,
+  failed and skipped; `provider_ref` holds the provider's message id (Telegram message id, push `Location`) and is
+  shown as "accepted by the provider". Errors are stored with credentials redacted.
+- **TEST sends** (`POST /api/notifications/templates/<event>/test`) build a sample `Message` with `test=True`, send it
+  only to the requesting administrator and write only the audit entry `notifications.test_sent`.
+- **Frontend:** `pages/Notifications.tsx`, `components/NotificationCard.tsx`, `components/NotificationBanners.tsx`
+  (poll every 60 s and on navigation), `pages/settings/NotificationTemplates.tsx` (Template Manager, Delivery history),
+  the push section of My account → Notifications.
+- Migration `notify.0002_rich_notifications`; new tables `PushSubscription`, `NotificationTemplate`, `ExpirySnooze`.

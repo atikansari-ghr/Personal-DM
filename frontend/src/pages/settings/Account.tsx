@@ -174,8 +174,55 @@ function Linked() {
   );
 }
 
-const CH_LABEL: Record<string, string> = { in_app: "In-app", email: "Email", telegram: "Telegram" };
+const CH_LABEL: Record<string, string> = { in_app: "In-app", email: "Email", telegram: "Telegram" , push: "Push" };
 const GROUPS: [string, string][] = [["documents", "Documents"], ["security", "Account & security"], ["system", "System (administrators)"]];
+
+function b64ToUint8(b64: string) {
+  const raw = atob((b64 + "=".repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+/** Web Push on this device: needs the installed app or a browser that supports push, over HTTPS. */
+function PushCard() {
+  const toast = useToast();
+  const { data, reload } = useAsync(() => api<any>("notifications/push"), []);
+  const [busy, setBusy] = useState(false);
+  const supported = typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  if (!data) return <div className="card"><Skeleton /></div>;
+  if (!data.enabled) return null;
+  const enable = async () => {
+    setBusy(true);
+    try {
+      if ((await Notification.requestPermission()) !== "granted") throw new Error("Notifications are blocked for this site in the browser settings.");
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToUint8(data.key) });
+      const j = sub.toJSON();
+      await api("notifications/push", { body: { endpoint: j.endpoint, keys: j.keys, label: navigator.userAgent.replace(/^.*\) /, "").slice(0, 100) } });
+      toast("Push notifications are on for this device");
+      reload();
+    } catch (e: any) { toast(e.message || "Could not turn on push notifications", "error"); } finally { setBusy(false); }
+  };
+  return (
+    <div className="card" id="push">
+      <h2>Push notifications on this device</h2>
+      <p className="small muted">Alerts on your phone's lock screen or your computer, through the installed app. Choose Push in the table above for the events you want. Document numbers and document text are never shown.</p>
+      {!supported ? <p className="small">This browser does not support push notifications. On iPhone and iPad, add the app to the Home Screen first.</p>
+        : <div className="row"><button className="btn primary" disabled={busy} onClick={enable}>Turn on for this device</button>
+          {data.devices.length > 0 && <button className="btn" onClick={() => api<any>("notifications/push/test", { method: "POST" }).then(() => toast("Test push sent")).catch((e) => toast(e.message, "error"))}>Send test push</button>}</div>}
+      <div className="field" style={{ maxWidth: 360, marginTop: ".6rem" }}><label htmlFor="push-preview">Lock-screen detail</label>
+        <select id="push-preview" value={data.preview} onChange={(e) => api("settings", { method: "PUT", body: { values: { "me.push_preview": e.target.value } } }).then(reload).catch((x) => toast(x.message, "error"))}>
+          <option value="minimal">Minimal — only that something needs attention</option>
+          <option value="standard">Standard — alert title and short summary, no names</option>
+          <option value="detailed">Detailed — also document names</option>
+        </select></div>
+      {data.devices.length > 0 && (
+        <ul className="small device-list">{data.devices.map((d: any) => (
+          <li key={d.id} className="row between"><span>{d.label || "Device"}{d.error && <span className="badge danger" title={d.error}> problem</span>}</span>
+            <button className="btn small ghost" onClick={() => api("notifications/push", { method: "DELETE", body: { id: d.id } }).then(reload)}>Remove</button></li>))}</ul>
+      )}
+    </div>
+  );
+}
 
 function Channels() {
   const toast = useToast();
@@ -248,6 +295,7 @@ function Channels() {
         </div>
         <p className="small muted">{channels.filter((c) => c.channel !== "in_app" && c.issue).map((c) => `${c.label}: ${c.issue}`).join(" · ")}</p>
       </div>
+      <PushCard />
       <div className="card">
         <h2>Telegram</h2>
         {data.telegram.linked ? (

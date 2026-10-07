@@ -128,24 +128,12 @@ def delivery_history(request):
 @api_view(["GET"])
 @permission_classes([IsActiveAuthenticated])
 def template_preview(request):
-    class _T:
-        name = "Passport"
+    """Plain-text preview of an expiry reminder with sample data (Settings → Notifications)."""
+    from . import rich
 
-    class _O:
-        display_name = request.user.display_name
-
-    class _D:
-        id = "00000000-0000-0000-0000-000000000000"
-        owner = _O()
-        doc_type = _T()
-        doc_type_id = 1
-        expiry_date = expiry.local_today() + timezone.timedelta(days=30)
-
-    subject, body, _ = expiry.expiry_message(_D(), 30, user=request.user)
-    from . import templates
-
-    return Response({"subject": templates.subject(subject), "body": body,
-                     "note": "Messages never include document numbers, codes, passwords or attachments; long numbers in names are masked and the link requires sign-in and permission."})
+    subject, body, _html = rich.render_email(rich.sample("expiry.reminder", request.user.display_name), request.user)
+    return Response({"subject": subject, "body": body,
+                     "note": "Messages never include document numbers (unless the administrator allows a masked number in email/Telegram), codes, passwords or attachments; long numbers in names are masked and the link requires sign-in and permission."})
 
 
 @api_view(["POST"])
@@ -157,7 +145,7 @@ def run_reminders_now(request):
     return Response(result)
 
 
-CHANNEL_LABELS = {"in_app": "In-app", "email": "Email", "telegram": "Telegram"}
+CHANNEL_LABELS = {"in_app": "In-app", "email": "Email", "telegram": "Telegram", "push": "Push"}
 
 
 @api_view(["GET", "PUT"])
@@ -189,7 +177,7 @@ def my_notification_preferences(request):
     prefs = catalog.preferences(user)
     channels = []
     for ch in catalog.CHANNELS:
-        globally = ch == "in_app" or (config.get("smtp.enabled") if ch == "email" else config.get("telegram.enabled"))
+        globally = catalog.channel_configured(ch)
         channels.append({"channel": ch, "label": CHANNEL_LABELS[ch], "configured": bool(globally),
                          "issue": catalog.channel_issue(user, ch)})
     events = []

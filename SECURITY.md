@@ -23,7 +23,7 @@ Only the latest commit on `main` (pre-release 0.1.x) receives fixes.
 
 In scope: authentication (passwords, TOTP, passkeys, recovery, Google and authentik linking), session handling,
 permissions (including AI retrieval and the Administrator role), share links, file handling and previews, antivirus
-quarantine and release, the country/IP access policy and trusted-proxy IP handling, the installer/upgrade scripts,
+quarantine and release, notification rendering, templates and Web Push subscriptions, the country/IP access policy and trusted-proxy IP handling, the installer/upgrade scripts,
 the NAS helper and the host helper.
 
 Design points (details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/adr/](docs/adr/)):
@@ -46,6 +46,19 @@ Design points (details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs
 - The Administrator role gives access to the security center, not to documents.
 - Root actions from the web interface (OS security updates, signature updates, reboot) go through a host helper that
   accepts only a fixed list of actions; the web application never runs `sudo`.
+- **Notification rendering is a security boundary.** Document, folder and person names, OCR-derived values and
+  administrator template text are untrusted input: each channel renderer escapes them for its own format (HTML email,
+  Telegram HTML, plain text, push), templates accept plain text with an allowlist of placeholders only (no code, no
+  HTML), and the email preview is shown in a sandboxed frame. Emails contain no scripts, remote images or tracking
+  pixels.
+- **No tokens in notification links.** Actions in notifications are application paths only; opening one requires
+  sign-in and the normal permission checks, so a forwarded message grants nothing. Paths to the API and quarantine
+  releases are never offered as actions. Document numbers are left out unless the administrator allows a masked
+  number, and never appear in push notifications.
+- **Push endpoint allowlist.** Web Push subscriptions are accepted only for HTTPS endpoints on the known push
+  services (Apple, Google, Mozilla, Microsoft); internal addresses, other hosts and URLs with credentials are refused,
+  so a subscription cannot make the server call into the local network. Payloads are encrypted for the receiving
+  device and the VAPID signing key is stored encrypted.
 
 **Limits of the built-in checks.** The Basic Internet Security Test in Settings → Security is a baseline of this
 application and this server. It is not a penetration test, it does not scan other devices, and passing it does not

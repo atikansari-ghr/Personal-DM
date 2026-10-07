@@ -713,6 +713,57 @@ await step("AT-161..175 document types: set from Details, suggestion, safe chang
   await page.keyboard.press("Escape");
 });
 
+await step("AT-176..186 rich notifications: TEST messages, Notification Center, banners, template manager", async () => {
+  // clearly marked TEST messages create real in-app cards (no fake events) of different severities
+  for (const ev of ["expiry.reminder", "antivirus.threat", "document.added", "security.new_country", "security.operations"]) {
+    const r = await api(page, `/api/notifications/templates/${ev}/test`, { body: { channels: ["in_app"] } });
+    expect(r.status === 200 && r.data.results.in_app === "sent", `test ${ev}: ${JSON.stringify(r.data)}`);
+  }
+  // AT-180: banners for the new critical/warning ones
+  await page.goto(BASE + "/folders");
+  await page.waitForSelector(".note-banner.sev-critical");
+  expect(await page.locator(".note-banner").count() <= 3, "at most three banners");
+  await page.screenshot({ path: `${SHOTS}/notification-banner.png` });
+  // AT-179: Notification Center
+  await page.goto(BASE + "/notifications");
+  await page.waitForSelector(".note-card");
+  expect(await page.locator(".note-card .sev-badge:has-text('Critical')").count() >= 1, "critical card with text label");
+  expect(await page.locator(".note-banner").count() === 0, "banners clear on the Notification Center");
+  const expiryCard = page.locator(".note-card", { hasText: "Passport expires" }).first();
+  await expiryCard.locator("button:has-text('Show details')").click();
+  await expiryCard.locator("dt:has-text('Expiry date')").waitFor();
+  expect(await expiryCard.locator("a:has-text('Open Document')").count() === 1, "primary action");
+  await page.screenshot({ path: `${SHOTS}/notification-center.png` });
+  await page.selectOption("select[aria-label='Severity']", "critical");
+  await page.waitForFunction(() => [...document.querySelectorAll(".note-card .sev-badge")].every((b) => b.textContent === "Critical"));
+  await page.selectOption("select[aria-label='Severity']", "");
+  await page.click("button[role=radio]:has-text('Unread')");
+  const unreadBefore = await page.locator(".note-card").count();
+  await page.locator(".note-card").first().locator("button:has-text('Mark read')").click();
+  await page.waitForFunction((n) => document.querySelectorAll(".note-card").length === n - 1, unreadBefore);
+  await page.click("button[role=radio]:has-text('All')");
+  // AT-184/186: template manager with previews for every channel
+  await page.goto(BASE + "/settings/notifications");
+  await page.waitForSelector("#templates .tmpl-row");
+  await page.click("#templates button[aria-label='Edit template Expiry reminders']");
+  await page.fill("#t-title", "{document_type} renewal due in {days_remaining} days");
+  await page.waitForFunction(() => document.querySelector("iframe.email-preview")?.srcdoc.includes("Passport renewal due in 45 days"));
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${SHOTS}/notification-template-email.png` });
+  await page.click(".modal [role=tab]:has-text('Telegram')");
+  await page.waitForSelector(".tg-bubble");
+  await page.screenshot({ path: `${SHOTS}/notification-template-telegram.png` });
+  await page.click(".modal [role=tab]:has-text('Push')");
+  await page.waitForSelector(".push-preview");
+  expect(!(await page.locator(".push-preview").innerText()).includes("Sample Person"), "push preview has no names");
+  await page.fill("#t-title", "{password}");
+  await page.waitForSelector(".modal .alert.error:has-text('unknown placeholder')");
+  await page.fill("#t-title", "");
+  await page.keyboard.press("Escape");
+  // delivery history card renders
+  await page.waitForSelector("text=Delivery history");
+});
+
 await step("AT-146 authentik settings and sign-in button", async () => {
   await api(page, "/api/settings", { method: "PUT", body: { values: { "authentik.enabled": true, "authentik.issuer": "https://auth.example.test/application/o/personal-dm/",
     "authentik.client_id": "personal-dm-demo", "authentik.client_secret": "demo-secret-not-real" } } });
@@ -780,7 +831,7 @@ await step("AT-128/130 every sign-in design keeps the same sign-in methods (desk
 });
 
 // ------------------------------------------------------------------ tablet / mobile parity
-const ROUTES = ["/", "/ocr-review", "/settings/documents", `/documents/${ids.typed}`, "/settings/overview", "/settings/security", "/settings/security?view=antivirus", "/settings/security?view=test", "/settings/security?view=storage", "/folders", `/folders/${ids.parity}`, `/documents/${ids["Sample policy (3 pages)"]}`, "/search?q=sample", "/shared",
+const ROUTES = ["/", "/ocr-review", "/notifications", "/settings/notifications", "/settings/documents", `/documents/${ids.typed}`, "/settings/overview", "/settings/security", "/settings/security?view=antivirus", "/settings/security?view=test", "/settings/security?view=storage", "/folders", `/folders/${ids.parity}`, `/documents/${ids["Sample policy (3 pages)"]}`, "/search?q=sample", "/shared",
   "/offline", "/notifications", "/archive", "/settings/account", "/settings/account?tab=security", "/settings/account?tab=appearance",
   "/settings/account?tab=notifications", "/settings/family", "/settings/notifications", "/settings/storage", "/settings/security",
   "/settings/ai", "/settings/activity?view=logins", "/assistant", "/imports/new", "/help/getting-started"];
@@ -835,6 +886,18 @@ for (const [vname, w, h] of VIEWPORTS) {
     expect(m, "type dialog fits the screen");
     await mp.tap(".modal button:has-text('Cancel')");
     if (vname === "mobile-portrait") { await mp.locator(".details-panel").scrollIntoViewIfNeeded(); await mp.screenshot({ path: `${SHOTS}/mobile-details.png` }); }
+  });
+  await step(`AT-194 ${vname}: Notification Center cards, filters and actions by touch without clipping`, async () => {
+    await mp.goto(`${BASE}/notifications`);
+    await mp.waitForSelector(".note-card");
+    const r = await mp.evaluate(() => {
+      const off = [...document.querySelectorAll(".note-card a, .note-card button, .note-filters select, .note-filters button")].filter((el) => { const b = el.getBoundingClientRect(); return b.width > 0 && (b.right > window.innerWidth + 1 || b.left < -1); }).length;
+      const small = [...document.querySelectorAll(".note-card .note-actions a, .note-card .note-actions button")].filter((el) => { const b = el.getBoundingClientRect(); return b.width > 0 && (b.height < 24 || b.width < 24); }).length;
+      return { over: document.documentElement.scrollWidth - window.innerWidth, off, small };
+    });
+    expect(r.over <= 1 && r.off === 0 && r.small === 0, `notifications: overflow ${r.over}, off-screen ${r.off}, small ${r.small}`);
+    await mp.locator(".note-card").first().locator("button:has-text('Show details')").tap().catch(() => undefined);
+    if (vname === "mobile-portrait") await mp.screenshot({ path: `${SHOTS}/mobile-notifications.png` });
   });
   if (vname !== "tablet") {
     await step(`AT-75 ${vname}: Move to… by touch, and back navigation`, async () => {

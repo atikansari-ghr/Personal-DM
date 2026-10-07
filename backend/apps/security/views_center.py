@@ -162,7 +162,7 @@ def reboot(request):
 
     for admin in events._admins():
         events.notify(admin, "security.operations", kind="security.operations", key=f"reboot:{run.id}",
-                      title="Server reboot requested", lines=[f"Requested by {request.user.display_name}."], link="/settings/security?view=updates")
+                      title="Server reboot requested", severity="warning", icon="system", lines=[f"Requested by {request.user.display_name}."], link="/settings/security?view=updates")
     return Response(_os_json(run), status=202)
 
 

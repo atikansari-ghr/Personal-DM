@@ -26,7 +26,7 @@ Administrators only: holiday countries and corrections, Hijri date adjustment, t
 
 ## Notifications and connections {#notifications}
 
-Reminder days and time, recipients, default and required channels for reminders, **critical notifications** and their channels, names in external messages, delivery problems, message preview, delivery history; SMTP and Telegram setup with tests; WhatsApp status (planned). Each person chooses optional notifications per event and channel under My account → Notifications. See [notifications](expiry-rules.md#critical).
+Reminder days and time, recipients, default and required channels for reminders, **critical notifications** and their channels, names in external messages, **Include document numbers in email/Telegram** (`notifications.include_document_number`, default off), **Push notifications (PWA)** (`notifications.push_enabled`, default on), **Repeat cooldown for recurring conditions** (`notifications.repeat_cooldown_hours`, default 24), delivery problems, **Templates** (wording, icon, severity shown and action labels per event and channel, with previews and TEST sends; main administrator), **Delivery history**; SMTP and Telegram setup with tests; WhatsApp status (planned). Each person chooses optional notifications per event and channel (in-app, email, Telegram, push) under My account → Notifications, turns on push per device and sets the **Push notification detail** (`me.push_preview`: Minimal, Standard, Detailed). See [notifications](notifications.md) and [critical and optional notifications](expiry-rules.md#critical).
 
 ## Authentication {#authentication}
 

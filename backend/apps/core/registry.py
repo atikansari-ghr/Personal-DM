@@ -68,7 +68,7 @@ class SettingDef:
         }
 
 
-CHANNELS = ("in_app", "email", "telegram")
+CHANNELS = ("in_app", "email", "telegram", "push")
 THEMES = ("green", "blue", "mono")
 # Tesseract language packs offered for OCR (Debian package tesseract-ocr-<code>)
 _OCR_LANGS = {
@@ -329,6 +329,17 @@ SETTINGS: list[SettingDef] = [
     SettingDef("notifications.include_names", "Include names in email/Telegram",
                "Show folder, document and file names in external messages (long numbers are always masked). Turn off to send only counts and a sign-in link.",
                "bool", True, "notifications", help="expiry-rules#templates"),
+    SettingDef("notifications.include_document_number", "Include document numbers in email/Telegram",
+               "Show a masked document number (last four characters) in email and Telegram expiry messages. Never shown in push notifications.",
+               "bool", False, "notifications", effect="Applies to the next notification.", help="notifications#privacy"),
+    SettingDef("notifications.push_enabled", "Push notifications (PWA)",
+               "Let people receive notifications on their phone or computer through the installed app (Web Push). "
+               "Needs the HTTPS address; only known push services (Apple, Google, Mozilla, Microsoft) are contacted.",
+               "bool", True, "notifications", effect="When off, push is not offered and nothing is sent.", help="notifications#push"),
+    SettingDef("notifications.repeat_cooldown_hours", "Repeat cooldown for recurring conditions",
+               "A recurring condition (antivirus unavailable, storage nearly full, update failures …) is notified again only after this many hours. "
+               "New critical events (malware found, failed backups) are always sent at once.",
+               "int", 24, "notifications", min=1, max=168, help="notifications#noise"),
     # ---- Connections
     SettingDef("smtp.enabled", "Email (SMTP) enabled", "Send notification and password-reset email.", "bool", False,
                "connections", depends_on=("smtp.host", "smtp.from_address"),
@@ -642,6 +653,11 @@ SETTINGS: list[SettingDef] = [
                "event_matrix", {}, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#optional"),
     SettingDef("me.channels", "My notification channels", "Channels you want reminders on. Required channels stay on.",
                "channel_list", None, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#channels"),
+    SettingDef("me.push_preview", "Push notification detail",
+               "What your phone or computer may show on the lock screen. Minimal: only that something needs attention. "
+               "Standard: the alert title and a short summary without names. Detailed: also document names. Document numbers and text are never shown.",
+               "choice", "standard", "my_notifications", scope=USER, editable_by=SELF, choices=("minimal", "standard", "detailed"),
+               help="notifications#push"),
     SettingDef("me.event_alerts", "Other alerts by email/Telegram",
                "Also send access, import and (for administrators) backup and integrity alerts to your email/Telegram channels. They always appear in the in-app feed.",
                "bool", True, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#other-alerts"),

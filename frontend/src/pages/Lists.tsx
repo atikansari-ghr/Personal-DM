@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, formatDate, formatDateTime } from "../api";
+import { api, formatDate } from "../api";
 import DocumentPanel from "../components/DocumentPanel";
 import { AvBadge } from "./settings/SecurityCenter";
 import { Avatar, Confirm, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useAsync, useToast } from "../components/ui";
@@ -103,32 +103,6 @@ export function DocumentPage() {
     <div>
       <button className="btn small ghost" onClick={() => nav(-1)} style={{ marginBottom: ".6rem" }}>← Back</button>
       <div className="card"><DocumentPanel id={id!} full /></div>
-    </div>
-  );
-}
-
-export function NotificationsPage() {
-  const { data, loading, reload } = useAsync(() => api<{ notifications: any[]; unread: number }>("notifications"), []);
-  if (loading || !data) return <Skeleton />;
-  return (
-    <div className="stack">
-      <div className="page-head"><h1>Notifications</h1>
-        <div className="row"><Link className="btn" to="/settings/account?tab=notifications">Notification settings</Link>{data.unread > 0 && <button className="btn" onClick={() => api("notifications/read", { body: {} }).then(reload)}>Mark all read</button>}</div>
-      </div>
-      {data.notifications.length === 0 ? <div className="empty">No notifications.</div> : (
-        <div className="card" style={{ padding: 0 }}>
-          {data.notifications.map((n) => (
-            <div key={n.id} className="list-item" style={{ padding: ".8rem 1rem", background: n.read ? "transparent" : "var(--brand-softer)" }}>
-              <Icon name={({ expiry: "clock", access: "users", import: "folder", backup: "db", integrity: "shield", processing: "file" } as Record<string, string>)[n.kind] || "bell"} />
-              <div className="grow">
-                <div style={{ fontWeight: n.read ? 500 : 700 }}>{n.title} {!n.read && <span className="sr-only">(unread)</span>}</div>
-                <div className="small muted">{formatDateTime(n.created_at)}</div>
-              </div>
-              {n.link && <Link className="btn small" to={n.link} onClick={() => api("notifications/read", { body: { ids: [n.id] } })}>Open</Link>}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

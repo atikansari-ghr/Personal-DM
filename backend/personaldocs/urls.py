@@ -12,7 +12,7 @@ from apps.core import overview_views as ov
 from apps.core import views as core
 from apps.library import export, ocr_views as ocrv, views as lib, views_import as imp, views_share as share, views_types as vt
 from apps.mailimport import views as mail
-from apps.notify import views as notify
+from apps.notify import views as notify, views_rich as nrich
 from apps.ops import views as ops
 from apps.security import views as sec
 
@@ -200,10 +200,17 @@ api = [
     path("offline/validate", export.offline_validate),
     path("offline/audit", export.offline_audit),
     # notifications
-    path("notifications", notify.notifications),
-    path("notifications/read", notify.mark_read),
+    path("notifications", nrich.notifications),
+    path("notifications/read", nrich.mark_read),
+    path("notifications/<int:pk>/action", nrich.notification_action),
+    path("notifications/push", nrich.push),
+    path("notifications/push/test", nrich.push_test),
+    path("notifications/templates", nrich.templates_list),
+    path("notifications/templates/<str:event>", nrich.template_detail),
+    path("notifications/templates/<str:event>/preview", nrich.template_preview),
+    path("notifications/templates/<str:event>/test", nrich.template_test),
     path("notifications/test", notify.test_channel),
-    path("notifications/deliveries", notify.delivery_history),
+    path("notifications/deliveries", nrich.delivery_history),
     path("notifications/problems", notify.delivery_problems),
     path("notifications/preview", notify.template_preview),
     path("notifications/run", notify.run_reminders_now),
