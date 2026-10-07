@@ -53,7 +53,8 @@ export interface DocRow {
   title: string;
   folder: string;
   owner: UserMini;
-  type: { id: number; name: string } | null;
+  type: { id: number; name: string; emoji?: string; confirmed?: boolean } | null;
+  type_suggested?: boolean;
   state: string;
   expiry_date: string | null;
   issue_date: string | null;
@@ -101,14 +102,34 @@ export interface Field {
   key: string;
   value: string;
   sensitive: boolean;
+  label?: string;
   status: "proposed" | "confirmed";
   source: string;
+  source_label?: string;
+  scope?: "type" | "custom" | "unmapped";
+  group?: "template" | "additional" | "unmapped";
+  overridden?: boolean;
+  previous_type?: string;
   confidence: number | null;
   flags: string[];
   excerpt: string;
   proposed_value: string;
   confirmed_at: string | null;
+  updated_at?: string | null;
+  confirmed_by?: string | null;
 }
+export interface TemplateField {
+  key: string;
+  label: string;
+  field_type: string;
+  required: boolean;
+  help_text: string;
+  choices: string[];
+  role: string;
+  sensitive?: boolean;
+}
+export interface TypeSuggestion { index: number | null; type: number; name: string; source: string; source_label: string; reason: string; confidence: number | null; conflict?: boolean }
+export interface DetailsStatus { status: "confirmed" | "incomplete" | "needs_review" | "empty"; proposed: number; unmapped: number; missing_required: string[]; incomplete_ok: boolean }
 export interface DocDetail extends DocRow {
   ocr?: { state: string; mode: string; sources: { version: string; pages: string }[]; languages: string[]; error: string; ai_allowed: boolean };
   title_is_custom: boolean;
@@ -117,6 +138,10 @@ export interface DocDetail extends DocRow {
   review_flags: string[];
   inherit_permissions: boolean;
   fields: Field[];
+  template: TemplateField[];
+  type_info: { source: string; source_label: string; confirmed: boolean; suggestions: TypeSuggestion[] };
+  details_status: DetailsStatus;
+  can_manage_types: boolean;
   versions: Version[];
   current_version: Version | null;
   path: { id: string; name: string; emoji: string }[];
@@ -140,6 +165,7 @@ export interface FolderNode {
   count: number;
   archived: boolean;
   owner_user: UserMini | null;
+  suggested_type?: { id: number; name: string } | null;
 }
 export interface Group {
   id: string;
@@ -149,7 +175,7 @@ export interface Group {
   delegations: { delegate: string; scopes: string[] }[];
 }
 export interface Meta {
-  types: { id: number; name: string; template: string; has_expiry: boolean }[];
+  types: { id: number; name: string; template: string; has_expiry: boolean; emoji?: string; archived?: boolean; description?: string }[];
   tags: { id: number; name: string; color: string }[];
   correspondents: { id: number; name: string }[];
   fields: { key: string; label: string; type: string; choices: string[] }[];

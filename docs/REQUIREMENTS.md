@@ -242,6 +242,29 @@ Acceptance tests AT-138…AT-160.
 | STOR-2 | Safe cleanup only of regenerable or expired data (temporary files older than 24 hours, orphan previews and OCR copies, expired security records) with analysis and confirmation. Original documents are never deleted by any cleanup, purge, antivirus, update or repair workflow. |
 | OPS-M1 | `personaldocs status` and `doctor` report ClamAV, freshclam, the host helper, signature age, files pending scan, Internet HTTPS, storage thresholds and a pending reboot; install, upgrade and repair install ClamAV and the host helper; `--with-security-tools` adds pip-audit. |
 
+## Change set N (2026-10): document types, metadata templates, field sources and type assignment
+
+Acceptance tests AT-161…AT-175. Guide: [document types](guides/document-types.md).
+
+| ID | Requirement |
+|---|---|
+| DT-1 | Folder and document type are independent: moving a document never changes its type and changing the type never moves the file. |
+| DT-2 | Document types are editable data (seeded, not code constants) managed by the main administrator: add from a standard template or a copy, edit name, icon, description, expiry awareness and per-type reminder days, archive/restore, delete only when unused or after moving its documents to another type with the value-preserving rules. |
+| DT-3 | Each type has a template of fields with a stable key, label, field type (text, long text, date, number, yes/no, select, country, person, identifier), shown/required flags, order, help text, OCR/AI extraction flag, searchable flag, role (expiry, issue, no expiry), choices and validation (pattern, minimum, maximum, maximum length); fields with values are turned off, not deleted; reordering is keyboard accessible with a preview. |
+| DT-4 | The Details panel shows the owner, the document type (Set type / Change… for editors, read-only for viewers, "Not assigned" when empty, Manage for the main administrator), a details status (confirmed, incomplete with the required fields, needs review) with "Confirm as incomplete", the template fields in order, additional details and previous details. The type can be set from the upload dialog, the Details panel, the document ⋮ menu / More actions and bulk Set type…. |
+| DT-5 | Every value records its source (manual, OCR, MRZ, Local AI, import, system, migrated), whether it is suggested or edited, and who confirmed it when; confirmed values are never overwritten by OCR, re-maps or AI (a differing value is shown as "New scan suggests …"). |
+| DT-6 | Type suggestions from the folder, from OCR text (with reason and confidence) and from the local AI are suggestions only (Accept / Change / Ignore); conflicting suggestions are shown as a conflict; a confirmed type is never silently replaced. |
+| DT-7 | Changing a type shows a preview (values kept, values that become previous details with the reason, additional details, new empty fields, a warning when the expiry field no longer applies); unmapped values are kept as previous details to map, keep or remove; nothing is deleted. |
+| DT-8 | After a type change, existing OCR text can be re-mapped to the new type's fields without a new OCR scan, as suggestions only. |
+| DT-9 | One-off additional details never change the template; the main administrator can promote one to a template field after confirmation, moving only that document's value. |
+| DT-10 | Bulk Set type… previews counts and current types, skips documents with another confirmed type unless explicitly overridden, skips documents the person may not edit, and uses the same safe change per document. |
+| DT-11 | Viewers see the type read-only; editors assign types, edit values and add details; only the main administrator manages templates, promotes fields and reviews untyped documents. Type changes, bulk changes, re-maps, reviews and template changes are audited and recorded in the document history without OCR text. |
+| DT-12 | Search filters by type, indexes values of searchable fields (identifiers not searchable by default), and the OCR review queue filters by type (All / Not assigned / a type). OCR and the local AI propose only template fields marked extractable. |
+| DT-13 | Only the confirmed value of the expiry-role field drives the expiry date and reminders; per-type reminder days override the global setting; a type change re-derives the expiry date and never invents one. |
+| DT-14 | The upgrade migration gives every type a template, keeps typed documents' types (confirmed, source migrated), leaves untyped documents untyped, keeps values outside the template as additional details (confirmed issue/expiry/no-expiry fields are added to the template), and deletes nothing. A folder can carry a suggested type for uploads (inherited by sub-folders); an administrator review of untyped documents applies nothing until confirmed. |
+| DT-15 | The Details panel, type selection and previous details work by touch at tablet and phone sizes without clipping. |
+| OPS-N1 | `personaldocs manage document_types report` and `personaldocs doctor` report typed, untyped and suggested counts; no new system packages; the migration is applied by the normal upgrade after the verified backup. |
+
 ## Later phases
 
 Personal WhatsApp notifications, native apps, scanning enhancement, in-browser Office editing, DICOM viewing.

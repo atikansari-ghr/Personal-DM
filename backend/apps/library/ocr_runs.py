@@ -331,10 +331,11 @@ def remove_ocr(*, actor, doc: Document, request=None) -> dict:
         except Exception:  # noqa: BLE001 - optional component
             pass
         doc.content_text = document_text(doc)
+        doc.type_suggestions = [x for x in doc.type_suggestions or [] if x.get("source") != "ocr"]  # derived from the text
         doc.ocr_state, doc.ocr_error, doc.ocr_updated_at = "removed", "", timezone.now()
         if doc.state == Document.NEEDS_REVIEW and not doc.fields.filter(status=DocumentField.PROPOSED).exists() and not doc.review_flags:
             doc.state = Document.READY
-        doc.save(update_fields=["content_text", "ocr_state", "ocr_error", "ocr_updated_at", "state", "updated_at"])
+        doc.save(update_fields=["content_text", "type_suggestions", "ocr_state", "ocr_error", "ocr_updated_at", "state", "updated_at"])
         update_search_vector(doc)
     # the audit entry records what was removed, never the removed text
     audit.record("document.ocr_remove", request=request, actor=actor, target=doc,

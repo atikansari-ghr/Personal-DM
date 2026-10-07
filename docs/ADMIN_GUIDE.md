@@ -112,8 +112,8 @@ Guide: [notifications](guides/expiry-rules.md#critical).
 
 - **Selective OCR:** OCR reads only what is chosen. **OCR policy per document type** sets each type to *Disabled*,
   *Manual* or *Automatic* (only the document's primary OCR source), with default languages, expected fields and
-  whether **AI may read text**. Add custom types or archive types no longer needed; built-in types and types in use
-  are never deleted. **Untyped documents** (`processing.ocr_untyped_mode`, default *Manual*) covers documents without
+  whether **AI may read text**. Types and their templates are managed under [Document types and templates](#document-types);
+  a type in use is never deleted. **Untyped documents** (`processing.ocr_untyped_mode`, default *Manual*) covers documents without
   a type.
 - **Defaults:** new installations start with *Manual* for every type. Installations upgraded from an earlier release
   are set to *Automatic* with AI allowed for every type and for untyped documents, so nothing changes until you
@@ -136,6 +136,31 @@ Guide: [notifications](guides/expiry-rules.md#critical).
   ([OCR benchmark](OCR_BENCHMARK.md)).
 
 Guides: [OCR and corrections](guides/ocr-corrections.md#selective), [Office and DICOM](guides/office-dicom.md).
+
+### Document types and templates {#document-types}
+
+**Settings → Documents & folders → Document types** (main administrator only):
+
+- **Types:** list with document counts; **Add type** from a standard template (passport, visa, residence permit /
+  iqama, national ID, driving licence, employee ID, insurance, certificate, generic) or as a copy of another type;
+  edit name, icon, description, *expiry-aware* and **reminder days** (empty = global schedule); archive or restore.
+  A type in use cannot be deleted: move its documents to another type first (values are kept or become previous
+  details) or archive it.
+- **Templates:** add, edit, turn off and reorder (↑/↓) fields; field type (text, long text, date, number, yes/no,
+  select, country, person, identifier), role (expiry, issue, no expiry), required, *OCR / Local AI may suggest*,
+  searchable, help text, choices and format (regular expression, maximum length). The preview shows the Details
+  panel. A field with values cannot be deleted, only turned off. Only the confirmed value of the **expiry-role**
+  field drives reminders.
+- **Promotion:** **Add to … template…** (for example *Add to Passport template…*) on a document's additional detail adds the field to the template; only
+  that document's value moves.
+- **Review untyped documents:** untyped documents with their folder and OCR suggestions; nothing is applied until you
+  confirm, and conflicts start unselected. `sudo personaldocs manage document_types report` and `doctor` print the
+  typed / untyped / suggested counts.
+- **Folder suggestions:** folder ⋮ → **Suggested document type…** preselects a type for new uploads into that folder
+  and its sub-folders. It never changes existing documents.
+- **OCR by document type** (Settings → OCR & processing) stays in sync with the templates' OCR/AI flags.
+
+Guide: [document types](guides/document-types.md#manage).
 
 ## 7. Local AI (optional) {#ai}
 
@@ -349,6 +374,13 @@ page uses Minimal until you change them. People who had chosen their dashboard w
 release (the one-line `personal-DM.sh -- upgrade` does this for you). Existing files are marked *Not scanned* ("Stored before antivirus scanning was added") until you run **Scan entire existing
 library**. HSTS is now sent for https origins. The country/IP settings moved to Settings → Security → Access policy.
 Nothing is deleted.
+
+**Upgrading to the document types release (Change Set N):** one migration (`library.0009_document_type_templates`),
+applied automatically after the verified backup; no extra post-upgrade step. Every type gets a template, typed
+documents keep their type (confirmed, source *Migrated*), untyped documents stay untyped, and values outside a
+template become additional details. Nothing is deleted. Afterwards, optionally run
+`sudo personaldocs manage document_types report`, set folder suggested types and **Review untyped documents**.
+See [Change Set N](guides/upgrades.md#change-set-n).
 
 Guide: [upgrades](guides/upgrades.md#change-set-m) (with notes for each change set).
 

@@ -97,6 +97,10 @@
  ],
  [
   "PASS",
+  "AT-161..175 document types: set from Details, suggestion, safe change, custom detail, templates"
+ ],
+ [
+  "PASS",
   "AT-146 authentik settings and sign-in button"
  ],
  [
@@ -117,11 +121,19 @@
  ],
  [
   "PASS",
+  "AT-175 tablet: Details, type selection and previous values work by touch without clipping"
+ ],
+ [
+  "PASS",
   "AT-76/77 mobile-portrait: every screen renders without horizontal overflow"
  ],
  [
   "PASS",
   "AT-83 mobile-portrait: viewer controls are reachable and large enough"
+ ],
+ [
+  "PASS",
+  "AT-175 mobile-portrait: Details, type selection and previous values work by touch without clipping"
  ],
  [
   "PASS",
@@ -138,6 +150,10 @@
  [
   "PASS",
   "AT-83 mobile-landscape: viewer controls are reachable and large enough"
+ ],
+ [
+  "PASS",
+  "AT-175 mobile-landscape: Details, type selection and previous values work by touch without clipping"
  ],
  [
   "PASS",

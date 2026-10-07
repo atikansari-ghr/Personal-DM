@@ -1,25 +1,19 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, formatBytes, formatDate, formatDateTime, upload } from "../api";
+import { api, formatBytes, formatDateTime, upload } from "../api";
 import { saveOffline } from "../offline";
 import { useSession } from "../session";
 import type { DocDetail, DocRow, Meta } from "../types";
 import PermissionsDialog from "./PermissionsDialog";
-import { Avatar, Confirm, CopyButton, ExpiryBadge, HelpTip, Icon, Modal, Skeleton, StateBadge, useToast } from "./ui";
+import { Confirm, CopyButton, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useToast } from "./ui";
 import AISuggestions from "./AISuggestions";
+import DocumentDetails, { DetailsBadge } from "./DocumentDetails";
 import Menu from "./Menu";
 import OcrPanel, { OcrStateBadge } from "./OcrPanel";
 import { AvBadge } from "../pages/settings/SecurityCenter";
 import DocViewer from "./DocViewer";
 import FileTypeIcon from "./FileTypeIcon";
 import { useAiStatus } from "../ai";
-
-const FIELD_LABELS: Record<string, string> = {
-  full_name: "Full name", document_number: "Document number", issue_date: "Issue date", expiry_date: "Expiry date", date_of_birth: "Date of birth",
-  nationality: "Nationality", issuer: "Issuer", country_code: "Country code", sex: "Sex", place_of_issue: "Place of issue",
-  no_expiry: "Does not expire",
-};
-const DATE_KEYS = ["issue_date", "expiry_date", "date_of_birth"];
 
 const VIEWABLE_IMAGES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
@@ -53,93 +47,14 @@ function Preview({ doc, full }: { doc: DocDetail; full?: boolean }) {
   );
 }
 
-function Fields({ doc, onChange }: { doc: DocDetail; onChange: () => void }) {
-  const canEdit = doc.caps.includes("edit");
-  const toast = useToast();
-  const [editing, setEditing] = useState<string | null>(null);
-  const [value, setValue] = useState("");
-  const [newKey, setNewKey] = useState("");
-  const [custom, setCustom] = useState<Meta["fields"]>([]);
-  useEffect(() => { if (canEdit) api<Meta>("metadata").then((m) => setCustom(m.fields)).catch(() => undefined); }, [canEdit]);
-  const customLabel = (key: string) => custom.find((c) => `custom:${c.key}` === key)?.label;
-  const proposed = doc.fields.filter((f) => f.status === "proposed");
-  const save = async (key: string, v: string, confirm = true) => {
-    try {
-      await api(`documents/${doc.id}/fields`, { body: { key, value: v, confirm } });
-      setEditing(null);
-      onChange();
-    } catch (e: any) {
-      toast(e.message, "error");
-    }
-  };
-  const rows: [string, string, React.ReactNode, boolean][] = [
-    ["owner", "Owner", doc.owner.display_name, false],
-    ["type", "Type", doc.type?.name || "—", false],
-  ];
+function DocLinks({ doc }: { doc: DocDetail }) {
   return (
-    <div className="stack">
-      {doc.review_flags.map((f) => <div key={f} className="alert warn">{f}</div>)}
-      {proposed.length > 0 && (
-        <div className="alert warn row between">
-          <span><strong>{proposed.length} suggested value{proposed.length > 1 ? "s" : ""}</strong> from OCR. Check them against the document: suggestions do not rename the document or schedule reminders until confirmed.</span>
-          {canEdit && <button className="btn small primary" onClick={() => api(`documents/${doc.id}/fields`, { body: { confirm_all: true } }).then(onChange)}>Confirm all</button>}
-        </div>
-      )}
-      <div className="kv">
-        {rows.map(([k, label, val]) => (
-          <div key={k} style={{ display: "contents" }}><div className="k">{label}</div><div className="v">{k === "owner" ? <span className="row" style={{ gap: ".4rem" }}><Avatar user={doc.owner} size="sm" /> {val}</span> : val}</div><div className="c"><CopyButton label={label} getValue={() => String(val)} /></div></div>
-        ))}
-        {doc.fields.map((f) => (
-          <div key={f.key} style={{ display: "contents" }}>
-            <div className="k">{FIELD_LABELS[f.key] || customLabel(f.key) || f.key.replace(/^custom:/, "").replace(/_/g, " ")}</div>
-            <div className="v">
-              {editing === f.key ? (
-                <form className="row" onSubmit={(e) => { e.preventDefault(); save(f.key, value); }}>
-                  {f.key === "no_expiry" ? (
-                    <select aria-label="Does not expire" value={value} onChange={(e) => setValue(e.target.value)} style={{ maxWidth: 220 }} autoFocus>
-                      <option value="yes">Yes — this document has no expiry date</option><option value="no">No</option>
-                    </select>
-                  ) : <input aria-label={`Edit ${f.key}`} type={DATE_KEYS.includes(f.key) || custom.find((c) => `custom:${c.key}` === f.key)?.type === "date" ? "date" : custom.find((c) => `custom:${c.key}` === f.key)?.type === "number" ? "number" : "text"} value={value} onChange={(e) => setValue(e.target.value)} style={{ maxWidth: 220 }} autoFocus />}
-                  <button className="btn small primary">Save</button><button type="button" className="btn small" onClick={() => setEditing(null)}>Cancel</button>
-                </form>
-              ) : (
-                <>
-                  <span>{DATE_KEYS.includes(f.key) ? formatDate(f.value) : f.key === "no_expiry" ? (f.value === "yes" ? "Yes" : f.value === "no" ? "No" : "—") : f.value || "—"}</span>
-                  {(f.key === "expiry_date" || f.key === "no_expiry") && f.status === "confirmed" && <ExpiryBadge expiry={doc.expiry} />}
-                  {f.status === "proposed" && <span className="badge soon" title={`Source: ${f.source}`}>Suggested</span>}
-                  {f.flags.map((fl) => <span key={fl} className="badge danger" title={fl}>Check</span>)}
-                  {f.excerpt && f.status === "proposed" && <HelpTip text={`Found in text: “${f.excerpt}”`} />}
-                  {f.proposed_value && <span className="small muted">New scan suggests {f.proposed_value}</span>}
-                </>
-              )}
-            </div>
-            <div className="c row" style={{ gap: 0, flexWrap: "nowrap" }}>
-              <CopyButton label={FIELD_LABELS[f.key] || f.key} getValue={async () => (f.sensitive ? (await api(`documents/${doc.id}/fields/${f.key}/reveal`)).value : f.value)} />
-              {canEdit && editing !== f.key && (
-                <>
-                  {f.status === "proposed" && <button className="icon-btn" aria-label={`Confirm ${f.key}`} title="Confirm" onClick={() => save(f.key, f.value)}><Icon name="check" size={18} /></button>}
-                  <button className="icon-btn" aria-label={`Edit ${f.key}`} title="Edit" onClick={async () => { setEditing(f.key); setValue(f.sensitive ? (await api(`documents/${doc.id}/fields/${f.key}/reveal`)).value : f.value); }}><Icon name="settings" size={18} /></button>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-      {canEdit && (
-        <form className="row" onSubmit={(e) => { e.preventDefault(); if (newKey) { setEditing(newKey); setValue(""); save(newKey, "", true).then(() => setNewKey("")); } }}>
-          <select aria-label="Add a detail" value={newKey} onChange={(e) => setNewKey(e.target.value)} style={{ maxWidth: 260 }}>
-            <option value="">Add a detail…</option>
-            {Object.entries(FIELD_LABELS).filter(([k]) => !doc.fields.some((f) => f.key === k)).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-            {custom.filter((c) => !doc.fields.some((f) => f.key === `custom:${c.key}`)).map((c) => <option key={c.key} value={`custom:${c.key}`}>{c.label} ({c.type})</option>)}
-          </select>
-          <button className="btn small" disabled={!newKey}><Icon name="plus" size={16} /> Add</button>
-        </form>
-      )}
+    <>
       {doc.renews && <p className="small">Renews: <Link to={`/documents/${doc.renews.id}`}>{doc.renews.title}</Link></p>}
       {doc.renewed_by.map((r) => <p key={r.id} className="small">Renewed by: <Link to={`/documents/${r.id}`}>{r.title}</Link></p>)}
       {doc.tags.length > 0 && <div className="row">{doc.tags.map((t) => <span key={t.id} className="badge">{t.name}</span>)}</div>}
       {doc.source_path && <p className="small muted">Imported from: {doc.source_path}</p>}
-    </div>
+    </>
   );
 }
 
@@ -244,7 +159,6 @@ export function ShareDialog({ doc, onClose }: { doc: Shareable; onClose: () => v
 function EditDialog({ doc, onClose, onDone }: { doc: DocDetail; onClose: () => void; onDone: () => void }) {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [title, setTitle] = useState(doc.title);
-  const [type, setType] = useState(doc.type?.id ? String(doc.type.id) : "");
   const [corr, setCorr] = useState(doc.correspondent?.name || "");
   const [tags, setTags] = useState(doc.tags.map((t) => t.name).join(", "));
   const [err, setErr] = useState("");
@@ -254,7 +168,7 @@ function EditDialog({ doc, onClose, onDone }: { doc: DocDetail; onClose: () => v
       <form className="stack" onSubmit={async (e) => {
         e.preventDefault();
         try {
-          const body: any = { doc_type: type || null, correspondent: corr || null, tags: tags.split(",").map((t) => t.trim()).filter(Boolean) };
+          const body: any = { correspondent: corr || null, tags: tags.split(",").map((t) => t.trim()).filter(Boolean) };
           if (title !== doc.title) body.title = title;
           await api(`documents/${doc.id}`, { method: "PATCH", body });
           onDone();
@@ -263,7 +177,6 @@ function EditDialog({ doc, onClose, onDone }: { doc: DocDetail; onClose: () => v
         {err && <div className="alert error">{err}</div>}
         <div className="field"><label htmlFor="et">Title</label><input id="et" type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
           {doc.title_is_custom && <button type="button" className="btn small ghost" onClick={() => api(`documents/${doc.id}`, { method: "PATCH", body: { reset_title: true } }).then(onDone)}>Use generated name</button>}</div>
-        <div className="field"><label htmlFor="ety">Type</label><select id="ety" value={type} onChange={(e) => setType(e.target.value)}><option value="">Not set</option>{meta?.types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
         <div className="field"><label htmlFor="eco">Issuer / correspondent</label><input id="eco" type="text" list="corrs" value={corr} onChange={(e) => setCorr(e.target.value)} /><datalist id="corrs">{meta?.correspondents.map((c) => <option key={c.id} value={c.name} />)}</datalist></div>
         <div className="field"><label htmlFor="eta">Tags (comma separated)</label><input id="eta" type="text" value={tags} onChange={(e) => setTags(e.target.value)} /></div>
         <div className="row" style={{ justifyContent: "flex-end" }}><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn primary">Save</button></div>
@@ -281,6 +194,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
   const [error, setError] = useState("");
   const [tab, setTab] = useState("details");
   const [dialog, setDialog] = useState<string>("");
+  const [typeReq, setTypeReq] = useState(0);
 
   const [similar, setSimilar] = useState<(DocRow & { reasons: string[] })[] | null>(null);
   const load = () => api<DocDetail>(`documents/${id}`).then((d) => { setDoc(d); setError(""); }).catch((e) => setError(e.status === 404 ? "This document does not exist or you do not have access to it." : e.message));
@@ -314,6 +228,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
           {!full ? <Link className="btn" to={`/documents/${doc.id}`}><Icon name="external" /> Open full page</Link> : null}
           <Menu label="More actions" className="btn" items={[
             { label: "Rename / edit details…", hidden: !can("edit"), onSelect: () => setDialog("edit") },
+            { label: doc.type ? "Change document type…" : "Set document type…", hidden: !can("edit"), onSelect: () => { setTab("details"); setTypeReq((n) => n + 1); } },
             { label: "Upload new version (better scan)…", hidden: !can("version"), onSelect: () => setDialog("version") },
             { label: "Add another side or copy…", hidden: !can("version"), onSelect: () => setDialog("additional") },
             { label: "Add renewed document…", hidden: !doc.folder, onSelect: () => setDialog("renew") },
@@ -331,9 +246,9 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
         {[["details", "Details"], ["text", "Text (OCR)"], ["versions", `Versions (${doc.versions.length})`], ["similar", "More like this"], ...(doc.history.length ? [["history", "History"]] : [])].map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{l}</button>
         ))}
-        {doc.fields.length > 0 && !doc.fields.some((f) => f.status === "proposed") && <span className="badge ok" style={{ marginLeft: "auto", alignSelf: "center" }}><Icon name="check" size={13} /> Details confirmed</span>}
+        <span style={{ marginLeft: "auto", alignSelf: "center" }}><DetailsBadge doc={doc} /></span>
       </div>
-      {tab === "details" && <><Fields doc={doc} onChange={changed} /><AISuggestions docId={doc.id} onChange={changed} />{ai?.assistant && <Link className="btn small ghost" to={`/assistant?document=${doc.id}`}><Icon name="sparkle" size={16} /> Ask AI about this document</Link>}</>}
+      {tab === "details" && <><DocumentDetails doc={doc} onChange={changed} openTypeDialog={typeReq} /><DocLinks doc={doc} /><AISuggestions docId={doc.id} onChange={changed} />{ai?.assistant && <Link className="btn small ghost" to={`/assistant?document=${doc.id}`}><Icon name="sparkle" size={16} /> Ask AI about this document</Link>}</>}
       {tab === "text" && <OcrPanel docId={doc.id} onChanged={changed} />}
       {tab === "versions" && (
         <table className="responsive"><thead><tr><th>Version</th><th>File</th><th>Added</th><th /></tr></thead><tbody>

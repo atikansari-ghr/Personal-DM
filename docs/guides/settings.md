@@ -14,9 +14,11 @@ Members (add, deactivate; documents are never deleted), groups and heads, delega
 
 Stored filename template, upload size limit, blocked extensions, emoji suggestions, approved server import folders, document types, tags, issuers and custom fields.
 
+**Document types** (main administrator): the list of types with document counts; add (from a standard template or a copy of another type), edit name, icon, description, expiry awareness and per-type reminder days; archive, restore, or delete an unused type (or move its documents first); the template editor (fields, field types, roles, required, OCR/AI, searchable, format, order, preview); and **Review untyped documents**. See [document types](document-types.md#manage).
+
 ## OCR & processing {#processing}
 
-OCR on/off, the OCR policy per document type (Disabled, Manual, Automatic; languages, expected fields, AI permission), untyped documents, OCR languages offered, concurrency, timeouts, size, page, queue and attempt limits, **Pause OCR queue**, and the processing queue with retry. See [selective OCR](ocr-corrections.md#selective).
+OCR on/off, the OCR policy per document type (Disabled, Manual, Automatic; languages, expected fields, AI permission; kept in sync with each template's *OCR / Local AI may suggest* flags), untyped documents, OCR languages offered, concurrency, timeouts, size, page, queue and attempt limits, **Pause OCR queue**, and the processing queue with retry. See [selective OCR](ocr-corrections.md#selective).
 
 ## Overview & sign-in {#overview}
 

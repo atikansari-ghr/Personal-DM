@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import OcrTypes from "./OcrTypes";
+import DocumentTypesAdmin from "./DocumentTypes";
 import { api, formatBytes, formatDateTime } from "../../api";
 import SettingsForm from "../../components/SettingsForm";
 import AuthentikAdmin from "./Authentik";
@@ -9,29 +10,25 @@ import type { Meta } from "../../types";
 export function DocumentsPanel() {
   const toast = useToast();
   const meta = useAsync(() => api<Meta>("metadata"), []);
-  const [kind, setKind] = useState("type");
+  const [kind, setKind] = useState("tag");
   const [name, setName] = useState("");
-  const [expiry, setExpiry] = useState(false);
-  const [template, setTemplate] = useState("generic");
   const [ftype, setFtype] = useState("text");
   return (
     <div className="stack">
       <SettingsForm section="documents" title="Documents & folders" />
+      <DocumentTypesAdmin />
       <div className="card">
-        <h2>Types, tags, issuers and custom fields</h2>
-        <p className="small muted">None of these are mandatory. Document types with a template (e.g. passport) enable specific field suggestions.</p>
+        <h2>Tags, issuers and custom fields</h2>
+        <p className="small muted">None of these are mandatory. Custom fields here can be added to any document as an additional detail; fields that belong to a type are set in its template above.</p>
         {meta.data ? (
           <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-            <div><h3>Document types</h3><ul className="small">{meta.data.types.map((t) => <li key={t.id}>{t.name}{t.has_expiry && " · expires"} <span className="muted">({t.template})</span> <button className="btn small ghost" onClick={() => api(`metadata/type/${t.id}`, { method: "DELETE" }).then(meta.reload)}>Remove</button></li>)}</ul></div>
             <div><h3>Tags</h3><div className="row">{meta.data.tags.map((t) => <span key={t.id} className="badge">{t.name} <button className="icon-btn" style={{ minWidth: 18, minHeight: 18, padding: 0 }} aria-label={`Remove tag ${t.name}`} onClick={() => api(`metadata/tag/${t.id}`, { method: "DELETE" }).then(meta.reload)}>×</button></span>)}</div>
               <h3 style={{ marginTop: "1rem" }}>Custom fields</h3><ul className="small">{meta.data.fields.map((f) => <li key={f.key}>{f.label} ({f.type}{f.choices.length ? `: ${f.choices.join(", ")}` : ""})</li>)}</ul></div>
           </div>
         ) : <Skeleton />}
-        <form className="row" onSubmit={(e) => { e.preventDefault(); api("metadata", { body: { kind, name, has_expiry: expiry, template, type: ftype } }).then(() => { setName(""); meta.reload(); toast("Added"); }).catch((x) => toast(x.message, "error")); }}>
-          <select aria-label="Kind" value={kind} onChange={(e) => setKind(e.target.value)} style={{ maxWidth: 170 }}><option value="type">Document type</option><option value="tag">Tag</option><option value="correspondent">Issuer</option><option value="field">Custom field</option></select>
+        <form className="row" onSubmit={(e) => { e.preventDefault(); api("metadata", { body: { kind, name, type: ftype } }).then(() => { setName(""); meta.reload(); toast("Added"); }).catch((x) => toast(x.message, "error")); }}>
+          <select aria-label="Kind" value={kind} onChange={(e) => setKind(e.target.value)} style={{ maxWidth: 170 }}><option value="tag">Tag</option><option value="correspondent">Issuer</option><option value="field">Custom field</option></select>
           <input aria-label="Name" type="text" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} style={{ maxWidth: 220 }} />
-          {kind === "type" && <><label className="check"><input type="checkbox" checked={expiry} onChange={(e) => setExpiry(e.target.checked)} /> Has expiry</label>
-            <select aria-label="Template" value={template} onChange={(e) => setTemplate(e.target.value)} style={{ maxWidth: 170 }}>{meta.data?.templates.map((t) => <option key={t}>{t}</option>)}</select></>}
           {kind === "field" && <select aria-label="Field type" value={ftype} onChange={(e) => setFtype(e.target.value)} style={{ maxWidth: 140 }}>{["text", "date", "number", "boolean", "choice"].map((t) => <option key={t}>{t}</option>)}</select>}
           <button className="btn" disabled={!name}>Add</button>
         </form>

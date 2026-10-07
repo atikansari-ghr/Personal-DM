@@ -14,6 +14,45 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to the document types release (Change Set N) {#change-set-n}
+
+```
+sudo personaldocs upgrade
+# or: bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)" -- upgrade
+sudo personaldocs doctor     # info line: typed / untyped / with suggestions
+```
+
+No extra post-upgrade step is needed for this release. If you are coming from a release **before Change Set M**,
+the `sudo personaldocs post-upgrade` step described [below](#change-set-m) still applies once. No new system packages
+are installed.
+
+This release adds **one database migration**, applied automatically after the verified backup:
+
+- `library.0009_document_type_templates`: document type templates (fields with type, role, required, OCR/AI and
+  search flags), per-type reminder days, the source and confirmation of each document's type, pending type
+  suggestions, provenance of each detail, and the suggested type of a folder. Its data step:
+  - gives every existing type its template: the standard fields of its starting template plus the fields its OCR
+    policy listed;
+  - keeps the type of every **typed** document and marks it confirmed with the source *Migrated*;
+  - leaves **untyped** documents untyped (types are not guessed from field names);
+  - turns values of typed documents that are not in the template into **additional details** of that document,
+    except confirmed issue, expiry and "does not expire" values, whose field is added to the template so dates and
+    reminders keep working;
+  - deletes nothing.
+
+After upgrading (optional):
+
+1. `sudo personaldocs manage document_types report` prints how many documents are typed, untyped and have
+   suggestions.
+2. Set a **suggested document type** on folders that hold one kind of document (folder ⋮ → *Suggested document
+   type…*). It only affects new uploads. See [folder suggestions](document-types.md#folder-suggestions).
+3. **Settings → Documents & folders → Document types → Review untyped documents**: assign types to older untyped
+   documents; nothing is applied until you confirm. See [review](document-types.md#review-untyped).
+4. Check the templates and reminder days of the types you use. See [managing types](document-types.md#manage).
+
+To go back, restore the pre-upgrade backup: this release adds a migration, so `sudo personaldocs rollback` is refused
+unless the previous release knows it (see [Rollback](#rollback)).
+
 ## Upgrading to the antivirus, authentik and security center release (Change Set M) {#change-set-m}
 
 ```

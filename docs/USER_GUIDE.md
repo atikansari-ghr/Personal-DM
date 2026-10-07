@@ -163,6 +163,34 @@ because it inherits the new folder's access. See [moving](guides/getting-started
 - **Versions and renewals:** a better scan is a new version; a renewed passport is a new linked document. See
   [originals and versions](guides/originals-versions.md).
 
+### Document type and details {#document-types}
+
+The **folder** is where a document is kept; the **document type** (Passport, Visa, Insurance…) is what it is.
+Moving a document never changes its type, and changing the type never moves it.
+
+- **Set or change the type:** in **Details** use **Set type** (shown as *Not assigned* when empty) or **Change…**;
+  or **⋮ → Set document type…** in Folders and **More actions** on the document page; or choose it in the upload
+  dialog, where a folder's suggested type is preselected (*Suggested by this folder*). Viewers see the type
+  read-only.
+- **Details:** the type decides the fields shown under **… details** heading (for example *Passport details*), in order. Empty fields show **+**. The
+  status badge says *Details confirmed*, *Incomplete: …* (naming the empty required fields) or *Needs review*; **Confirm as incomplete** accepts
+  empty required fields on purpose.
+- **Where a value came from:** *Suggested* (not yet confirmed) or *Edited* (you replaced an OCR/AI value), and a
+  source chip: Manual, OCR, OCR (MRZ), Local AI, Imported, System or Migrated. Only confirmed values count for the
+  name and reminders, and confirmed values are never overwritten.
+- **Suggested types:** a folder, OCR or the local AI can suggest a type with **Accept…**, **Change…** or **Ignore**;
+  nothing is applied by itself.
+- **Changing the type** shows a preview first. Values the new type has no field for are kept under **Previous
+  details — needs review**: **Map to a template field**, **Keep as detail** or **Remove**. If the expiry field no
+  longer applies, reminders stop until you map it. **Re-map existing OCR data** fills the new fields from the text
+  already recognised, without a new scan.
+- **Additional details:** **Add a detail… → New detail for this document…** adds a one-off detail (name and value)
+  to this document only.
+- **Several documents:** tick them and choose **Set type…**. Documents with another confirmed type are skipped unless
+  you tick *Also change documents with a confirmed type*.
+
+See [document types and details](guides/document-types.md).
+
 ## 8. Local AI (if your administrator turned it on) {#ai}
 
 - **AI suggestions** on a document propose a title, type, dates, tags and folder. Nothing changes until you click

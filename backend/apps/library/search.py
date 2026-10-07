@@ -22,7 +22,12 @@ def update_search_vector(doc: Document) -> None:
     tags = " ".join(doc.tags.values_list("name", flat=True))
     meta = " ".join(filter(None, [doc.doc_type.name if doc.doc_type_id else "", doc.correspondent.name if doc.correspondent_id else "",
                                   tags, doc.owner.display_name if doc.owner_id else ""]))
-    fields = " ".join(f.value for f in doc.fields.exclude(key="document_number") if f.value)
+    # values of fields the type marks searchable (identifiers such as document numbers are not, by default)
+    if doc.doc_type_id:
+        hidden = set(doc.doc_type.template_fields.filter(searchable=False).values_list("key", flat=True))
+    else:
+        hidden = {"document_number"}
+    fields = " ".join(f.value for f in doc.fields.exclude(key__in=hidden).exclude(scope="unmapped") if f.value)
     Document.objects.filter(pk=doc.pk).update(
         search_vector=SearchVector(Value(doc.title), weight="A", config=CONFIG)
         + SearchVector(Value(meta + " " + fields), weight="B", config=CONFIG)

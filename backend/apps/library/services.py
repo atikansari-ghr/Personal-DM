@@ -234,23 +234,36 @@ def _commit_version(*, actor, doc: Document, staged: storage.Staged, number: int
 
 
 def create_document(*, actor, folder: Folder, owner, staged: storage.Staged, title: str = "", doc_type=None,
-                    renews: Document | None = None, source_path: str = "", inherit: bool = True) -> Document:
+                    renews: Document | None = None, source_path: str = "", inherit: bool = True,
+                    type_source: str = "manual") -> Document:
+    from . import doctypes
+
     if owner is None:
         raise DomainError("Every document needs an owner account.")
+    suggestions = []
+    if doc_type is None:  # the folder may suggest a type: recorded for review, never applied by itself
+        hint = doctypes.folder_suggestion(folder)
+        if hint is not None:
+            suggestions = [{"type": hint.id, "name": hint.name, "source": "folder",
+                            "reason": f"Uploaded to a folder that suggests {hint.name}.", "confidence": None,
+                            "at": timezone.now().isoformat()}]
     final_path = None
     try:
         with transaction.atomic():
             doc = Document.objects.create(
                 folder=folder, owner=owner, group=folder.group, title=(title or Path(staged.original_name).stem)[:255],
                 title_is_custom=bool(title), doc_type=doc_type, renews=renews, source_path=source_path,
-                created_by=actor, inherit_permissions=inherit, state=Document.QUEUED)
+                created_by=actor, inherit_permissions=inherit, state=Document.QUEUED,
+                type_source=(type_source if type_source in Document.TYPE_SOURCES else "manual") if doc_type else "",
+                type_confirmed=doc_type is not None, type_suggestions=suggestions)
             version = _commit_version(actor=actor, doc=doc, staged=staged, number=1)
             final_path = storage.resolve_original(version.storage_path)
             doc.current_version = version
             doc.save(update_fields=["current_version"])
             if doc_type is not None and not title:
                 refresh_title(doc)
-            _history(doc, actor, "created", version=1, renews=str(renews.id) if renews else None)
+            _history(doc, actor, "created", version=1, renews=str(renews.id) if renews else None,
+                     type=doc_type.name if doc_type else None)
             transaction.on_commit(lambda: jobs.enqueue("process_version", {"version_id": str(version.id)},
                                                        idempotency_key=f"process:{version.id}"))
     except Exception:
@@ -319,64 +332,84 @@ def mask(key: str, value: str) -> str:
     return value
 
 
-def set_field(*, actor, doc: Document, key: str, value: str, confirm: bool = True) -> DocumentField:
-    from .extraction import parse_date
+def set_field(*, actor, doc: Document, key: str, value: str, confirm: bool = True, source: str = "manual",
+              label: str = "", scope: str | None = None) -> DocumentField:
+    """Save one detail value. Template fields are validated against the type's field definition; a person editing an
+    OCR / AI value marks it as overridden (manual), so later scans can never silently replace it."""
+    from . import doctypes
 
     key = key.strip()[:80]
-    value = (value or "").strip()
-    if key == "no_expiry":
-        if value.lower() not in ("", "yes", "no"):
-            raise DomainError("Use yes or no.")
-        value = value.lower() if value.lower() == "yes" else ""
-    if key in DATE_FIELDS and value:
-        parsed = parse_date(value)
-        if parsed is None:
-            raise DomainError("Enter dates as YYYY-MM-DD.")
-        value = parsed.isoformat()
-    field, _ = DocumentField.objects.get_or_create(document=doc, key=key)
-    old = field.value
+    try:
+        value = doctypes.check_value(doc, key, value)
+    except doctypes.TypeError_ as exc:
+        raise DomainError(str(exc)) from None
+    if key == "no_expiry" or (doctypes.role_keys(doc).get("no_expiry") == key):
+        value = "yes" if value == "yes" else ""
+    field, created = DocumentField.objects.get_or_create(document=doc, key=key)
+    old, old_source = field.value, field.source
     field.value = value
-    field.source = "manual" if field.status == DocumentField.CONFIRMED or field.source == "manual" or not confirm else field.source
+    if source != "manual":
+        field.source = source
+    elif created or field.source == "manual" or field.status == DocumentField.CONFIRMED or not confirm or old != value:
+        if not created and old_source in ("ocr", "mrz", "ai") and old != value:
+            field.overridden = True
+        field.source = "manual"
+    if created:
+        field.scope = scope or (DocumentField.CUSTOM if key.startswith("custom:") else DocumentField.TYPE)
+        field.label = (label or "")[:80]
+    elif scope:
+        field.scope = scope
     if confirm:
         field.status = DocumentField.CONFIRMED
         field.confirmed_by = actor
         field.confirmed_at = timezone.now()
         field.flags = []
+        field.proposed_value = ""
     field.save()
     _history(doc, actor, "field_confirmed" if confirm else "field_set", key=key,
-             old=mask(key, old), new=mask(key, value))
+             old=mask(key, old), new=mask(key, value), source=field.source)
     apply_confirmed_fields(doc)
     return field
 
 
-def confirm_all(*, actor, doc: Document) -> None:
-    for f in doc.fields.filter(status=DocumentField.PROPOSED):
+def confirm_all(*, actor, doc: Document, allow_incomplete: bool = False) -> None:
+    for f in doc.fields.filter(status=DocumentField.PROPOSED).exclude(scope=DocumentField.UNMAPPED):
         f.status = DocumentField.CONFIRMED
         f.confirmed_by = actor
         f.confirmed_at = timezone.now()
         f.flags = []
         f.save()
         _history(doc, actor, "field_confirmed", key=f.key, new=mask(f.key, f.value))
+    if allow_incomplete:
+        Document.objects.filter(pk=doc.pk).update(details_incomplete_ok=True)
+        doc.details_incomplete_ok = True
+        _history(doc, actor, "details_confirmed_incomplete")
     apply_confirmed_fields(doc)
 
 
 def apply_confirmed_fields(doc: Document) -> None:
-    """Only confirmed values drive dates, generated names and reminders."""
+    """Only confirmed values of the fields with the issue / expiry / no-expiry role drive dates, generated names and
+    reminders (the type template decides which fields have those roles; values kept from a previous type do not)."""
     from datetime import date
 
-    vals = {f.key: f.value for f in doc.fields.filter(status=DocumentField.CONFIRMED)}
+    from . import doctypes
 
-    def d(k):
+    roles = doctypes.role_keys(doc)
+    vals = {f.key: f.value for f in doc.fields.filter(status=DocumentField.CONFIRMED)
+            .exclude(scope__in=[DocumentField.UNMAPPED, DocumentField.CUSTOM])}
+
+    def d(role):
+        k = roles.get(role)
         try:
-            return date.fromisoformat(vals[k]) if vals.get(k) else None
+            return date.fromisoformat(vals[k]) if k and vals.get(k) else None
         except ValueError:
             return None
 
     old_expiry = doc.expiry_date
-    doc.issue_date = d("issue_date")
-    doc.expiry_date = d("expiry_date")
-    doc.no_expiry = (vals.get("no_expiry") or "").lower() in ("yes", "true", "1")
-    pending = doc.fields.filter(status=DocumentField.PROPOSED).exists()
+    doc.issue_date = d("issue")
+    doc.expiry_date = d("expiry")
+    doc.no_expiry = (vals.get(roles.get("no_expiry") or "") or "").lower() in ("yes", "true", "1")
+    pending = doc.fields.filter(status=DocumentField.PROPOSED).exclude(scope=DocumentField.UNMAPPED).exists()
     flags = []
     if doc.issue_date and doc.expiry_date and doc.issue_date >= doc.expiry_date:
         flags.append("Issue date is not before expiry date.")

@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 
+from apps.library.doctypes import ensure_template
 from apps.library.models import DocumentType
 from apps.library.ocr_policy import TEMPLATE_FIELDS
 
@@ -16,13 +17,15 @@ DEFAULT_TYPES = [
 
 
 class Command(BaseCommand):
-    help = "Create optional default document types (idempotent; existing types are left unchanged)."
+    help = "Create optional default document types and their metadata templates (idempotent; existing types are left unchanged)."
 
     def handle(self, *args, **opts):
         n = 0
         for name, template, expiry, emoji in DEFAULT_TYPES:
-            _, created = DocumentType.objects.get_or_create(name=name, defaults={
+            t, created = DocumentType.objects.get_or_create(name=name, defaults={
                 "template": template, "has_expiry": expiry, "emoji": emoji, "ocr_languages": ["eng"],
-                "ocr_fields": TEMPLATE_FIELDS.get(template, [])})
+                "ocr_fields": TEMPLATE_FIELDS.get(template, []), "sort_order": 900 if name == "Other" else 100})
             n += created
+            if created or not t.template_fields.exists():
+                ensure_template(t)  # editable seeded metadata template
         self.stdout.write(f"created {n} document type(s)")

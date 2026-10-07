@@ -23,6 +23,7 @@ from . import permissions as P
 from . import search as searchlib
 from . import services as S
 from . import storage
+from . import doctypes
 from .models import (AccessRule, Correspondent, CustomFieldDef, Document, DocumentField, DocumentType, DocumentVersion, Folder,
                      DocumentHistory, SavedView, Tag)
 from .serializers import document_detail, document_row, field_json, folder_json, user_mini, version_json
@@ -86,7 +87,7 @@ def folders(request):
         return Response(folder_json(ctx, f), status=201)
     include_archived = request.query_params.get("archived") == "1" and ctx.is_admin
     qs = Folder.objects.all() if include_archived else Folder.objects.filter(archived_at__isnull=True)
-    qs = qs.select_related("owner")
+    qs = qs.select_related("owner", "suggested_type")
     visible = ctx.folder_ids_with(P.VIEW) if not ctx.is_admin else set(qs.values_list("id", flat=True))
     by_id = {f.id: f for f in qs}
     # include ancestors as path-only nodes so the tree renders
@@ -141,6 +142,14 @@ def folder_detail(request, pk):
                 if not caps & P.MANAGE:
                     raise PermissionDenied("You cannot change permission inheritance here.")
                 folder.inherit_permissions = bool(d["inherit_permissions"])
+            if "suggested_type" in d:  # only a suggestion for uploads; documents already here are not changed
+                if not caps & P.ORGANIZE:
+                    raise PermissionDenied("You cannot change this folder's suggested type.")
+                st = d["suggested_type"]
+                folder.suggested_type = (DocumentType.objects.filter(pk=st, archived=False).first()
+                                         if str(st or "").isdigit() else None)
+                if st and folder.suggested_type is None:
+                    return _err("Choose an active document type.")
             folder.save()
             if d.get("parent") and str(folder.parent_id) != str(d["parent"]):
                 new_parent = get_folder(request, d["parent"])
@@ -293,7 +302,10 @@ def _upload(request, ctx):
         owner = _resolve_owner(request, folder)
     except S.DomainError as exc:
         return _err(str(exc))
-    doc_type = DocumentType.objects.filter(pk=request.data.get("doc_type")).first() if request.data.get("doc_type") else None
+    doc_type = (DocumentType.objects.filter(pk=request.data.get("doc_type"), archived=False).first()
+                if str(request.data.get("doc_type") or "").isdigit() else None)
+    # "folder" when the person kept the type the folder suggested, "manual" when they chose it
+    type_source = "folder" if request.data.get("type_source") == "folder" else "manual"
     blocked = {e.strip().lower().lstrip(".") for e in (config.get("documents.blocked_extensions") or "").split(",") if e.strip()}
     paths = getlist("paths")  # relative paths of dropped files ("House Documents/Lease/2024.pdf"), parallel to files
     if paths and len(paths) != len(files):
@@ -315,7 +327,8 @@ def _upload(request, ctx):
             target = tree.folder_for(paths[i]) if paths else folder
             staged = storage.stage_uploaded_file(f)
             doc = S.create_document(actor=request.user, folder=target, owner=owner, staged=staged,
-                                    title=request.data.get("title", "") if len(files) == 1 and not paths else "", doc_type=doc_type)
+                                    title=request.data.get("title", "") if len(files) == 1 and not paths else "", doc_type=doc_type,
+                                    type_source=type_source)
             created.append(doc)
             audit.record("document.upload", request=request, target=doc, subject_user=owner, size=staged.size)
         except (storage.StorageError, S.DomainError) as exc:
@@ -420,9 +433,11 @@ def document_view(request, pk):
                 doc.title, doc.title_is_custom = title, True
             if d.get("reset_title"):
                 doc.title_is_custom = False
-            if "doc_type" in d:
-                doc.doc_type = DocumentType.objects.filter(pk=d["doc_type"]).first() if d["doc_type"] else None
-                changes["type"] = doc.doc_type.name if doc.doc_type else None
+            new_type = _UNSET = object()
+            if "doc_type" in d and str(d["doc_type"] or "") != str(doc.doc_type_id or ""):
+                new_type = DocumentType.objects.filter(pk=d["doc_type"]).first() if str(d["doc_type"] or "").isdigit() else None
+                if d["doc_type"] and new_type is None:
+                    return _err("Unknown document type.")
             if "correspondent" in d:
                 val = d["correspondent"]
                 if isinstance(val, str) and val and not val.isdigit():
@@ -436,6 +451,10 @@ def document_view(request, pk):
                 doc.renews = prev
                 changes["renews"] = str(prev.pk) if prev else None
             doc.save()
+            if new_type is not _UNSET:  # same rules as the Set type dialog: values are kept, nothing is moved
+                doctypes.change_type(actor=request.user, doc=doc, new_type=new_type, request=request)
+                doc.refresh_from_db()
+                changes["type"] = new_type.name if new_type else None
             if "tags" in d:
                 names = [str(t).strip()[:60] for t in d["tags"] if str(t).strip()]
                 tags = [Tag.objects.get_or_create(name=n)[0] for n in names]
@@ -512,26 +531,49 @@ def document_renew(request, pk):
 @api_view(["POST"])
 @permission_classes([IsActiveAuthenticated])
 def document_fields(request, pk):
+    """Edit, confirm, add or remove detail values. One-off details (custom) belong to this document only; values kept
+    from a previous type are reviewed with action map / keep / remove."""
     doc = get_doc(request, pk, P.EDIT)
+    d = request.data
     try:
-        if request.data.get("confirm_all"):
-            S.confirm_all(actor=request.user, doc=doc)
+        if d.get("confirm_all"):
+            S.confirm_all(actor=request.user, doc=doc, allow_incomplete=bool(d.get("allow_incomplete")))
         else:
-            key = (request.data.get("key") or "").strip()
+            key = (d.get("key") or "").strip()
+            label = (d.get("label") or "").strip()[:80]
+            if not key and label:  # a one-off detail with its own label: "custom:<slug>"
+                key = doctypes.custom_key(label)
+                if doc.fields.filter(key=key).exists():
+                    return _err("This document already has a detail with that name.")
             if not re.fullmatch(r"[a-z0-9_:\-]{1,80}", key):
                 return _err("Invalid field name.")
-            if key.startswith("custom:"):
+            if d.get("action") in ("map", "keep", "remove"):
+                doctypes.resolve_unmapped(actor=request.user, doc=doc, key=key, action=d["action"],
+                                          to=(d.get("to") or "").strip())
+            elif key.startswith("custom:") and not label and not doc.fields.filter(key=key).exists():
                 cdef = CustomFieldDef.objects.filter(key=key[7:]).first()
                 if cdef is None:
                     return _err("Unknown custom field.")
-                _validate_custom(cdef, request.data.get("value", ""))
-            if request.data.get("delete"):
+                _validate_custom(cdef, d.get("value", ""))
+                S.set_field(actor=request.user, doc=doc, key=key, value=str(d.get("value", "")), label=cdef.label,
+                            scope=DocumentField.CUSTOM, confirm=bool(d.get("confirm", True)))
+            elif d.get("delete"):
                 DocumentField.objects.filter(document=doc, key=key).delete()
                 S._history(doc, request.user, "field_removed", key=key)
                 S.apply_confirmed_fields(doc)
             else:
-                S.set_field(actor=request.user, doc=doc, key=key, value=str(request.data.get("value", "")),
-                            confirm=bool(request.data.get("confirm", True)))
+                existing = doc.fields.filter(key=key).first()
+                if key.startswith("custom:") and existing is not None and existing.scope == DocumentField.TYPE:
+                    return _err("Invalid field name.")
+                cdef = CustomFieldDef.objects.filter(key=key[7:]).first() if key.startswith("custom:") else None
+                if cdef is not None:
+                    _validate_custom(cdef, d.get("value", ""))
+                scope = None
+                if existing is None and not key.startswith("custom:") and doc.doc_type_id \
+                        and doctypes.template_field_for(doc, key) is None:
+                    scope = DocumentField.CUSTOM  # a standard detail outside this type's template: one-off
+                S.set_field(actor=request.user, doc=doc, key=key, value=str(d.get("value", "")), label=label,
+                            scope=scope, confirm=bool(d.get("confirm", True)))
     except S.DomainError as exc:
         return _err(str(exc))
     audit.record("document.fields", request=request, target=doc, subject_user=doc.owner)
@@ -789,10 +831,15 @@ def documents_bulk(request):
             if action in ("tag_add", "tag_remove", "set_type"):
                 if not caps & P.EDIT:
                     raise S.DomainError("No edit permission")
-                if action == "set_type":
-                    doc.doc_type = DocumentType.objects.filter(pk=value).first() if value else None
-                    doc.save(update_fields=["doc_type"])
-                    S.refresh_title(doc)
+                if action == "set_type":  # same rules as one document: values kept, confirmed types protected
+                    new_type = DocumentType.objects.filter(pk=value).first() if str(value or "").isdigit() else None
+                    if value and new_type is None:
+                        raise S.DomainError("Unknown document type.")
+                    if (doc.type_confirmed and doc.doc_type_id and doc.doc_type_id != getattr(new_type, "pk", None)
+                            and not request.data.get("overwrite_confirmed")):
+                        raise S.DomainError("Already has a confirmed type (not changed)")
+                    if doc.doc_type_id != getattr(new_type, "pk", None):
+                        doctypes.change_type(actor=request.user, doc=doc, new_type=new_type, request=request)
                 else:
                     tag, _ = Tag.objects.get_or_create(name=str(value).strip()[:60])
                     (doc.tags.add if action == "tag_add" else doc.tags.remove)(tag)
@@ -878,9 +925,11 @@ def metadata(request):
         if not name:
             return _err("Enter a name.")
         if kind == "type":
-            t, _ = DocumentType.objects.get_or_create(name=name[:80], defaults={
+            t, created = DocumentType.objects.get_or_create(name=name[:80], defaults={
                 "template": request.data.get("template") if request.data.get("template") in DocumentType.TEMPLATES else "generic",
-                "has_expiry": bool(request.data.get("has_expiry"))})
+                "has_expiry": bool(request.data.get("has_expiry")), "is_custom": True})
+            if created:
+                doctypes.ensure_template(t)
         elif kind == "tag":
             Tag.objects.get_or_create(name=name[:60])
         elif kind == "correspondent":
@@ -894,7 +943,8 @@ def metadata(request):
         else:
             return _err("Unknown kind.")
     return Response({
-        "types": [{"id": t.id, "name": t.name, "template": t.template, "has_expiry": t.has_expiry} for t in DocumentType.objects.all()],
+        "types": [{"id": t.id, "name": t.name, "template": t.template, "has_expiry": t.has_expiry, "emoji": t.emoji,
+                   "archived": t.archived, "description": t.description} for t in DocumentType.objects.all()],
         "tags": [{"id": t.id, "name": t.name, "color": t.color} for t in Tag.objects.all()],
         "correspondents": [{"id": c.id, "name": c.name} for c in Correspondent.objects.all()],
         "fields": [{"key": f.key, "label": f.label, "type": f.type, "choices": f.choices} for f in CustomFieldDef.objects.all()],
@@ -912,6 +962,10 @@ def metadata_delete(request, kind, pk):
             CustomFieldDef.objects.filter(key=pk).delete()
             return Response(status=204)
         raise Http404
+    if model is DocumentType and Document.objects.filter(doc_type_id=pk).exists():
+        # never untype documents by deleting their type: archive it or move the documents first (Settings)
+        return _err("This document type is in use. Archive it or move its documents to another type first.", 409,
+                    code="in_use")
     model.objects.filter(pk=pk).delete()
     return Response(status=204)
 

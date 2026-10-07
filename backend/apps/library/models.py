@@ -24,6 +24,8 @@ class Folder(models.Model):
     inherit_permissions = models.BooleanField(default=True)
     sort_order = models.IntegerField(default=100)
     source_path = models.TextField(blank=True)
+    suggested_type = models.ForeignKey("DocumentType", null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+                                       help_text="Proposed for uploads here; never forced, never moves documents")
     archived_at = models.DateTimeField(null=True, blank=True)
     archived_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
@@ -74,12 +76,47 @@ class DocumentType(models.Model):
     ocr_ai_allowed = models.BooleanField(default=False, help_text="May Local AI read this type's recognised text")
     is_custom = models.BooleanField(default=False)
     archived = models.BooleanField(default=False, help_text="Hidden from new documents; existing documents keep it")
+    # Change Set N: administrator-managed classification and metadata template
+    description = models.CharField(max_length=500, blank=True, help_text="Shown to people choosing a type")
+    sort_order = models.IntegerField(default=100)
+    reminder_days = models.JSONField(default=list, blank=True,
+                                     help_text="Days before expiry for reminders of this type ([] = the global setting)")
 
     class Meta:
-        ordering = ["name"]
+        ordering = ["sort_order", "name"]
 
     def __str__(self):
         return self.name
+
+
+class DocumentTypeField(models.Model):
+    """One field of a document type's metadata template. `key` is stable: renaming the label never orphans values."""
+
+    TYPES = ("text", "long_text", "date", "number", "boolean", "select", "country", "person", "identifier")
+    ROLES = ("", "expiry", "issue", "no_expiry")
+
+    doc_type = models.ForeignKey(DocumentType, on_delete=models.CASCADE, related_name="template_fields")
+    key = models.CharField(max_length=80)
+    label = models.CharField(max_length=80)
+    field_type = models.CharField(max_length=12, default="text")
+    enabled = models.BooleanField(default=True)
+    required = models.BooleanField(default=False)
+    order = models.IntegerField(default=100)
+    help_text = models.CharField(max_length=300, blank=True)
+    extract = models.BooleanField(default=True, help_text="OCR / Local AI may suggest a value")
+    searchable = models.BooleanField(default=True)
+    role = models.CharField(max_length=10, blank=True, help_text="expiry | issue | no_expiry: drives dates and reminders")
+    choices = models.JSONField(default=list, blank=True)
+    validation = models.JSONField(default=dict, blank=True, help_text="pattern / min / max / max_length")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+        unique_together = [("doc_type", "key")]
+
+    def __str__(self):
+        return f"{self.doc_type.name}: {self.label}"
 
 
 class Tag(models.Model):
@@ -123,6 +160,12 @@ class Document(models.Model):
     title = models.CharField(max_length=255)
     title_is_custom = models.BooleanField(default=False)
     doc_type = models.ForeignKey(DocumentType, null=True, blank=True, on_delete=models.SET_NULL, related_name="documents")
+    TYPE_SOURCES = ("", "manual", "folder", "ocr", "ai", "import", "system", "migrated")
+    type_source = models.CharField(max_length=10, blank=True, help_text="How the type was assigned")
+    type_confirmed = models.BooleanField(default=False, help_text="A person chose or accepted the type")
+    type_suggestions = models.JSONField(default=list, blank=True,
+                                        help_text="Pending type suggestions: [{type, source, reason, confidence}]")
+    details_incomplete_ok = models.BooleanField(default=False, help_text="Explicitly confirmed with required fields empty")
     correspondent = models.ForeignKey(Correspondent, null=True, blank=True, on_delete=models.SET_NULL, related_name="documents")
     tags = models.ManyToManyField(Tag, blank=True, related_name="documents")
     issue_date = models.DateField(null=True, blank=True)
@@ -213,11 +256,21 @@ class DocumentField(models.Model):
                 "issuer", "country_code", "sex", "place_of_issue")
     SENSITIVE = ("document_number",)
 
+    TYPE, CUSTOM, UNMAPPED = "type", "custom", "unmapped"
+    SOURCES = ("manual", "ocr", "mrz", "ai", "import", "system", "migrated")
+
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="fields")
     key = models.CharField(max_length=80)
+    label = models.CharField(max_length=80, blank=True, help_text="For one-off details that are not in the template")
     value = models.TextField(blank=True)
     status = models.CharField(max_length=10, default=PROPOSED)
-    source = models.CharField(max_length=20, default="manual")  # ocr|mrz|manual|import
+    source = models.CharField(max_length=20, default="manual")  # manual|ocr|mrz|ai|import|system|migrated
+    # type: from the type template (or extraction); custom: a one-off detail of this document;
+    # unmapped: kept from a previous type until the person maps, keeps or removes it
+    scope = models.CharField(max_length=10, default=TYPE)
+    overridden = models.BooleanField(default=False, help_text="A person replaced an OCR / AI value")
+    previous_type = models.CharField(max_length=80, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     version = models.ForeignKey(DocumentVersion, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     confidence = models.FloatField(null=True, blank=True)
     flags = models.JSONField(default=list, blank=True)

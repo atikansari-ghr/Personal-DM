@@ -206,19 +206,11 @@ def _apply_to_document(doc: Document, version: DocumentVersion, text: str, versi
     # Low-confidence OCR lines stay searchable but never become suggested details.
     source = reliable if reliable is not None else text
     proposals = extract(source, owner_names=owner_names, template=template) if source else []
-    existing = {f.key: f for f in doc.fields.all()}
-    for p in proposals:
-        f = existing.get(p.key)
-        if f and f.status == DocumentField.CONFIRMED:
-            if f.value != p.value:
-                f.proposed_value = p.value
-                f.flags = list(set((f.flags or []) + [f"New scan suggests '{p.value}'."])) if p.key not in DocumentField.SENSITIVE else list(set((f.flags or []) + ["New scan suggests a different value."]))
-                f.save(update_fields=["proposed_value", "flags"])
-            continue
-        DocumentField.objects.update_or_create(
-            document=doc, key=p.key,
-            defaults={"value": p.value, "status": DocumentField.PROPOSED, "source": p.source, "version": version,
-                      "confidence": p.confidence, "flags": p.flags, "source_excerpt": "" if p.key in DocumentField.SENSITIVE else p.excerpt[:300]})
+    from . import doctypes
+
+    doctypes.store_proposals(doc, proposals, version)  # only the type's extractable fields; confirmed values stay
+    if source:
+        doctypes.suggest_from_text(doc, source)  # a type suggestion with its reason, never applied automatically
     has_proposed = doc.fields.filter(status=DocumentField.PROPOSED).exists()
     if version_state == "failed":
         doc.state = Document.FAILED
