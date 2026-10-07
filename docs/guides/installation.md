@@ -131,12 +131,17 @@ Useful options: `--bind 0.0.0.0:8000` (when the proxy runs on another host), `--
 
 ## Antivirus (ClamAV) {#antivirus}
 
-Install, upgrade and repair install `clamav`, `clamav-daemon` and `clamav-freshclam` and adjust `/etc/clamav/clamd.conf`:
+Install, upgrade and repair install `clamav`, `clamav-daemon` and `clamav-freshclam` and then run the [antivirus repair](antivirus.md#repair), which adjusts `/etc/clamav/clamd.conf` (backed up once as `clamd.conf.personaldocs-backup`):
 
-- `LocalSocket /run/clamav/clamd.ctl` and **no** `TCPSocket` (clamd never listens on the network);
+- `LocalSocket` set to the path of the systemd socket unit `clamav-daemon.socket` (`/run/clamav/clamd.ctl`) and **no** `TCPSocket` (clamd never listens on the network). Debian's default line `LocalSocket /var/run/clamav/clamd.ctl` is replaced, because clamd only takes over the systemd socket when both strings are identical;
+- `LocalSocketMode 666` and `FixStaleSocket true`;
 - `StreamMaxLength 1100M` (the app's own *Maximum scan size*, default 50 MB, decides what is scanned);
 - `ConcurrentDatabaseReload no` (avoids holding two signature sets in memory during a reload);
 - `EnableVersionCommand true` (Debian ships it off; the app reads the engine and signature version with it).
+
+It also installs a restart drop-in for `clamav-daemon.service` and a tmpfiles entry for `/run/clamav` (see [persistence](antivirus.md#persistence)).
+
+**Installed is not the same as working.** Since Change Set P the installer does not stop at installing packages: it starts the socket and the daemon, waits for clamd to answer (up to 4 minutes while it loads signatures), checks that the `personaldocs` service account can connect, and runs a **real self-test**: a harmless text file must be *Clean* and the standard EICAR test file must be detected. The output lists each step with its result. When something fails, the installation still completes, prints *ClamAV is installed but not working yet; see the steps above. Retry with: sudo personaldocs antivirus repair*, and the failed check names the likely cause (for example *signatures missing*, *too little memory*, *LocalSocket differs from the systemd socket*). Fix the cause, then run `sudo personaldocs antivirus repair`; `sudo personaldocs antivirus status` shows the full diagnosis at any time. See [antivirus troubleshooting](antivirus.md#socket-missing).
 
 The first signature download can take a few minutes; `clamav-freshclam` then checks for updates automatically. ClamAV 1.5 also downloads `.cvd.sign` files, which it needs to load the signatures (FIPS mode); let freshclam fetch them rather than copying `.cvd` files by hand.
 
@@ -160,10 +165,11 @@ The first signature download can take a few minutes; `clamav-freshclam` then che
 | Command | Purpose |
 |---|---|
 | `personaldocs status` | Service state (also `clamav-daemon`, `clamav-freshclam`, `personaldocs-host.path`), version, health, "Reboot required" |
-| `personaldocs doctor` | Read-only diagnostics (redacted), including missing OCR language packs, ClamAV and signature age, files pending scan, host helper, HTTPS for Internet deployments, storage thresholds and a pending reboot |
+| `personaldocs doctor` | Read-only diagnostics (redacted), starting with the root ClamAV diagnosis, then missing OCR language packs, ClamAV and signature age, files pending scan, host helper, HTTPS for Internet deployments, storage thresholds and a pending reboot |
 | `personaldocs upgrade [--ref TAG]` | Back up, update, migrate, restart, verify |
 | `personaldocs rollback` | Return to the previous release when the schema is compatible |
-| `personaldocs repair` | Safe repairs (packages, permissions, services, migrations, stuck jobs) |
+| `personaldocs repair` | Safe repairs (packages, permissions, services, migrations, stuck jobs, ClamAV repair) |
+| `personaldocs antivirus status\|repair\|selftest` | ClamAV diagnosis as root, safe repair with self-test, clean + EICAR self-test. See [antivirus](antivirus.md#cli) |
 | `personaldocs backup` | Application backup now |
 | `personaldocs restore PATH` | Verify and restore a backup (stops services) |
 | `personaldocs integrity [--repair [--confirm]]` | Storage integrity check |

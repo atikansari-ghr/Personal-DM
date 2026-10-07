@@ -2,7 +2,7 @@
 
 ## Passwords {#passwords}
 
-Passwords need at least 10 characters and cannot be common or similar to your username. Change yours in **My account → Password & security**; other devices are signed out.
+Passwords need at least 10 characters and cannot be common or similar to your username. Change yours in **My account → Password & security**; other devices are signed out and you receive the notice **Password reset completed**. You can sign in with your email address instead of your username when that address belongs to exactly one active account.
 
 ## Authenticator app (optional) {#totp}
 
@@ -25,9 +25,11 @@ Compatibility with specific third-party password managers is tested manually (se
 
 ## Forgotten password {#reset}
 
-- With an email address on your profile and SMTP configured: **Forgot password?** sends a single-use link valid for 30 minutes (configurable).
-- Otherwise the main administrator sets a temporary password (Settings → Family & access → Reset password), which you must change at sign-in.
+- With an email address on your profile and SMTP configured: **Forgot password?** sends a branded email with a single-use link valid for 30 minutes (configurable). A newer request or any password change makes older links stop working.
+- Otherwise an administrator uses **Reset password…** (Settings → Family & access, or Settings → Users for the Administrator role): either a **temporary password** shown to them once, which you must change at sign-in (all your sessions end), or a **password reset email**. A main administrator's password can only be reset by another main administrator or from the console.
 - Lost authenticator or passkeys: use a recovery code (or another passkey), or ask the administrator to reset two-step verification ([details](passkeys.md#recovery)).
+
+Full details for members and administrators: [password reset](password-reset.md).
 
 ## Main administrator lockout {#console-recovery}
 
