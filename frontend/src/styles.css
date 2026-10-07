@@ -569,3 +569,30 @@ i.c0 { background: #1f8a4c; } i.c1 { background: #e07b00; } i.c2 { background: #
 .kv2 { display: grid; grid-template-columns: minmax(130px, 190px) minmax(0, 1fr); gap: 0.4rem 0.9rem; align-items: baseline; }
 .kv2 > .k { color: var(--muted); }
 @media (max-width: 640px) { .kv2 { grid-template-columns: minmax(0, 1fr); gap: 0.1rem; } .kv2 > .k { margin-top: 0.4rem; } }
+
+/* ---------- document types and details (Change Set N) */
+.kv > div[style*="contents"] > .k, .kv > div[style*="contents"] > .v, .kv > div[style*="contents"] > .c { padding: 0.55rem 0.8rem; border-top: 1px solid var(--line); display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; min-width: 0; overflow-wrap: anywhere; }
+.kv > div[style*="contents"]:first-child > div { border-top: 0; }
+.details-h { font-size: 0.95rem; margin: 0.4rem 0 -0.2rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.req { color: var(--danger, #b42318); font-weight: 700; }
+.prov { display: inline-flex; gap: 0.3rem; align-items: center; }
+.prov-src { font-size: 0.75rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 0.45rem; white-space: nowrap; }
+.type-chip { font-weight: 650; }
+.type-suggest { display: flex; flex-direction: column; gap: 0.45rem; background: var(--brand-softer); }
+.type-plan ul { margin: 0.3rem 0 0 1.1rem; }
+.unmapped { border: 1px dashed var(--line); border-radius: 10px; padding: 0.7rem 0.8rem; }
+.unmapped-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0; border-top: 1px solid var(--line); }
+.add-detail { flex-wrap: wrap; }
+.grid.two { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.block { display: block; }
+.type-report { gap: 0.8rem; align-items: center; margin: 0.2rem 0 0.6rem; }
+.type-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.5rem; margin-bottom: 0.6rem; }
+.type-card { display: flex; gap: 0.6rem; align-items: center; text-align: left; border: 1px solid var(--line); background: var(--surface, #fff); border-radius: 10px; padding: 0.6rem 0.75rem; cursor: pointer; font: inherit; color: inherit; min-height: 52px; }
+.type-card:hover, .type-card:focus-visible { border-color: var(--brand); background: var(--brand-softer); }
+.type-emoji { font-size: 1.4rem; }
+.type-preview { background: var(--brand-softer); }
+.tfields td { vertical-align: middle; }
+@media (max-width: 640px) {
+  .details-panel .kv { grid-template-columns: minmax(92px, 36%) minmax(0, 1fr) auto; }
+  .unmapped-row > .row { width: 100%; }
+}

@@ -620,6 +620,99 @@ await step("AT-149/150/156/159 security center: health score, Internet test, sto
   await page.waitForSelector("[data-widget=security] .score-ring");
 });
 
+await step("AT-161..175 document types: set from Details, suggestion, safe change, custom detail, templates", async () => {
+  const text = "PASSPORT\nName: SAMPLE PERSON\nNationality: Testland\nDate of birth: 01 Jan 2000\nDate of issue: 19 Oct 2016\nDate of expiry: 18 Oct 2030\nPlace of issue: Sample City\n";
+  const up = await page.evaluate(async ([folder, text]) => {
+    const csrf = decodeURIComponent((document.cookie.match(/pd_csrftoken=([^;]+)/) || [])[1] || "");
+    const fd = new FormData();
+    fd.set("folder", folder);
+    fd.append("files", new File([text], "sample-passport.txt", { type: "text/plain" }));
+    const r = await fetch("/api/documents", { method: "POST", body: fd, headers: { "X-CSRFToken": csrf } });
+    return r.json();
+  }, [ids.parity, text]);
+  const id = up.documents[0].id;
+  ids.typed = id;
+  for (let i = 0; i < 60; i++) {
+    const d = (await api(page, `/api/documents/${id}`)).data;
+    if (!["queued", "processing"].includes(d.state)) break;
+    await page.waitForTimeout(1000);
+  }
+  await page.goto(`${BASE}/documents/${id}`);
+  await page.waitForSelector(".details-panel");
+  // AT-161: the reported defect state (details present, type blank) now offers Set type; AT-167: OCR suggestion
+  await page.waitForSelector(".details-panel :text('Not assigned')");
+  await page.waitForSelector(".type-suggest :text('Passport')");
+  await page.click(".type-suggest button:has-text('Accept')");
+  await page.waitForSelector("#type-select");
+  await page.waitForSelector(".type-plan :text('Kept')");
+  await page.click(".modal button:has-text('Apply type')");
+  await page.waitForSelector(".details-h:has-text('Passport details')");
+  await page.reload();
+  await page.waitForSelector(".details-h:has-text('Passport details')");  // survives reload
+  for (const label of ["Passport number", "Full name", "Nationality", "Expiry date", "Place of issue"]) expect(await page.locator(`.details-panel .k:has-text('${label}')`).count() > 0, `template field ${label}`);
+  expect(await page.locator(".details-panel .prov-src:has-text('OCR')").count() > 0, "provenance shown");
+  await page.locator(".details-panel").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${SHOTS}/document-details-type.png` });
+  // AT-171: one-off detail
+  await page.selectOption(".add-detail select", "__new");
+  await page.fill(".add-detail input[aria-label='Detail name']", "Old passport number");
+  await page.fill(".add-detail input[aria-label='Detail value']", "X0000000");
+  await page.click(".add-detail button:has-text('Add')");
+  await page.waitForSelector(".details-panel .k:has-text('Old passport number')");
+  // AT-169: change type with review; unmapped values kept
+  await page.click(".details-panel button[aria-label='Change document type']");
+  const ins = (await api(page, "/api/document-types")).data.types.find((t) => t.name === "Insurance policy");
+  await page.selectOption("#type-select", String(ins.id));
+  await page.waitForSelector(".type-plan .alert.warn");
+  await page.screenshot({ path: `${SHOTS}/type-change-review.png` });
+  await page.click(".modal button:has-text('Apply type')");
+  await page.waitForSelector("text=Previous details — needs review");
+  expect(await page.locator(".unmapped-row").count() >= 2, "previous values listed");
+  await page.locator(".unmapped").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${SHOTS}/document-details-previous.png` });
+  await page.locator(".unmapped-row").first().locator("button:has-text('Keep as detail')").click();
+  await page.waitForTimeout(500);
+  const d = (await api(page, `/api/documents/${id}`)).data;
+  expect(d.fields.some((f) => f.label === "Old passport number" && f.group === "additional"), "custom detail kept across type changes");
+  expect(d.folder === ids.parity, "type change did not move the file");
+  // back to passport for the later screens; AT-170 re-map offer appears
+  await page.click(".details-panel button[aria-label='Change document type']");
+  await page.selectOption("#type-select", String((await api(page, "/api/document-types")).data.types.find((t) => t.name === "Passport").id));
+  await page.click(".modal button:has-text('Apply type')");
+  await page.waitForSelector("button:has-text('Re-map existing OCR data')");
+  await page.click("button:has-text('Re-map existing OCR data')");
+  await page.waitForSelector(".toast");
+  // AT-163/164: administrator template editor with preview
+  const pid = (await api(page, "/api/document-types")).data.types.find((t) => t.name === "Passport").id;
+  await page.goto(`${BASE}/settings/documents?type=${pid}`);
+  await page.waitForSelector(".modal :text('Metadata template')");
+  await page.click(".modal button:has-text('Add field')");
+  await page.fill("#fl", "Blood group");
+  await page.selectOption("#ft", "select");
+  await page.fill("#fc", "A, B, AB, O");
+  await page.click(".modal button:has-text('Save field')");
+  await page.waitForSelector(".tfields :text('Blood group')");
+  await page.click(".modal button[aria-label='Move Blood group up']");
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${SHOTS}/settings-document-types.png` });
+  const t = (await api(page, "/api/document-types/admin")).data.types.find((x) => x.id === pid);
+  const bg = t.fields.find((f) => f.key === "blood_group");
+  expect(t.fields.sort((a, b) => a.order - b.order).findIndex((f) => f.key === "blood_group") < t.fields.length - 1, "reordered");
+  await api(page, `/api/document-types/${pid}/fields/${bg.id}`, { method: "DELETE" });
+  await page.keyboard.press("Escape");
+  // AT-166 folder suggestion preselects the type in the upload dialog
+  await api(page, `/api/folders/${ids.visa}`, { method: "PATCH", body: { suggested_type: (await api(page, "/api/document-types")).data.types.find((x) => x.name === "Visa").id } });
+  await page.goto(`${BASE}/folders/${ids.visa}`);
+  await page.click("button:has-text('Upload')");
+  await page.waitForSelector("#dtype");
+  await page.waitForFunction(() => document.querySelector("#dtype option:checked")?.textContent?.includes("Visa"), null, { timeout: 10000 })
+    .catch(() => undefined);
+  const sel = await page.locator("#dtype option:checked").innerText();
+  expect(sel.includes("Visa"), `upload preselects the folder's type (${sel})`);
+  expect(await page.locator("text=Suggested by this folder").count() > 0, "the hint says where the suggestion comes from");
+  await page.keyboard.press("Escape");
+});
+
 await step("AT-146 authentik settings and sign-in button", async () => {
   await api(page, "/api/settings", { method: "PUT", body: { values: { "authentik.enabled": true, "authentik.issuer": "https://auth.example.test/application/o/personal-dm/",
     "authentik.client_id": "personal-dm-demo", "authentik.client_secret": "demo-secret-not-real" } } });
@@ -687,7 +780,7 @@ await step("AT-128/130 every sign-in design keeps the same sign-in methods (desk
 });
 
 // ------------------------------------------------------------------ tablet / mobile parity
-const ROUTES = ["/", "/ocr-review", "/settings/overview", "/settings/security", "/settings/security?view=antivirus", "/settings/security?view=test", "/settings/security?view=storage", "/folders", `/folders/${ids.parity}`, `/documents/${ids["Sample policy (3 pages)"]}`, "/search?q=sample", "/shared",
+const ROUTES = ["/", "/ocr-review", "/settings/documents", `/documents/${ids.typed}`, "/settings/overview", "/settings/security", "/settings/security?view=antivirus", "/settings/security?view=test", "/settings/security?view=storage", "/folders", `/folders/${ids.parity}`, `/documents/${ids["Sample policy (3 pages)"]}`, "/search?q=sample", "/shared",
   "/offline", "/notifications", "/archive", "/settings/account", "/settings/account?tab=security", "/settings/account?tab=appearance",
   "/settings/account?tab=notifications", "/settings/family", "/settings/notifications", "/settings/storage", "/settings/security",
   "/settings/ai", "/settings/activity?view=logins", "/assistant", "/imports/new", "/help/getting-started"];
@@ -726,6 +819,22 @@ for (const [vname, w, h] of VIEWPORTS) {
     expect(await mp.locator(".zoom-value").innerText() !== z0, "tap zooms");
     await mp.tap(".viewer-toolbar button:has-text('Fit width')");
     if (vname === "mobile-portrait") await mp.screenshot({ path: `${SHOTS}/mobile-viewer.png` });
+  });
+  await step(`AT-175 ${vname}: Details, type selection and previous values work by touch without clipping`, async () => {
+    await mp.goto(`${BASE}/documents/${ids.typed}`);
+    await mp.waitForSelector(".details-panel");
+    const box = await mp.evaluate(() => {
+      const panel = document.querySelector(".details-panel").getBoundingClientRect();
+      const cut = [...document.querySelectorAll(".details-panel button, .details-panel select, .details-panel input")].filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && (r.right > window.innerWidth + 1 || r.left < -1); }).length;
+      return { over: document.documentElement.scrollWidth - window.innerWidth, cut, w: panel.width };
+    });
+    expect(box.over <= 1 && box.cut === 0, `details overflow ${box.over}px, ${box.cut} controls off-screen`);
+    await mp.tap(".details-panel button[aria-label='Change document type']");
+    await mp.waitForSelector("#type-select");
+    const m = await mp.evaluate(() => { const r = document.querySelector(".modal").getBoundingClientRect(); return r.right <= window.innerWidth + 1 && r.left >= -1; });
+    expect(m, "type dialog fits the screen");
+    await mp.tap(".modal button:has-text('Cancel')");
+    if (vname === "mobile-portrait") { await mp.locator(".details-panel").scrollIntoViewIfNeeded(); await mp.screenshot({ path: `${SHOTS}/mobile-details.png` }); }
   });
   if (vname !== "tablet") {
     await step(`AT-75 ${vname}: Move to… by touch, and back navigation`, async () => {

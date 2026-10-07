@@ -50,12 +50,22 @@ export default function UploadDialog({ onClose, onDone, folderId, initialFiles }
   }, []);
   const selected = folders.find((f) => f.id === folder);
   const needsOwner = selected && !selected.owner;
+  // the nearest folder (itself or a parent) that suggests a type: preselected, never forced
+  const suggested = (() => {
+    const byId = new Map(folders.map((f) => [f.id, f]));
+    let node = selected;
+    for (let i = 0; node && i < 40; i++) { if (node.suggested_type) return node.suggested_type; node = node.parent ? byId.get(node.parent) : undefined; }
+    return null;
+  })();
+  const [typeTouched, setTypeTouched] = useState(false);
+  useEffect(() => { if (!typeTouched) setDocType(suggested ? String(suggested.id) : ""); }, [folder, folders.length]);
 
   const submit = async () => {
     const form = new FormData();
     form.set("folder", folder);
     if (owner) form.set("owner", owner);
     if (docType) form.set("doc_type", docType);
+    if (docType && suggested && String(suggested.id) === docType) form.set("type_source", "folder");
     if (title && files.length === 1) form.set("title", title);
     files.forEach((f) => form.append("files", f));
     setProgress(0);
@@ -90,11 +100,11 @@ export default function UploadDialog({ onClose, onDone, folderId, initialFiles }
         )}
         <div className="field">
           <label htmlFor="dtype">Document type (optional)</label>
-          <select id="dtype" value={docType} onChange={(e) => setDocType(e.target.value)}>
-            <option value="">Not set</option>
-            {meta?.types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          <select id="dtype" value={docType} onChange={(e) => { setDocType(e.target.value); setTypeTouched(true); }}>
+            <option value="">Not assigned</option>
+            {meta?.types.filter((t) => !t.archived).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
-          <div className="hint">With a type and confirmed dates, names are generated like “Name Passport (2016–2026)”.</div>
+          <div className="hint">{suggested && String(suggested.id) === docType ? `Suggested by this folder — you can change it. ` : ""}The type says what the document is; it decides which details are shown. With confirmed dates, names are generated like “Name Passport (2016–2026)”.</div>
         </div>
         {files.length === 1 && (
           <div className="field"><label htmlFor="title">Title (optional)</label><input id="title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={files[0].name} /></div>

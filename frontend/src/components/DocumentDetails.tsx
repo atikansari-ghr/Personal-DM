@@ -99,7 +99,7 @@ function FieldRow({ doc, f, tf, label, canEdit, onSaved, extra }: { doc: DocDeta
 }
 
 /** Choose a type, preview what happens to each value, then apply. */
-export function TypeDialog({ doc, types, initial, source = "manual", onClose, onDone }: { doc: DocDetail; types: TypeOption[]; initial?: number | null; source?: string; onClose: () => void; onDone: (offerRemap: boolean) => void }) {
+export function TypeDialog({ doc, types, initial, source = "manual", onClose, onDone }: { doc: Pick<DocDetail, "id" | "type">; types: TypeOption[]; initial?: number | null; source?: string; onClose: () => void; onDone: (offerRemap: boolean) => void }) {
   const toast = useToast();
   const [type, setType] = useState<string>(initial ? String(initial) : doc.type ? String(doc.type.id) : "");
   const [plan, setPlan] = useState<any>(null);
@@ -122,7 +122,7 @@ export function TypeDialog({ doc, types, initial, source = "manual", onClose, on
         <div className="field"><label htmlFor="type-select">Document type</label>
           <select id="type-select" value={type} onChange={(e) => setType(e.target.value)}>
             <option value="">Not assigned</option>
-            {types.filter((t) => !t.archived || t.id === doc.type?.id).map((t) => <option key={t.id} value={t.id}>{t.emoji ? `${t.emoji} ` : ""}{t.name}</option>)}
+            {types.filter((t) => !t.archived || t.id === doc.type?.id).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
           {types.find((t) => String(t.id) === type)?.description && <div className="hint">{types.find((t) => String(t.id) === type)?.description}</div>}
         </div>
@@ -169,8 +169,8 @@ function AddDetail({ doc, custom, typed, onSaved }: { doc: DocDetail; custom: Me
         {std.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
         {custom.filter((c) => !have.has(`custom:${c.key}`)).map((c) => <option key={c.key} value={`custom:${c.key}`}>{c.label} ({c.type})</option>)}
       </select>
-      {choice === "__new" && <input aria-label="Detail name" placeholder="Name, e.g. Old passport number" value={label} onChange={(e) => setLabel(e.target.value)} style={{ maxWidth: 220 }} />}
-      {choice && <input aria-label="Detail value" placeholder="Value" value={value} onChange={(e) => setValue(e.target.value)} style={{ maxWidth: 200 }} />}
+      {choice === "__new" && <input type="text" aria-label="Detail name" placeholder="Name, e.g. Old passport number" value={label} onChange={(e) => setLabel(e.target.value)} style={{ maxWidth: 220 }} />}
+      {choice && <input type="text" aria-label="Detail value" placeholder="Value" value={value} onChange={(e) => setValue(e.target.value)} style={{ maxWidth: 200 }} />}
       <button className="btn small" disabled={!choice || (choice === "__new" && !label.trim())}><Icon name="plus" size={16} /> Add</button>
     </form>
   );
@@ -267,7 +267,7 @@ export default function DocumentDetails({ doc, onChange, openTypeDialog }: { doc
           <p className="small muted">Kept from {unmapped[0].previous_type || "the earlier type"}. Map each value to a field of {doc.type?.name || "this type"}, keep it as an additional detail, or remove it.</p>
           {unmapped.map((f) => (
             <div key={f.key} className="unmapped-row">
-              <div><strong>{f.label}</strong>: {f.value || "—"} <Provenance f={f} /></div>
+              <div><strong>{f.label}</strong>: {display(f, fieldType(f.key))} <Provenance f={f} /></div>
               {canEdit && (
                 <div className="row" style={{ gap: ".3rem" }}>
                   <select aria-label={`Map ${f.label} to`} value={mapTo[f.key] || ""} onChange={(e) => setMapTo({ ...mapTo, [f.key]: e.target.value })} style={{ maxWidth: 190 }}>
@@ -308,4 +308,61 @@ export function DetailsBadge({ doc }: { doc: DocDetail }) {
   if (st.status === "incomplete") return <span className="badge soon" title={`Empty required: ${st.missing_required.join(", ")}`}>Incomplete: {st.missing_required.join(", ")}</span>;
   const parts = [st.proposed ? `${st.proposed} suggested` : "", st.unmapped ? `${st.unmapped} previous` : "", doc.type_info?.suggestions?.length && !doc.type?.confirmed ? "type suggested" : ""].filter(Boolean);
   return <span className="badge soon">Needs review{parts.length ? `: ${parts.join(", ")}` : ""}</span>;
+}
+
+/** Several documents at once: counts first, confirmed types are protected unless explicitly overwritten. */
+export function BulkTypeDialog({ ids, onClose, onDone }: { ids: string[]; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const types = useDocumentTypes();
+  const [type, setType] = useState("");
+  const [preview, setPreview] = useState<any>(null);
+  const [overwrite, setOverwrite] = useState(false);
+  useEffect(() => { setPreview(null); if (type) api<any>("documents/bulk-type", { body: { ids, type: Number(type), preview: true } }).then(setPreview).catch((e) => toast(e.message, "error")); }, [type]);
+  return (
+    <Modal title={`Set document type for ${ids.length} document${ids.length === 1 ? "" : "s"}`} onClose={onClose}>
+      <div className="stack">
+        <div className="field"><label htmlFor="bulk-type">Document type</label>
+          <select id="bulk-type" value={type} onChange={(e) => setType(e.target.value)}><option value="">Choose a type…</option>{types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+        {preview && (
+          <div className="stack small" aria-live="polite">
+            <div>Now: {Object.entries(preview.current).map(([k, v]) => `${k} (${v})`).join(", ") || "—"}</div>
+            {preview.not_allowed > 0 && <div className="alert warn">{preview.not_allowed} document{preview.not_allowed === 1 ? "" : "s"} cannot be changed by you and will be skipped.</div>}
+            {preview.already > 0 && <div>{preview.already} already {preview.already === 1 ? "is" : "are"} {preview.type}.</div>}
+            {preview.confirmed_other > 0 && (
+              <div className="alert warn">{preview.confirmed_other} document{preview.confirmed_other === 1 ? " has" : "s have"} another confirmed type. They are skipped unless you choose otherwise.
+                <label className="check"><input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} /> Also change documents with a confirmed type</label></div>
+            )}
+            <div className="muted">Values that do not fit {preview.type} are kept as previous details for review; files and folders are not changed.</div>
+          </div>
+        )}
+        <div className="row" style={{ justifyContent: "flex-end" }}>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn primary" disabled={!preview || preview.allowed === 0} onClick={async () => {
+            try { const r = await api<any>("documents/bulk-type", { body: { ids, type: Number(type), overwrite_confirmed: overwrite } }); toast(`${r.changed} changed${r.skipped ? `, ${r.skipped} skipped` : ""}`); onDone(); }
+            catch (e: any) { toast(e.message, "error"); }
+          }}>Apply</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** A folder may suggest a type for uploads. It never moves documents or changes their type. */
+export function SuggestedTypeDialog({ folder, onClose, onDone }: { folder: { id: string; name: string; suggested_type?: { id: number; name: string } | null }; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const types = useDocumentTypes();
+  const [type, setType] = useState(folder.suggested_type ? String(folder.suggested_type.id) : "");
+  return (
+    <Modal title={`Suggested document type for “${folder.name}”`} onClose={onClose}>
+      <div className="stack">
+        <p className="small muted">Uploads into this folder (and its subfolders) start with this type selected; people can change it. Documents already here keep their type, and the folder never changes a type later.</p>
+        <div className="field"><label htmlFor="sugg-type">Suggested type</label>
+          <select id="sugg-type" value={type} onChange={(e) => setType(e.target.value)}><option value="">No suggestion</option>{types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
+        <div className="row" style={{ justifyContent: "flex-end" }}>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn primary" onClick={async () => { try { await api(`folders/${folder.id}`, { method: "PATCH", body: { suggested_type: type ? Number(type) : null } }); toast("Suggested type saved"); onDone(); } catch (e: any) { toast(e.message, "error"); } }}>Save</button>
+        </div>
+      </div>
+    </Modal>
+  );
 }

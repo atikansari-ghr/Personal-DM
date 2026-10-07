@@ -87,7 +87,7 @@ def folders(request):
         return Response(folder_json(ctx, f), status=201)
     include_archived = request.query_params.get("archived") == "1" and ctx.is_admin
     qs = Folder.objects.all() if include_archived else Folder.objects.filter(archived_at__isnull=True)
-    qs = qs.select_related("owner")
+    qs = qs.select_related("owner", "suggested_type")
     visible = ctx.folder_ids_with(P.VIEW) if not ctx.is_admin else set(qs.values_list("id", flat=True))
     by_id = {f.id: f for f in qs}
     # include ancestors as path-only nodes so the tree renders

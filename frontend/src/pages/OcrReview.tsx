@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, formatDate, formatDateTime } from "../api";
 import { OcrStateBadge } from "../components/OcrPanel";
+import { useDocumentTypes } from "../components/DocumentDetails";
 import { Icon, Skeleton, useAsync, useToast } from "../components/ui";
 
 /** OCR review queue: recognised documents waiting for a person to check the suggested details. Only documents the
@@ -16,7 +17,9 @@ const DATES = ["issue_date", "expiry_date", "date_of_birth"];
 export default function OcrReviewPage() {
   const toast = useToast();
   const [tick, setTick] = useState(0);
-  const { data, error } = useAsync(() => api<{ items: any[] }>("ocr/review"), [tick]);
+  const [typeFilter, setTypeFilter] = useState("");
+  const types = useDocumentTypes();
+  const { data, error } = useAsync(() => api<{ items: any[] }>(`ocr/review${typeFilter ? `?type=${typeFilter}` : ""}`), [tick, typeFilter]);
   const [editing, setEditing] = useState<string>("");
   const [value, setValue] = useState("");
   const reload = () => setTick((t) => t + 1);
@@ -31,6 +34,8 @@ export default function OcrReviewPage() {
     <div>
       <div className="page-head"><h1>OCR review</h1></div>
       <p className="muted">Details suggested by text recognition are not used until you confirm them. Accept, correct or reject each one; confirmed values are never overwritten by a later OCR run.</p>
+      <div className="field" style={{ maxWidth: 280 }}><label htmlFor="ocr-type-filter">Document type</label>
+        <select id="ocr-type-filter" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}><option value="">All types</option><option value="none">Not assigned</option>{types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
       {error && <div className="alert error">{error}</div>}
       {!data ? <Skeleton lines={6} /> : data.items.length === 0 ? <div className="empty"><Icon name="check" /> Nothing waiting for review.</div> : (
         <div className="stack">{data.items.map((d) => (

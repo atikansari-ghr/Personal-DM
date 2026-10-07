@@ -25,6 +25,7 @@ const PAGES = [
   ["settings-notifications", "/settings/notifications", true],
   ["settings-family", "/settings/family", true],
   ["settings-storage", "/settings/storage", true],
+  ["settings-documents", "/settings/documents", true],
   ["help", "/help/getting-started", true],
   ["my-notifications", "/settings/account?tab=notifications", true],
   ["appearance-widgets", "/settings/account?tab=appearance", true],

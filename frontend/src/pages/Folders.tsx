@@ -9,6 +9,7 @@ import { PanelHandles, usePanelWidths } from "../components/PanelResizer";
 import PermissionsDialog from "../components/PermissionsDialog";
 import UploadDialog from "../components/UploadDialog";
 import FileTypeIcon from "../components/FileTypeIcon";
+import { BulkTypeDialog, SuggestedTypeDialog, TypeDialog, useDocumentTypes } from "../components/DocumentDetails";
 import FolderPicker, { descendantIds, FolderIcon, folderChildren, folderLabel } from "../components/FolderPicker";
 import { AvBadge } from "./settings/SecurityCenter";
 import { Avatar, Confirm, EmojiPicker, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useToast } from "../components/ui";
@@ -85,8 +86,8 @@ function TreeNode({ node, active, expanded, toggle, select, level, me, dnd, menu
 }
 let childrenOf: Map<string | null, FolderNode[]> = new Map();
 
-type FolderDlg = { kind: "new" | "rename" | "icon" | "perms" | "archive"; f: FolderNode };
-type DocDlg = { kind: "rename" | "archive" | "purge" | "share"; d: DocRow };
+type FolderDlg = { kind: "new" | "rename" | "icon" | "perms" | "archive" | "type"; f: FolderNode };
+type DocDlg = { kind: "rename" | "archive" | "purge" | "share" | "type"; d: DocRow };
 type DropState = DropProgress & { target: string };
 
 export default function FoldersPage() {
@@ -110,7 +111,9 @@ export default function FoldersPage() {
   const chooseSort = (v: string) => { setSort(v); savePref("me.doc_sort", v); };
   const [dialog, setDialog] = useState("");
   const [fdlg, setFdlg] = useState<FolderDlg | null>(null);
+  const [bulkType, setBulkType] = useState(false);
   const [ddlg, setDdlg] = useState<DocDlg | null>(null);
+  const docTypes = useDocumentTypes(ddlg?.kind === "type");  // loaded only when the type dialog opens
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -252,6 +255,7 @@ export default function FoldersPage() {
       { label: "Rename…", hidden: !c("organize") || f.kind !== "normal", onSelect: () => { setName(f.name); setFdlg({ kind: "rename", f }); } },
       { label: "Change icon…", hidden: !c("organize") || f.kind !== "normal", onSelect: () => { setEmoji(f.emoji_is_custom ? f.emoji : ""); setFdlg({ kind: "icon", f }); } },
       { label: "Move to…", hidden: !dnd.startFolder(f), onSelect: () => setMoving({ type: "folder", id: f.id }) },
+      { label: f.suggested_type ? `Suggested type: ${f.suggested_type.name}…` : "Suggested document type…", hidden: !c("organize"), onSelect: () => setFdlg({ kind: "type", f }) },
       { label: "Share / who has access", onSelect: () => setFdlg({ kind: "perms", f }) },
       { label: "Apply folder template", hidden: !c("organize"), onSelect: () => api<{ created: number }>(`folders/${f.id}/apply-template`, { method: "POST" }).then((r) => { toast(r.created ? `${r.created} template folder(s) added` : "All template folders already exist"); loadFolders(); }).catch((e) => toast(e.message, "error")) },
       { label: "Download folder (ZIP)", hidden: !c("download"), href: `/api/export/download?folder=${f.id}` },
@@ -265,6 +269,7 @@ export default function FoldersPage() {
       { label: "Open", onSelect: () => openDoc(d.id) },
       { label: "Rename…", hidden: !c("edit"), onSelect: () => { setName(d.title); setDdlg({ kind: "rename", d }); } },
       { label: "Move to…", hidden: !c("organize"), onSelect: () => setMoving({ type: "docs", ids: [d.id] }) },
+      { label: d.type ? "Change document type…" : "Set document type…", hidden: !c("edit"), onSelect: () => setDdlg({ kind: "type", d }) },
       { label: "Download", hidden: !c("download"), href: `/api/documents/${d.id}/file?download=1` },
       { label: "Share…", hidden: !c("share") && !c("download"), onSelect: () => setDdlg({ kind: "share", d }) },
       "separator",
@@ -359,6 +364,7 @@ export default function FoldersPage() {
               <strong>{selected.size} selected</strong>
               <button className="btn small" onClick={() => { const t = prompt("Tag to add"); if (t) bulk("tag_add", t); }}>Add tag</button>
               <button className="btn small" onClick={() => setMoving({ type: "docs", ids: [...selected] })}>Move to…</button>
+              <button className="btn small" onClick={() => setBulkType(true)}>Set type…</button>
               <button className="btn small danger" onClick={() => bulk("archive")}>Archive</button>
               <button className="btn small ghost" onClick={() => setSelected(new Set())}>Clear</button>
             </div>
@@ -441,6 +447,9 @@ export default function FoldersPage() {
         </div>
       )}
       {dialog === "upload" && folderId && <UploadDialog folderId={folderId} onClose={() => setDialog("")} onDone={() => { setDialog(""); refresh(); }} />}
+      {fdlg?.kind === "type" && <SuggestedTypeDialog folder={fdlg.f} onClose={() => setFdlg(null)} onDone={() => { setFdlg(null); loadFolders(); }} />}
+      {ddlg?.kind === "type" && <TypeDialog doc={ddlg.d} types={docTypes} onClose={() => setDdlg(null)} onDone={() => { setDdlg(null); refresh(); }} />}
+      {bulkType && <BulkTypeDialog ids={[...selected]} onClose={() => setBulkType(false)} onDone={() => { setBulkType(false); setSelected(new Set()); refresh(); }} />}
       {fdlg?.kind === "new" && (
         <Modal title={`New folder in ${folderLabel(fdlg.f, me)}`} onClose={() => setFdlg(null)}>
           <form className="stack" onSubmit={async (e) => {
