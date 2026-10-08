@@ -4,6 +4,9 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Fixed (2026-10-08) — PP-OCRv5 model download failed during upgrade
+- `personaldocs upgrade` could report "Some PP-OCRv5 models could not be downloaded: PermissionError: [Errno 13] Permission denied: 'None'". The model libraries ran as the service user inside root's working directory, using download caches outside the model folder. The installer now runs them inside `/var/lib/personaldocs/paddle`, with their own temp and cache folders there, and passes an HTTPS proxy through when one is set. An installer error now also names where it failed, and the full traceback goes to `/var/log/personaldocs/install.log`. Retry with `sudo personaldocs ocr install-models`.
+
 ### Added (2026-10-08) — PaddleOCR (PP-OCRv5) and the complete OCR lifecycle (Change Set Q)
 - **PaddleOCR with PP-OCRv5** is the default OCR engine (`processing.ocr_engine`); **Tesseract (Legacy)** stays as the fallback (`processing.ocr_engine_fallback`) and as an explicit choice. It runs locally in an isolated environment `/opt/personaldocs/paddle-venv` (PaddlePaddle 3.2.2, PaddleOCR 3.7.0, PaddleX 3.7.2, pinned in `backend/requirements-paddle.txt`) through `apps/library/paddle_worker.py`. The worker runs under the sandbox with a memory limit (`processing.paddle_memory_mb`, 3000 MB), a CPU limit, a timeout and one job at a time. Models live in `/var/lib/personaldocs/paddle` and are never downloaded while recognising.
 - **Language profiles** English, Arabic + English, Hindi (Devanagari) + English, Telugu + English, Tamil + English (`processing.ocr_profiles`, `processing.ocr_default_profile`, per document type `ocr_profile`). Advanced settings: model Mobile/Server, CPU threads, document orientation, text-line orientation, unwarping.

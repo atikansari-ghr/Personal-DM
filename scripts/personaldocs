@@ -208,9 +208,15 @@ install_paddleocr() { # install_paddleocr RELEASE_DIR — isolated PaddleOCR ven
 
 paddle_run() { # paddle_run WORKER ARGS... as the service user, with the model cache and no inherited secrets
   local worker=$1; shift
-  runuser -u $APP -- env -i PATH=/usr/bin:/bin HOME="$PADDLE_HOME" PADDLE_PDX_CACHE_HOME="$PADDLE_HOME" \
-    PADDLE_PDX_MODEL_SOURCE="${PADDLE_PDX_MODEL_SOURCE:-huggingface}" OMP_NUM_THREADS=2 \
-    "$PADDLE_VENV/bin/python" "$worker" "$@"
+  # run inside the service user's own model directory, with its own temp and download caches: model libraries
+  # write relative to the working directory or to cache variables, and root's directory is not writable for them
+  install -d -m 0750 -o $APP -g $APP "$PADDLE_HOME" "$PADDLE_HOME/tmp" "$PADDLE_HOME/cache"
+  (cd "$PADDLE_HOME" && runuser -u $APP -- env -i PATH=/usr/bin:/bin HOME="$PADDLE_HOME" LANG=C.UTF-8 \
+    PADDLE_PDX_CACHE_HOME="$PADDLE_HOME" TMPDIR="$PADDLE_HOME/tmp" XDG_CACHE_HOME="$PADDLE_HOME/cache" \
+    HF_HOME="$PADDLE_HOME/cache/huggingface" MODELSCOPE_CACHE="$PADDLE_HOME/cache/modelscope" \
+    AISTUDIO_CACHE_HOME="$PADDLE_HOME/cache" PADDLE_PDX_MODEL_SOURCE="${PADDLE_PDX_MODEL_SOURCE:-huggingface}" \
+    ${HTTPS_PROXY:+HTTPS_PROXY="$HTTPS_PROXY"} ${https_proxy:+https_proxy="$https_proxy"} OMP_NUM_THREADS=2 \
+    "$PADDLE_VENV/bin/python" "$worker" "$@")
 }
 
 paddle_models() { # download missing PP-OCRv5 models for the offered profiles (network needed once)
@@ -227,7 +233,7 @@ paddle_models() { # download missing PP-OCRv5 models for the offered profiles (n
     out=$(PADDLE_PDX_MODEL_SOURCE=BOS paddle_run "$worker" install-models $langs --model "$model" 2>>"$LOG" | tail -1)
   fi
   echo "$out" | grep -q '"missing": \[\]' && c_ok "PP-OCRv5 models installed ($langs)." \
-    || { c_warn "Some PP-OCRv5 models could not be downloaded: $out"; return 1; }
+    || { c_warn "Some PP-OCRv5 models could not be downloaded: $out"; c_warn "Details: $LOG. Retry: sudo personaldocs ocr install-models"; return 1; }
 }
 
 paddle_selftest() { # real inference on a generated image; importing the library alone is not a success
