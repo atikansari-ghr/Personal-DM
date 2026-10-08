@@ -75,7 +75,10 @@ export function OcrRunDialog({ docId, status, onClose, onDone }: { docId: string
         e.preventDefault();
         setBusy(true);
         setErr("");
-        const body: any = { sources, engine, rotate: rotate === "auto" ? null : Number(rotate), set_primary: primary, reprocess: rerun };
+        const body: any = { sources, rotate: rotate === "auto" ? null : Number(rotate), set_primary: primary, reprocess: rerun };
+        // the default engine is not sent, so the server may fall back to Tesseract when PaddleOCR is unavailable;
+        // an engine the person picked explicitly is sent and never silently replaced
+        if (engine !== status.engine_default) body.engine = engine;
         if (engine === "paddleocr") body.profile = profile; else body.languages = langs;
         try { onDone(await api<OcrStatus>(`documents/${docId}/ocr`, { body })); }
         catch (x: any) { setErr(x.message); }

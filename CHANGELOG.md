@@ -37,6 +37,7 @@ The first implementation of the full initial-release scope. See `docs/IMPLEMENTA
 - A page-range re-run left the previous full searchable PDF, which previews and shares still served. Stale searchable copies are now removed.
 - Switching a version to current rebuilt the search text without the OCR rules.
 - Removal left OCR sources and languages set.
+- Run OCR… sent the default engine explicitly, which disabled the Tesseract fallback: without the PaddleOCR runtime (no AVX, `--without-paddleocr`) every run from the dialog failed. The default engine is now left to the server, so fallback applies; an engine the person picks is still never replaced.
 - The ⋮ menus closed by themselves when a long menu was scrolled, or when it was opened right after a page scroll (the late scroll event closed it although the menu's button had not moved).
 
 ### Fixed (2026-10-08) — ClamAV would not start on Debian 13: unknown option `EnableVersionCommand`

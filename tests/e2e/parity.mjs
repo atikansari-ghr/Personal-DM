@@ -746,8 +746,13 @@ await step("AT-176..186 rich notifications: TEST messages, Notification Center, 
   await page.selectOption("select[aria-label='Severity']", "");
   await page.click("button[role=radio]:has-text('Unread')");
   // track the card itself: background jobs (e.g. a PP-OCRv5 run finishing) may add new unread cards meanwhile
-  const label = await page.locator(".note-card").first().getAttribute("aria-label");
-  const sameBefore = await page.locator(`.note-card[aria-label="${label}"]`).count();
+  await page.waitForLoadState("networkidle");  // the Unread list has reloaded
+  await page.waitForSelector(".note-card.unread");
+  const [label, sameBefore] = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll(".note-card")];
+    const l = cards[0].getAttribute("aria-label");
+    return [l, cards.filter((c) => c.getAttribute("aria-label") === l).length];
+  });
   await page.locator(".note-card").first().locator("button:has-text('Mark read')").click();
   await page.waitForFunction(([l, n]) => [...document.querySelectorAll(".note-card")].filter((c) => c.getAttribute("aria-label") === l).length === n - 1, [label, sameBefore])
     .catch((e) => { throw new Error(`mark read (${label}, ${sameBefore}): ${e}`); });
