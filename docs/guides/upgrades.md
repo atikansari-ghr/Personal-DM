@@ -14,6 +14,63 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to Change Set Q (PaddleOCR PP-OCRv5 and the complete OCR lifecycle) {#change-set-q}
+
+```
+sudo personaldocs upgrade
+# or: bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)" -- upgrade
+sudo personaldocs ocr status   # PaddleOCR versions, models, AVX and a real PP-OCRv5 inference self-test
+sudo personaldocs doctor       # includes the OCR checks (engine, models, self-test, Tesseract, queue, storage, orphans)
+```
+
+(The change prompt called this "Change Set P" with tests AT-191..AT-210. Those numbers were already in use, so here it
+is **Change Set Q** with tests **AT-211..AT-230**: prompt AT-n = AT-(n+20).)
+
+**Before you start:** PaddlePaddle needs a CPU with **AVX** (`grep -c avx /proc/cpuinfo` must print more than 0;
+on Proxmox use CPU type `host` for VMs) and about **3 GB free disk** for the first installation. On a 6 GB / 4 vCPU
+container the defaults are sized to fit. Without AVX, with too little disk, or with `--without-paddleocr`, the
+upgrade still completes and OCR keeps using Tesseract.
+
+What the upgrade does (the post-upgrade step runs it for you, after the verified backup):
+
+1. Applies the migration **`library.0010_ocr_engines_lifecycle`**:
+   - adds the engine, model, profile and text-position fields, the per-document OCR switch and the OCR run history;
+   - labels existing results **Tesseract (Legacy)** (or *Unknown* when that cannot be determined);
+   - maps each document type's Tesseract languages to a language profile (Arabic → Arabic + English, Hindi → Hindi +
+     English, …).
+
+   **No OCR job is queued and no document is re-processed.**
+2. Installs `apt` libraries `libgomp1`, `libgl1`, `libglib2.0-0` and builds the isolated PaddleOCR environment
+   **`/opt/personaldocs/paddle-venv`** (PaddlePaddle 3.2.2, PaddleOCR 3.7.0, PaddleX 3.7.2; about 1.3 GB, several
+   minutes). It is built next to the old one and swapped in only when complete.
+3. Downloads the **PP-OCRv5 models** of the offered language profiles into **`/var/lib/personaldocs/paddle`**
+   (about 60 MB; from Hugging Face, retried from Baidu's mirror). This needs Internet access once.
+4. Runs the **self-test**: real PP-OCRv5 inference on a generated image. Only a passing self-test makes the engine
+   *Healthy*.
+5. Sets `PD_PADDLE_PYTHON` / `PD_PADDLE_HOME` in `/etc/personaldocs/personaldocs.env` and installs the worker unit
+   with `MemoryHigh=3400M`, `MemoryMax=4000M` and `CPUWeight=50`.
+
+After the upgrade:
+
+- **New** OCR runs use PaddleOCR (PP-OCRv5); results show their engine.
+- Existing OCR text stays as it was, labelled Tesseract (Legacy).
+- To upgrade old results deliberately, use **Settings → OCR & processing → Existing OCR data**: filter *Tesseract*,
+  select documents (or all matching), then **Re-process with PP-OCRv5**, preview and confirm. Each document keeps its
+  old text until the new result succeeds, and confirmed details are never overwritten.
+- Check **Settings → OCR & processing → OCR engines**. It should say *Healthy*; otherwise run
+  `sudo personaldocs ocr status` and see [troubleshooting](troubleshooting.md).
+- If unwanted OCR text came back after removal in earlier releases, remove it again with **Remove OCR data…**. Tick
+  *Also hide the text layer embedded in the file* if the words are in the PDF itself. Optionally disable OCR for that
+  document.
+- Offer Telugu + English or Tamil + English under **Offered language profiles**, then run
+  `sudo personaldocs ocr install-models`.
+
+Rollback: `sudo personaldocs rollback` switches back to the previous release; the PaddleOCR environment and models stay
+on disk unused. The new columns are only used by this release. If the previous release refuses to start, restore
+the pre-upgrade database snapshot as described in [Rollback](#rollback). To remove PaddleOCR completely:
+`sudo rm -rf /opt/personaldocs/paddle-venv /var/lib/personaldocs/paddle`, then set **Default OCR engine** to
+Tesseract (Legacy).
+
 ## Upgrading to Change Set P (passkey sign-in, password reset, ClamAV repair) {#change-set-p}
 
 > **ClamAV fix (2026-10-08).** If the Antivirus page shows *Unavailable* and `journalctl -u clamav-daemon` says `Unknown option EnableVersionCommand`: an earlier release added that option, which Debian 13's clamd does not know, so clamd stops at start. Upgrade again (or run `sudo personaldocs antivirus repair`) — the repair now removes it. Quick manual fix: `sudo sed -i '/^EnableVersionCommand/d' /etc/clamav/clamd.conf && sudo systemctl restart clamav-daemon.socket clamav-daemon`. The `clamd.conf.personaldocs-backup` file may also contain the line; remove it there too before restoring that backup.

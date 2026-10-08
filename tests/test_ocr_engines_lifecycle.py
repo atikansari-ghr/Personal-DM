@@ -301,7 +301,7 @@ def test_at217_at219_at220_remove_cleans_everything_derived(family, clients, pad
     assert not stale.exists() and not DocumentChunk.objects.filter(document=doc).exists()
     assert not AISuggestion.objects.filter(document=doc, status=AISuggestion.PENDING).exists()
     assert not DocumentField.objects.filter(document=doc, status=DocumentField.PROPOSED).exists()
-    AIJob.objects.get(pk=ai_job.pk).status == "cancelled"
+    assert AIJob.objects.get(pk=ai_job.pk).status == "cancelled"
     assert "ZEBRAPHRASE" not in doc.content_text.upper()
     assert _found(c, "zebraphrase") == 0  # AT-219: the phrase only existed in OCR
     assert _found(c, doc.title.split()[0]) >= 1 or doc.title  # title/filename still match
@@ -543,7 +543,10 @@ def test_at229_models_and_config_survive_restart(family, clients, paddle, settin
     assert ocr_engines.paddle_status(refresh=True)["healthy"]
     script = (Path(__file__).resolve().parents[1] / "scripts/personaldocs").read_text()
     assert "PADDLE_HOME=$DATA_DIR/paddle" in script and "PADDLE_VENV=$PREFIX/paddle-venv" in script
-    assert "install_paddleocr" in script.split("cmd_post_upgrade()")[0] or "install_paddleocr" in script
+    optional = script.split("install_optional_packages() {")[1].split("\n}")[0]
+    post = script.split("cmd_post_upgrade() {")[1].split("\n}")[0]
+    repair = script.split("cmd_repair() {")[1].split("\n}")[0]
+    assert "install_paddleocr" in optional and "install_optional_packages" in post and "install_optional_packages" in repair
 
 
 # ------------------------------------------------------------------ live PP-OCRv5 (skipped unless the runtime exists)
@@ -578,3 +581,18 @@ def test_live_at216_arabic_english_profile(family, clients, real_paddle):
     v = DocumentVersion.objects.get(pk=doc.current_version_id)
     assert v.ocr_profile == "ar_en" and "arabic_PP-OCRv5_mobile_rec" in v.ocr_model
     assert "السعودية" in v.text or "العربية" in v.text, v.text
+
+
+@live
+def test_live_at216_hindi_english_profile_reads_upright(family, clients, real_paddle):
+    """Regression: with text-line orientation on, PP-OCRv5 read every line of this card upside down (benchmark)."""
+    assert config.get("processing.paddle_textline") is False
+    img = _png(["नमूना पहचान पत्र"], font="/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf")
+    _manual()
+    doc = _upload(clients["son1"], personal_root(family["son1"]), "hi.png", img)
+    run_jobs()
+    assert clients["son1"].post(f"/api/documents/{doc.id}/ocr", {"profile": "hi_en"}, format="json").status_code == 202
+    run_jobs()
+    v = DocumentVersion.objects.get(pk=doc.current_version_id)
+    assert v.ocr_profile == "hi_en" and "devanagari_PP-OCRv5_mobile_rec" in v.ocr_model
+    assert "पहचान" in v.text and "नमूना" in v.text, v.text  # upright: an upside-down read produces Latin-like junk

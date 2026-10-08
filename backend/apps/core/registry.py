@@ -294,7 +294,9 @@ SETTINGS: list[SettingDef] = [
                "Turn sideways or upside-down photos and scans the right way before recognition.", "bool", True,
                "processing", help="ocr-engines#preprocessing"),
     SettingDef("processing.paddle_textline", "Detect text-line orientation (PaddleOCR)",
-               "Reads individual upside-down lines correctly. Costs a little time.", "bool", True, "processing",
+               "Turns individual upside-down lines. Off by default: in the benchmark it flipped every line of a "
+               "Hindi + English card (20 % instead of 100 % accuracy). Turn on only for pages with mixed-direction lines.",
+               "bool", False, "processing",
                help="ocr-engines#preprocessing"),
     SettingDef("processing.paddle_unwarping", "Flatten curved photos (PaddleOCR)",
                "Straightens photographed pages that are bent or curved. Can make clean flat scans worse, so it is off by "

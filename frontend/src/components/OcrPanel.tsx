@@ -5,30 +5,44 @@ import { Confirm, CopyButton, Icon, Modal, Skeleton, useToast } from "./ui";
 /** Selective text recognition (OCR): status, chosen sources/pages/languages, results, re-run and removal. */
 
 export interface OcrFile { version: string; number: number; name: string; format: string; page_count: number | null; size: number; current: boolean; additional: boolean; ocr_applied: boolean; ocr_pages: string; ocrable: boolean }
+export interface OcrResult {
+  version: string; number: number; name: string; pages: string; text: string; quality: any;
+  engine: string; engine_label: string; model: string; profile: string; ocr_at: string | null;
+}
 export interface OcrStatus {
   state: string; mode: string; sources: { version: string; pages: string }[]; languages: string[]; default_languages: string[];
   error: string; updated_at: string | null; ai_allowed: boolean; can_run: boolean; can_edit: boolean; paused: boolean;
-  job: { status: string } | null; files: OcrFile[];
-  results: { version: string; number: number; name: string; pages: string; text: string; quality: any }[];
+  job: { status: string } | null; files: OcrFile[]; results: OcrResult[];
   languages_available: { code: string; name: string; installed: boolean }[];
+  override: string; profile: string; default_profile: string; embedded_text_hidden: boolean; embedded_text: boolean;
+  type_mode: string; profiles: { key: string; label: string }[]; engine_default: string;
+}
+
+export const ENGINE_LABEL: Record<string, string> = { paddleocr: "PaddleOCR (PP-OCRv5)", tesseract: "Tesseract (Legacy)", unknown: "Unknown (earlier version)" };
+export function EngineBadge({ engine }: { engine: string }) {
+  return <span className={`badge ${engine === "paddleocr" ? "ok" : "neutral"}`} title="OCR engine that produced this text">{ENGINE_LABEL[engine] || engine}</span>;
 }
 
 export const OCR_STATE_LABEL: Record<string, [string, string]> = {
   not_processed: ["Not processed", "neutral"], queued: ["Queued", "neutral"], processing: ["Processing", "neutral"],
-  needs_review: ["Needs review", "soon"], confirmed: ["Confirmed", "ok"], failed: ["Failed", "danger"], removed: ["OCR removed", "neutral"],
+  needs_review: ["Needs review", "soon"], confirmed: ["Confirmed", "ok"], failed: ["Failed", "danger"], removed: ["OCR removed", "neutral"], disabled: ["Disabled", "neutral"],
 };
 export function OcrStateBadge({ state }: { state: string }) {
   const [label, cls] = OCR_STATE_LABEL[state] || [state, "neutral"];
   return <span className={`badge ${cls}`} title="Text recognition status">OCR: {label}</span>;
 }
 
-function ResultText({ text, quality }: { text: string; quality: any }) {
+function ResultText({ text, quality, result }: { text: string; quality: any; result?: OcrResult }) {
   const low = new Set<number>(quality?.low_lines || []);
   const confidence: number | null = quality?.confidence ?? null;
   const level = confidence === null ? "" : confidence >= 85 ? "ok" : confidence >= 60 ? "soon" : "danger";
   return (
     <div className="stack" style={{ gap: ".4rem" }}>
-      <div className="row small">
+      <div className="row small" style={{ flexWrap: "wrap" }}>
+        {result && <EngineBadge engine={result.engine} />}
+        {result?.profile && <span className="badge neutral" title="Language profile">{result.profile.replace("_", " + ").toUpperCase()}</span>}
+        {result?.model && <span className="small muted" title="Recognition model">{result.model}</span>}
+        {result?.ocr_at && <span className="small muted">{formatDateTime(result.ocr_at)}</span>}
         {confidence !== null && <span className={`badge ${level}`} title="Mean word confidence reported by the OCR engine">OCR confidence {Math.round(confidence)}%</span>}
         {quality?.rotation ? <span className="badge neutral">Rotated {quality.rotation}°</span> : null}
         {quality?.languages?.length ? <span className="badge neutral">{quality.languages.join(" + ")}</span> : null}
@@ -40,6 +54,9 @@ function ResultText({ text, quality }: { text: string; quality: any }) {
 }
 
 export function OcrRunDialog({ docId, status, onClose, onDone }: { docId: string; status: OcrStatus; onClose: () => void; onDone: (s: OcrStatus) => void }) {
+  const [engine, setEngine] = useState<string>(status.engine_default || "paddleocr");
+  const [profile, setProfile] = useState<string>(status.profile || status.default_profile || "en");
+  const rerun = status.results.length > 0;
   const ocrable = status.files.filter((f) => f.ocrable);
   const initial = status.sources.length ? status.sources : ocrable.filter((f) => f.current).map((f) => ({ version: f.version, pages: "" }));
   const [chosen, setChosen] = useState<Record<string, { on: boolean; pages: string }>>(() =>
@@ -57,7 +74,9 @@ export function OcrRunDialog({ docId, status, onClose, onDone }: { docId: string
         e.preventDefault();
         setBusy(true);
         setErr("");
-        try { onDone(await api<OcrStatus>(`documents/${docId}/ocr`, { body: { sources, languages: langs, rotate: rotate === "auto" ? null : Number(rotate), set_primary: primary } })); }
+        const body: any = { sources, engine, rotate: rotate === "auto" ? null : Number(rotate), set_primary: primary, reprocess: rerun };
+        if (engine === "paddleocr") body.profile = profile; else body.languages = langs;
+        try { onDone(await api<OcrStatus>(`documents/${docId}/ocr`, { body })); }
         catch (x: any) { setErr(x.message); }
         finally { setBusy(false); }
       }}>
@@ -76,14 +95,27 @@ export function OcrRunDialog({ docId, status, onClose, onDone }: { docId: string
             </div>
           ))}
         </fieldset>
-        <fieldset className="field"><legend>Languages</legend>
+        <div className="row" style={{ flexWrap: "wrap" }}>
+          <div className="field grow"><label htmlFor="ocr-engine">OCR engine</label>
+            <select id="ocr-engine" value={engine} onChange={(e) => setEngine(e.target.value)}>
+              <option value="paddleocr">PaddleOCR (PP-OCRv5) — recommended</option><option value="tesseract">Tesseract (Legacy)</option>
+            </select></div>
+          {engine === "paddleocr" && (
+            <div className="field grow"><label htmlFor="ocr-profile">Language profile</label>
+              <select id="ocr-profile" value={profile} onChange={(e) => setProfile(e.target.value)}>
+                {status.profiles.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+              </select></div>
+          )}
+        </div>
+        {rerun && <p className="small muted">Re-running replaces the current OCR text only after the new run succeeds; if it fails, the previous result stays.</p>}
+        {engine === "tesseract" && <fieldset className="field"><legend>Languages (Tesseract)</legend>
           <div className="row">{status.languages_available.map((l) => (
             <label key={l.code} className="check" title={l.installed ? "" : "Language pack not installed on the server"}>
               <input type="checkbox" disabled={!l.installed} checked={langs.includes(l.code)} onChange={(e) => setLangs((x) => e.target.checked ? [...x, l.code] : x.filter((y) => y !== l.code))} /> {l.name}{l.installed ? "" : " (not installed)"}
             </label>
           ))}</div>
           <div className="hint">Choose the languages printed on the document; combining several is slower.</div>
-        </fieldset>
+        </fieldset>}
         {anyImage && (
           <div className="field"><label htmlFor="ocr-rot">Orientation of photos</label>
             <select id="ocr-rot" value={rotate} onChange={(e) => setRotate(e.target.value)} style={{ maxWidth: 260 }}>
@@ -93,19 +125,74 @@ export function OcrRunDialog({ docId, status, onClose, onDone }: { docId: string
         )}
         <label className="check"><input type="checkbox" checked={primary} onChange={(e) => setPrimary(e.target.checked)} /> Use these files as the primary OCR source {status.mode === "automatic" ? "(Automatic OCR processes only this source set)" : ""}</label>
         <div className="row" style={{ justifyContent: "flex-end" }}><button type="button" className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn primary" disabled={busy || !sources.length || !langs.length}>Run OCR</button></div>
+          <button className="btn primary" disabled={busy || !sources.length || (engine === "tesseract" && !langs.length)}>{rerun ? "Re-run OCR" : "Run OCR"}</button></div>
       </form>
     </Modal>
   );
 }
 
-export default function OcrPanel({ docId, onChanged }: { docId: string; onChanged: () => void }) {
+function RemoveDialog({ docId, status, onClose, onDone }: { docId: string; status: OcrStatus; onClose: () => void; onDone: (s: OcrStatus, freed: number) => void }) {
+  const [embedded, setEmbedded] = useState(false);
+  const [disable, setDisable] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const engines = Array.from(new Set(status.results.map((r) => ENGINE_LABEL[r.engine] || r.engine)));
+  return (
+    <Modal title="Remove OCR data" onClose={onClose}>
+      <div className="stack">
+        {err && <div className="alert error" role="alert">{err}</div>}
+        <p>Deleted: the recognised text{engines.length ? ` (${engines.join(", ")})` : ""}, text positions and confidence values, the searchable PDF copy, search-index entries built from them, unconfirmed suggested details, Local AI suggestions and semantic-search data from this text, and queued Local AI work.</p>
+        <p><strong>Kept:</strong> the original file and every version, the title, type, owner, folder, permissions, notes, tags, manually entered and confirmed details (raw OCR excerpts next to them are cleared), and the audit history.</p>
+        {(status.embedded_text || status.results.length > 0) && (
+          <label className="check"><input type="checkbox" checked={embedded} onChange={(e) => setEmbedded(e.target.checked)} /> Also hide the text layer embedded in the file (from the scanner or an earlier OCR program). The file itself is not changed.</label>
+        )}
+        <label className="check"><input type="checkbox" checked={disable} onChange={(e) => setDisable(e.target.checked)} /> Also disable OCR for this document (Automatic OCR, Regenerate preview and repairs will not recognise it again)</label>
+        <div className="row" style={{ justifyContent: "flex-end" }}>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn danger" disabled={busy} onClick={async () => {
+            setBusy(true);
+            try { const r = await api<OcrStatus & { bytes_freed: number }>(`documents/${docId}/ocr`, { method: "DELETE", body: { confirm: true, include_embedded: embedded, disable } }); onDone(r, r.bytes_freed || 0); }
+            catch (x: any) { setErr(x.message); } finally { setBusy(false); }
+          }}>Remove OCR data</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function DisableDialog({ docId, status, onClose, onDone }: { docId: string; status: OcrStatus; onClose: () => void; onDone: (s: OcrStatus) => void }) {
+  const [removeExisting, setRemoveExisting] = useState(false);
+  const [err, setErr] = useState("");
+  const has = status.results.length > 0;
+  return (
+    <Modal title="Disable OCR for this document" onClose={onClose}>
+      <div className="stack">
+        {err && <div className="alert error" role="alert">{err}</div>}
+        <p>No new text recognition runs for this document — not from an Automatic document type, Regenerate preview, a repair or a bulk action — until you enable it again. The original file is not changed.</p>
+        {has && (
+          <fieldset className="field"><legend>Existing OCR data</legend>
+            <label className="check"><input type="radio" name="dis-keep" checked={!removeExisting} onChange={() => setRemoveExisting(false)} /> Keep the existing OCR text (it stays searchable)</label>
+            <label className="check"><input type="radio" name="dis-keep" checked={removeExisting} onChange={() => setRemoveExisting(true)} /> Remove the existing OCR data too</label>
+          </fieldset>
+        )}
+        <div className="row" style={{ justifyContent: "flex-end" }}>
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn danger" onClick={() => api<OcrStatus>(`documents/${docId}/ocr/mode`, { body: { disabled: true, remove_existing: removeExisting } }).then(onDone).catch((x) => setErr(x.message))}>Disable OCR</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+export default function OcrPanel({ docId, onChanged, request }: { docId: string; onChanged: () => void; request?: { action: string; n: number } }) {
   const toast = useToast();
   const [status, setStatus] = useState<OcrStatus | null>(null);
   const [dialog, setDialog] = useState("");
   const [error, setError] = useState("");
   const load = () => api<OcrStatus>(`documents/${docId}/ocr`).then(setStatus).catch((e) => setError(e.message));
   useEffect(() => { setStatus(null); load(); }, [docId]);
+  useEffect(() => { if (request && request.action !== "view") setDialog(request.action); }, [request?.n]);
+  const enable = () => api<OcrStatus>(`documents/${docId}/ocr/mode`, { body: { disabled: false } }).then((s) => { setStatus(s); toast("OCR enabled for this document"); onChanged(); }).catch((e) => toast(e.message, "error"));
   useEffect(() => {
     if (!status || !["queued", "processing"].includes(status.state)) return;
     const t = setTimeout(load, 3000);
@@ -120,35 +207,36 @@ export default function OcrPanel({ docId, onChanged }: { docId: string; onChange
       <div className="row between">
         <div className="row">
           <OcrStateBadge state={status.state} />
-          <span className="small muted">Policy: {status.mode === "disabled" ? "OCR disabled for this type" : status.mode === "automatic" ? "Automatic (primary source only)" : "Manual"}</span>
+          <span className="small muted">Policy: {status.override === "disabled" ? "OCR disabled for this document" : status.mode === "disabled" ? "OCR disabled for this type" : status.mode === "automatic" ? "Automatic (primary source only)" : "Manual"}</span>
+          {status.embedded_text_hidden && <span className="badge neutral" title="The text layer embedded in the file is not used for search">Embedded text hidden</span>}
           {status.paused && running && <span className="badge soon">Queue paused by the administrator</span>}
         </div>
         <div className="row">
           {status.can_run && !running && <button className="btn small primary" onClick={() => setDialog("run")}><Icon name="refresh" size={16} /> {status.results.length ? "Re-run OCR…" : "Run OCR…"}</button>}
           {status.can_edit && status.state === "queued" && status.job?.status === "queued" && <button className="btn small" onClick={() => api<OcrStatus>(`documents/${docId}/ocr/cancel`, { method: "POST" }).then((s) => { setStatus(s); toast("OCR cancelled"); }).catch((e) => toast(e.message, "error"))}>Cancel</button>}
           {status.can_edit && status.state === "needs_review" && <button className="btn small" onClick={() => api<OcrStatus>(`documents/${docId}/ocr/reviewed`, { method: "POST" }).then((s) => { setStatus(s); onChanged(); })}>Mark reviewed</button>}
-          {status.can_edit && status.results.length > 0 && !running && <button className="btn small danger" onClick={() => setDialog("remove")}>Remove OCR data…</button>}
+          {status.can_edit && (status.results.length > 0 || status.embedded_text) && !running && <button className="btn small danger" onClick={() => setDialog("remove")}>Remove OCR data…</button>}
+          {status.can_edit && status.override !== "disabled" && !running && <button className="btn small" onClick={() => setDialog("disable")}>Disable OCR for this document…</button>}
+          {status.can_edit && status.override === "disabled" && <button className="btn small" onClick={enable}>Enable OCR for this document</button>}
         </div>
       </div>
       {sourceNames.length > 0 && <p className="small muted">Source: {sourceNames.join(" + ")}{status.languages.length ? ` · ${status.languages.join(" + ")}` : ""}{status.updated_at ? ` · ${formatDateTime(status.updated_at)}` : ""}</p>}
       {status.state === "failed" && <div className="alert error">Text recognition failed: {status.error || "unknown error"}. Try another page range, language or orientation.</div>}
       {running && <div className="alert">Text recognition is {status.state === "queued" ? "waiting in the queue" : "running"}…</div>}
       {status.results.length === 0 && !running && (
-        <div className="empty small">{status.mode === "disabled" ? "Text recognition is disabled for this document type." : status.state === "removed" ? "OCR data was removed. The original file is unchanged." : "This document has not been recognised. Choose Run OCR to read selected files or pages."}</div>
+        <div className="empty small">{status.override === "disabled" ? "Text recognition is disabled for this document." : status.mode === "disabled" ? "Text recognition is disabled for this document type." : status.state === "removed" ? "OCR data was removed. The original file is unchanged." : "This document has not been recognised. Choose Run OCR to read selected files or pages."}</div>
       )}
       {status.results.some((r) => r.quality?.low_lines?.length) && <p className="small muted">Greyed lines were read with low confidence and are not used for suggested details.</p>}
       {status.results.map((r) => (
         <div key={r.version}>
           {status.results.length > 1 && <h4 style={{ margin: ".4rem 0" }}>{r.name}{r.pages ? ` · pages ${r.pages}` : ""}</h4>}
-          <ResultText text={r.text} quality={r.quality} />
+          <ResultText text={r.text} quality={r.quality} result={r} />
         </div>
       ))}
-      {dialog === "run" && <OcrRunDialog docId={docId} status={status} onClose={() => setDialog("")} onDone={(s) => { setStatus(s); setDialog(""); toast("Text recognition queued"); onChanged(); }} />}
-      {dialog === "remove" && (
-        <Confirm title="Remove OCR data" danger confirmLabel="Remove OCR data" onClose={() => setDialog("")}
-          message={<p>The recognised text, its search entries, confidence values and the details suggested from it are deleted, together with the searchable PDF copy. <strong>The original file stays unchanged</strong>, and details you have confirmed are kept. You can run OCR again later.</p>}
-          onConfirm={async () => { try { const s = await api<OcrStatus>(`documents/${docId}/ocr`, { method: "DELETE", body: { confirm: true } }); setStatus(s); setDialog(""); toast("OCR data removed"); onChanged(); } catch (x: any) { toast(x.message, "error"); } }} />
-      )}
+      {dialog === "run" && !status.can_run && <Confirm title="Text recognition is disabled" message={<p>{status.override === "disabled" ? "OCR is disabled for this document. Enable it first." : "OCR is disabled for this document type or globally."}</p>} confirmLabel="OK" onConfirm={() => setDialog("")} onClose={() => setDialog("")} />}
+      {dialog === "run" && status.can_run && <OcrRunDialog docId={docId} status={status} onClose={() => setDialog("")} onDone={(s) => { setStatus(s); setDialog(""); toast("Text recognition queued"); onChanged(); }} />}
+      {dialog === "remove" && <RemoveDialog docId={docId} status={status} onClose={() => setDialog("")} onDone={(s, freed) => { setStatus(s); setDialog(""); toast(`OCR data removed${freed ? ` · ${formatBytes(freed)} freed` : ""}`); onChanged(); }} />}
+      {dialog === "disable" && <DisableDialog docId={docId} status={status} onClose={() => setDialog("")} onDone={(s) => { setStatus(s); setDialog(""); toast("OCR disabled for this document"); onChanged(); }} />}
     </div>
   );
 }

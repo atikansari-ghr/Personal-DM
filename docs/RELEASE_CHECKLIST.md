@@ -25,6 +25,10 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Restore drill on a clean LXC: sign-in, permissions, versions, settings, integration secrets
 - [ ] `personaldocs integrity` clean
 - [ ] `sudo personaldocs doctor` reports no missing OCR language packs (otherwise `sudo personaldocs repair`)
+- [ ] `sudo personaldocs ocr status` shows PaddleOCR installed, no missing models and **self-test passed (real PP-OCRv5 inference)**; Settings → OCR & processing → OCR engines shows *Healthy*
+- [ ] After an upgrade, existing OCR results are labelled Tesseract (Legacy) / Unknown and **no OCR job was queued** by the upgrade (Existing OCR data → queued 0)
+- [ ] Remove OCR data / Disable OCR for this document checked on a sample document; Orphaned OCR data → Analyze shows nothing unexpected
+- [ ] Engine benchmark re-run if `ocr_engines.py`/`paddle_worker.py` or the pinned PaddleOCR versions changed (`scripts/ocr_engine_benchmark.py`), `docs/OCR_BENCHMARK.md` updated
 - [ ] Fresh install: setup creates only the Main Administrator; upgrade from the previous tag keeps every existing account
 - [ ] After an upgrade, Settings → OCR & processing shows the expected OCR policy per document type (existing installations: Automatic with AI allowed)
 - [ ] `personaldocs status`: `clamav-daemon` and `clamav-freshclam` active; Settings → Security → Antivirus shows ClamAV running and signatures not stale (`doctor` reports the signature age)

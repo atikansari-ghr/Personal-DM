@@ -131,7 +131,7 @@ export interface TemplateField {
 export interface TypeSuggestion { index: number | null; type: number; name: string; source: string; source_label: string; reason: string; confidence: number | null; conflict?: boolean }
 export interface DetailsStatus { status: "confirmed" | "incomplete" | "needs_review" | "empty"; proposed: number; unmapped: number; missing_required: string[]; incomplete_ok: boolean }
 export interface DocDetail extends DocRow {
-  ocr?: { state: string; mode: string; sources: { version: string; pages: string }[]; languages: string[]; error: string; ai_allowed: boolean };
+  ocr?: { state: string; mode: string; sources: { version: string; pages: string }[]; languages: string[]; error: string; ai_allowed: boolean; override?: string; profile?: string; embedded_text_hidden?: boolean };
   title_is_custom: boolean;
   correspondent: { id: number; name: string } | null;
   tags: { id: number; name: string; color: string }[];

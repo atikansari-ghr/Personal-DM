@@ -298,7 +298,7 @@ def ocr_engines_status(request):
 def ocr_engines_selftest(request):
     res = ocr_engines.paddle_selftest(actor=request.user)
     ocr_engines.paddle_status(refresh=True)
-    return Response(res, status=200 if res.get("healthy") else 503)
+    return Response(res)  # "healthy" says whether real inference worked
 
 
 @api_view(["GET"])

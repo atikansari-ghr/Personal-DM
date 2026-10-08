@@ -232,9 +232,9 @@ Turn sideways or upside-down photos and scans the right way before recognition.
 
 ### Detect text-line orientation (PaddleOCR) (`processing.paddle_textline`)
 
-Reads individual upside-down lines correctly. Costs a little time.
+Turns individual upside-down lines. Off by default: in the benchmark it flipped every line of a Hindi + English card (20 % instead of 100 % accuracy). Turn on only for pages with mixed-direction lines.
 
-- **Default:** `True`
+- **Default:** `False`
 - **Allowed values:** bool
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing

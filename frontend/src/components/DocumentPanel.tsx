@@ -195,6 +195,8 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
   const [tab, setTab] = useState("details");
   const [dialog, setDialog] = useState<string>("");
   const [typeReq, setTypeReq] = useState(0);
+  const [ocrReq, setOcrReq] = useState<{ action: string; n: number } | undefined>();
+  const ocrAction = (action: string) => { setTab("text"); setOcrReq((r) => ({ action, n: (r?.n || 0) + 1 })); };
 
   const [similar, setSimilar] = useState<(DocRow & { reasons: string[] })[] | null>(null);
   const load = () => api<DocDetail>(`documents/${id}`).then((d) => { setDoc(d); setError(""); }).catch((e) => setError(e.status === 404 ? "This document does not exist or you do not have access to it." : e.message));
@@ -234,7 +236,11 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
             { label: "Add renewed document…", hidden: !doc.folder, onSelect: () => setDialog("renew") },
             { label: "Save for offline use", hidden: !(can("download") && v), onSelect: async () => { try { await saveOffline(session!.user!.id, doc, v!); toast("Saved for offline use on this device"); } catch (e: any) { toast(e.message, "error"); } } },
             { label: "Who has access", onSelect: () => setDialog("perms") },
-            { label: "Text recognition (OCR)…", hidden: !can("edit") || doc.ocr?.mode === "disabled", onSelect: () => setTab("text") },
+            { label: doc.ocr && doc.ocr.state !== "not_processed" && doc.ocr.state !== "removed" ? "Re-run OCR…" : "Run OCR…", hidden: !can("edit") || doc.ocr?.mode === "disabled", onSelect: () => ocrAction("run") },
+            { label: "View OCR text", onSelect: () => ocrAction("view") },
+            { label: "Remove OCR data…", hidden: !can("edit"), onSelect: () => ocrAction("remove") },
+            { label: "Disable OCR for this document…", hidden: !can("edit") || doc.ocr?.override === "disabled", onSelect: () => ocrAction("disable") },
+            { label: "Enable OCR for this document", hidden: !can("edit") || doc.ocr?.override !== "disabled", onSelect: () => api(`documents/${doc.id}/ocr/mode`, { body: { disabled: false } }).then(() => { toast("OCR enabled for this document"); changed(); }).catch((e) => toast(e.message, "error")) },
             { label: "Regenerate preview", hidden: !can("edit"), onSelect: () => api(`documents/${doc.id}/reprocess`, { method: "POST" }).then(() => { toast("Preview regeneration queued"); changed(); }).catch((e) => toast(e.message, "error")) },
             "separator",
             { label: "Archive…", danger: true, hidden: !can("archive") || doc.archived, onSelect: () => setDialog("archive") },
@@ -249,7 +255,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
         <span style={{ marginLeft: "auto", alignSelf: "center" }}><DetailsBadge doc={doc} /></span>
       </div>
       {tab === "details" && <><DocumentDetails doc={doc} onChange={changed} openTypeDialog={typeReq} /><DocLinks doc={doc} /><AISuggestions docId={doc.id} onChange={changed} />{ai?.assistant && <Link className="btn small ghost" to={`/assistant?document=${doc.id}`}><Icon name="sparkle" size={16} /> Ask AI about this document</Link>}</>}
-      {tab === "text" && <OcrPanel docId={doc.id} onChanged={changed} />}
+      {tab === "text" && <OcrPanel docId={doc.id} onChanged={changed} request={ocrReq} />}
       {tab === "versions" && (
         <table className="responsive"><thead><tr><th>Version</th><th>File</th><th>Added</th><th /></tr></thead><tbody>
           {doc.versions.map((ver) => (

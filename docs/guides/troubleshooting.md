@@ -16,7 +16,11 @@
 | "Forbidden (CSRF)" or sign-in loops | `PD_PUBLIC_ORIGIN` must match the address in the browser exactly (https, no trailing slash); `PD_BEHIND_PROXY=1` behind NPM/Pangolin |
 | Uploads fail at a certain size | Raise the proxy's body size limit and the app's Maximum upload size |
 | Document stuck in *Processing* | Check the worker is running; failed jobs can be retried in OCR & processing |
-| No OCR text | Image too large or OCR disabled; very poor scans may need rescanning |
+| No OCR text | Image too large or OCR disabled (for the type or for this document); very poor scans may need rescanning |
+| OCR engines card says *PaddleOCR: Not installed* or *Self-test failed* | Run `sudo personaldocs ocr status`. Not installed: `sudo personaldocs ocr reinstall` (needs AVX and ~3 GB free disk). Models missing: `sudo personaldocs ocr install-models`. Until then new OCR falls back to Tesseract when fallback is on. See [OCR engines](ocr-engines.md#health). |
+| OCR fails with "PaddleOCR stopped without a result (memory limit reached…)" | Large or very detailed pages: raise **PaddleOCR memory limit**, choose fewer pages, or use the Mobile model. The previous OCR result stays. |
+| CPU without AVX (Proxmox) | PaddlePaddle needs AVX. Set the VM CPU type to `host` (or check the host CPU), then `sudo personaldocs ocr reinstall`. Tesseract keeps working meanwhile. |
+| Removed OCR text still finds the document | The words are in the PDF's own text layer: **Remove OCR data…** with *Also hide the text layer embedded in the file*. See [removing OCR data](ocr-engines.md#remove). |
 | Office preview missing | LibreOffice not installed or conversion timed out — the original is still downloadable |
 | "Server low on disk space" | Free space or enlarge the LXC disk; uploads stop at 512 MB free |
 | Backup "not on a mounted share" | Mount the NAS (`mount -a`) and check the marker file |

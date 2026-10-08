@@ -322,6 +322,33 @@ Acceptance tests AT-196…AT-210 (the change prompt numbered them AT-176…AT-19
 | AV-R9 | Health states Healthy (reachable and a real scan works), Degraded (non-fatal issue such as stale signatures), Unavailable (unreachable), Error (cannot scan or last self-test failed) and Turned off drive the Security Health score: Unavailable and Error give 0 antivirus points and force At Risk. The hourly check runs the self-test once a day and after a failure. |
 | OPS-P1 | Two migrations (`accounts.0007_passkey_mode`, `notify.0003_template_brand_footer`), no new packages; the post-upgrade step runs the ClamAV repair automatically; existing accounts, passkeys and templates are kept. |
 
+## Change set Q (2026-10): PaddleOCR (PP-OCRv5) and the complete OCR lifecycle
+
+Acceptance tests AT-211…AT-230 (the change prompt numbered them AT-191…AT-210, prompt AT-n = AT-(n+20); see
+[TRACEABILITY.md](TRACEABILITY.md), section *Change set Q*). Guides: [OCR engines](guides/ocr-engines.md),
+[OCR, details and corrections](guides/ocr-corrections.md). Decision: [ADR 0016](adr/0016-paddleocr-ocr-lifecycle.md).
+
+| ID | Requirement |
+|---|---|
+| OQ-1 | PaddleOCR with PP-OCRv5 models is the default OCR engine; Tesseract stays available as *Legacy / Fallback* and as an explicit choice. OCR stays local: no document image, page or text is sent to an external service. |
+| OQ-2 | The PaddleOCR runtime is isolated from the application environment (own virtual environment, pinned versions), runs CPU-only through the sandbox with a memory limit, a CPU limit and a timeout, and never downloads models while recognising. |
+| OQ-3 | *Healthy* means a real inference self-test succeeded; installed packages or a successful import alone are not healthy. The health is shown in Settings, in `personaldocs ocr status` and in `personaldocs doctor`. |
+| OQ-4 | Every OCR result records engine, engine version/model, language profile and date; historical results are labelled Tesseract or Unknown and never relabelled as PaddleOCR. |
+| OQ-5 | Changing the default engine never triggers library-wide OCR; existing documents are re-processed only by an explicit administrator action. |
+| OQ-6 | Language profiles English, Arabic + English, Hindi (Devanagari) + English, Telugu + English and Tamil + English route to the matching PP-OCRv5 models (and to the equivalent Tesseract languages); the administrator chooses which are offered, the default profile and a profile per document type. |
+| OQ-7 | On a 6 GB / 4 vCPU server OCR runs one job at a time with bounded memory and CPU; a crash, timeout or memory-limit stop fails visibly once and keeps the previous result. |
+| OQ-8 | Per document: Run / Re-run OCR (sources, pages, engine, profile), View OCR text (with engine label), Remove OCR data, Disable / Enable OCR for this document. |
+| OQ-9 | Remove OCR data deletes recognised text, positions, confidences, every searchable copy, the search entries built from them, unconfirmed suggestions, raw OCR excerpts, Local AI suggestions, semantic chunks and queued Local AI work; it keeps originals, versions, manual and confirmed details, ownership, permissions and audit history; optionally it also hides the embedded text layer. Running OCR or AI jobs cannot bring the removed text back. |
+| OQ-10 | Disable OCR for this document prevents every regeneration (Automatic type, Regenerate preview, repair, bulk re-process) until enabled again; the person decides whether the existing text is kept or removed. |
+| OQ-11 | Removal, disabling, bulk actions, orphan cleanup, self-tests and OCR tests are audited without any recognised text. |
+| OQ-12 | Administrator *Existing OCR data*: counts by engine (PaddleOCR / Tesseract / Unknown), searchable, disabled, failed and queued, storage used, filters, and bulk Remove / Remove and disable / Disable / Enable / Re-process / Set profile with a mandatory preview, run in throttled batches. |
+| OQ-13 | Re-processing is staged: the new result replaces the old one atomically only when every source succeeded; confirmed details are never overwritten. |
+| OQ-14 | Orphan analysis is a dry run; cleanup removes only the verified derived orphans (unreferenced searchable copies, stale scratch folders, leftover blocks, chunks, suggestions, abandoned runs), never originals, versions, confirmed details, previews or running jobs. Storage Health shows OCR text, cache, orphans and models. |
+| OQ-15 | *Test OCR / Compare engines* (administrator only) runs a sanitised file outside the library, reports diagnostics and character accuracy against expected text, never treats engine confidences as comparable, and deletes its temporary files. |
+| OQ-16 | Local AI keeps reading only the OCR text of types where it is allowed; it works with PP-OCRv5 output and never overwrites confirmed details. |
+| OQ-17 | Install, upgrade, post-upgrade and repair install the runtime and the models of the offered profiles and run the self-test; a CPU without AVX, too little disk or `--without-paddleocr` leaves Tesseract working. Models and settings persist across restarts, upgrades and repairs. |
+| OQ-18 | A representative benchmark compares PP-OCRv5 and Tesseract on the samples actually available; categories without samples are reported as Not Run, never fabricated. |
+
 ## Later phases
 
 Personal WhatsApp notifications, native apps, scanning enhancement, in-browser Office editing, DICOM viewing.

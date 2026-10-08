@@ -46,6 +46,12 @@ Design points (details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs
 - The Administrator role gives access to the security center, not to documents.
 - Root actions from the web interface (OS security updates, signature updates, antivirus repair, reboot) go through a host helper that
   accepts only a fixed list of actions; the web application never runs `sudo`.
+- **OCR stays local and leaves no text behind.** PaddleOCR and Tesseract run on the server; no image, page or text
+  goes to an external OCR service. The PaddleOCR worker runs in its own environment through the sandbox (memory, CPU
+  and time limits, no inherited secrets, no model downloads at OCR time). OCR text follows the source document's
+  permissions. Audit entries for OCR removal, bulk actions, orphan cleanup and tests record counts, never recognised
+  text. Temporary OCR files live in private directories and are always deleted. Test OCR / Compare engines and the
+  OCR administration endpoints are main-administrator only, enforced on the server.
 - **Notification rendering is a security boundary.** Document, folder and person names, OCR-derived values and
   administrator template text are untrusted input: each channel renderer escapes them for its own format (HTML email,
   Telegram HTML, plain text, push), templates accept plain text with an allowlist of placeholders only (no code, no

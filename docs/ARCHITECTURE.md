@@ -115,6 +115,14 @@ Originals are write-once and always exist before their rows commit. `pg_dump` ta
 
 See [ADR 0011](adr/0011-selective-ocr-overview.md).
 
+- **OCR engines (Change Set Q):** `library/ocr_engines.py` routes runs to PaddleOCR (PP-OCRv5, default) or Tesseract
+  (Legacy), resolves fallback, maps language profiles to models, and checks health with a real-inference self-test.
+  `library/paddle_worker.py` runs in the isolated `/opt/personaldocs/paddle-venv` through the sandbox (memory, CPU and
+  time limits; it never imports Django and never downloads models). Runs are staged and applied atomically
+  (`ocr_runs._apply_run`) against the document's OCR epoch. `ocr_runs.remove_ocr` / `set_ocr_disabled` implement
+  removal and the per-document override. `library/ocr_admin.py` provides the inventory, throttled bulk jobs
+  (`ocr_bulk`), orphan analysis/cleanup and Test / Compare. `OcrRun` records run metadata, never text. See
+  [ADR 0016](adr/0016-paddleocr-ocr-lifecycle.md).
 - **Selective OCR:** `library/ocr_policy.py` decides the mode (Disabled / Manual / Automatic), default languages,
   page ranges and whether AI may read a document's text, per document type and for untyped documents.
   `library/ocr_runs.py` validates requests (sources, pages, languages, size, page, queue and attempt limits), queues
