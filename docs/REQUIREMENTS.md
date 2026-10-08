@@ -349,6 +349,24 @@ Acceptance tests AT-211…AT-230 (the change prompt numbered them AT-191…AT-21
 | OQ-17 | Install, upgrade, post-upgrade and repair install the runtime and the models of the offered profiles and run the self-test; a CPU without AVX, too little disk or `--without-paddleocr` leaves Tesseract working. Models and settings persist across restarts, upgrades and repairs. |
 | OQ-18 | A representative benchmark compares PP-OCRv5 and Tesseract on the samples actually available; categories without samples are reported as Not Run, never fabricated. |
 
+## Change set R (2026-10): application-wide UI alignment, responsive layout and visual regression
+
+Acceptance tests AT-231…AT-245 (the change prompt called this "Change Set Q" with AT-211…AT-225; prompt AT-n =
+AT-(n+20); see [TRACEABILITY.md](TRACEABILITY.md), section *Change set R*). Guide: [UI layout rules](guides/ui-layout.md).
+Decision: [ADR 0017](adr/0017-ui-layout-primitives.md).
+
+| ID | Requirement |
+|---|---|
+| UI-1 | The reported preview-header defect is reproduced and its root cause documented before the fix. |
+| UI-2 | The document header uses the available panel width: the title wraps only at meaningful boundaries, the status badges (OCR, antivirus, expiry, archived) stay together as one group, file name, size and version stay inline where space permits and wrap deliberately otherwise, and actions never squeeze the information column. |
+| UI-3 | Long document, folder and file names, metadata and help tables have defined behaviour (natural wrapping, wrap-anywhere for names without spaces, sideways scrolling for wide tables); security, expiry and error meaning is never hidden by truncation. |
+| UI-4 | Layout adapts deliberately: wide desktop uses horizontal space, narrow panes and tablets reflow into rows, phones stack title → badges → details → actions → viewer; components in panes respond to the pane width (container queries). |
+| UI-5 | The three-panel Folders screen keeps usable minimum widths, switches to a two-panel mode with the document at full width below 1280 px, and to one panel at a time on phones. |
+| UI-6 | Icon + text controls, badges and status elements align consistently through shared flex primitives; no page-specific pixel offsets, negative margins, JavaScript text measuring, overflow hiding or font shrinking as a fix. |
+| UI-7 | An automated audit covers the screens of the change prompt's audit scope at 1920×1080, 1440×900, 1366×768, tablet landscape and portrait, and about 430 and 390 px; geometry of the document header is regression-tested against a reviewed baseline. |
+| UI-8 | Menus, dropdowns and dialogs stay inside the viewport and are keyboard and touch reachable; icon-only buttons have accessible names; focus stays visible; DOM order stays logical. |
+| UI-9 | Arabic and mixed-character metadata and file names do not break the audited layouts (the application itself stays left-to-right). |
+
 ## Later phases
 
 Personal WhatsApp notifications, native apps, scanning enhancement, in-browser Office editing, DICOM viewing.

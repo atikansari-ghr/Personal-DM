@@ -20,13 +20,12 @@ export function DocList({ docs }: { docs: DocRow[] }) {
       {docs.map((d) => (
         <Link key={d.id} to={`/documents/${d.id}`} className="list-item" style={{ color: "inherit", textDecoration: "none", padding: ".8rem 1rem" }}>
           <FileTypeIcon kind={d.file_kind} label={d.file_label} size="sm" />
-          <div className="grow">
-            <div style={{ fontWeight: 600 }}>{d.title}</div>
-            <div className="small muted">{d.owner.display_name} · {d.type?.name || d.file_label} · added {formatDate(d.created_at)}</div>
+          <div className="grow doc-card-main">
+            <div className="doc-open">{d.title}</div>
+            <div className="doc-meta small muted"><span>{d.owner.display_name}</span><span>{d.type?.name || d.file_label}</span><span>added {formatDate(d.created_at)}</span></div>
+            <div className="doc-badges"><StateBadge state={d.state} /><AvBadge status={d.av_status} compact /><ExpiryBadge expiry={d.expiry} /></div>
             {d.snippet && <Snippet text={d.snippet} />}
           </div>
-          <StateBadge state={d.state} /><AvBadge status={d.av_status} compact />
-          <ExpiryBadge expiry={d.expiry} />
         </Link>
       ))}
     </div>
@@ -102,7 +101,7 @@ export function DocumentPage() {
   return (
     <div>
       <button className="btn small ghost" onClick={() => nav(-1)} style={{ marginBottom: ".6rem" }}>← Back</button>
-      <div className="card"><DocumentPanel id={id!} full /></div>
+      <div className="card doc-page"><DocumentPanel id={id!} full /></div>
     </div>
   );
 }

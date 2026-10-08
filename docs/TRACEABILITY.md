@@ -330,3 +330,29 @@ Code paths are relative to `backend/apps/` and `frontend/src/`. Unless stated ot
 | AT-230 (210) | Representative benchmark on available sanitised samples; unavailable categories Not Run | OQ-18 | `scripts/ocr_engine_benchmark.py` | benchmark executed (see OCR_BENCHMARK.md) | OCR_BENCHMARK.md#engines | Passed for synthetic samples — real passports, iqamas, ID cards, certificates and phone photos: Not Run (no sanitised real samples available) |
 
 Upgrade (OQ-17): migration `library.0010_ocr_engines_lifecycle` is covered by AT-212. The installer steps (`install_paddleocr`, models, self-test) were syntax-checked and covered by the installer tests. The real worker and models were validated in the development container; a real Debian 13 / Proxmox upgrade: Not Run.
+
+## Change set R (2026-10): UI alignment, responsive layout and visual regression
+
+**Numbering.** The change prompt called this "Change Set Q" with acceptance tests AT-211…AT-225. Those numbers belong to the PaddleOCR change set, so here it is **Change Set R** with **AT-231…AT-245**: prompt AT-n → AT-(n+20), i.e. 211 → 231, 212 → 232, 213 → 233, 214 → 234, 215 → 235, 216 → 236, 217 → 237, 218 → 238, 219 → 239, 220 → 240, 221 → 241, 222 → 242, 223 → 243, 224 → 244, 225 → 245. (The step names in `tests/e2e/layout.mjs` use these numbers.)
+
+"layout" means `tests/e2e/layout.mjs` (run by `scripts/e2e.sh` and CI) with the step named. Code paths are relative to `frontend/src/`.
+
+| ID (prompt) | Scenario (abridged) | Req | Code | Tests | Docs | Status |
+|---|---|---|---|---|---|---|
+| AT-231 (211) | Screenshot defect reproduced and root cause documented before the fix | UI-1 | — | Reproduction with synthetic documents: 1920×1080 pane 746 px, title 192 px, 6 lines for a long name; the audit run against the unfixed build: 137 defects, 24 of 25 steps failed | adr/0017, guides/ui-layout.md#flex-basis, images/layout/ | Passed |
+| AT-232 (212) | Preview header: title, OCR badge, security status and file name/size/version use the panel width and stay aligned | UI-2 | `components/DocumentPanel.tsx` (doc-header), `styles.css` (.doc-header, .doc-badges, .doc-meta, .doc-actions, container queries) | layout "AT-232/233 <viewport>" (7 viewports × 5 names) | guides/ui-layout.md | Passed |
+| AT-233 (213) | Short, normal, long and very long file names without word-by-word wrapping, overlap or hidden content | UI-3 | `.doc-meta .doc-file`, `.doc-card-main .doc-open`, headings `overflow-wrap` | layout "AT-232/233 <viewport>" | guides/ui-layout.md#long-text | Passed |
+| AT-234 (214) | Three panels usable at desktop widths, deliberate reflow when narrower | UI-5 | `styles.css` (.browser columns, 1279 px mode), `pages/Folders.tsx` | layout "AT-237 <viewport>" (folders, document screens) and geometry baseline; parity AT-76/77 | guides/ui-layout.md#responsive | Passed |
+| AT-235 (215) | Icon/text alignment of buttons, menu items, metadata rows and status elements | UI-6 | shared `.btn`, `.badge`, `.doc-*` primitives | layout "iconalign" check on every audited screen | guides/ui-layout.md | Passed (no misalignment > 3 px found) |
+| AT-236 (216) | OCR, security, expiry and antivirus badges don't detach or distort rows | UI-2, UI-6 | `.doc-badges`, `AvBadge` labelled in the header, list cards | layout AT-232/233 and geometry baseline | guides/ui-layout.md | Passed |
+| AT-237 (217) | Every screen of the audit scope inspected; material defects fixed or documented | UI-7 | — | layout "AT-237 <viewport>": 27 screens × 7 viewports, 0 defects after the fixes (5 other defect families found and fixed, see TEST_REPORT) | TEST_REPORT.md#change-set-r | Passed |
+| AT-238 (218) | Desktop visual regression at 1920×1080, 1440×900, 1366×768 | UI-7 | `tests/e2e/layout-baseline.json` | layout "AT-238/239/240 geometry regression" + audit at the three sizes; screenshots reviewed | guides/ui-layout.md#check | Passed (geometry baseline; pixel snapshots deliberately not used, see ADR 0017) |
+| AT-239 (219) | Tablet portrait and landscape without overlap or clipping | UI-4, UI-5 | as AT-234 | layout at 1180×820 and 820×1180 | guides/ui-layout.md#responsive | Passed |
+| AT-240 (220) | Phones at about 390 and 430 px stack and reflow without horizontal breakage | UI-4 | as above | layout at 430×932 and 390×844; parity mobile steps | guides/ui-layout.md#responsive | Passed (emulated phones in Chromium) |
+| AT-241 (221) | Installed-PWA layout tested on an available environment | UI-4 | — | — | — | Not Run (no installed PWA on a real device in this environment; the emulated viewports above were tested) |
+| AT-242 (222) | Menus, dropdowns, dialogs and confirmations inside the viewport, keyboard and touch reachable | UI-8 | `components/Menu.tsx`, `components/ui.tsx` (Modal) | layout "AT-242 <viewport>" (menu and Share dialog at 7 viewports); parity menu steps | guides/ui-layout.md#check | Passed |
+| AT-243 (223) | Accessibility preserved: keyboard, visible focus, accessible names, logical order | UI-8 | icon buttons with `aria-label`/`title` | layout "noname" check and "AT-243 <viewport>" focus check; `tests/e2e/a11y.mjs` (no serious/critical violations) | guides/ui-layout.md | Passed |
+| AT-244 (224) | English and Arabic / mixed-character metadata and file names | UI-9 | as AT-233 | layout with "تجديد الإقامة رسوم ٢٠١٨-١٩ إيصال الدفع.jpg" and the very long name, all viewports | guides/ui-layout.md#long-text | Passed |
+| AT-245 (225) | Fixed by reusable rules, not pixel nudges, clipping or font shrinking | UI-6 | `styles.css` diff (flex basis, container queries, shared components; no negative margins, absolute positioning or JS measuring) | code review in the pull request | adr/0017 | Passed (review) |
+
+Browsers: Chromium (Playwright 1.56) only. Other browsers (Firefox, Safari, Edge) and real phones/tablets: Not Run.

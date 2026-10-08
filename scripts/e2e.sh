@@ -32,3 +32,5 @@ BASE=http://localhost:8000 SETUP_TOKEN="$TOKEN" FIXTURE="$FIXTURE" node tests/e2
 BASE=http://localhost:8000 node tests/e2e/a11y.mjs
 $PY tests/e2e/make_parity_fixtures.py "$LOGDIR/parity" >/dev/null
 BASE=http://localhost:8000 PARITY="$LOGDIR/parity" node tests/e2e/parity.mjs
+# application-wide layout audit at seven viewport classes + document-header geometry regression (Change Set R)
+BASE=http://localhost:8000 node tests/e2e/layout.mjs

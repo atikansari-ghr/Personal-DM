@@ -44,3 +44,4 @@ backend/staticfiles/
 .env.dev
 tests/e2e/node_modules/
 *.tsbuildinfo
+tests/e2e/out/

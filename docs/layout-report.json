@@ -1,0 +1,105 @@
+{
+ "results": [
+  [
+   "PASS",
+   "AT-237 desktop-1920: every audited screen without overflow, squeezed text, wrapped buttons, misaligned icons, overlaps or unnamed controls"
+  ],
+  [
+   "PASS",
+   "AT-232/233 desktop-1920: document header uses the pane width; title, badges, file details and actions aligned"
+  ],
+  [
+   "PASS",
+   "AT-242 desktop-1920: menus and dialogs stay inside the viewport and are keyboard reachable"
+  ],
+  [
+   "PASS",
+   "AT-243 desktop-1920: keyboard focus is visible on header actions"
+  ],
+  [
+   "PASS",
+   "AT-237 desktop-1440: every audited screen without overflow, squeezed text, wrapped buttons, misaligned icons, overlaps or unnamed controls"
+  ],
+  [
+   "PASS",
+   "AT-232/233 desktop-1440: document header uses the pane width; title, badges, file details and actions aligned"
+  ],
+  [
+   "PASS",
+   "AT-242 desktop-1440: menus and dialogs stay inside the viewport and are keyboard reachable"
+  ],
+  [
+   "PASS",
+   "AT-243 desktop-1440: keyboard focus is visible on header actions"
+  ],
+  [
+   "PASS",
+   "AT-237 desktop-1366: every audited screen without overflow, squeezed text, wrapped buttons, misaligned icons, overlaps or unnamed controls"
+  ],
+  [
+   "PASS",
+   "AT-232/233 desktop-1366: document header uses the pane width; title, badges, file details and actions aligned"
+  ],
+  [
+   "PASS",
+   "AT-242 desktop-1366: menus and dialogs stay inside the viewport and are keyboard reachable"
+  ],
+  [
+   "PASS",
+   "AT-243 desktop-1366: keyboard focus is visible on header actions"
+  ],
+  [
+   "PASS",
+   "AT-237 tablet-landscape: every audited screen without overflow, squeezed text, wrapped buttons, misaligned icons, overlaps or unnamed controls"
+  ],
+  [
+   "PASS",
+   "AT-232/233 tablet-landscape: document header uses the pane width; title, badges, file details and actions aligned"
+  ],
+  [
+   "PASS",
+   "AT-242 tablet-landscape: menus and dialogs stay inside the viewport and are keyboard reachable"
+  ],
+  [
+   "PASS",
+   "AT-237 tablet-portrait: every audited screen without overflow, squeezed text, wrapped buttons, misaligned icons, overlaps or unnamed controls"
+  ],
+  [
+   "PASS",
+   "AT-232/233 tablet-portrait: document header uses the pane width; title, badges, file details and actions aligned"
+  ],
+  [
+   "PASS",
+   "AT-242 tablet-portrait: menus and dialogs stay inside the viewport and are keyboard reachable"
+  ],
+  [
+   "PASS",
+   "AT-237 mobile-430: every audited screen without overflow, squeezed text, wrapped buttons, misaligned icons, overlaps or unnamed controls"
+  ],
+  [
+   "PASS",
+   "AT-232/233 mobile-430: document header uses the pane width; title, badges, file details and actions aligned"
+  ],
+  [
+   "PASS",
+   "AT-242 mobile-430: menus and dialogs stay inside the viewport and are keyboard reachable"
+  ],
+  [
+   "PASS",
+   "AT-237 mobile-390: every audited screen without overflow, squeezed text, wrapped buttons, misaligned icons, overlaps or unnamed controls"
+  ],
+  [
+   "PASS",
+   "AT-232/233 mobile-390: document header uses the pane width; title, badges, file details and actions aligned"
+  ],
+  [
+   "PASS",
+   "AT-242 mobile-390: menus and dialogs stay inside the viewport and are keyboard reachable"
+  ],
+  [
+   "PASS",
+   "AT-238/239/240 geometry regression against the reviewed baseline (document header, all viewports)"
+  ]
+ ],
+ "defects": []
+}

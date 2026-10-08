@@ -45,3 +45,10 @@ documentation.
 
 The project is licensed under the [MIT License](LICENSE). By contributing you agree that your contribution is
 published under the same license.
+
+## UI changes
+
+Follow the [UI layout rules](docs/guides/ui-layout.md): shared flex/grid primitives and container queries, no pixel
+nudges. `scripts/e2e.sh` runs the layout audit (`tests/e2e/layout.mjs`) at seven viewport sizes; review the screenshots
+and, for intentional changes to the document header, regenerate the geometry baseline with `UPDATE_BASELINE=1`.
+

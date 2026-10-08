@@ -103,6 +103,8 @@ jobs:
             docs/screenshots/
             docs/images/screenshots/
             docs/a11y-report.json
+            docs/layout-report.json
+            tests/e2e/out/layout/
             docs/parity-report.json
 
   release:

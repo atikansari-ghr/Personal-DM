@@ -84,6 +84,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 .row { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
 .row.between { justify-content: space-between; }
 .grow { flex: 1; min-width: 0; }
+/* A growing item in a wrapping header row keeps a real minimum basis: when the row is too narrow for it and its
+   siblings (usually action buttons), the siblings wrap onto their own line instead of squeezing the text into a
+   word-by-word column (flex-basis 0 never triggers wrapping). */
+.row > .grow, .list-item > .grow { flex: 1 1 var(--grow-basis, 12rem); }
+.list-item { flex-wrap: wrap; }
+h1, h2, h3, h4 { overflow-wrap: break-word; }
 .stack > * + * { margin-top: 0.75rem; }
 .error-text { color: var(--danger-ink); }
 .alert { padding: 0.7rem 0.9rem; border-radius: 10px; background: var(--info-bg); margin: 0.6rem 0; }
@@ -158,7 +164,7 @@ tr.clickable:hover td { background: var(--brand-softer); }
 .list-item:first-child { border-top: 0; }
 
 /* ---------- three panel browser */
-.browser { position: relative; display: grid; grid-template-columns: var(--tree-w, minmax(220px, 270px)) var(--list-w, minmax(280px, 1fr)) minmax(320px, 1.25fr); border: 1px solid var(--line); border-radius: var(--radius); min-height: calc(100vh - 190px); overflow: hidden; background: #fff; }
+.browser { position: relative; display: grid; grid-template-columns: var(--tree-w, minmax(220px, 270px)) var(--list-w, minmax(320px, 1fr)) minmax(340px, 1fr); border: 1px solid var(--line); border-radius: var(--radius); min-height: calc(100vh - 190px); overflow: hidden; background: #fff; }
 .browser > section { min-width: 0; overflow: auto; max-height: calc(100vh - 190px); }
 .browser > section + section { border-left: 1px solid var(--line); }
 .tree { padding: 0.6rem; }
@@ -246,7 +252,7 @@ tr.clickable:hover td { background: var(--brand-softer); }
 .switch input:checked + span::after { transform: translateX(20px); }
 .switch input:focus-visible + span { box-shadow: var(--focus); }
 .switch input:disabled + span { opacity: 0.6; cursor: not-allowed; }
-.setting-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.3fr); gap: 1rem; padding: 0.9rem 0; border-top: 1px solid var(--line); align-items: start; }
+.setting-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 1rem; padding: 0.9rem 0; border-top: 1px solid var(--line); align-items: start; }
 .setting-row:first-child { border-top: 0; }
 .setting-meta { font-size: 0.8rem; color: var(--muted); margin-top: 0.3rem; }
 .markdown h1 { font-size: 1.6rem; margin: 0.4rem 0 0.8rem; }
@@ -256,13 +262,17 @@ tr.clickable:hover td { background: var(--brand-softer); }
 .markdown table td, .markdown table th { border: 1px solid var(--line); }
 
 /* ---------- responsive */
-@media (min-width: 1101px) { .hide-desktop-detail { display: none !important; } }
-@media (max-width: 1100px) {
+/* three panels need about 1280 px next to the 260 px sidebar; below that an open document takes the full width */
+@media (min-width: 1280px) { .hide-desktop-detail { display: none !important; } }
+@media (max-width: 1279px) {
   .panel-handle { display: none; }
   .browser { grid-template-columns: minmax(200px, 240px) 1fr; }
   .browser > section.detail-pane { display: none; }
   .browser.has-doc > section.list-pane { display: none; }
   .browser.has-doc > section.detail-pane { display: block; }
+  .browser.has-doc { grid-template-columns: 1fr; }
+  .browser.has-doc > section.tree-pane { display: none; }
+  .browser.has-doc > section + section { border-left: 0; }
 }
 @media (max-width: 760px) {
   .shell { grid-template-columns: 1fr; }
@@ -336,7 +346,11 @@ tr.clickable:hover td { background: var(--brand-softer); }
 .viewer-error { text-align: center; padding: 2rem 1rem; border: 1px solid var(--line); border-radius: 10px; }
 @media (max-width: 640px) {
   .viewer, .viewer.compact { height: 70vh; }
-  /* one row that scrolls sideways instead of four wrapped rows; every control stays reachable */
+}
+/* the toolbar follows the width the viewer really has (a narrow preview pane on a wide screen as well as a phone):
+   one row that scrolls sideways instead of several ragged wrapped rows; every control stays reachable */
+.viewer { container-type: inline-size; container-name: viewer; }
+@container viewer (max-width: 34rem) {
   .viewer-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
   .viewer-toolbar > * { flex-shrink: 0; }
   .viewer-toolbar .grow { display: none; }
@@ -457,7 +471,8 @@ table.responsive td.row, table.responsive td > .row { flex-wrap: wrap; }
 .ov-editbar { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center; }
 .ov-editbar select { width: auto; }
 /* date */
-.ov-date { display: flex; gap: 0.9rem; align-items: center; }
+.ov-date { display: flex; flex-wrap: wrap; gap: 0.6rem 0.9rem; align-items: center; }
+.ov-date > div:last-child { flex: 1 1 11rem; min-width: 0; }
 .ov-date-day { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 64px; height: 70px; border-radius: 12px; background: var(--brand); color: var(--brand-ink); }
 .ov-date-day span { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
 .ov-date-day strong { font-size: 1.8rem; line-height: 1; }
@@ -666,3 +681,37 @@ code.temp-password { font-size: 1.15rem; padding: .4rem .6rem; letter-spacing: .
 
 /* Change Set Q: two-column cards (OCR engines, Compare engines) */
 .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+
+/* ---- document header (preview pane and full page): title, status badges, file metadata, actions.
+   Shared flex primitives only; the pane is a size container so the header adapts to the space the pane actually
+   has, not to the window width. */
+.detail-pane, .doc-page { container-type: inline-size; container-name: docpane; }
+.doc-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1rem; }
+.doc-header-main { flex: 1 1 20rem; min-width: 0; }
+.doc-title { font-size: 1.25rem; line-height: 1.3; margin: 0 0 0.35rem; }
+.doc-title.full { font-size: 1.6rem; }
+.doc-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-bottom: 0.3rem; }
+.doc-badges:empty { display: none; }
+.doc-meta { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.45rem; row-gap: 0.1rem; }
+.doc-meta > span { white-space: nowrap; }
+.doc-meta > span:not(:last-child)::after { content: "·"; margin-left: 0.45rem; color: var(--muted); }
+.doc-meta > .doc-file { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+.doc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; flex: 0 1 auto; }
+/* below a genuinely wide panel the actions get their own row under title, badges and file details, so they never
+   take width from the title */
+@container docpane (max-width: 60rem) { .doc-header-main { flex-basis: 100%; } }
+@container docpane (max-width: 34rem) {
+  .doc-actions .btn-label-opt { display: none; }
+  .doc-actions .btn { padding-left: 0.7rem; padding-right: 0.7rem; }
+}
+
+/* tab bar side note (e.g. "No details yet"): keeps its words together at the end of the bar */
+.tabs-aside { flex: 0 0 auto; margin-left: auto; align-self: center; white-space: nowrap; padding-left: 0.5rem; }
+/* document list cards: only checkbox, file icon and menu sit beside the text; status badges go under the name */
+.doc-card-main .doc-open { overflow-wrap: anywhere; text-align: start; }
+.doc-card-main .doc-meta { margin-top: 0.1rem; }
+.doc-card-main .doc-badges { margin: 0.25rem 0 0; }
+
+/* help / markdown tables: columns keep a readable minimum width; a table wider than the page scrolls sideways
+   (structurally appropriate for tables) instead of crushing its text into narrow columns */
+.markdown th, .markdown td { min-width: 9rem; vertical-align: top; }
