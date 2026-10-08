@@ -221,6 +221,12 @@ def main(argv: list[str]) -> int:
             return 2
     except Exception as exc:  # noqa: BLE001 - reported to the caller as JSON, never with document content
         out = {"ok": False, "error": "failed", "message": f"{exc.__class__.__name__}: {str(exc)[:300]}"}
+        if cmd != "run":  # installer commands never touch documents: show where it failed, for diagnosis
+            import traceback
+
+            frames = traceback.extract_tb(exc.__traceback__)[-3:]
+            out["where"] = [f"{Path(f.filename).name}:{f.lineno} {f.name}" for f in frames]
+            traceback.print_exc(file=sys.stderr)
         if cmd == "run" and len(argv) == 3:
             Path(argv[2]).write_text(json.dumps(out))
             return 3
