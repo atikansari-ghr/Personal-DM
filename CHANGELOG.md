@@ -37,6 +37,7 @@ The first implementation of the full initial-release scope. See `docs/IMPLEMENTA
 - A page-range re-run left the previous full searchable PDF, which previews and shares still served. Stale searchable copies are now removed.
 - Switching a version to current rebuilt the search text without the OCR rules.
 - Removal left OCR sources and languages set.
+- The ⋮ menus closed by themselves when a long menu was scrolled, or when it was opened right after a page scroll (the late scroll event closed it although the menu's button had not moved).
 
 ### Fixed (2026-10-08) — ClamAV would not start on Debian 13: unknown option `EnableVersionCommand`
 - Earlier releases (Change Set M installer and the Change Set P repair) wrote `EnableVersionCommand true` into `/etc/clamav/clamd.conf`. Only Ubuntu's patched clamd knows that option; Debian 13's clamd 1.4.3 stops with "Unknown option EnableVersionCommand", so the socket `/run/clamav/clamd.ctl` never appeared and the Antivirus page showed Unavailable.

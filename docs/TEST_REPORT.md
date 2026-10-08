@@ -1,6 +1,6 @@
 # Test report
 
-Date: 2026-10-03, updated 2026-10-06 (change sets K and L) and 2026-10-07 (change sets M, N, O and P). Revision: the branch head at the commit that adds this file.
+Date: 2026-10-03, updated 2026-10-06 (change sets K and L), 2026-10-07 (change sets M, N, O and P) and 2026-10-08 (change set Q). Revision: the branch head at the commit that adds this file.
 
 ## Environment actually used
 
@@ -12,6 +12,7 @@ Date: 2026-10-03, updated 2026-10-06 (change sets K and L) and 2026-10-07 (chang
 | Tesseract / OCRmyPDF | 5.3.4 / 15.2.0 (Ubuntu packages, run via `python3.12 -m ocrmypdf`) |
 | LibreOffice | 24.2 (Writer/Calc/Impress) |
 | Node / browser | Node 22, Chromium (Playwright 1.56) |
+| PaddleOCR (change set Q) | PaddlePaddle 3.2.2, PaddleOCR 3.7.0, PaddleX 3.7.2 in a separate Python 3.13 virtualenv; PP-OCRv5 mobile detection and en/arabic/devanagari/te/ta recognition models, PP-LCNet document-orientation model; CPU with AVX, no GPU |
 | ClamAV (change sets M and P) | 1.5.4 daemon in the development container, used only by `tests/test_antivirus_live.py` and by running the change set P diagnosis tool against it. Debian 13 ClamAV packaging (`clamav-daemon` / `clamav-freshclam` 1.4.3+dfsg-1) was checked from the package unit files and reproduced by a simulated host in `tests/test_auth_password_clamav.py`; no real Debian 13 systemd host was available |
 
 ## Commands and results
@@ -21,6 +22,9 @@ Date: 2026-10-03, updated 2026-10-06 (change sets K and L) and 2026-10-07 (chang
 | `scripts/verify.sh` (compile, `manage.py check`, `makemigrations --check`, settings reference, `bash -n` + shellcheck, pytest, `tsc` + `vite build`, repository hygiene) | **All passed** |
 | `pytest` (`tests/`) | **232 passed**, 0 failed, 0 skipped (OCR and LibreOffice tests ran; 2026-10-05, change set J: `test_browsing_v3` 7, `test_ocr_quality` 6) |
 | Change sets K and L (`tests/test_selective_ocr.py` 11, `tests/test_overview.py` 15, `tests/test_family_setup.py`; full `pytest tests` run on 2026-10-06) | **All passed**; full backend suite: 264 tests passed (`scripts/verify.sh`, which also ran the 18 stubbed installer checks, 17 frontend unit tests, type check, build and privacy check). Selective OCR policy, custom/archived types (409 for built-in or in-use types), source and page selection, front and back as one job, primary source, Remove OCR data and search, re-runs keep confirmed values, English/Arabic/Hindi with missing packs reported, states, review queue permissions, limits, cancel and pause, AI only for permitted types; Overview widgets, layout limits and styles, Gregorian/Hijri in the installation timezone, calendar, Saudi and Indian holidays with status and source, countries and corrections, weather off by default and against a **fake local weather server** (cache, stale, unavailable), sign-in presets, wallpaper upload/rejections/removal, identical sign-in methods; setup with only the Main Administrator, optional members, members added later, earlier six-account installations kept, deactivation keeps documents (DELETE 405) |
+| Change set Q (`tests/test_ocr_engines_lifecycle.py` 21 incl. 3 live, AT-211…AT-230; 2026-10-08) | **All 21 passed**: 18 via the fake worker protocol, and **3 live against the real PP-OCRv5 runtime** (self-test + document run, Arabic + English, Hindi + English upright). Full backend suite: **E2E_BACKEND**. `manage.py doctor` with the real runtime: all OCR checks OK, including the inference self-test ("PERSONAL DOCUMENTS OCR SELF TEST 2027" read in 2.6–3.8 s) |
+| `scripts/ocr_engine_benchmark.py` (21 synthetic samples, PP-OCRv5 mobile vs Tesseract 5.3.4; 2026-10-08) | PP-OCRv5 mean character accuracy **98.8 %** vs Tesseract **93.7 %**; English word F1 1.00 vs 0.97; 5.7 vs 2.6 s/page; peak child RSS 1.9 GB vs 0.5 GB. A first run with text-line orientation on read Hindi + English at 20 % (every line flipped), so that option now defaults to off. Real-document categories: **Not Run**. See [benchmark](OCR_BENCHMARK.md#engines) |
+| `scripts/e2e.sh` (2026-10-08, change set Q, **with the real PP-OCRv5 runtime**: browser flow, accessibility audit, parity checks) | **E2E_RESULT**. New steps: *AT-213/217/218 OCR engine label, Remove OCR data and Disable OCR for this document* and *AT-211/221/225/226 OCR engines (real self-test), Existing OCR data, orphans and Test OCR / Compare engines*; the selective OCR step now checks the PP-OCRv5 default and its profiles. Found and fixed: the ⋮ menu closed when a long menu itself scrolled |
 | Change set P (`tests/test_auth_password_clamav.py` 18, AT-196…AT-210; `tests/test_antivirus_live.py`; 2026-10-07) | **All 18 passed**; live ClamAV tests **passed** against a real clamd 1.5.4; earlier tests updated (passkey policy in `test_passkeys.py`, the HTML password reset email in `test_auth.py`, the account-locked alert in `test_security.py`); full backend suite: **350 passed** (fresh test database, including the live ClamAV tests). Covered with a software WebAuthn authenticator, mocked SMTP and a **simulated Debian 13 host** (fake `systemctl`, `dpkg`, `clamconf`, `freshclam`, `runuser` and a fake clamd on the socket): Sign in with Passkey offered before the password, passwordless without username or password (user verification required, replay refused), both passkey modes and main administrator recovery, audited passkey management, temporary password shown once / hash only / never sent / forced change / sessions ended, branded single-use expiring reset email never stored in the outbox, Main Administrator protection, security templates with protected mandatory text, account-locked and link events, the missing-socket / LocalSocket-mismatch state and the skipped-start-condition state diagnosed by cause and not by cached metadata, repair (clamd.conf, drop-in, tmpfiles, unit order, idempotency, service-account access, self-test), the host-helper action, persistence configuration, clean + EICAR self-test without artifacts, admin-only endpoints, upload/quarantine after repair, Security Health from the operational state |
 | `scripts/e2e.sh` (2026-10-07, change set P: browser flow, accessibility audit, parity checks) | **62 PASS, 0 FAIL** (no serious or critical accessibility violations). New steps: *AT-196 Sign in with Passkey on the first sign-in screen*, *AT-200/201 administrator resets a password: temporary password shown once* and *AT-205..207 antivirus: Diagnose / Repair panel and clean + EICAR self-test*. New screenshots: `login-passkey.png`, `admin-reset-password.png`, `security-antivirus-diagnose.png` |
 | Change set O (`tests/test_rich_notifications.py` 19, AT-176…AT-193 and AT-195; 2026-10-07) | **All 19 passed**; the affected earlier suites (expiry, events, notification policy, security, antivirus, passkeys, auth, security center, document types, authentik): **125 passed** after the change; full backend suite: **331 passed** (330 in the full run plus the live ClamAV test re-run once the local daemon was started). Covered with mocked SMTP, Telegram and push service: one event rendered for every channel, multipart email (no scripts, images or tracking, `dir="auto"`), Telegram HTML with escaping, buttons only on https and plain-text fallback, Notification Center filters, unread and cursor, critical notifications kept, push payload encrypted (decrypted with the subscriber key in the test) with lock-screen privacy and an endpoint allowlist (`http://`, `127.0.0.1`, unknown hosts and URLs with credentials refused), event-specific actions, quarantine release never in a message, Template Manager, injection payloads (`<script>`, `<img onerror>`, Markdown, Telegram markup) escaped, previews and TEST sends (only the audit entry `notifications.test_sent`), critical never below Warning, repeat cooldown, Unicode/RTL/time zone/date format, delivery history states with redacted errors, document type and masked document number, security event severity and audience, links never granting access, existing configuration kept by the migration |
@@ -50,14 +54,14 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
-## Acceptance summary (AT-01…AT-210) {#summary}
+## Acceptance summary (AT-01…AT-230) {#summary}
 
-200 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
+220 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
 
 | Result | Count | Scenarios |
 |---|---|---|
-| Passed (automated tests, or for AT-136 a documented review) | 154 | all scenarios not listed below |
-| Passed in automated tests; real-environment validation pending | 40 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195, 197, 202, 205, 206, 208 |
+| Passed (automated tests, or for AT-136 a documented review) | 167 | all scenarios not listed below |
+| Passed in automated tests; real-environment validation pending | 47 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195, 197, 202, 205, 206, 208, 211, 212, 214, 216, 228, 229, 230 |
 | Blocked (external environment) | 5 | AT-14, AT-26; AT-24, AT-27, AT-30 (partly automated, the rest needs a real Debian 13 LXC) |
 | Not run (manual steps, not automated) | 1 | AT-15 |
 
@@ -78,6 +82,84 @@ real Debian 13 installation (AT-195).
 Change set P: see [below](#change-set-p). Pending external validations (none reported as passed): real passkey
 platforms (AT-197), real SMTP delivery of the reset email (AT-202), a real Debian 13 / Proxmox LXC upgrade and repair
 (AT-205, AT-206) and reboot persistence on a real host (AT-208).
+
+Change set Q: see [below](#change-set-q). Pending external validations (none reported as passed): a fresh install
+and an upgrade on a real Debian 13 / Proxmox LXC with 6 GB (AT-211, AT-212, AT-214, AT-229), accuracy on sanitised
+real documents (AT-216, AT-230), and a real Local AI server with PP-OCRv5 output (AT-228).
+
+## Change set Q: PaddleOCR (PP-OCRv5) and the complete OCR lifecycle {#change-set-q}
+
+The change prompt numbered the acceptance tests AT-191…AT-210. In this repository they are **AT-211…AT-230**
+(prompt AT-n → AT-(n+20)).
+
+| AT | Prompt AT | Scenario | Status |
+|---|---|---|---|
+| AT-211 | AT-191 | PaddleOCR installation, minimal real inference | Passed in the development container (real self-test, doctor, live test, e2e) — fresh install on a real Debian 13 LXC Not Run |
+| AT-212 | AT-192 | Upgrade preservation, no automatic re-processing | Passed (migration test) — real upgrade Not Run |
+| AT-213 | AT-193 | PP-OCRv5 default, engine/model/profile recorded | Passed (automated, live, e2e) |
+| AT-214 | AT-194 | 6 GB resource behaviour, single queued worker | Passed (queue and limits; worker peak RSS 1.3–1.9 GB measured) — real 6 GB LXC under load Not Run |
+| AT-215 | AT-195 | Selective OCR modes and per-document override | Passed |
+| AT-216 | AT-196 | Language profiles route to the intended models | Passed (routing; real models on synthetic samples for all five profiles) — real-document accuracy Not Run |
+| AT-217 | AT-197 | Remove OCR deletes all derived data, keeps originals and confirmed details | Passed (automated, e2e) |
+| AT-218 | AT-198 | Document-level Disabled prevents regeneration until enabled | Passed (automated, e2e) |
+| AT-219 | AT-199 | Search cleanup | Passed (automated, e2e) |
+| AT-220 | AT-200 | Audit privacy | Passed |
+| AT-221 | AT-201 | Existing OCR inventory by engine with storage | Passed (automated, e2e) |
+| AT-222 | AT-202 | Bulk cleanup | Passed |
+| AT-223 | AT-203 | Controlled re-processing | Passed |
+| AT-224 | AT-204 | Failed re-processing safety | Passed |
+| AT-225 | AT-205 | Orphan dry run and cleanup | Passed (automated, e2e) |
+| AT-226 | AT-206 | OCR Test outside the library | Passed (automated, e2e with the real runtime) |
+| AT-227 | AT-207 | Compare engines without comparing confidences | Passed (automated, e2e, benchmark) |
+| AT-228 | AT-208 | Local AI with PP-OCRv5 output; confirmed data protected | Passed with a mocked AI server — real AI server Not Run |
+| AT-229 | AT-209 | Models and configuration persist across restart/upgrade/repair | Passed for configuration and restart — real upgrade/repair/reboot Not Run |
+| AT-230 | AT-210 | Representative benchmark | Passed for synthetic samples — real passports, iqamas, IDs, certificates and phone photos Not Run |
+
+**Handover evidence.**
+
+- **Root cause of retained OCR text** (nine causes) and the **previous storage/index map**: see
+  [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-q).
+- **Versions:** PaddlePaddle 3.2.2, PaddleOCR 3.7.0, PaddleX 3.7.2 (3.3.1 crashed in oneDNN on CPU).
+- **Model and profile:** PP-OCRv5 mobile detection plus per-language mobile recognition; default profile English;
+  offered English, Arabic + English, Hindi + English; document orientation on, text-line orientation off.
+- **6 GB worker configuration:**
+  - one heavy job at a time;
+  - 2 threads and a 3000 MB address-space limit per job;
+  - worker unit `MemoryHigh=3400M`, `MemoryMax=4000M`, `CPUWeight=50`.
+- **Real inference result:** the self-test passed in 2.5–3.8 s. A real document run read "SAMPLE RESIDENCE PERMIT …
+  2027-03-15", and the Arabic and Hindi profiles read their scripts (live tests).
+- **Benchmarks and comparisons actually executed:** 21 synthetic samples × 2 engines (above), plus Compare engines
+  in the browser on a synthetic permit (both engines 100 %). Not executed: any real document category.
+- **Removal proof** (`test_at217_at219_at220_*`), all after removal:
+  - text, blocks, engine and quality cleared;
+  - the stale `searchable.pdf` deleted;
+  - semantic chunks, pending AI suggestions and proposals deleted, the queued AI job cancelled;
+  - the OCR-only phrase no longer found;
+  - the confirmed detail kept with its excerpt cleared;
+  - originals and versions unchanged (SHA-256);
+  - the audit entry has counts only.
+
+  The browser step repeats it on a real PP-OCRv5 or Tesseract result.
+- **Disable proof** (`test_at218_*`):
+  - *Automatic* type upload, *Regenerate preview*, a bulk re-process and an explicit Run OCR do not recognise the
+    document while it is disabled;
+  - after Enable, OCR works again.
+- **Storage reclaimed in controlled cleanup tests:**
+  - the bulk removal lowers the inventory's text storage (`test_at221_at222_*`);
+  - the orphan cleanup removed 8,000 bytes of unreferenced searchable copies and a stale 1,000-byte scratch folder;
+  - it kept the referenced copy, the preview, and a copy written within the last hour (`test_at225_*`).
+- **Local AI regression:** `tests/test_ai.py` passed (full suite), and `test_at228_*` showed that:
+  - a result for removed text is discarded through the OCR epoch;
+  - confirmed details are never overwritten.
+- **Affected earlier regression tests:** selective OCR (`test_at111` now runs an explicit Tesseract request when
+  languages are given), storage health categories (four OCR categories added), and the e2e selective OCR step
+  (PP-OCRv5 default and profiles).
+- **Not tested:**
+  - a real Debian 13 / Proxmox LXC (install, upgrade, repair, reboot, 6 GB under load);
+  - model download from Hugging Face on a fresh server (the container used the BOS mirror);
+  - real family documents;
+  - a real Local AI server;
+  - GPU (not supported by design).
 
 ## Change set P: passkey sign-in, password reset, security templates, ClamAV repair {#change-set-p}
 

@@ -18,6 +18,7 @@ export interface OcrStatus {
   type_mode: string; profiles: { key: string; label: string }[]; engine_default: string;
 }
 
+export const PROFILE_LABEL: Record<string, string> = { en: "English", ar_en: "Arabic + English", hi_en: "Hindi (Devanagari) + English", te_en: "Telugu + English", ta_en: "Tamil + English" };
 export const ENGINE_LABEL: Record<string, string> = { paddleocr: "PaddleOCR (PP-OCRv5)", tesseract: "Tesseract (Legacy)", unknown: "Unknown (earlier version)" };
 export function EngineBadge({ engine }: { engine: string }) {
   return <span className={`badge ${engine === "paddleocr" ? "ok" : "neutral"}`} title="OCR engine that produced this text">{ENGINE_LABEL[engine] || engine}</span>;
@@ -40,12 +41,12 @@ function ResultText({ text, quality, result }: { text: string; quality: any; res
     <div className="stack" style={{ gap: ".4rem" }}>
       <div className="row small" style={{ flexWrap: "wrap" }}>
         {result && <EngineBadge engine={result.engine} />}
-        {result?.profile && <span className="badge neutral" title="Language profile">{result.profile.replace("_", " + ").toUpperCase()}</span>}
+        {result?.profile && result.engine === "paddleocr" && <span className="badge neutral" title="Language profile">{PROFILE_LABEL[result.profile] || result.profile}</span>}
         {result?.model && <span className="small muted" title="Recognition model">{result.model}</span>}
         {result?.ocr_at && <span className="small muted">{formatDateTime(result.ocr_at)}</span>}
         {confidence !== null && <span className={`badge ${level}`} title="Mean word confidence reported by the OCR engine">OCR confidence {Math.round(confidence)}%</span>}
         {quality?.rotation ? <span className="badge neutral">Rotated {quality.rotation}°</span> : null}
-        {quality?.languages?.length ? <span className="badge neutral">{quality.languages.join(" + ")}</span> : null}
+        {result?.engine !== "paddleocr" && quality?.languages?.length ? <span className="badge neutral" title="Tesseract languages">{quality.languages.join(" + ")}</span> : null}
         <CopyButton label="Text" getValue={() => text} />
       </div>
       <pre className="preview-text">{text.split("\n").map((ln, i) => low.has(i) ? <span key={i} className="ocr-low" title="Low confidence">{ln}{"\n"}</span> : <span key={i}>{ln}{"\n"}</span>)}</pre>
@@ -141,12 +142,12 @@ function RemoveDialog({ docId, status, onClose, onDone }: { docId: string; statu
     <Modal title="Remove OCR data" onClose={onClose}>
       <div className="stack">
         {err && <div className="alert error" role="alert">{err}</div>}
-        <p>Deleted: the recognised text{engines.length ? ` (${engines.join(", ")})` : ""}, text positions and confidence values, the searchable PDF copy, search-index entries built from them, unconfirmed suggested details, Local AI suggestions and semantic-search data from this text, and queued Local AI work.</p>
+        <p>Deleted: the recognised text{engines.length ? ` from ${engines.join(" and ")}` : ""}, text positions and confidence values, the searchable PDF copy, search-index entries built from them, unconfirmed suggested details, Local AI suggestions and semantic-search data from this text, and queued Local AI work.</p>
         <p><strong>Kept:</strong> the original file and every version, the title, type, owner, folder, permissions, notes, tags, manually entered and confirmed details (raw OCR excerpts next to them are cleared), and the audit history.</p>
         {(status.embedded_text || status.results.length > 0) && (
           <label className="check"><input type="checkbox" checked={embedded} onChange={(e) => setEmbedded(e.target.checked)} /> Also hide the text layer embedded in the file (from the scanner or an earlier OCR program). The file itself is not changed.</label>
         )}
-        <label className="check"><input type="checkbox" checked={disable} onChange={(e) => setDisable(e.target.checked)} /> Also disable OCR for this document (Automatic OCR, Regenerate preview and repairs will not recognise it again)</label>
+        <label className="check"><input type="checkbox" checked={disable} onChange={(e) => setDisable(e.target.checked)} /> Also disable OCR for this document (Automatic OCR, Regenerate preview, repairs and bulk re-processing will not recognise it again)</label>
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn danger" disabled={busy} onClick={async () => {
@@ -220,7 +221,7 @@ export default function OcrPanel({ docId, onChanged, request }: { docId: string;
           {status.can_edit && status.override === "disabled" && <button className="btn small" onClick={enable}>Enable OCR for this document</button>}
         </div>
       </div>
-      {sourceNames.length > 0 && <p className="small muted">Source: {sourceNames.join(" + ")}{status.languages.length ? ` · ${status.languages.join(" + ")}` : ""}{status.updated_at ? ` · ${formatDateTime(status.updated_at)}` : ""}</p>}
+      {sourceNames.length > 0 && <p className="small muted">Source: {sourceNames.join(" + ")}{status.results.some((r) => r.engine === "paddleocr") && status.profile ? ` · ${PROFILE_LABEL[status.profile] || status.profile}` : status.languages.length ? ` · ${status.languages.join(" + ")}` : ""}{status.updated_at ? ` · ${formatDateTime(status.updated_at)}` : ""}</p>}
       {status.state === "failed" && <div className="alert error">Text recognition failed: {status.error || "unknown error"}. Try another page range, language or orientation.</div>}
       {running && <div className="alert">Text recognition is {status.state === "queued" ? "waiting in the queue" : "running"}…</div>}
       {status.results.length === 0 && !running && (

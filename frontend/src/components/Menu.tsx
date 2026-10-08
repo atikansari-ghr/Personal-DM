@@ -66,15 +66,23 @@ export default function Menu({ label, items, className = "icon-btn", trigger, mi
       if (!menu.current?.contains(t) && !btn.current?.contains(t)) close(false);
     };
     const away = () => close(false);
+    // close when scrolling moved the trigger away from the menu; ignore scrolling inside a long menu and the late
+    // scroll event of a scroll that finished before the menu opened (the trigger did not move)
+    const anchor = btn.current?.getBoundingClientRect();
+    const scrolled = (e: Event) => {
+      if (menu.current?.contains(e.target as Node)) return;
+      const now = btn.current?.getBoundingClientRect();
+      if (!anchor || !now || Math.abs(now.top - anchor.top) > 2 || Math.abs(now.left - anchor.left) > 2) close(false);
+    };
     document.addEventListener("mousedown", outside);
     document.addEventListener("touchstart", outside);
     window.addEventListener("resize", away);
-    window.addEventListener("scroll", away, true);
+    window.addEventListener("scroll", scrolled, true);
     return () => {
       document.removeEventListener("mousedown", outside);
       document.removeEventListener("touchstart", outside);
       window.removeEventListener("resize", away);
-      window.removeEventListener("scroll", away, true);
+      window.removeEventListener("scroll", scrolled, true);
     };
   }, [open]);
   useEffect(() => () => { if (closeOpenMenu === closer.current) closeOpenMenu = null; }, []);

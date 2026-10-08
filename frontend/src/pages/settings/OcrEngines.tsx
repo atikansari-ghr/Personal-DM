@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, formatBytes, formatDateTime } from "../../api";
-import { ENGINE_LABEL } from "../../components/OcrPanel";
+import { ENGINE_LABEL, PROFILE_LABEL } from "../../components/OcrPanel";
 import { Confirm, HelpTip, Icon, Modal, Skeleton, useToast } from "../../components/ui";
 
 /** Settings → OCR & processing (Change Set Q): engine health, Existing OCR Data (inventory, bulk, orphans) and
@@ -56,7 +56,7 @@ export function OcrEngineStatus() {
           <div className="small muted">Limits: {d.limits.max_file_mb} MB · {d.limits.max_pages} pages · {d.limits.timeout_seconds}s per file</div>
         </div>
       </div>
-      <h3>Language profiles</h3>
+      <h3 style={{ marginTop: "1rem" }}>Language profiles</h3>
       <div style={{ overflowX: "auto" }}>
         <table className="responsive"><thead><tr><th>Profile</th><th>Offered</th><th>PP-OCRv5 models</th><th>Tesseract (Legacy)</th></tr></thead><tbody>
           {d.profiles.map((pr) => (
@@ -139,7 +139,7 @@ export function OcrExistingData() {
               <td><a href={`/documents/${d.id}`}>{d.title}</a><div className="small muted">{[d.type, d.folder].filter(Boolean).join(" · ")}</div></td>
               <td className="small">{d.owner}</td>
               <td className="small">{d.engines.map((e) => ENGINE_LABEL[e] || e).join(", ") || "—"}</td>
-              <td className="small">{d.profile || "—"}</td>
+              <td className="small">{PROFILE_LABEL[d.profile] || d.profile || "—"}</td>
               <td className="small">{d.ocr_state}{d.disabled ? " · OCR disabled" : ""}{d.embedded_text_hidden ? " · embedded text hidden" : ""}</td>
               <td className="small">{d.ocr_at ? formatDateTime(d.ocr_at) : "—"}</td>
               <td className="small">{d.text_chars.toLocaleString()} chars</td>

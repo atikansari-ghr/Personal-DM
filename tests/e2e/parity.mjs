@@ -287,7 +287,8 @@ await step("AT-101/106/112 selective OCR: manual by default, chosen pages and la
   await page.fill(".modal input[aria-label^='Pages of']", "1");
   // Change Set Q: PP-OCRv5 is the default engine with language profiles; Tesseract (Legacy) keeps its languages
   expect(await page.inputValue("#ocr-engine") === "paddleocr", "PaddleOCR is the default engine");
-  for (const prof of ["English", "Arabic + English", "Hindi (Devanagari) + English"]) expect(await page.locator(`#ocr-profile option:has-text('${prof}')`).count() === 1, `profile ${prof} offered`);
+  const profiles = await page.locator("#ocr-profile option").allTextContents();
+  for (const prof of ["English", "Arabic + English", "Hindi (Devanagari) + English"]) expect(profiles.includes(prof), `profile ${prof} offered (${profiles})`);
   await page.selectOption("#ocr-engine", "tesseract");
   for (const lang of ["English", "Arabic", "Hindi"]) expect(await page.locator(`.modal label:has-text('${lang}')`).count() === 1, `Tesseract language ${lang} offered`);
   await page.selectOption("#ocr-engine", "paddleocr");
@@ -740,12 +741,16 @@ await step("AT-176..186 rich notifications: TEST messages, Notification Center, 
   expect(await expiryCard.locator("a:has-text('Open Document')").count() === 1, "primary action");
   await page.screenshot({ path: `${SHOTS}/notification-center.png` });
   await page.selectOption("select[aria-label='Severity']", "critical");
-  await page.waitForFunction(() => [...document.querySelectorAll(".note-card .sev-badge")].every((b) => b.textContent === "Critical"));
+  await page.waitForFunction(() => [...document.querySelectorAll(".note-card .sev-badge")].every((b) => b.textContent === "Critical"))
+    .catch(async (e) => { throw new Error(`severity filter: ${await page.locator(".note-card .sev-badge").allTextContents()} ${e}`); });
   await page.selectOption("select[aria-label='Severity']", "");
   await page.click("button[role=radio]:has-text('Unread')");
-  const unreadBefore = await page.locator(".note-card").count();
+  // track the card itself: background jobs (e.g. a PP-OCRv5 run finishing) may add new unread cards meanwhile
+  const label = await page.locator(".note-card").first().getAttribute("aria-label");
+  const sameBefore = await page.locator(`.note-card[aria-label="${label}"]`).count();
   await page.locator(".note-card").first().locator("button:has-text('Mark read')").click();
-  await page.waitForFunction((n) => document.querySelectorAll(".note-card").length === n - 1, unreadBefore);
+  await page.waitForFunction(([l, n]) => [...document.querySelectorAll(".note-card")].filter((c) => c.getAttribute("aria-label") === l).length === n - 1, [label, sameBefore])
+    .catch((e) => { throw new Error(`mark read (${label}, ${sameBefore}): ${e}`); });
   await page.click("button[role=radio]:has-text('All')");
   // AT-184/186: template manager with previews for every channel
   await page.goto(BASE + "/settings/notifications");
@@ -869,6 +874,11 @@ await step("AT-211/221/225/226 OCR engines, Existing OCR data, orphans and Test 
   await page.goto(BASE + "/settings/processing");
   await page.waitForSelector("h2:has-text('OCR engines')");
   await page.waitForSelector("text=Language profiles");
+  await page.click("button:has-text('Run self-test')");  // real inference (a successful import alone is not Healthy)
+  await page.waitForSelector(".toast:has-text('Self-test passed'), .toast:has-text('Self-test failed')", { timeout: 120000 });
+  const eng = (await api(page, "/api/ocr/engines")).data;
+  expect(eng.paddle.healthy === !!eng.paddle.installed, `health follows the real self-test (installed ${eng.paddle.installed})`);
+  await page.waitForSelector("h3:has-text('PaddleOCR (PP-OCRv5)') .badge:has-text('Healthy'), h3:has-text('PaddleOCR (PP-OCRv5)') .badge:has-text('Not installed')");
   await page.locator("h2:has-text('OCR engines')").evaluate((el) => { el.scrollIntoView({ block: "start" }); window.scrollBy(0, -90); });
   await page.screenshot({ path: `${SHOTS}/settings-ocr-engines.png` });
   await page.waitForSelector("h2:has-text('Existing OCR data')");

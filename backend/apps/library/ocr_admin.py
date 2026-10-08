@@ -219,8 +219,9 @@ def ocr_bulk(job):
                 if waiting >= int(config.get("processing.ocr_queue_max")):
                     rest = [did] + [x for x in batch[batch.index(did) + 1:]] + rest
                     break
-                if not DocumentVersion.objects.filter(document=doc, ocr_applied=True).exists() and not doc.ocr_sources:
-                    skipped += 1
+                if doc.ocr_override == "disabled" or (
+                        not DocumentVersion.objects.filter(document=doc, ocr_applied=True).exists() and not doc.ocr_sources):
+                    skipped += 1  # OCR disabled for this document, or nothing was ever recognised
                     continue
                 ocr_runs.request_ocr(actor=actor, doc=doc, set_primary=False, engine="paddleocr", reprocess=True,
                                      profile=(doc.ocr_profile or None))
@@ -250,16 +251,24 @@ def _orphan_files() -> list[Path]:
     if not root.exists():
         return []
     referenced = _referenced_searchables()
+    # a running job writes its searchable copy just before the database row that refers to it is committed:
+    # anything modified within the last hour is never an orphan
+    cutoff = time.time() - 3600
     out = []
     for p in root.glob("*/*/searchable*.pdf"):
         try:
             rel = storage.derivative_rel(p)
-        except ValueError:
+            recent = p.stat().st_mtime > cutoff
+        except (ValueError, OSError):
             continue
-        if rel not in referenced:
+        if rel not in referenced and not recent:
             out.append(p)
     for p in root.glob("*/*/*.hocr"):
-        out.append(p)
+        try:
+            if p.stat().st_mtime <= cutoff:
+                out.append(p)
+        except OSError:
+            continue
     return out
 
 

@@ -360,6 +360,13 @@ def test_at218_disable_prevents_regeneration_until_enabled(family, clients, padd
     assert Job.objects.filter(kind="ocr_run").count() == before  # Automatic type, but no OCR came back
     r = c.post(f"/api/documents/{doc.id}/ocr", {}, format="json")
     assert r.status_code == 400 and "disabled for this document" in r.json()["error"]
+    Document.objects.filter(pk=doc.pk).update(ocr_sources=[{"version": str(doc.current_version_id), "pages": ""}])
+    r = clients["dad"].post("/api/ocr/bulk", {"action": "reprocess", "ids": [str(doc.id)], "confirm": True}, format="json")
+    assert r.status_code == 202
+    run_jobs()
+    assert Job.objects.filter(kind="ocr_run").count() == before  # a bulk re-process skips it as well
+    fin = AuditEvent.objects.filter(action="ocr.bulk_finished").latest("at").context
+    assert fin["skipped"] == 1 and fin["done"] == 0 and fin["errors"] == 0
     assert c.post(f"/api/documents/{doc.id}/ocr/mode", {"disabled": False}, format="json").json()["override"] == ""
     assert c.post(f"/api/documents/{doc.id}/ocr", {}, format="json").status_code == 202
     assert AuditEvent.objects.filter(action="document.ocr_disable").exists() and AuditEvent.objects.filter(action="document.ocr_enable").exists()
@@ -464,6 +471,10 @@ def test_at225_orphan_dry_run_then_cleanup_only_orphans(family, clients, paddle,
     (tmp_old / "page.png").write_bytes(b"z" * 1000)
     old = time.time() - 4 * 3600
     os.utime(tmp_old, (old, old))
+    for f in (orphan_dir / "searchable.pdf", stray):
+        os.utime(f, (old, old))
+    fresh = d / "searchable-new.pdf"  # being written by a running job right now: not an orphan yet
+    fresh.write_bytes(b"w" * 700)
     other = _upload(c, personal_root(family["son1"]), "other.png", _png(["OTHER"]))
     run_jobs()
     DocumentVersion.objects.filter(document=other).update(ocr_applied=False, ocr_blocks=[{"page": 1, "lines": []}])
@@ -477,6 +488,7 @@ def test_at225_orphan_dry_run_then_cleanup_only_orphans(family, clients, paddle,
     assert r["removed"] >= 4 and r["after"]["count"] == 0
     assert not (orphan_dir / "searchable.pdf").exists() and not stray.exists() and not tmp_old.exists()
     assert referenced.exists() and (orphan_dir / "thumb.png").exists()  # referenced OCR copy and previews stay
+    assert fresh.exists()
     assert storage.resolve_original(v.storage_path).exists()
     keys = {x["key"] for x in clients["dad"].get("/api/security/storage?refresh=1").json()["categories"]}
     assert {"ocr_text", "ocr_cache", "ocr_orphans", "ocr_models"} <= keys

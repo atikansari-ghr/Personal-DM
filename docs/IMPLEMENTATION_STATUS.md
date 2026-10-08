@@ -81,6 +81,78 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
 - Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
 
+## Change set Q: PaddleOCR (PP-OCRv5) and the complete OCR lifecycle {#change-set-q}
+
+**Numbering.** The change prompt called this "Change Set P" with AT-191…AT-210. Those numbers were already used, so
+it is **Change Set Q** with **AT-211…AT-230** (prompt AT-n → AT-(n+20); full mapping in [TRACEABILITY.md](TRACEABILITY.md)).
+Decision record: [ADR 0016](adr/0016-paddleocr-ocr-lifecycle.md).
+
+**Root cause: removed OCR text came back.** The pipeline was mapped end to end; nine causes were found and fixed:
+
+1. *Remove OCR data* reset the search text to the PDF's embedded text layer, so text from the scanner or an earlier
+   OCR program stayed searchable. It can now be hidden (`Document.ignore_embedded_text`).
+2. The Remove button was hidden when no version was marked `ocr_applied`; it is now offered whenever OCR or embedded
+   text exists.
+3. *Regenerate preview* (`/reprocess` → `process_version`) and the integrity repair re-ran automatic OCR, and
+   migration 0007 had made every type *Automatic* on upgraded installs. These jobs now carry `auto_ocr: False`.
+4. Queued or running Local AI jobs recreated suggestions and semantic chunks after removal. They now carry the
+   document's `ocr_epoch`; removal bumps it and cancels queued AI work.
+5. Confirmed details kept raw OCR excerpts (`DocumentField.source_excerpt`); removal clears them.
+6. A page-range re-run left the previous full `searchable.pdf`, still served by the preview and share links. A run now
+   replaces or deletes the superseded copy, and removal deletes every `searchable*.pdf` of the document.
+7. Stale searchable files inside known version directories were never detected. Removal and the orphan analysis
+   find them now.
+8. Policy switches never deleted data, and nothing said so. The UI now offers *Remove* and *Disable* explicitly; the
+   per-document override beats the type.
+9. `set_current_version` rebuilt the search text without `document_text()`, and removal left `ocr_sources` and
+   `ocr_languages` set. Both are fixed.
+
+**Previous OCR storage / index map** (before this change):
+
+| Where | What |
+|---|---|
+| `DocumentVersion` | `text`, `ocr_applied`, `ocr_quality`, `ocr_pages`, `searchable_path`, `pdfa` |
+| `Document` | `content_text`, `search_vector` (GIN index; weights A title, B type/correspondent/tags/owner/fields, C `content_text`), `type_suggestions`, `ocr_sources`, `ocr_languages`, `ocr_state` |
+| `DocumentField` | proposals with `source_excerpt` (raw OCR snippets) |
+| Local AI | `AISuggestion`, `DocumentChunk` (semantic-search embeddings), queued `AIJob`s |
+| Files | `DERIVATIVES_DIR/<id[:2]>/<id>/searchable.pdf` (plus `thumb.png`, `preview.pdf`); scratch folders `TMP_DIR/ocr-*`, `proc-*` |
+
+New in this change:
+
+- `DocumentVersion`: `ocr_engine`, `ocr_model`, `ocr_profile`, `ocr_blocks`, `ocr_at`.
+- `Document`: `ocr_override`, `ocr_profile`, `ignore_embedded_text`, `ocr_epoch`.
+- `DocumentType.ocr_profile`.
+- `OcrRun` (metadata only).
+- Scratch folders `TMP_DIR/paddle-*` and `ocrtest-*`.
+
+**Runtime actually validated** (development container, CPU, AVX):
+
+- PaddlePaddle **3.2.2**, PaddleOCR **3.7.0** and PaddleX **3.7.2** on Python 3.13.
+- Models: `PP-OCRv5_mobile_det`, `en_` / `arabic_` / `devanagari_` / `te_` / `ta_PP-OCRv5_mobile_rec`, and
+  `PP-LCNet_x1_0_doc_ori`.
+- PaddlePaddle 3.3.1 crashed on CPU in oneDNN (`ConvertPirAttribute2RuntimeAttribute`), and PaddleOCR 3.2.0 lacks the
+  ar/hi/te/ta PP-OCRv5 models, hence the pins.
+- **Effective defaults:** engine PaddleOCR; mobile models; profiles offered English, Arabic + English and Hindi +
+  English; default profile English; document orientation on; text-line orientation **off** (measured, see
+  [benchmark](OCR_BENCHMARK.md#engines)); unwarping off.
+- **Health:** a real inference self-test read "PERSONAL DOCUMENTS OCR SELF TEST 2027" in 2.5–3.8 s
+  (`manage.py doctor`, `test_live_at211_*`).
+
+**6 GB / 4 vCPU worker configuration:**
+
+- one heavy job at a time (`processing.heavy_concurrency` = 1);
+- PaddleOCR with 2 CPU threads and `RLIMIT_AS` 3000 MB per job, plus a CPU-time limit and a timeout;
+- worker unit `MemoryHigh=3400M`, `MemoryMax=4000M`, `CPUWeight=50`.
+
+Measured peak RSS of the worker process: 1.3–1.9 GB. The self-test also passes under a 3 GB address-space limit.
+
+**Not validated here:**
+
+- a real Debian 13 / Proxmox LXC with 6 GB: install, upgrade, repair, reboot and load;
+- real family documents (no sanitised real samples; every benchmark sample is synthetic);
+- a real Local AI server with PP-OCRv5 output (mocked in tests);
+- Hugging Face model download from a fresh server (models were downloaded from the BOS mirror in the container).
+
 ## Change set P: passkey sign-in, password reset, security templates, ClamAV repair {#change-set-p}
 
 **Numbering.** The change prompt called this "Change Set O" with AT-176…AT-190; those numbers already belonged to the

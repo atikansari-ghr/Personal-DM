@@ -1,0 +1,71 @@
+[
+ [
+  "FAIL",
+  "first-run setup: Main Administrator, then optional family members",
+  "Error: ENOENT: no such file or directory, open 'docs/screenshots/../../tests/e2e/.son1'"
+ ],
+ [
+  "FAIL",
+  "login page and sign in as the administrator",
+  "TimeoutError: page.waitForSelector: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=Welcome back') to be visible\u001b[22m\n"
+ ],
+ [
+  "FAIL",
+  "upload a scanned passport (synthetic) and process it",
+  "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\\'Upload documents\\')')\u001b[22m\n"
+ ],
+ [
+  "FAIL",
+  "passport type is Manual: nothing is recognised until Run OCR is chosen",
+  "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('nav').locator('text=Folders')\u001b[22m\n"
+ ],
+ [
+  "FAIL",
+  "Overview shows the date, holidays and the recent document",
+  "TimeoutError: page.waitForSelector: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.ov-grid [data-widget=date] .ov-hijri') to be visible\u001b[22m\n"
+ ],
+ [
+  "FAIL",
+  "three-panel folder browser with preview and suggested details",
+  "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('nav').locator('text=Folders')\u001b[22m\n"
+ ],
+ [
+  "FAIL",
+  "confirm suggested dates -> generated name with years",
+  "TimeoutError: page.waitForSelector: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.detail-pane h2:has-text(\\'(2016–2026)\\')') to be visible\u001b[22m\n"
+ ],
+ [
+  "FAIL",
+  "search with highlighted snippet",
+  "TimeoutError: page.fill: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#global-search')\u001b[22m\n"
+ ],
+ [
+  "FAIL",
+  "notifications settings (admin) render with reminder days",
+  "TimeoutError: page.waitForSelector: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=Expiry reminder days') to be visible\u001b[22m\n"
+ ],
+ [
+  "FAIL",
+  "family & access settings",
+  "TimeoutError: page.waitForSelector: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('text=Family groups') to be visible\u001b[22m\n"
+ ],
+ [
+  "FAIL",
+  "profile page and blue theme applies",
+  "TimeoutError: page.selectOption: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#s-me\\\\.theme')\u001b[22m\n"
+ ],
+ [
+  "FAIL",
+  "help guide renders bundled documentation",
+  "TimeoutError: page.waitForSelector: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.markdown h1') to be visible\u001b[22m\n"
+ ],
+ [
+  "FAIL",
+  "another user keeps their own (green) theme and forced password change",
+  "Error: ENOENT: no such file or directory, open 'tests/e2e/.son1'"
+ ],
+ [
+  "PASS",
+  "no uncaught page errors"
+ ]
+]
