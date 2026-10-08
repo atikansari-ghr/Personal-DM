@@ -10,6 +10,8 @@ are described in [OCR, details and corrections](ocr-corrections.md).
 
 ## Engines {#engine}
 
+![OCR engines card with a passed real-inference self-test](../images/screenshots/settings-ocr-engines.png)
+
 | Engine | Use | Notes |
 | --- | --- | --- |
 | **PaddleOCR (PP-OCRv5)** — default | All new OCR runs | Better on photos, skewed or curved pages, mixed scripts and small text. Stores text **positions** (boxes) and a score per line. Runs in its own isolated Python environment (`/opt/personaldocs/paddle-venv`), on CPU, one job at a time. |
@@ -108,6 +110,8 @@ Confirmed details are never overwritten by a re-run. A different reading is show
 
 ## Removing OCR data {#remove}
 
+![OCR result labelled with its engine, profile and model, with Remove and Disable actions](../images/screenshots/ocr-engine-label.png)
+
 **Remove OCR data…** deletes everything that was derived from recognition:
 
 - the recognised text, text positions/blocks and confidence values;
@@ -161,6 +165,8 @@ Bulk work runs in the background in batches. *Re-process* adds documents to the 
 accepts them, so a large library never floods the server. Each re-processed document keeps its previous result
 until the new PP-OCRv5 result succeeds.
 
+![Existing OCR data with counts by engine, storage, filters and bulk actions](../images/screenshots/settings-ocr-existing.png)
+
 ## Orphaned OCR data {#orphans}
 
 **Analyze (dry run)** lists derived OCR data that no longer belongs to anything:
@@ -186,6 +192,8 @@ compare with Tesseract and paste the expected text. The result shows, per engine
 
 The test file is processed in a private temporary folder that is always deleted. It is never added to the library.
 Engine confidences are not comparable with each other; judge by the accuracy or by reading the text.
+
+![Compare engines on a synthetic sample](../images/screenshots/settings-ocr-compare.png)
 
 ## Server commands {#commands}
 

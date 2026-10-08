@@ -300,7 +300,7 @@ Upgrade (OPS-P1): migrations `accounts.0007_passkey_mode` and `notify.0003_templ
 
 **Numbering.** The change prompt called this "Change Set P" with acceptance tests AT-191…AT-210. Those numbers were already used (rich notifications AT-176…AT-195, Change Set P AT-196…AT-210), so in this repository it is **Change Set Q** with tests **AT-211…AT-230**: prompt AT-n → AT-(n+20). That is 191 → 211, 192 → 212, 193 → 213, 194 → 214, 195 → 215, 196 → 216, 197 → 217, 198 → 218, 199 → 219, 200 → 220, 201 → 221, 202 → 222, 203 → 223, 204 → 224, 205 → 225, 206 → 226, 207 → 227, 208 → 228, 209 → 229, 210 → 230.
 
-Code paths are relative to `backend/apps/` and `frontend/src/`. Unless stated otherwise the tests are in `tests/test_ocr_engines_lifecycle.py` (20 tests, all passed).
+Code paths are relative to `backend/apps/` and `frontend/src/`. Unless stated otherwise the tests are in `tests/test_ocr_engines_lifecycle.py` (21 tests including 3 live, all passed). The browser suite passed with **64 PASS, 0 FAIL**.
 
 - **fake:** CI has no 1.3 GB PaddlePaddle runtime. These tests run the worker protocol through `tests/fake_paddle_worker.py`, which uses the real sandbox and the same request/result files, and reads text with Tesseract.
 - **live:** `test_live_*` run the **real** PP-OCRv5 runtime (PaddlePaddle 3.2.2, PaddleOCR 3.7.0, PaddleX 3.7.2, mobile models) in the development container, with `PD_TEST_PADDLE_PYTHON` set. Without it they are reported as skipped, never as passed.
