@@ -4,6 +4,31 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Fixed (2026-10-08) — UI alignment and responsive layout (Change Set R)
+- **Document preview header.** The title wrapped word by word in a narrow column while the pane had free width (746 px pane, 192 px title at 1920×1080). Badges and the shield were detached, and "file · size · version" broke item by item.
+  - Root cause: the shared header row gave the title `flex: 1` (basis 0), so the wrapping row never wrapped and the action buttons took the space.
+  - The shared rule now gives growing items a real basis, so actions move to their own row before text is squeezed.
+  - The header is a reusable component: title; status badges as one group (antivirus as a labelled badge); file details whose separators never start a line; actions.
+- **Responsive by available space.** The preview pane, the full page and the viewer adapt to their own width (CSS container queries), not the window's.
+  - Narrow panes show *Share* / *Open full page* as named icon buttons.
+  - The viewer toolbar becomes one scrolling row instead of several ragged rows.
+- **Three panels from 1280 px.** Below that, an open document uses the full width with *Back to folder* (it was squeezed to 273 px next to the tree on tablets). List and preview share the width equally.
+- **Other squeezed layouts found by the new audit:**
+  - document list cards (status badges moved under the name; very long names wrap);
+  - the tab bar's "No details yet";
+  - the Overview date widget;
+  - settings rows on tablets (one column when two don't fit);
+  - help tables (minimum column width, sideways scrolling on phones).
+- **Menus:** the ⋮ menus no longer close when opened right after a page scroll.
+
+### Added (2026-10-08) — Change Set R
+- `tests/e2e/layout.mjs`, run by `scripts/e2e.sh` and CI, covers 27 screens at 1920×1080, 1440×900, 1366×768, tablet landscape and portrait, and 430/390 px phones.
+  - Checks: horizontal overflow, squeezed text, wrapped button labels, icon/label misalignment, overlapping or off-screen controls, and unnamed icon-only controls.
+  - Document header checks with short, long, very long and Arabic synthetic names; menus and dialogs inside the viewport and keyboard reachable; visible focus.
+  - Header geometry regression against the reviewed `tests/e2e/layout-baseline.json`.
+  - Report in `docs/layout-report.json`; review screenshots are a CI artifact.
+- Contributor guide [UI layout rules](docs/guides/ui-layout.md), ADR 0017, before/after images in `docs/images/layout/`.
+
 ### Fixed (2026-10-08) — PP-OCRv5 model download failed during upgrade
 - `personaldocs upgrade` could report "Some PP-OCRv5 models could not be downloaded: PermissionError: [Errno 13] Permission denied: 'None'". The model libraries ran as the service user inside root's working directory, using download caches outside the model folder. The installer now runs them inside `/var/lib/personaldocs/paddle`, with their own temp and cache folders there, and passes an HTTPS proxy through when one is set. An installer error now also names where it failed, and the full traceback goes to `/var/log/personaldocs/install.log`. Retry with `sudo personaldocs ocr install-models`.
 

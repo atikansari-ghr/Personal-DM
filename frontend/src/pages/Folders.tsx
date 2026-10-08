@@ -384,8 +384,10 @@ export default function FoldersPage() {
             <div key={d.id} className={`doc-card ${docId === d.id ? "active" : ""}`} {...rowProps(d)}>
               {check(d)}
               <FileTypeIcon kind={d.file_kind} label={d.file_label} />
-              <div className="grow">{openBtn(d)}<div className="small muted">{d.file_label} · {formatBytes(d.size)} · {formatDate(d.created_at)}</div></div>
-              <StateBadge state={d.state} /><AvBadge status={d.av_status} compact />{d.expiry && d.expiry.level !== "ok" && <ExpiryBadge expiry={d.expiry} />}
+              <div className="grow doc-card-main">{openBtn(d)}
+                <div className="doc-meta small muted"><span>{d.file_label}</span><span>{formatBytes(d.size)}</span><span>{formatDate(d.created_at)}</span></div>
+                <div className="doc-badges"><StateBadge state={d.state} /><AvBadge status={d.av_status} compact />{d.expiry && d.expiry.level !== "ok" && <ExpiryBadge expiry={d.expiry} />}</div>
+              </div>
               {rowMenu(d)}
             </div>
           )) : view === "thumbnails" ? (

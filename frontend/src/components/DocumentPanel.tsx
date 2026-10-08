@@ -217,17 +217,18 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
 
   return (
     <div style={{ padding: full ? 0 : "1rem" }} className="stack">
-      <div className="row between" style={{ alignItems: "flex-start" }}>
-        <div className="grow">
-          <h2 style={{ fontSize: full ? "1.6rem" : "1.25rem", marginBottom: ".2rem" }}>{doc.title}</h2>
-          <div className="row small muted"><StateBadge state={doc.state} />{doc.ocr && doc.ocr.state !== "not_processed" && <OcrStateBadge state={doc.ocr.state} />}<ExpiryBadge expiry={doc.expiry} /><AvBadge status={v?.antivirus?.status} compact />{v && <span>{v.original_name} · {formatBytes(v.size)} · v{v.number}</span>}{doc.archived && <span className="badge neutral">Archived</span>}</div>
+      <header className="doc-header">
+        <div className="doc-header-main">
+          <h2 className={`doc-title${full ? " full" : ""}`}>{doc.title}</h2>
+          <div className="doc-badges"><StateBadge state={doc.state} />{doc.ocr && doc.ocr.state !== "not_processed" && <OcrStateBadge state={doc.ocr.state} />}<ExpiryBadge expiry={doc.expiry} /><AvBadge status={v?.antivirus?.status} />{doc.archived && <span className="badge neutral">Archived</span>}</div>
+          {v && <div className="doc-meta small muted"><span className="doc-file" title={v.original_name}>{v.original_name}</span><span>{formatBytes(v.size)}</span><span>v{v.number}</span></div>}
           {v?.antivirus?.blocked && <div className="alert error" role="alert" style={{ marginTop: ".5rem" }}><strong>Quarantined by the antivirus ({v.antivirus.signature}).</strong> Preview, download, OCR and Local AI are blocked for this file. The main administrator can review it in Settings → Security → Antivirus.</div>}
           {v?.antivirus && ["not_scanned", "size_limit", "failed"].includes(v.antivirus.status) && <div className="small muted" style={{ marginTop: ".3rem" }}>Antivirus: {v.antivirus.detail || "not scanned"}</div>}
         </div>
-        <div className="row">
+        <div className="doc-actions">
           {can("download") && v && <a className="btn primary" href={`/api/documents/${doc.id}/file?download=1`}><Icon name="download" /> Download</a>}
-          {(can("share") || can("download")) && <button className="btn" onClick={() => setDialog("share")}><Icon name="share" /> Share</button>}
-          {!full ? <Link className="btn" to={`/documents/${doc.id}`}><Icon name="external" /> Open full page</Link> : null}
+          {(can("share") || can("download")) && <button className="btn" aria-label="Share" title="Share" onClick={() => setDialog("share")}><Icon name="share" /><span className="btn-label-opt">Share</span></button>}
+          {!full ? <Link className="btn" aria-label="Open full page" title="Open full page" to={`/documents/${doc.id}`}><Icon name="external" /><span className="btn-label-opt">Open full page</span></Link> : null}
           <Menu label="More actions" className="btn" items={[
             { label: "Rename / edit details…", hidden: !can("edit"), onSelect: () => setDialog("edit") },
             { label: doc.type ? "Change document type…" : "Set document type…", hidden: !can("edit"), onSelect: () => { setTab("details"); setTypeReq((n) => n + 1); } },
@@ -246,13 +247,13 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
             { label: "Archive…", danger: true, hidden: !can("archive") || doc.archived, onSelect: () => setDialog("archive") },
           ]} />
         </div>
-      </div>
+      </header>
       <Preview doc={doc} full={full} />
       <div className="tabs" role="tablist">
         {[["details", "Details"], ["text", "Text (OCR)"], ["versions", `Versions (${doc.versions.length})`], ["similar", "More like this"], ...(doc.history.length ? [["history", "History"]] : [])].map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{l}</button>
         ))}
-        <span style={{ marginLeft: "auto", alignSelf: "center" }}><DetailsBadge doc={doc} /></span>
+        <span className="tabs-aside"><DetailsBadge doc={doc} /></span>
       </div>
       {tab === "details" && <><DocumentDetails doc={doc} onChange={changed} openTypeDialog={typeReq} /><DocLinks doc={doc} /><AISuggestions docId={doc.id} onChange={changed} />{ai?.assistant && <Link className="btn small ghost" to={`/assistant?document=${doc.id}`}><Icon name="sparkle" size={16} /> Ask AI about this document</Link>}</>}
       {tab === "text" && <OcrPanel docId={doc.id} onChanged={changed} request={ocrReq} />}

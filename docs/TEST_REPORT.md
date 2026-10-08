@@ -1,6 +1,6 @@
 # Test report
 
-Date: 2026-10-03, updated 2026-10-06 (change sets K and L), 2026-10-07 (change sets M, N, O and P) and 2026-10-08 (change set Q). Revision: the branch head at the commit that adds this file.
+Date: 2026-10-03, updated 2026-10-06 (change sets K and L), 2026-10-07 (change sets M, N, O and P) and 2026-10-08 (change sets Q and R). Revision: the branch head at the commit that adds this file.
 
 ## Environment actually used
 
@@ -22,6 +22,7 @@ Date: 2026-10-03, updated 2026-10-06 (change sets K and L), 2026-10-07 (change s
 | `scripts/verify.sh` (compile, `manage.py check`, `makemigrations --check`, settings reference, `bash -n` + shellcheck, pytest, `tsc` + `vite build`, repository hygiene) | **All passed** |
 | `pytest` (`tests/`) | **232 passed**, 0 failed, 0 skipped (OCR and LibreOffice tests ran; 2026-10-05, change set J: `test_browsing_v3` 7, `test_ocr_quality` 6) |
 | Change sets K and L (`tests/test_selective_ocr.py` 11, `tests/test_overview.py` 15, `tests/test_family_setup.py`; full `pytest tests` run on 2026-10-06) | **All passed**; full backend suite: 264 tests passed (`scripts/verify.sh`, which also ran the 18 stubbed installer checks, 17 frontend unit tests, type check, build and privacy check). Selective OCR policy, custom/archived types (409 for built-in or in-use types), source and page selection, front and back as one job, primary source, Remove OCR data and search, re-runs keep confirmed values, English/Arabic/Hindi with missing packs reported, states, review queue permissions, limits, cancel and pause, AI only for permitted types; Overview widgets, layout limits and styles, Gregorian/Hijri in the installation timezone, calendar, Saudi and Indian holidays with status and source, countries and corrections, weather off by default and against a **fake local weather server** (cache, stale, unavailable), sign-in presets, wallpaper upload/rejections/removal, identical sign-in methods; setup with only the Main Administrator, optional members, members added later, earlier six-account installations kept, deactivation keeps documents (DELETE 405) |
+| Change set R (`tests/e2e/layout.mjs`, AT-231…AT-245; 2026-10-08) | **25 PASS, 0 FAIL**, 0 layout defects. 27 screens × 7 viewports (1920×1080, 1440×900, 1366×768, 1180×820, 820×1180, 430×932, 390×844); header geometry baseline written and reviewed. Run against the unfixed build: **137 defects, 24 of 25 steps failed**. Full browser suite: flow + accessibility + parity **89 PASS, 0 FAIL**, no serious or critical accessibility violations |
 | Change set Q (`tests/test_ocr_engines_lifecycle.py` 21 incl. 3 live, AT-211…AT-230; 2026-10-08) | **All 21 passed**: 18 via the fake worker protocol, and **3 live against the real PP-OCRv5 runtime** (self-test + document run, Arabic + English, Hindi + English upright). Full backend suite: **372 passed**, 0 failed, 0 skipped (live PP-OCRv5 tests included). `manage.py doctor` with the real runtime: all OCR checks OK, including the inference self-test ("PERSONAL DOCUMENTS OCR SELF TEST 2027" read in 2.6–3.8 s) |
 | `scripts/ocr_engine_benchmark.py` (21 synthetic samples, PP-OCRv5 mobile vs Tesseract 5.3.4; 2026-10-08) | PP-OCRv5 mean character accuracy **98.8 %** vs Tesseract **93.7 %**; English word F1 1.00 vs 0.97; 5.7 vs 2.6 s/page; peak child RSS 1.9 GB vs 0.5 GB. A first run with text-line orientation on read Hindi + English at 20 % (every line flipped), so that option now defaults to off. Real-document categories: **Not Run**. See [benchmark](OCR_BENCHMARK.md#engines) |
 | `scripts/e2e.sh` (2026-10-08, change set Q, **with the real PP-OCRv5 runtime**: browser flow, accessibility audit, parity checks) | **64 PASS, 0 FAIL** (no serious or critical accessibility violations). New steps: *AT-213/217/218 OCR engine label, Remove OCR data and Disable OCR for this document* and *AT-211/221/225/226 OCR engines (real self-test), Existing OCR data, orphans and Test OCR / Compare engines*; the selective OCR step now checks the PP-OCRv5 default and its profiles. Found and fixed: the ⋮ menu closed when a long menu itself scrolled. Also run **without** the PaddleOCR runtime (as in CI): **64 PASS, 0 FAIL**, after fixing the Run OCR dialog, which sent the default engine explicitly and so disabled the Tesseract fallback |
@@ -54,16 +55,16 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
-## Acceptance summary (AT-01…AT-230) {#summary}
+## Acceptance summary (AT-01…AT-245) {#summary}
 
-220 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
+235 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
 
 | Result | Count | Scenarios |
 |---|---|---|
-| Passed (automated tests, or for AT-136 a documented review) | 167 | all scenarios not listed below |
+| Passed (automated tests, or for AT-136 and AT-245 a documented review) | 181 | all scenarios not listed below |
 | Passed in automated tests; real-environment validation pending | 47 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195, 197, 202, 205, 206, 208, 211, 212, 214, 216, 228, 229, 230 |
 | Blocked (external environment) | 5 | AT-14, AT-26; AT-24, AT-27, AT-30 (partly automated, the rest needs a real Debian 13 LXC) |
-| Not run (manual steps, not automated) | 1 | AT-15 |
+| Not run (manual steps, not automated, or no environment) | 2 | AT-15, AT-241 (installed PWA on a real device) |
 
 Pending external validations for change set M (none reported as passed): a real authentik server; public DNS, a
 valid TLS certificate and an Internet-accessible staging site for Internet Ready; the real host helper on Debian 13
@@ -86,6 +87,73 @@ platforms (AT-197), real SMTP delivery of the reset email (AT-202), a real Debia
 Change set Q: see [below](#change-set-q). Pending external validations (none reported as passed): a fresh install
 and an upgrade on a real Debian 13 / Proxmox LXC with 6 GB (AT-211, AT-212, AT-214, AT-229), accuracy on sanitised
 real documents (AT-216, AT-230), and a real Local AI server with PP-OCRv5 output (AT-228).
+
+Change set R: see [below](#change-set-r). Not run: an installed PWA on a real device (AT-241), browsers other than
+Chromium.
+
+## Change set R: UI alignment, responsive layout and visual regression {#change-set-r}
+
+The change prompt numbered the acceptance tests AT-211…AT-225; in this repository they are **AT-231…AT-245**
+(prompt AT-n → AT-(n+20)), because AT-211…AT-230 belong to Change Set Q.
+
+**Root cause** (details in [ADR 0017](adr/0017-ui-layout-primitives.md)): the header title was a `flex: 1` item
+(`flex-basis: 0`) in a wrapping row next to non-wrapping buttons, so the row never wrapped and the title was
+squeezed. Responsive rules followed the window width, not the width of the pane.
+
+**Before/after (synthetic documents, same instance), title width and lines of "Family residence permit renewal
+receipt and payment confirmation 2018-19 final copy.JPG":**
+
+| Viewport | Pane before | Title before | Lines before | Pane after | Title after | Lines after |
+|---|---|---|---|---|---|---|
+| 1920×1080 | 746 | 192 | 6 | 746 | 713 | 2 |
+| 1366×768 | 438 | 405 | 3 | 438 | 405 | 3 |
+| Tablet landscape 1180×820 | 323 | 290 | 4 | 873 | 841 | 2 |
+| Tablet portrait 820×1180 | 273 | 240 | 5 | 513 | 481 | 2 |
+| Phone 390×844 | 356 | 324 | 3 | 356 | 324 | 3 |
+
+Images: `docs/images/layout/preview-before-1920.png`, `preview-after-1920.png`, `preview-before-tablet-portrait.png`,
+`preview-after-tablet-portrait.png`.
+
+| AT | Prompt AT | Scenario | Status |
+|---|---|---|---|
+| AT-231 | AT-211 | Screenshot defect reproduced, root cause documented | Passed |
+| AT-232 | AT-212 | Preview header uses the panel width and stays aligned | Passed (layout, 7 viewports × 5 names) |
+| AT-233 | AT-213 | Short/normal/long/very long file names | Passed |
+| AT-234 | AT-214 | Three-panel responsiveness | Passed |
+| AT-235 | AT-215 | Icon/text alignment | Passed (no misalignment > 3 px on any audited screen) |
+| AT-236 | AT-216 | Badge consistency | Passed |
+| AT-237 | AT-217 | Global screen audit | Passed (27 screens × 7 viewports, 0 defects; findings fixed listed below) |
+| AT-238 | AT-218 | Desktop visual regression (1920×1080, 1440×900, 1366×768) | Passed (geometry baseline + reviewed screenshots) |
+| AT-239 | AT-219 | Tablet portrait/landscape | Passed (emulated in Chromium) |
+| AT-240 | AT-220 | Phones ~390/430 px | Passed (emulated in Chromium) |
+| AT-241 | AT-221 | Installed PWA | Not Run (no real device / installed PWA in this environment) |
+| AT-242 | AT-222 | Menus, dropdowns, dialogs inside the viewport, keyboard/touch reachable | Passed (7 viewports) |
+| AT-243 | AT-223 | Accessibility regression | Passed (accessible names, focus ring, axe audit: no serious/critical) |
+| AT-244 | AT-224 | Arabic / mixed-character metadata | Passed |
+| AT-245 | AT-225 | No fragile workaround | Passed (code review: flex basis, container queries, shared components) |
+
+**Other defects found by the audit and fixed:**
+
+- document list cards, and the shared/search/archive lists: name and details squeezed beside the status badges (61 px
+  at 1366 px, 38 px at 430 px); the badges now sit under the name;
+- the tab-bar note "No details yet" (42 px);
+- the Overview date widget (88 px);
+- settings label columns on tablets;
+- help table columns (wrapping in 129–136 px columns).
+
+**Reviewed and not changed:** the viewer toolbar keeps its sideways-scrolling single row on narrow panes (all
+controls reachable).
+
+**Not tested / limits:**
+
+- Chromium only: Firefox, Safari and Edge are Not Run;
+- installed PWA on real devices: Not Run;
+- the details/table view and the thumbnail grid with very long names, tooltips and confirmation dialogs other than
+  Share / Remove OCR / Disable OCR: Not Run;
+- real phones and tablets: Not Run (emulated viewports only).
+
+Affected earlier tests: none failed. The parity selectors for the document "More actions" menu and the Share button
+still match (labels kept as accessible names).
 
 ## Change set Q: PaddleOCR (PP-OCRv5) and the complete OCR lifecycle {#change-set-q}
 

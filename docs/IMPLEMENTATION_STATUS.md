@@ -81,6 +81,79 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
 - Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
 
+## Change set R: UI alignment, responsive layout and visual regression {#change-set-r}
+
+**Numbering.** The change prompt called this "Change Set Q" with AT-211…AT-225. Those numbers belong to the PaddleOCR
+change set, so it is **Change Set R** with **AT-231…AT-245** (prompt AT-n → AT-(n+20); mapping in
+[TRACEABILITY.md](TRACEABILITY.md)). Decision record: [ADR 0017](adr/0017-ui-layout-primitives.md). Rules for
+contributors: [UI layout rules](guides/ui-layout.md).
+
+**Root cause of the screenshot defect.** The document header was a wrapping flex row:
+
+- the title block was `.grow` = `flex: 1`, so `flex-basis: 0`;
+- next to it sat an actions row of four non-wrapping buttons (about 520 px).
+
+Flexbox wraps only when the items' basis sizes don't fit. With a basis of 0 the row never wrapped, so the buttons
+kept their width and the title got the rest. Reproduced with synthetic documents at 1920×1080: pane 746 px, title
+**192 px**, a long name on 6 lines. The metadata row (badges, shield, "file · size · v1") was squeezed the same way.
+
+A second cause: responsive rules depended on the window width, so a narrow pane on a wide screen got the desktop
+layout. In tablet portrait the preview pane was **273 px**, next to the folder tree, with the four buttons stacked
+one per line.
+
+**Fix (shared rules, no pixel nudges):**
+
+- **Flex basis.** `.row > .grow` and `.list-item > .grow` get a 12 rem basis, and list rows may wrap, so actions and
+  badges wrap instead of squeezing text.
+- **Reusable header.** `.doc-header` / `.doc-header-main` / `.doc-actions`, `.doc-badges` (status badges as one
+  group; antivirus shown as a labelled badge) and `.doc-meta` (separators stay with the preceding item; long names
+  wrap anywhere).
+- **Container queries** on the preview pane, full page and viewer:
+  - actions take their own row below 60 rem;
+  - icon buttons with accessible names below 34 rem;
+  - a one-row scrolling viewer toolbar below 34 rem.
+- **Responsive modes.** Three panels only from 1280 px, otherwise an open document gets the full width. List and
+  preview share the width equally.
+- **Other components.** Settings rows switch to one column when two 16 rem columns don't fit; help tables keep
+  9 rem columns and scroll sideways; headings use `overflow-wrap: break-word`.
+
+**After the fix:**
+
+- the title gets the full pane width at every viewport (713 px of 746 at 1920×1080);
+- normal names fit on one line;
+- the tablet-portrait pane is 513 px.
+
+Before/after images are in `docs/images/layout/`.
+
+**Global audit.** `tests/e2e/layout.mjs` covers 27 screens at 7 viewports:
+
+- login / passkey (through the parity suite), Overview, Folders, the list view, document preview and the full page;
+- search, shared, offline, archive, OCR review, notifications;
+- settings: family, account security, document types, OCR & processing (engines, existing OCR data, test/compare),
+  notification policy;
+- every Security Center view (overview, antivirus, security test, OS updates, firewall, records, storage, access
+  policy);
+- help.
+
+Defects found outside the reported screen and fixed:
+
+- document list cards: name and details squeezed to 61 px beside the badges at 1366 px;
+- the shared, search and archive lists: the same, 38 px at 430 px;
+- the tab-bar note "No details yet": 42 px;
+- the Overview date widget;
+- settings label columns on tablets;
+- help table columns;
+- the ⋮ menus closing when opened after a page scroll (fixed in Change Set Q).
+
+The list view and grid views are covered through the Folders screens. The details/table view and the thumbnail
+grid were not separately audited with long names: **Not Run**.
+
+**Not tested here:**
+
+- browsers other than Chromium;
+- an installed PWA on real phones and tablets (AT-241);
+- real right-to-left application UI (not supported by design).
+
 ## Change set Q: PaddleOCR (PP-OCRv5) and the complete OCR lifecycle {#change-set-q}
 
 **Numbering.** The change prompt called this "Change Set P" with AT-191…AT-210. Those numbers were already used, so
