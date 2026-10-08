@@ -44,6 +44,16 @@ DROPIN = Path("/etc/systemd/system/clamav-daemon.service.d/50-personaldocs.conf"
 TMPFILES = Path("/etc/tmpfiles.d/personaldocs-clamav.conf")
 SERVICE_USER = "personaldocs"
 PACKAGES = ("clamav", "clamav-daemon", "clamav-freshclam")
+# Options earlier Personal DM releases wrote into clamd.conf that Debian's clamd does not know. clamd refuses to start
+# on an unknown option ("ERROR: Parse error at line N: Unknown option EnableVersionCommand"); EnableVersionCommand only
+# exists in Ubuntu's patched clamd, not in Debian 13's clamav 1.4.3+dfsg. The app reads versions without it.
+UNSUPPORTED_OPTIONS = ("EnableVersionCommand",)
+_UNKNOWN_RX = re.compile(r"Unknown option:?\s+([A-Za-z][A-Za-z0-9]*)")
+
+
+def unknown_options(text: str) -> list[str]:
+    """Option names clamd/clamconf rejected ("Unknown option X") in a log or clamconf output."""
+    return sorted(set(_UNKNOWN_RX.findall(text or "")))
 # The harmless, industry-standard antivirus test string (not malware). Assembled at run time so this source file is
 # not itself reported by scanners; it never touches the document library.
 EICAR = ("X5O!P%@AP[4\\PZX54(P^)7CC)7}$" + "EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*").encode()
@@ -240,6 +250,9 @@ class Clamav:
         code, out = self._out(["journalctl", "-u", SERVICE, "-n", "60", "--no-pager", "-o", "cat"], timeout=20)
         if code != 0:
             return ""
+        bad = unknown_options(out)
+        if bad:
+            return f"clamd refuses to start: unknown option {', '.join(bad)} in clamd.conf"
         for rx, hint in ((r"out of memory|oom|Cannot allocate memory|Killed", "clamd ran out of memory (it needs about 1.2 GB; 4 GB for the container is recommended)"),
                          (r"apparmor=\"DENIED\"|Permission denied", "permission denied (AppArmor or file permissions); see journalctl -u clamav-daemon"),
                          (r"Can't open/parse the config file|Parse error|ERROR: .*clamd.conf", "clamd.conf has an error (run clamconf)"),
@@ -305,6 +318,16 @@ class Clamav:
             f"{path} (systemd socket unit: {eff['unit'] or '—'}, clamd.conf LocalSocket: {eff['configured'] or '—'})"
             + (" — clamd.conf does not match the systemd socket" if eff["mismatch"] else ""),
             "sudo personaldocs antivirus repair (sets LocalSocket to the systemd socket path)" if eff["mismatch"] else "")
+        conf_keys = read_conf(self.conf)
+        rejected = [k for k in UNSUPPORTED_OPTIONS if k in conf_keys]
+        if self.as_root:
+            code, jout = self._out(["journalctl", "-u", SERVICE, "-n", "60", "--no-pager", "-o", "cat"], timeout=20)
+            rejected += [k for k in unknown_options(jout if code == 0 else "") if k in conf_keys and k not in rejected]
+        if rejected:
+            add("conf_options", "clamd.conf options supported by this clamd", "fail",
+                f"{', '.join(rejected)} is not a valid option for Debian's clamd — clamd refuses to start with it",
+                "sudo personaldocs antivirus repair (removes it)  or:  sudo sed -i '/^" + rejected[0]
+                + "/d' /etc/clamav/clamd.conf && sudo systemctl restart clamav-daemon.socket clamav-daemon")
         if eff["tcp"]:
             add("tcp", "No network listener", "fail", "clamd.conf contains TCPSocket: clamd listens on the network",
                 "sudo personaldocs antivirus repair (removes TCPSocket/TCPAddr)")
@@ -379,6 +402,11 @@ class Clamav:
             return ""
         if bad("packages"):
             return "ClamAV is not (fully) installed."
+        if bad("conf_options"):
+            return ("clamd.conf contains an option this clamd does not know ("
+                    + by["conf_options"]["detail"].split(" is not")[0]
+                    + "), so clamav-daemon exits at start and the socket is never served. Earlier Personal DM releases "
+                    "added EnableVersionCommand, which only Ubuntu's clamd supports.")
         if bad("signatures"):
             return "No signature files: Debian's clamav-daemon refuses to start without them (its start condition)."
         if "skipped by its start condition" in by.get("daemon", {}).get("detail", ""):
@@ -429,7 +457,7 @@ class Clamav:
             text = self.conf.read_text(errors="replace")
             new = set_conf(text, {"TCPSocket": None, "TCPAddr": None, "LocalSocket": sock_path, "LocalSocketMode": "666",
                                   "FixStaleSocket": "true", "StreamMaxLength": "1100M", "ConcurrentDatabaseReload": "no",
-                                  "EnableVersionCommand": "true"})
+                                  **{k: None for k in UNSUPPORTED_OPTIONS}})
             if new != text:
                 backup = self.conf.with_name("clamd.conf.personaldocs-backup")
                 if not backup.exists():
@@ -438,9 +466,18 @@ class Clamav:
                 step("clamd.conf", True, f"LocalSocket {sock_path}, Unix socket only (backup: {backup.name})")
             else:
                 step("clamd.conf", True, "already correct")
+            had = {ln.strip().split(" ", 1)[0] for ln in text.splitlines() if ln.strip() and not ln.strip().startswith("#")}
+            removed = [k for k in UNSUPPORTED_OPTIONS if k in had]
+            if removed:
+                step("remove unsupported options", True, ", ".join(removed) + " removed (clamd refuses to start with them)")
             code, out = self._out(["clamconf", "-n"], timeout=60)
             if code != 127:
-                bad = [ln for ln in out.splitlines() if "ERROR" in ln or "Can't parse" in ln]
+                extra = [k for k in unknown_options(out) if k in read_conf(self.conf)]
+                if extra:  # any other option this clamd rejects: take it out rather than leave clamd unable to start
+                    self.conf.write_text(set_conf(self.conf.read_text(errors="replace"), {k: None for k in extra}))
+                    step("remove unsupported options", True, ", ".join(extra) + " removed (rejected by clamconf)")
+                    code, out = self._out(["clamconf", "-n"], timeout=60)
+                bad = [ln for ln in out.splitlines() if "ERROR" in ln or "Can't parse" in ln or "Unknown option" in ln]
                 step("validate clamd.conf (clamconf)", not bad, "; ".join(bad) or "no errors")
         else:
             step("clamd.conf", False, f"{self.conf} does not exist (reinstall clamav-daemon)")

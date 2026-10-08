@@ -125,8 +125,9 @@ def _database_header() -> dict:
 def version_info() -> dict:
     """``ClamAV 1.4.3/27800/Tue Oct  6 07:34:01 2026`` -> engine, signature version and signature date.
 
-    Debian/Ubuntu ship clamd with EnableVersionCommand off; then the signature version is read from the database
-    file header instead (the installer turns the command on)."""
+    If clamd answers "COMMAND UNAVAILABLE" (Ubuntu's patched clamd with EnableVersionCommand off), the signature
+    version is read from the database file header instead. The installer never sets that option: Debian's clamd does
+    not know it and refuses to start with it."""
     raw = command("VERSION")
     if raw.startswith("COMMAND UNAVAILABLE"):
         engine = "ClamAV"

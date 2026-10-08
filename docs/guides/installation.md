@@ -137,7 +137,7 @@ Install, upgrade and repair install `clamav`, `clamav-daemon` and `clamav-freshc
 - `LocalSocketMode 666` and `FixStaleSocket true`;
 - `StreamMaxLength 1100M` (the app's own *Maximum scan size*, default 50 MB, decides what is scanned);
 - `ConcurrentDatabaseReload no` (avoids holding two signature sets in memory during a reload);
-- `EnableVersionCommand true` (Debian ships it off; the app reads the engine and signature version with it).
+- `EnableVersionCommand` is **removed** if present: Debian 13's clamd does not know this option (only Ubuntu's build has it) and refuses to start with it. Earlier releases added it; the repair takes it out. The app reads the engine and signature version without it.
 
 It also installs a restart drop-in for `clamav-daemon.service` and a tmpfiles entry for `/run/clamav` (see [persistence](antivirus.md#persistence)).
 
