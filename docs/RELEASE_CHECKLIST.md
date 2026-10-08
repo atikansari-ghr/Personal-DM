@@ -95,7 +95,8 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Repository visibility changed by the owner (Settings → General → Danger zone)
 - [ ] Raw installer URL returns the script (`curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh | head -3`)
 - [ ] README renders on GitHub: badges, screenshots near the top, one-line install, Ko-fi link; `.github/FUNDING.yml` shows the Sponsor button
-- [ ] Topics added by the owner (recommended: document-management, self-hosted, family, ocr, tesseract, django, react, pwa, webauthn, passkeys, local-ai, goaccess, privacy, debian, proxmox)
+- [ ] Social preview image uploaded by the owner: Settings → General → Social preview → Edit → upload `docs/images/social-preview.png` (1280×640, synthetic demo data only)
+- [ ] Topics added by the owner (recommended: document-management, self-hosted, family, ocr, paddleocr, tesseract, django, react, pwa, webauthn, passkeys, local-ai, goaccess, privacy, debian, proxmox)
 
 ## Publish
 - [ ] Tag `vX.Y.Z` and push; confirm `frontend-dist.tar.gz` is attached to the GitHub release
