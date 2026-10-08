@@ -4,6 +4,10 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Fixed (2026-10-08) — ClamAV would not start on Debian 13: unknown option `EnableVersionCommand`
+- Earlier releases (Change Set M installer and the Change Set P repair) wrote `EnableVersionCommand true` into `/etc/clamav/clamd.conf`. Only Ubuntu's patched clamd knows that option; Debian 13's clamd 1.4.3 stops with "Unknown option EnableVersionCommand", so the socket `/run/clamav/clamd.ctl` never appeared and the Antivirus page showed Unavailable.
+- The repair (`sudo personaldocs antivirus repair`, also run by upgrade/post-upgrade/repair and the Diagnose / Repair button) now removes it, and removes any other option `clamconf` reports as unknown. The diagnosis reports an unsupported option as the cause. The app reads engine and signature versions without it.
+
 ### Added (2026-10-07) — passkey sign-in on the first screen, administrator password reset, security templates, ClamAV repair (Change Set P)
 - **Sign in with Passkey** on the first sign-in screen (password, "or", Sign in with Passkey, then authentik/Google when enabled), passkey autofill in the username field (WebAuthn conditional mediation, `autocomplete="username webauthn"`), greyed out with "Passkeys need the secure HTTPS address of this app" on plain http.
 - **Passkey sign-in mode** (`auth.passkey_mode`): *Passwordless* (default) or *Password + Passkey*; passwordless sign-in uses a discoverable credential with user verification required and a single-use challenge. Enrolling a discoverable passkey in passwordless mode turns passwordless on for that account (opt-out under Passkeys).

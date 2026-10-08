@@ -16,6 +16,8 @@ If anything fails **before** migrations, the old release keeps running untouched
 
 ## Upgrading to Change Set P (passkey sign-in, password reset, ClamAV repair) {#change-set-p}
 
+> **ClamAV fix (2026-10-08).** If the Antivirus page shows *Unavailable* and `journalctl -u clamav-daemon` says `Unknown option EnableVersionCommand`: an earlier release added that option, which Debian 13's clamd does not know, so clamd stops at start. Upgrade again (or run `sudo personaldocs antivirus repair`) — the repair now removes it. Quick manual fix: `sudo sed -i '/^EnableVersionCommand/d' /etc/clamav/clamd.conf && sudo systemctl restart clamav-daemon.socket clamav-daemon`. The `clamd.conf.personaldocs-backup` file may also contain the line; remove it there too before restoring that backup.
+
 ```
 sudo personaldocs upgrade
 # or: bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)" -- upgrade

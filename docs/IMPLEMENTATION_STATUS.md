@@ -113,7 +113,7 @@ diagnosis; the most likely one for the reported upgrade is the LocalSocket misma
 - `backend/apps/ops/clamav_check.py` (standard library only): diagnosis and repair shared by the `personaldocs`
   command, the root host helper (`antivirus_repair`) and the web app. Repair: packages, clamd.conf (`LocalSocket` =
   socket unit path, no TCP, `LocalSocketMode 666`, `FixStaleSocket true`, `StreamMaxLength 1100M`,
-  `ConcurrentDatabaseReload no`, `EnableVersionCommand true`, one-time backup `clamd.conf.personaldocs-backup`,
+  `ConcurrentDatabaseReload no`, removes the unsupported `EnableVersionCommand` (and any option `clamconf` rejects), one-time backup `clamd.conf.personaldocs-backup`,
   `clamconf` validation), restart drop-in `50-personaldocs.conf`, tmpfiles `personaldocs-clamav.conf`, signatures,
   unit order, stale pid, wait for `PONG` (up to 4 minutes), access by the `personaldocs` account (`runuser`), final
   diagnosis and self-test; success only for Healthy/Degraded; never a TCP port.

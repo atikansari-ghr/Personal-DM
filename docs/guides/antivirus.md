@@ -84,7 +84,7 @@ The self-test never creates a document, a version or a quarantine entry, never u
 The repair runs as root, is safe to repeat (it only changes what is wrong) and never opens a TCP port:
 
 1. Installs missing packages.
-2. Rewrites `/etc/clamav/clamd.conf` so `LocalSocket` equals the systemd socket unit's path (default `/run/clamav/clamd.ctl`); removes `TCPSocket` and `TCPAddr`; sets `LocalSocketMode 666`, `FixStaleSocket true`, `StreamMaxLength 1100M`, `ConcurrentDatabaseReload no` and `EnableVersionCommand true`. The original file is backed up once as `/etc/clamav/clamd.conf.personaldocs-backup`. The result is checked with `clamconf`.
+2. Rewrites `/etc/clamav/clamd.conf` so `LocalSocket` equals the systemd socket unit's path (default `/run/clamav/clamd.ctl`); removes `TCPSocket` and `TCPAddr`; sets `LocalSocketMode 666`, `FixStaleSocket true`, `StreamMaxLength 1100M`, `ConcurrentDatabaseReload no`; **removes `EnableVersionCommand`** (Debian 13's clamd does not know it and refuses to start with it — earlier releases added it) and any other option `clamconf` reports as unknown. The original file is backed up once as `/etc/clamav/clamd.conf.personaldocs-backup`. The result is checked with `clamconf`.
 3. Installs `/etc/systemd/system/clamav-daemon.service.d/50-personaldocs.conf` (`Restart=on-failure`, `RestartSec=15s`) and `/etc/tmpfiles.d/personaldocs-clamav.conf` (`d /run/clamav 0755 clamav clamav -`), then runs `systemctl daemon-reload`.
 4. Downloads signatures with `freshclam` if they are missing.
 5. Enables `clamav-freshclam`, `clamav-daemon.socket` and `clamav-daemon`; stops the daemon and clears a stale pid file; starts the socket and then the daemon.
