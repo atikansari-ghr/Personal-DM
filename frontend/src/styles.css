@@ -663,3 +663,6 @@ i.c0 { background: #1f8a4c; } i.c1 { background: #e07b00; } i.c2 { background: #
 code.temp-password { font-size: 1.15rem; padding: .4rem .6rem; letter-spacing: .04em; user-select: all; word-break: break-all; }
 .note-mandatory { margin: .4rem 0; padding: .45rem .6rem; border-radius: 8px; background: var(--danger-bg, #fdecea); color: var(--danger-ink, #7a1f16); }
 .note-mandatory p { margin: .15rem 0; display: flex; gap: .35rem; align-items: flex-start; }
+
+/* Change Set Q: two-column cards (OCR engines, Compare engines) */
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }

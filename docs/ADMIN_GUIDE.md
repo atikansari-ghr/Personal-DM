@@ -155,6 +155,28 @@ Guides: [notifications](guides/notifications.md) ([templates](guides/notificatio
 
 ## 6. OCR and processing {#ocr}
 
+- **Engines:** **PaddleOCR (PP-OCRv5)** is the default engine; **Tesseract (Legacy)** stays available as the fallback
+  and as an explicit choice. Both run locally. The **OCR engines** card shows:
+  - the versions, CPU (AVX), model, threads and memory limit;
+  - missing models, the last real-inference self-test and the language profiles;
+  - Tesseract's version and packs, and the queue.
+
+  **Run self-test** recognises a generated image. *Healthy* means that worked, not merely that the library imports.
+  Changing **Default OCR engine** affects new runs only; existing results are never re-processed automatically.
+  See [OCR engines](guides/ocr-engines.md).
+- **Language profiles:** English, Arabic + English, Hindi (Devanagari) + English, Telugu + English and Tamil +
+  English (`processing.ocr_profiles`; default English, Arabic + English, Hindi + English). Each document type can carry
+  its own profile. After offering a new profile run `sudo personaldocs ocr install-models`.
+- **Existing OCR data:**
+  - counts by engine (PaddleOCR / Tesseract / Unknown), storage used, filters;
+  - bulk **Remove**, **Remove and disable**, **Disable**, **Enable**, **Re-process with PP-OCRv5** and **Set language
+    profile**, always with a preview first;
+  - **Orphaned OCR data**: Analyze (dry run), then Clean.
+
+  See [Existing OCR data](guides/ocr-engines.md#existing-data).
+- **Test OCR / Compare engines** runs a sanitised sample through PP-OCRv5 and Tesseract with character accuracy
+  against the expected text. Never use a real passport or ID here.
+
 - **Selective OCR:** OCR reads only what is chosen. **OCR policy per document type** sets each type to *Disabled*,
   *Manual* or *Automatic* (only the document's primary OCR source), with default languages, expected fields and
   whether **AI may read text**. Types and their templates are managed under [Document types and templates](#document-types);
@@ -163,10 +185,11 @@ Guides: [notifications](guides/notifications.md) ([templates](guides/notificatio
 - **Defaults:** new installations start with *Manual* for every type. Installations upgraded from an earlier release
   are set to *Automatic* with AI allowed for every type and for untyped documents, so nothing changes until you
   choose otherwise.
-- **Languages:** English, Arabic and Hindi are offered by default (`processing.ocr_languages`); add more as needed.
+- **Tesseract (Legacy) languages:** English, Arabic and Hindi are offered by default (`processing.ocr_languages`); add more as needed.
   Install, upgrade and `sudo personaldocs repair` install the Tesseract pack for every offered language;
   `sudo personaldocs doctor` reports missing packs. A language without its pack is shown as *not installed*.
-- **Limits:** concurrency (1 on 2 vCPU/4 GB), timeouts, memory, maximum file size for OCR (default 50 MB), maximum
+- **Limits:** concurrency (1 on 2 vCPU/4 GB; keep 1 on 6 GB / 4 vCPU with PaddleOCR), PaddleOCR CPU threads (2)
+  and memory limit (3000 MB per job; the worker service is capped at 4 GB), timeouts, memory, maximum file size for OCR (default 50 MB), maximum
   pages per OCR job, queue size (default 50 waiting jobs) and attempts (default 2). Requests above a limit are refused
   with a message; the file is still stored.
 - **Pause OCR queue** (`processing.ocr_paused`) keeps queued jobs waiting, for example during a backup or heavy

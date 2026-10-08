@@ -13,7 +13,7 @@
 `personaldocs install` is idempotent and resumable (rerun it after any failure; it continues safely and never wipes data or keys):
 
 1. Checks OS, architecture, RAM, disk, systemd, DNS/network and port availability.
-2. Installs packages: Python 3, PostgreSQL, Tesseract (English, Arabic, Hindi and orientation detection; packs for any other offered OCR language are installed too), OCRmyPDF, Ghostscript, qpdf, poppler-utils, LibreOffice (headless Writer/Calc/Impress), Node.js (only if the frontend must be built), git, and the **ClamAV antivirus** (`clamav`, `clamav-daemon`, `clamav-freshclam`; see [Antivirus](#antivirus)).
+2. Installs packages: Python 3, PostgreSQL, the **PaddleOCR (PP-OCRv5)** runtime in `/opt/personaldocs/paddle-venv` with the models of the offered language profiles in `/var/lib/personaldocs/paddle` and a real-inference self-test (needs a CPU with AVX and about 3 GB free disk; `--without-paddleocr` skips it), Tesseract (English, Arabic, Hindi and orientation detection; packs for any other offered OCR language are installed too), OCRmyPDF, Ghostscript, qpdf, poppler-utils, LibreOffice (headless Writer/Calc/Impress), Node.js (only if the frontend must be built), git, and the **ClamAV antivirus** (`clamav`, `clamav-daemon`, `clamav-freshclam`; see [Antivirus](#antivirus)).
 3. Creates the `personaldocs` system user, the PostgreSQL role/database (local socket only), and directories:
 
 | Path | Contents |

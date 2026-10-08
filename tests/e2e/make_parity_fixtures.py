@@ -49,3 +49,16 @@ imp = out / "import" / "Old"
 (imp / "Address Update 22July2026" / "letter.pdf").write_bytes(make_text_pdf("Synthetic letter"))
 (imp / "report.pdf").write_bytes(make_text_pdf("Synthetic report"))
 print(out)
+
+# Test OCR / Compare engines input (kept outside files/, so it is never uploaded to the library)
+from PIL import ImageFont  # noqa: E402
+
+_t = Image.new("RGB", (1400, 360), "white")
+_d = ImageDraw.Draw(_t)
+try:
+    _f = ImageFont.truetype("DejaVuSans.ttf", 56)
+except OSError:
+    _f = ImageFont.load_default(size=56)
+_d.text((60, 70), "SAMPLE PERMIT - NOT REAL", fill="black", font=_f)
+_d.text((60, 190), "Permit No 4455667788", fill="black", font=_f)
+_t.save(out / "ocr-test-sample.png", "PNG")

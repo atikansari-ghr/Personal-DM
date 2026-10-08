@@ -285,7 +285,13 @@ await step("AT-101/106/112 selective OCR: manual by default, chosen pages and la
   await page.click("button:has-text('Run OCR…')");
   await page.waitForSelector(".modal:has-text('Text recognition (OCR)')");
   await page.fill(".modal input[aria-label^='Pages of']", "1");
-  for (const lang of ["English", "Arabic", "Hindi"]) expect(await page.locator(`.modal label:has-text('${lang}')`).count() === 1, `language ${lang} offered`);
+  // Change Set Q: PP-OCRv5 is the default engine with language profiles; Tesseract (Legacy) keeps its languages
+  expect(await page.inputValue("#ocr-engine") === "paddleocr", "PaddleOCR is the default engine");
+  const profiles = await page.locator("#ocr-profile option").allTextContents();
+  for (const prof of ["English", "Arabic + English", "Hindi (Devanagari) + English"]) expect(profiles.includes(prof), `profile ${prof} offered (${profiles})`);
+  await page.selectOption("#ocr-engine", "tesseract");
+  for (const lang of ["English", "Arabic", "Hindi"]) expect(await page.locator(`.modal label:has-text('${lang}')`).count() === 1, `Tesseract language ${lang} offered`);
+  await page.selectOption("#ocr-engine", "paddleocr");
   await page.screenshot({ path: `${SHOTS}/ocr-run.png` });
   await page.click(".modal button:has-text('Run OCR')");
   await page.waitForSelector(".toast:has-text('Text recognition queued')");
@@ -735,12 +741,21 @@ await step("AT-176..186 rich notifications: TEST messages, Notification Center, 
   expect(await expiryCard.locator("a:has-text('Open Document')").count() === 1, "primary action");
   await page.screenshot({ path: `${SHOTS}/notification-center.png` });
   await page.selectOption("select[aria-label='Severity']", "critical");
-  await page.waitForFunction(() => [...document.querySelectorAll(".note-card .sev-badge")].every((b) => b.textContent === "Critical"));
+  await page.waitForFunction(() => [...document.querySelectorAll(".note-card .sev-badge")].every((b) => b.textContent === "Critical"))
+    .catch(async (e) => { throw new Error(`severity filter: ${await page.locator(".note-card .sev-badge").allTextContents()} ${e}`); });
   await page.selectOption("select[aria-label='Severity']", "");
   await page.click("button[role=radio]:has-text('Unread')");
-  const unreadBefore = await page.locator(".note-card").count();
+  // track the card itself: background jobs (e.g. a PP-OCRv5 run finishing) may add new unread cards meanwhile
+  await page.waitForLoadState("networkidle");  // the Unread list has reloaded
+  await page.waitForSelector(".note-card.unread");
+  const [label, sameBefore] = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll(".note-card")];
+    const l = cards[0].getAttribute("aria-label");
+    return [l, cards.filter((c) => c.getAttribute("aria-label") === l).length];
+  });
   await page.locator(".note-card").first().locator("button:has-text('Mark read')").click();
-  await page.waitForFunction((n) => document.querySelectorAll(".note-card").length === n - 1, unreadBefore);
+  await page.waitForFunction(([l, n]) => [...document.querySelectorAll(".note-card")].filter((c) => c.getAttribute("aria-label") === l).length === n - 1, [label, sameBefore])
+    .catch((e) => { throw new Error(`mark read (${label}, ${sameBefore}): ${e}`); });
   await page.click("button[role=radio]:has-text('All')");
   // AT-184/186: template manager with previews for every channel
   await page.goto(BASE + "/settings/notifications");
@@ -832,6 +847,65 @@ await step("AT-205..207 antivirus: Diagnose / Repair panel and clean + EICAR sel
   await page.screenshot({ path: `${SHOTS}/security-antivirus-diagnose.png` });
 });
 
+await step("AT-213/217/218 OCR engine label, Remove OCR data and Disable OCR for this document", async () => {
+  const card = ids["Sample residence card"];
+  await page.goto(`${BASE}/documents/${card}`);
+  await page.click("[role=tab]:has-text('Text (OCR)')");
+  await page.waitForSelector(".ocr-panel .badge:has-text('PaddleOCR (PP-OCRv5)'), .ocr-panel .badge:has-text('Tesseract (Legacy)')", { timeout: 90000 });
+  const engine = (await api(page, `/api/documents/${card}/ocr`)).data.results[0]?.engine;
+  expect(["paddleocr", "tesseract"].includes(engine), `engine recorded (${engine})`);
+  await page.locator(".ocr-panel").screenshot({ path: `${SHOTS}/ocr-engine-label.png` });
+  expect((await api(page, "/api/documents?q=2345678901")).data.total >= 1, "found by OCR text before removal");
+  await page.click("button[aria-label='More actions']");
+  await page.click("[role=menuitem]:has-text('Remove OCR data…')");
+  await page.waitForSelector(".modal:has-text('Remove OCR data')");
+  await page.screenshot({ path: `${SHOTS}/ocr-remove.png` });
+  await page.click(".modal button.danger:has-text('Remove OCR data')");
+  await page.waitForSelector(".toast:has-text('OCR data removed')");
+  expect((await api(page, "/api/documents?q=2345678901")).data.total === 0, "no longer found by OCR-only text");
+  await page.click("button[aria-label='More actions']");
+  await page.click("[role=menuitem]:has-text('Disable OCR for this document…')");
+  await page.waitForSelector(".modal:has-text('Disable OCR for this document')");
+  await page.click(".modal button.danger:has-text('Disable OCR')");
+  await page.waitForSelector(".toast:has-text('OCR disabled for this document')");
+  await page.waitForSelector(".ocr-panel >> text=OCR disabled for this document");
+  const st = (await api(page, `/api/documents/${card}/ocr`)).data;
+  expect(st.override === "disabled" && !st.can_run, "document-level disable");
+  await page.click("button:has-text('Enable OCR for this document')");
+  await page.waitForSelector(".toast:has-text('OCR enabled for this document')");
+});
+
+await step("AT-211/221/225/226 OCR engines, Existing OCR data, orphans and Test OCR / Compare engines", async () => {
+  await page.goto(BASE + "/settings/processing");
+  await page.waitForSelector("h2:has-text('OCR engines')");
+  await page.waitForSelector("text=Language profiles");
+  await page.click("button:has-text('Run self-test')");  // real inference (a successful import alone is not Healthy)
+  await page.waitForSelector(".toast:has-text('Self-test passed'), .toast:has-text('Self-test failed')", { timeout: 120000 });
+  const eng = (await api(page, "/api/ocr/engines")).data;
+  expect(eng.paddle.healthy === !!eng.paddle.installed, `health follows the real self-test (installed ${eng.paddle.installed})`);
+  await page.waitForSelector("h3:has-text('PaddleOCR (PP-OCRv5)') .badge:has-text('Healthy'), h3:has-text('PaddleOCR (PP-OCRv5)') .badge:has-text('Not installed')");
+  await page.locator("h2:has-text('OCR engines')").evaluate((el) => { el.scrollIntoView({ block: "start" }); window.scrollBy(0, -90); });
+  await page.screenshot({ path: `${SHOTS}/settings-ocr-engines.png` });
+  await page.waitForSelector("h2:has-text('Existing OCR data')");
+  await page.click("button:has-text('Analyze (dry run)')");
+  await page.waitForSelector("text=Never touched:");
+  await page.locator("h2:has-text('Existing OCR data')").evaluate((el) => { el.scrollIntoView({ block: "start" }); window.scrollBy(0, -90); });
+  await page.screenshot({ path: `${SHOTS}/settings-ocr-existing.png` });
+  // bulk preview only (nothing confirmed): the preview names what is kept
+  await page.selectOption("#ocr-bulk-action", "remove");
+  await page.click("button:has-text('Preview for all')");
+  await page.waitForSelector(".modal >> text=Kept:");
+  await page.keyboard.press("Escape");
+  await page.setInputFiles("input[aria-label='Test file']", `${FIX}/ocr-test-sample.png`);
+  await page.check("label:has-text('Compare with Tesseract (Legacy)') input");
+  await page.fill("textarea[aria-label='Expected text']", "SAMPLE PERMIT - NOT REAL\nPermit No 4455667788");
+  await page.click("button:has-text('Compare engines')");
+  await page.waitForSelector("text=Temporary files removed: yes", { timeout: 120000 });
+  expect(await page.locator("text=accuracy").count() >= 1, "accuracy reported");
+  await page.locator("h2:has-text('Test OCR / Compare engines')").evaluate((el) => { el.scrollIntoView({ block: "start" }); window.scrollBy(0, -90); });
+  await page.screenshot({ path: `${SHOTS}/settings-ocr-compare.png` });
+});
+
 await step("screens for the README (desktop)", async () => {
   await page.goto(`${BASE}/folders/${ids.parity}/${ids["Sample policy (3 pages)"]}`);
   await page.waitForSelector(".detail-pane .viewer canvas");
@@ -880,7 +954,7 @@ await step("AT-128/130 every sign-in design keeps the same sign-in methods (desk
 });
 
 // ------------------------------------------------------------------ tablet / mobile parity
-const ROUTES = ["/", "/ocr-review", "/notifications", "/settings/notifications", "/settings/documents", `/documents/${ids.typed}`, "/settings/overview", "/settings/security", "/settings/security?view=antivirus", "/settings/security?view=test", "/settings/security?view=storage", "/folders", `/folders/${ids.parity}`, `/documents/${ids["Sample policy (3 pages)"]}`, "/search?q=sample", "/shared",
+const ROUTES = ["/", "/ocr-review", "/notifications", "/settings/notifications", "/settings/documents", `/documents/${ids.typed}`, "/settings/overview", "/settings/security", "/settings/security?view=antivirus", "/settings/security?view=test", "/settings/security?view=storage", "/settings/processing", "/folders", `/folders/${ids.parity}`, `/documents/${ids["Sample policy (3 pages)"]}`, "/search?q=sample", "/shared",
   "/offline", "/notifications", "/archive", "/settings/account", "/settings/account?tab=security", "/settings/account?tab=appearance",
   "/settings/account?tab=notifications", "/settings/family", "/settings/notifications", "/settings/storage", "/settings/security",
   "/settings/ai", "/settings/activity?view=logins", "/assistant", "/imports/new", "/help/getting-started"];

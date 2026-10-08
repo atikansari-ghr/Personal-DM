@@ -907,6 +907,16 @@ def storage_health(refresh: bool = False) -> dict:
         with connection.cursor() as cur:
             cur.execute("SELECT pg_database_size(current_database())")
             db_bytes = cur.fetchone()[0]
+    try:  # OCR data held in the database, OCR scratch space, PaddleOCR models and derived orphans (Change Set Q)
+        from apps.library import ocr_admin
+
+        ocr_db = ocr_admin.storage_usage()
+        ocr_orphans = ocr_admin.orphan_analysis(summary=True)
+    except Exception:  # noqa: BLE001
+        ocr_db, ocr_orphans = {"text": 0, "blocks": 0, "chunks": 0}, {"bytes": 0, "count": 0}
+    ocr_tmp = sum(_dir_size(p)[0] for p in Path(settings.TMP_DIR).glob("*")
+                  if p.is_dir() and p.name.startswith(("ocr-", "paddle-", "ocrtest-"))) if Path(settings.TMP_DIR).exists() else 0
+    paddle_models = _dir_size(Path(settings.PADDLE_HOME))[0]
     pct = round(du.used / du.total * 100, 1) if du.total else 0
     warn, crit = int(config.get("storage.warn_percent")), int(config.get("storage.critical_percent"))
     status = "critical" if pct >= crit else "warning" if pct >= warn else "ok"
@@ -916,6 +926,12 @@ def storage_health(refresh: bool = False) -> dict:
                 {"key": "documents", "label": "Documents (originals)", "bytes": originals},
                 {"key": "previews", "label": "Previews and thumbnails", "bytes": deriv.get("previews", 0)},
                 {"key": "ocr", "label": "OCR data (searchable copies)", "bytes": deriv.get("ocr", 0)},
+                {"key": "ocr_text", "label": "OCR text, text blocks and AI chunks (in the database)",
+                 "bytes": ocr_db["text"] + ocr_db["blocks"] + ocr_db["chunks"]},
+                {"key": "ocr_cache", "label": "OCR working files (temporary)", "bytes": ocr_tmp},
+                {"key": "ocr_orphans", "label": f"Orphaned OCR data ({ocr_orphans['count']} item(s); clean in OCR & processing)",
+                 "bytes": ocr_orphans["bytes"]},
+                {"key": "ocr_models", "label": "PaddleOCR models", "bytes": paddle_models},
                 {"key": "database", "label": "Database (metadata, text, logs)", "bytes": db_bytes},
                 {"key": "logs", "label": "Security and application log files", "bytes": logs},
                 {"key": "quarantine", "label": "Antivirus quarantine", "bytes": quarantine},

@@ -2,7 +2,7 @@
 
 ## Selective OCR {#selective}
 
-Text recognition (OCR) runs locally with Tesseract through OCRmyPDF. It reads **only what you choose**, so a 40-page bank statement is not recognised just because one page matters. Born-digital PDFs that already contain text are always indexed without OCR.
+Text recognition (OCR) runs locally with **PaddleOCR (PP-OCRv5)** by default, or **Tesseract (Legacy)** through OCRmyPDF; see [OCR engines](ocr-engines.md). It reads **only what you choose**, so a 40-page bank statement is not recognised just because one page matters. Born-digital PDFs that already contain text are always indexed without OCR.
 
 The administrator sets a policy for each document type in **Settings → OCR & processing → OCR policy per document type**:
 
@@ -22,13 +22,16 @@ Open a document, then **Text (OCR)** (or **⋮ → Text recognition (OCR)…**) 
 
 - **Source files** — tick one or more files of the document. A front and back side added with **⋮ → Add another side or copy…** can be recognised together as one job.
 - **Pages** — for PDFs, leave empty for all pages or enter pages and ranges such as `1-2, 5`. Invalid ranges are rejected with a clear message.
-- **Languages** — see below.
+- **OCR engine** and **Language profile** — PaddleOCR (PP-OCRv5) with a profile such as Arabic + English, or Tesseract (Legacy) with languages; see [OCR engines](ocr-engines.md#profiles).
+- **Languages** (Tesseract only) — see below.
 - **Orientation of photos** — detect automatically or force 90°, 180° or 270°.
 - **Use these files as the primary OCR source** — marks the selection as the document's primary source, which is what *Automatic* processes for new versions.
 
 Status: *Not processed*, *Queued*, *Processing*, *Needs review*, *Confirmed*, *Failed* and *OCR removed*. A queued job can be cancelled. The original files are never changed.
 
 ### Languages {#languages}
+
+*This section is about Tesseract (Legacy). PaddleOCR uses [language profiles](ocr-engines.md#profiles).*
 
 English, Arabic and Hindi (Devanagari) are offered by default; the administrator can offer more in **Settings → OCR & processing → OCR languages**. Choose the languages printed on the document. Combining several is slower. A language whose Tesseract pack is missing on the server is shown as *not installed* and cannot be chosen; `sudo personaldocs repair` installs the packs for every offered language and `sudo personaldocs doctor` reports any that are missing.
 
@@ -38,7 +41,7 @@ English, Arabic and Hindi (Devanagari) are offered by default; the administrator
 
 ### Removing OCR data {#remove}
 
-**Remove OCR data…** deletes the recognised text, its search entries, confidence values, the searchable PDF copy and the details that were only *suggested* from it. The **original file stays unchanged**, details you confirmed are kept, and the document no longer appears in full-text search results for words that came only from OCR. You can run OCR again later.
+**Remove OCR data…** deletes the recognised text, its positions, search entries, confidence values, every searchable PDF copy, the details that were only *suggested* from it, raw OCR excerpts and Local AI data built from it. The **original file stays unchanged**, details you confirmed are kept, and the document no longer appears in full-text search results for words that came only from OCR. You can run OCR again later. Text embedded in the PDF itself can be hidden too, and OCR can be disabled for the document; see [removing](ocr-engines.md#remove) and [disabling](ocr-engines.md#disable) OCR.
 
 ### Local AI and OCR text {#ai}
 

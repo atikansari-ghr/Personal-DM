@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import OcrTypes from "./OcrTypes";
+import { OcrEngineStatus, OcrExistingData, OcrTest } from "./OcrEngines";
 import DocumentTypesAdmin from "./DocumentTypes";
 import { DeliveryHistory, NotificationTemplates } from "./NotificationTemplates";
 import { api, formatBytes, formatDateTime } from "../../api";
@@ -57,7 +58,7 @@ function JobsCard() {
 }
 
 export function ProcessingPanel() {
-  return <div className="stack"><SettingsForm section="processing" title="OCR & processing" /><OcrTypes /><JobsCard /></div>;
+  return <div className="stack"><OcrEngineStatus /><SettingsForm section="processing" title="OCR & processing" /><OcrTypes /><OcrExistingData /><OcrTest /><JobsCard /></div>;
 }
 
 function DeliveryProblems() {

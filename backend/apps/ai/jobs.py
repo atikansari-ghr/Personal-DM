@@ -18,7 +18,9 @@ log = logging.getLogger("personaldocs.ai")
 
 def queue(kind: str, *, document, user=None, delay_seconds: int = 0) -> AIJob:
     ai_job = AIJob.objects.create(kind=kind, document=document, requested_by=user)
-    jobs.enqueue("ai_task", {"ai_job": str(ai_job.id)}, delay_seconds=delay_seconds, max_attempts=2, priority=150)
+    # The OCR epoch changes when OCR data is removed; a job queued before that must not rebuild AI data from it.
+    jobs.enqueue("ai_task", {"ai_job": str(ai_job.id), "epoch": getattr(document, "ocr_epoch", 0)},
+                 delay_seconds=delay_seconds, max_attempts=2, priority=150)
     return ai_job
 
 
@@ -46,6 +48,9 @@ def ai_task(job):
     ai_job = AIJob.objects.select_related("document", "requested_by").filter(pk=job.payload.get("ai_job")).first()
     if ai_job is None or ai_job.document is None:
         return {"skipped": "missing"}
+    if ai_job.status == "cancelled" or job.payload.get("epoch", 0) != ai_job.document.ocr_epoch:
+        AIJob.objects.filter(pk=ai_job.pk).update(status="cancelled", finished_at=timezone.now())
+        return {"skipped": "OCR data was removed after this job was queued"}
     cv = ai_job.document.current_version
     if cv is not None and cv.av_blocked:  # never let Local AI read a quarantined file
         service.finish_job(ai_job, error=AIError("The file is in antivirus quarantine."))

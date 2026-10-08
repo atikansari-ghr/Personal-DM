@@ -2,7 +2,7 @@
 # personaldocs — install, upgrade, rollback, repair and operate Personal Documents Management System on Debian 13 (native, no Docker).
 #
 #   personaldocs install [--public-origin URL] [--bind ADDR:PORT] [--ref REF] [--repo URL] [--build-frontend] [--with-verapdf]
-#                        [--without-antivirus] [--with-security-tools]
+#                        [--without-antivirus] [--without-paddleocr] [--with-security-tools]
 #   personaldocs upgrade [--ref REF] [--skip-backup]
 #   personaldocs post-upgrade                  (set up components a new release adds: ClamAV, host helper; safe to repeat)
 #   personaldocs rollback
@@ -11,6 +11,7 @@
 #   personaldocs restore BACKUP_DIR [--verify-only] [--no-key]
 #   personaldocs recover-admin USERNAME [--generate] [--reset-totp]
 #   personaldocs antivirus status|repair|selftest  (ClamAV daemon/socket diagnosis, repair and clean + EICAR self-test)
+#   personaldocs ocr status|install-models|selftest|reinstall  (PaddleOCR PP-OCRv5 runtime, models and inference test)
 #   personaldocs nas-apply [--from-settings]   (mount the NAS configured in Settings → Storage & backup)
 #   personaldocs host-apply                    (run the host security action requested in Settings → Security)
 #   personaldocs setup-token
@@ -141,11 +142,113 @@ preflight() {
 }
 
 install_optional_packages() { # never fatal: the app works without them
-  log "optional packages (GoAccess traffic analytics, OCR language packs, ClamAV antivirus)"
+  log "optional packages (GoAccess traffic analytics, OCR language packs, ClamAV antivirus, PaddleOCR)"
   export DEBIAN_FRONTEND=noninteractive
   apt-get install -y -q --no-install-recommends goaccess >/dev/null 2>&1 || c_warn "GoAccess could not be installed; traffic analytics will use the built-in summary."
   install_ocr_languages
   install_antivirus
+  if [ -L "$CURRENT" ]; then install_paddleocr "$(readlink -f "$CURRENT")" || true; fi
+}
+
+PADDLE_VENV=$PREFIX/paddle-venv
+PADDLE_HOME=$DATA_DIR/paddle
+
+paddle_profiles_langs() { # PP-OCRv5 recognition languages for the profiles offered in Settings -> OCR & processing
+  local profiles="en ar_en hi_en" p langs=""
+  if [ -L "$CURRENT" ] && [ -f "$ENV_FILE" ]; then
+    profiles=$(manage shell -c "from apps.core import config; print(' '.join(config.get('processing.ocr_profiles') or ['en']))" 2>/dev/null | tail -1)
+    [ -n "$profiles" ] || profiles="en ar_en hi_en"
+  fi
+  for p in $profiles; do
+    case "$p" in en) langs="$langs en";; ar_en) langs="$langs ar en";; hi_en) langs="$langs hi en";;
+      te_en) langs="$langs te en";; ta_en) langs="$langs ta en";; esac
+  done
+  echo "$langs" | tr ' ' '\n' | awk 'NF && !seen[$0]++' | tr '\n' ' '
+}
+
+install_paddleocr() { # install_paddleocr RELEASE_DIR — isolated PaddleOCR venv + PP-OCRv5 models + a real inference test
+  local rel=${1:-$CURRENT}
+  if [ "${OPT_NO_PADDLE:-0}" = 1 ] || [ "${PD_NO_PADDLE:-0}" = 1 ]; then
+    c_warn "PaddleOCR skipped (--without-paddleocr): OCR uses Tesseract (Legacy)."; env_set PD_NO_PADDLE 1 2>/dev/null || true; return 0
+  fi
+  local req="$rel/backend/requirements-paddle.txt" worker="$rel/backend/apps/library/paddle_worker.py"
+  [ -f "$req" ] && [ -f "$worker" ] || return 0
+  if ! grep -qw avx /proc/cpuinfo; then
+    c_warn "This CPU does not report AVX, which PaddlePaddle needs. PaddleOCR is not installed; OCR uses Tesseract (Legacy)."
+    c_warn "Proxmox: set the container's host CPU type to 'host' (VM) or check the host CPU, then run: sudo personaldocs ocr reinstall"
+    return 0
+  fi
+  local free; free=$(df -Pm "$PREFIX" | awk 'NR==2 {print $4}')
+  if [ "$free" -lt 3000 ] && [ ! -x "$PADDLE_VENV/bin/python" ]; then
+    c_warn "PaddleOCR needs about 2.5 GB of disk space; only ${free} MB free. OCR uses Tesseract (Legacy) for now."; return 0
+  fi
+  log "PaddleOCR (PP-OCRv5) runtime"
+  apt-get install -y -q --no-install-recommends libgomp1 libgl1 libglib2.0-0 >/dev/null 2>&1 || true
+  local want have; want=$(sha256sum "$req" | cut -c1-64); have=$(cat "$PADDLE_VENV/.requirements.sha256" 2>/dev/null || true)
+  if [ "$want" != "$have" ] || [ ! -x "$PADDLE_VENV/bin/python" ]; then
+    local tmpv="$PADDLE_VENV.new"; rm -rf "$tmpv"
+    if python3 -m venv "$tmpv" >>"$LOG" 2>&1 && "$tmpv/bin/pip" install -q --no-cache-dir --upgrade pip >>"$LOG" 2>&1 \
+       && timeout 2400 "$tmpv/bin/pip" install -q --no-cache-dir -r "$req" >>"$LOG" 2>&1; then
+      echo "$want" >"$tmpv/.requirements.sha256"
+      rm -rf "$PADDLE_VENV.old"; [ -d "$PADDLE_VENV" ] && mv "$PADDLE_VENV" "$PADDLE_VENV.old"
+      mv "$tmpv" "$PADDLE_VENV"; rm -rf "$PADDLE_VENV.old"
+    else
+      rm -rf "$tmpv"
+      c_warn "PaddleOCR could not be installed (see $LOG). The previous runtime (if any) is kept; OCR falls back to Tesseract."
+      return 1
+    fi
+  fi
+  chmod -R a+rX "$PADDLE_VENV"
+  env_set PD_PADDLE_PYTHON "$PADDLE_VENV/bin/python"
+  env_set PD_PADDLE_HOME "$PADDLE_HOME"
+  install -d -m 0750 -o $APP -g $APP "$PADDLE_HOME"
+  paddle_models "$worker" || true
+  paddle_selftest "$worker" || true
+}
+
+paddle_run() { # paddle_run WORKER ARGS... as the service user, with the model cache and no inherited secrets
+  local worker=$1; shift
+  runuser -u $APP -- env -i PATH=/usr/bin:/bin HOME="$PADDLE_HOME" PADDLE_PDX_CACHE_HOME="$PADDLE_HOME" \
+    PADDLE_PDX_MODEL_SOURCE="${PADDLE_PDX_MODEL_SOURCE:-huggingface}" OMP_NUM_THREADS=2 \
+    "$PADDLE_VENV/bin/python" "$worker" "$@"
+}
+
+paddle_models() { # download missing PP-OCRv5 models for the offered profiles (network needed once)
+  local worker=$1 langs model=mobile out
+  langs=$(paddle_profiles_langs)
+  if [ -L "$CURRENT" ] && [ -f "$ENV_FILE" ]; then
+    model=$(manage shell -c "from apps.core import config; print(config.get('processing.paddle_model'))" 2>/dev/null | tail -1)
+    [ "$model" = server ] || model=mobile
+  fi
+  log "PP-OCRv5 models: $langs ($model)"
+  out=$(paddle_run "$worker" install-models $langs --model "$model" 2>>"$LOG" | tail -1)
+  if ! echo "$out" | grep -q '"missing": \[\]'; then
+    log "retrying the model download from the BOS mirror"
+    out=$(PADDLE_PDX_MODEL_SOURCE=BOS paddle_run "$worker" install-models $langs --model "$model" 2>>"$LOG" | tail -1)
+  fi
+  echo "$out" | grep -q '"missing": \[\]' && c_ok "PP-OCRv5 models installed ($langs)." \
+    || { c_warn "Some PP-OCRv5 models could not be downloaded: $out"; return 1; }
+}
+
+paddle_selftest() { # real inference on a generated image; importing the library alone is not a success
+  local worker=$1 out
+  out=$(paddle_run "$worker" selftest 2>>"$LOG" | tail -1)
+  if echo "$out" | grep -q '"healthy": true'; then c_ok "PaddleOCR self-test passed (real PP-OCRv5 inference)."
+  else c_warn "PaddleOCR self-test failed: ${out:-no output}. OCR falls back to Tesseract until it passes."; return 1; fi
+}
+
+cmd_ocr() { # ocr status|install-models|selftest|reinstall
+  need_root; load_env
+  [ -L "$CURRENT" ] || die "not installed"
+  local rel worker; rel=$(readlink -f "$CURRENT"); worker="$rel/backend/apps/library/paddle_worker.py"
+  case "${1:-status}" in
+    status) [ -x "$PADDLE_VENV/bin/python" ] || die "PaddleOCR runtime missing ($PADDLE_VENV); run: sudo personaldocs ocr reinstall"
+            paddle_run "$worker" versions; echo; paddle_selftest "$worker";;
+    install-models) paddle_models "$worker";;
+    selftest) paddle_selftest "$worker";;
+    reinstall) rm -f "$PADDLE_VENV/.requirements.sha256"; install_paddleocr "$rel" && { for u in personaldocs-worker; do systemctl restart "$u"; done; };;
+    *) die "usage: personaldocs ocr status|install-models|selftest|reinstall";;
+  esac
 }
 
 install_antivirus() { # ClamAV daemon on a local Unix socket only + automatic signature updates (freshclam)
@@ -576,6 +679,7 @@ cmd_install() {
   install_security_tools "$dir"
   for u in "${UNITS[@]}"; do systemctl enable --now "$u" >/dev/null; systemctl restart "$u"; done
   if [ "${OPT_NO_ANTIVIRUS:-0}" != 1 ] && [ "${PD_NO_ANTIVIRUS:-0}" != 1 ]; then antivirus_repair "$dir" || true; fi
+  install_paddleocr "$dir" && systemctl restart personaldocs-worker || true
   health || { show_web_failure; die "the web service did not become healthy; see: journalctl -u personaldocs-web -n 50"; }
   prune_releases
   log "=== install complete: $(version_of "$dir") ($REV)"
@@ -831,6 +935,7 @@ while [ $# -gt 0 ]; do
     --build-frontend) OPT_BUILD_FRONTEND=1; shift;;
     --with-verapdf) OPT_VERAPDF=1; shift;;
     --without-antivirus) OPT_NO_ANTIVIRUS=1; shift;;
+    --without-paddleocr) OPT_NO_PADDLE=1; shift;;
     --with-security-tools) OPT_SECURITY_TOOLS=1; shift;;
     *) ARGS+=("$1"); shift;;
   esac
@@ -847,6 +952,7 @@ case "$CMD" in
           if [ "${PD_NO_ANTIVIRUS:-0}" != 1 ] && script=$(clamav_script); then echo "== ClamAV (as root: services, socket, service-account access, self-test)"; python3 "$script" status || true; echo; fi
           manage doctor || exit 1;;   # failed checks are listed above; not a script error
   antivirus) cmd_antivirus "${ARGS[@]}" || exit 1;;
+  ocr) cmd_ocr "${ARGS[@]}" || exit 1;;
   backup) need_root; load_env; manage backup;;
   integrity) need_root; load_env; manage integrity "${ARGS[@]}";;
   restore)

@@ -18,7 +18,7 @@ Stored filename template, upload size limit, blocked extensions, emoji suggestio
 
 ## OCR & processing {#processing}
 
-OCR on/off, the OCR policy per document type (Disabled, Manual, Automatic; languages, expected fields, AI permission; kept in sync with each template's *OCR / Local AI may suggest* flags), untyped documents, OCR languages offered, concurrency, timeouts, size, page, queue and attempt limits, **Pause OCR queue**, and the processing queue with retry. See [selective OCR](ocr-corrections.md#selective).
+**OCR engines** card (PaddleOCR PP-OCRv5 health, real-inference self-test, language profiles, Tesseract Legacy status, queue); default OCR engine and Tesseract fallback, offered language profiles and the default profile, PaddleOCR model, CPU threads, memory limit, orientation / text-line orientation / unwarping (see [OCR engines](ocr-engines.md)); OCR on/off, the OCR policy per document type (Disabled, Manual, Automatic; languages, expected fields, AI permission; kept in sync with each template's *OCR / Local AI may suggest* flags), untyped documents, OCR languages offered, concurrency, timeouts, size, page, queue and attempt limits, **Pause OCR queue**, **Existing OCR data** (inventory, bulk actions with preview, orphan analysis and cleanup), **Test OCR / Compare engines**, and the processing queue with retry. See [selective OCR](ocr-corrections.md#selective).
 
 ## Overview & sign-in {#overview}
 

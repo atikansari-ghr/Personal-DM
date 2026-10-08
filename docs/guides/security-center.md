@@ -80,6 +80,6 @@ To free disk space, **Security records** offers a **Cleanup analysis** first: ch
 
 ## Storage Health {#storage}
 
-**Storage** shows total, used and free space and the share used by documents, previews and thumbnails, OCR copies, the database, log files, the antivirus quarantine, local pre-update backups and temporary files. **Storage warning at** (80 %) and **Storage critical at** (90 %) trigger notifications to administrators.
+**Storage** shows total, used and free space and the share used by documents, previews and thumbnails, OCR copies, **OCR text**, **OCR cache** (scratch files), **OCR orphans** and **OCR models** (see [OCR engines](ocr-engines.md#orphans)), the database, log files, the antivirus quarantine, local pre-update backups and temporary files. **Storage warning at** (80 %) and **Storage critical at** (90 %) trigger notifications to administrators.
 
 **Safe cleanup** only offers regenerable or expired data: temporary files older than 24 hours, previews/OCR copies of files that no longer exist, and security records past their retention. It shows the space each would free and asks for confirmation. **Original documents are never deleted** by any cleanup, purge, antivirus, update or maintenance workflow; quarantined files are handled only through the quarantine review; NAS backups are pruned only by the backup retention setting.

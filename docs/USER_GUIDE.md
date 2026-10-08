@@ -160,8 +160,10 @@ because it inherits the new folder's access. See [moving](guides/getting-started
 - **OCR (text recognition):** runs on your server, and only on what is chosen. Depending on the document type, the
   administrator sets OCR to *Disabled*, *Manual* (the default for new installations) or *Automatic*. To recognise a
   document, open **Text (OCR)** and choose **Run OCR…**: tick the source files (for example front and back, added with
-  **⋮ → Add another side or copy…**), the pages (`1-2, 5`, empty for all), the languages (English, Arabic, Hindi
-  and any others offered) and, if needed, a forced rotation. The status shows *Not processed*, *Queued*,
+  **⋮ → Add another side or copy…**), the pages (`1-2, 5`, empty for all), the engine (**PaddleOCR (PP-OCRv5)** by
+  default, or **Tesseract (Legacy)**), the language profile (English, Arabic + English, Hindi + English and any
+  others offered) and, if needed, a forced rotation. Each result shows which engine produced it. See
+  [OCR engines](guides/ocr-engines.md). The status shows *Not processed*, *Queued*,
   *Processing*, *Needs review*, *Confirmed*, *Failed* or *OCR removed*; a queued job can be cancelled. See
   [selective OCR](guides/ocr-corrections.md#selective).
 - **OCR quality:** the **Text** tab shows the recognised text and the **OCR confidence**, and greys out unreliable
@@ -171,8 +173,13 @@ because it inherits the new folder's access. See [moving](guides/getting-started
 - **OCR review:** the **OCR review** page in the sidebar lists the documents you may edit whose text waits for
   review or failed. Accept, correct or reject the suggested details, or **Mark reviewed**. See
   [review queue](guides/ocr-corrections.md#review).
-- **Remove OCR data…** deletes the recognised text and its search entries. The original file stays unchanged and
-  details you confirmed are kept. See [removing OCR data](guides/ocr-corrections.md#remove).
+- **Remove OCR data…** (also in **⋮ More actions**) deletes the recognised text, its positions and confidences, the
+  searchable copy, its search entries, unconfirmed suggestions and Local AI data built from it. Optionally it also
+  hides the text layer embedded in the file. The original file stays unchanged and details you confirmed are kept.
+  See [removing OCR data](guides/ocr-engines.md#remove).
+- **Disable OCR for this document…** stops every future recognition of that document (also by an *Automatic* type or
+  *Regenerate preview*) until you choose **Enable OCR for this document**. You decide whether the existing text is
+  kept or removed. See [disabling OCR](guides/ocr-engines.md#disable).
 - **Details:** suggested details (issue/expiry date, number, name) only count after you **Confirm** them. Confirmed
   dates drive the document name and reminders. See [OCR and corrections](guides/ocr-corrections.md).
 - **Versions and renewals:** a better scan is a new version; a renewed passport is a new linked document. See

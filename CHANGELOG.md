@@ -4,6 +4,42 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-08) — PaddleOCR (PP-OCRv5) and the complete OCR lifecycle (Change Set Q)
+- **PaddleOCR with PP-OCRv5** is the default OCR engine (`processing.ocr_engine`); **Tesseract (Legacy)** stays as the fallback (`processing.ocr_engine_fallback`) and as an explicit choice. It runs locally in an isolated environment `/opt/personaldocs/paddle-venv` (PaddlePaddle 3.2.2, PaddleOCR 3.7.0, PaddleX 3.7.2, pinned in `backend/requirements-paddle.txt`) through `apps/library/paddle_worker.py`. The worker runs under the sandbox with a memory limit (`processing.paddle_memory_mb`, 3000 MB), a CPU limit, a timeout and one job at a time. Models live in `/var/lib/personaldocs/paddle` and are never downloaded while recognising.
+- **Language profiles** English, Arabic + English, Hindi (Devanagari) + English, Telugu + English, Tamil + English (`processing.ocr_profiles`, `processing.ocr_default_profile`, per document type `ocr_profile`). Advanced settings: model Mobile/Server, CPU threads, document orientation, text-line orientation, unwarping.
+- Every OCR result records its **engine, model, profile and date**. PaddleOCR results also store text positions (`ocr_blocks`). Every run is recorded in `OcrRun` (metadata only, never text).
+- **Health = real inference**: a self-test recognises a generated image (Settings → OCR & processing → *OCR engines* → **Run self-test**, `sudo personaldocs ocr status|selftest|install-models|reinstall`, `personaldocs doctor`).
+- Document **⋮ More actions**: **Run / Re-run OCR…** (engine and profile), **View OCR text**, **Remove OCR data…** (optionally also hiding the embedded text layer and disabling OCR), **Disable / Enable OCR for this document** (keep or remove existing text). API `POST /api/documents/<id>/ocr/mode`.
+- Settings → OCR & processing:
+  - **Existing OCR data** (main administrator): counts by engine, storage, filters, and **bulk actions** (Remove, Remove and disable, Disable, Enable, Re-process with PP-OCRv5, Set language profile) with a mandatory preview and throttled background batches.
+  - **Orphaned OCR data**: Analyze (dry run) and Clean.
+  - **Test OCR / Compare engines**: a sanitised file with character accuracy against the expected text; the temporary files are always deleted.
+
+  API: `GET /api/ocr/engines`, `POST /api/ocr/engines/selftest`, `GET /api/ocr/inventory`, `POST /api/ocr/bulk`, `GET|POST /api/ocr/orphans` and `POST /api/ocr/test`.
+- Security Health → Storage gains **OCR text**, **OCR cache**, **OCR orphans** and **OCR models**.
+- `scripts/ocr_engine_benchmark.py` (PP-OCRv5 vs Tesseract on synthetic English, Arabic, Hindi, Telugu and Tamil samples), results in `docs/OCR_BENCHMARK.md`. Guide [OCR engines](docs/guides/ocr-engines.md); ADR 0016; tests AT-211..AT-230 (the prompt's AT-191..AT-210, renumbered).
+- Migration `library.0010_ocr_engines_lifecycle` labels existing OCR as Tesseract (Legacy) or Unknown and maps each type's Tesseract languages to a profile. It never queues OCR.
+
+### Changed (2026-10-08) — Change Set Q
+- Changing the default engine affects new runs only; existing OCR is never re-processed automatically.
+- A re-run is staged: the new result replaces the old one only after every source succeeded, otherwise the previous text, index and searchable copy stay.
+- An engine crash, timeout or memory-limit stop fails once instead of being retried three times.
+- *Regenerate preview* and the integrity repair no longer start OCR (`process_version` with `auto_ocr: False`).
+- Local AI jobs carry the document's OCR epoch and discard results produced from text that was removed meanwhile.
+- The PaddleOCR installer step needs AVX and about 3 GB free disk. `--without-paddleocr` / `PD_NO_PADDLE=1` skips it. The worker unit gains `MemoryHigh=3400M`, `MemoryMax=4000M` and `CPUWeight=50`.
+
+### Fixed (2026-10-08) — removed OCR text came back (Change Set Q)
+- *Remove OCR data* reset the search text to the PDF's embedded text layer, so text from a scanner or earlier OCR stayed searchable. It can now be hidden too.
+- The Remove button was hidden when no version was marked as recognised.
+- *Regenerate preview* and integrity repairs re-ran OCR on *Automatic* types.
+- Queued or running Local AI jobs recreated suggestions and semantic chunks after removal.
+- Confirmed details kept raw OCR excerpts.
+- A page-range re-run left the previous full searchable PDF, which previews and shares still served. Stale searchable copies are now removed.
+- Switching a version to current rebuilt the search text without the OCR rules.
+- Removal left OCR sources and languages set.
+- Run OCR… sent the default engine explicitly, which disabled the Tesseract fallback: without the PaddleOCR runtime (no AVX, `--without-paddleocr`) every run from the dialog failed. The default engine is now left to the server, so fallback applies; an engine the person picks is still never replaced.
+- The ⋮ menus closed by themselves when a long menu was scrolled, or when it was opened right after a page scroll (the late scroll event closed it although the menu's button had not moved).
+
 ### Fixed (2026-10-08) — ClamAV would not start on Debian 13: unknown option `EnableVersionCommand`
 - Earlier releases (Change Set M installer and the Change Set P repair) wrote `EnableVersionCommand true` into `/etc/clamav/clamd.conf`. Only Ubuntu's patched clamd knows that option; Debian 13's clamd 1.4.3 stops with "Unknown option EnableVersionCommand", so the socket `/run/clamav/clamd.ctl` never appeared and the Antivirus page showed Unavailable.
 - The repair (`sudo personaldocs antivirus repair`, also run by upgrade/post-upgrade/repair and the Diagnose / Repair button) now removes it, and removes any other option `clamconf` reports as unknown. The diagnosis reports an unsupported option as the cause. The app reads engine and signature versions without it.

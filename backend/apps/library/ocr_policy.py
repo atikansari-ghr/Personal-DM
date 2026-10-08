@@ -69,7 +69,11 @@ def missing_languages() -> list[str]:
 
 
 def mode_for(doc) -> str:
+    """Effective OCR mode: global switch, then the document's own override (Disable OCR for this document beats an
+    Automatic type), then the document type, then the setting for documents without a type."""
     if not config.get("processing.ocr_enabled"):
+        return "disabled"
+    if getattr(doc, "ocr_override", "") == "disabled":
         return "disabled"
     if doc.doc_type_id and doc.doc_type:
         return doc.doc_type.ocr_mode

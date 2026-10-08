@@ -121,6 +121,14 @@
  ],
  [
   "PASS",
+  "AT-213/217/218 OCR engine label, Remove OCR data and Disable OCR for this document"
+ ],
+ [
+  "PASS",
+  "AT-211/221/225/226 OCR engines, Existing OCR data, orphans and Test OCR / Compare engines"
+ ],
+ [
+  "PASS",
   "screens for the README (desktop)"
  ],
  [

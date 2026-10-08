@@ -11,7 +11,9 @@
 - `settings.json` (readable summary) and, optionally, the encryption key for stored integration secrets.
 - `manifest.json` listing every file, size, checksum and whether the backup verified.
 
-Not included: the GeoIP database file (download or upload it again after a restore — see
+OCR data is part of the database dump: recognised text, text positions (PaddleOCR blocks), engine/model/profile labels, the per-document *OCR disabled* switch and the OCR run history. OCR data you removed is not in later backups, but older backups still contain it until they expire under the retention rules. Restoring an older backup brings that text back; remove it again after the restore if needed.
+
+Not included: the PaddleOCR runtime and its models (`/opt/personaldocs/paddle-venv`, `/var/lib/personaldocs/paddle`; `sudo personaldocs repair` reinstalls them on a new server), the GeoIP database file (download or upload it again after a restore — see
 [Security & access](security-access.md#backup)), and files held in the **antivirus quarantine** (`<data>/quarantine`; see
 [Antivirus](antivirus.md#quarantine)). Secrets such as AI API keys and the MaxMind license key are stored encrypted in the
 database; they are only usable after a restore when the backup includes the encryption key (or you keep the key safely yourself).

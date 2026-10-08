@@ -81,9 +81,12 @@ come from the documents themselves, and everything runs on a small server you co
 **Processing and viewing**
 - **Selective OCR**: per document type the administrator chooses Disabled, Manual (default) or Automatic. You pick
   the files (front and back of a card as one job), the pages or ranges and the languages (English, Arabic, Hindi
-  and more) and can remove OCR data again without touching the original. An OCR review queue lists what waits for
+  and more) and can remove OCR data again (or disable OCR for a single document) without touching the original. An OCR review queue lists what waits for
   confirmation, and the local AI only reads document types that allow it.
-- Local OCR with Tesseract/OCRmyPDF (searchable PDF/A), with measured preprocessing: phone-photo orientation,
+- Local OCR with **PaddleOCR PP-OCRv5** (default) for photos, curved pages and Arabic/Devanagari/Telugu/Tamil +
+  English, with Tesseract/OCRmyPDF (searchable PDF/A) as Legacy / Fallback. Each result shows its engine. The
+  administrator sees all existing OCR data and can bulk remove, disable or re-process it, clean orphans, and
+  compare engines ([OCR engines](docs/guides/ocr-engines.md)). Tesseract uses measured preprocessing: phone-photo orientation,
   upside-down and sideways scans, deskew, contrast and denoise. On the synthetic benchmark, mean accuracy went from
   0.61 to 0.97 ([OCR benchmark](docs/OCR_BENCHMARK.md)). Confidence is shown per document and unreliable lines are
   greyed out.

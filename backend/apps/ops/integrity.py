@@ -75,7 +75,7 @@ def repair(dry_run: bool = True) -> list[str]:
         if p["type"] == "missing_derivative":
             actions.append(f"reprocess version {p['version']}")
             if not dry_run:
-                jobs.enqueue("process_version", {"version_id": p["version"]}, idempotency_key=f"repair:{p['version']}:{qdir.name}")
+                jobs.enqueue("process_version", {"version_id": p["version"], "auto_ocr": False}, idempotency_key=f"repair:{p['version']}:{qdir.name}")
         elif p["type"] == "orphan_original":
             actions.append(f"quarantine {p['path']}")
             if not dry_run:

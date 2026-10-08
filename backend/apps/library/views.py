@@ -644,7 +644,8 @@ def document_reprocess(request, pk):
         return _err("No file to process.")
     from .models import Document as D
 
-    payload = {"version_id": str(doc.current_version_id)}
+    # "Regenerate preview" only rebuilds previews/thumbnails: it never starts Automatic OCR again (Change Set Q).
+    payload = {"version_id": str(doc.current_version_id), "auto_ocr": False}
     rotate = request.data.get("rotate") if hasattr(request, "data") else None
     if rotate not in (None, "", "auto"):
         try:

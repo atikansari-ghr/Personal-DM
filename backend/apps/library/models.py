@@ -74,6 +74,7 @@ class DocumentType(models.Model):
     ocr_languages = models.JSONField(default=list, blank=True, help_text="Tesseract language codes, e.g. ['eng', 'ara']")
     ocr_fields = models.JSONField(default=list, blank=True, help_text="Structured fields expected for this type")
     ocr_ai_allowed = models.BooleanField(default=False, help_text="May Local AI read this type's recognised text")
+    ocr_profile = models.CharField(max_length=10, blank=True, help_text="Default OCR language profile ('' = global default)")
     is_custom = models.BooleanField(default=False)
     archived = models.BooleanField(default=False, help_text="Hidden from new documents; existing documents keep it")
     # Change Set N: administrator-managed classification and metadata template
@@ -184,6 +185,12 @@ class Document(models.Model):
     ocr_languages = models.JSONField(default=list, blank=True)
     ocr_error = models.TextField(blank=True)
     ocr_updated_at = models.DateTimeField(null=True, blank=True)
+    # Change Set Q: per-document OCR controls
+    ocr_override = models.CharField(max_length=10, blank=True, default="",
+                                    help_text="'' follows the document type; 'disabled' = never recognise this document")
+    ocr_profile = models.CharField(max_length=10, blank=True, help_text="Language profile of the last OCR run")
+    ignore_embedded_text = models.BooleanField(default=False, help_text="Do not use the text layer embedded in the file")
+    ocr_epoch = models.PositiveIntegerField(default=0, help_text="Bumped when OCR data is removed; stale jobs skip")
     search_vector = SearchVectorField(null=True)
     source_path = models.TextField(blank=True)
     archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
@@ -221,6 +228,12 @@ class DocumentVersion(models.Model):
     pdfa_report = models.JSONField(default=dict, blank=True)
     ocr_quality = models.JSONField(default=dict, blank=True, help_text="OCR confidence, rotation, steps, low-confidence lines")
     ocr_pages = models.CharField(max_length=200, blank=True, help_text="Pages recognised ('' = all pages)")
+    # Change Set Q: which engine produced the recognised text (historical Tesseract results are never relabelled)
+    ocr_engine = models.CharField(max_length=12, blank=True, db_index=True, help_text="paddleocr | tesseract | unknown")
+    ocr_model = models.CharField(max_length=120, blank=True)
+    ocr_profile = models.CharField(max_length=10, blank=True)
+    ocr_blocks = models.JSONField(default=list, blank=True, help_text="Per page: lines with text, score and box")
+    ocr_at = models.DateTimeField(null=True, blank=True)
     is_additional = models.BooleanField(default=False, help_text="Another side/copy of the same document (not a replacement)")
     state = models.CharField(max_length=16, default="queued")
     error = models.TextField(blank=True)
@@ -350,3 +363,35 @@ class ImportItem(models.Model):
 
     class Meta:
         unique_together = [("session", "relative_path")]
+
+
+class OcrRun(models.Model):
+    """One OCR job: engine, models, profile, sources, options, timing, outcome and confidence summary.
+
+    It never stores recognised text: the text lives on the document version only once the whole run succeeded, so a
+    failed run leaves the previous result untouched and removing OCR data leaves nothing behind here."""
+
+    QUEUED, RUNNING, DONE, FAILED, CANCELLED = "queued", "running", "done", "failed", "cancelled"
+    id = models.BigAutoField(primary_key=True)
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="ocr_runs")
+    job_id = models.UUIDField(null=True, blank=True)
+    engine = models.CharField(max_length=12, help_text="paddleocr | tesseract")
+    engine_version = models.CharField(max_length=80, blank=True)
+    model = models.CharField(max_length=200, blank=True)
+    profile = models.CharField(max_length=10, blank=True)
+    languages = models.JSONField(default=list, blank=True)
+    sources = models.JSONField(default=list, blank=True)
+    options = models.JSONField(default=dict, blank=True)
+    reprocess = models.BooleanField(default=False, help_text="Explicit re-processing of existing OCR")
+    status = models.CharField(max_length=10, default=QUEUED, db_index=True)
+    confidence = models.FloatField(null=True, blank=True)
+    line_count = models.PositiveIntegerField(default=0)
+    low_lines = models.PositiveIntegerField(default=0)
+    seconds = models.FloatField(null=True, blank=True)
+    error = models.CharField(max_length=500, blank=True)
+    requested_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
