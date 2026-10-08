@@ -419,7 +419,8 @@ def test_at159_storage_health_categories_thresholds_and_cleanup(family, clients,
     page = clients["dad"].get("/api/security/storage?refresh=1").json()
     assert page["total"] > 0 and page["used"] > 0 and page["free"] >= 0 and 0 <= page["percent"] <= 100
     keys = {c["key"] for c in page["categories"]}
-    assert keys == {"documents", "previews", "ocr", "database", "logs", "quarantine", "backups", "temporary"}
+    assert keys == {"documents", "previews", "ocr", "database", "logs", "quarantine", "backups", "temporary",
+                    "ocr_text", "ocr_cache", "ocr_orphans", "ocr_models"}  # OCR categories: Change Set Q
     assert next(c for c in page["categories"] if c["key"] == "documents")["bytes"] >= len(b"synthetic document")
     items = {i["key"]: i for i in page["cleanup"]["items"]}
     assert items["temporary"]["bytes"] >= 5000 and items["orphan_previews"]["count"] == 1

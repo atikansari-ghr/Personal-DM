@@ -128,6 +128,8 @@ def process_version(job):
     try:
         if fmt == "pdf":
             pages, text, encrypted = _pdf_info(original)
+            if doc.ignore_embedded_text:  # the person removed this file's embedded text layer (Remove OCR data)
+                text = ""
             if encrypted:
                 state, error = "unsupported", "Password-protected PDF: stored safely; preview and OCR are not possible."
             else:
@@ -182,7 +184,9 @@ def process_version(job):
             from .ocr_runs import document_text
 
             _apply_to_document(doc, version, document_text(doc), state)
-    if state in ("ready", "unsupported") and needs_ocr and not keep_ocr:
+    # Automatic OCR only on the first processing of an upload — never from "Regenerate preview", integrity repair or a
+    # re-processing — and never for a document whose OCR was disabled (ocr_policy.mode_for).
+    if state in ("ready", "unsupported") and needs_ocr and not keep_ocr and job.payload.get("auto_ocr", True):
         from .ocr_runs import auto_ocr
 
         auto_ocr(doc, version)

@@ -70,6 +70,10 @@ class Command(BaseCommand):
             self._operations_checks(report, warn, info)
         except Exception as exc:  # noqa: BLE001
             warn("antivirus/host checks could not run", exc.__class__.__name__)
+        try:
+            self._ocr_checks(report, warn, info)
+        except Exception as exc:  # noqa: BLE001
+            warn("OCR engine checks could not run", exc.__class__.__name__)
         raise SystemExit(0 if ok else 1)
 
     def _security_checks(self, report, warn, info):
@@ -137,6 +141,50 @@ class Command(BaseCommand):
             failed = AIJob.objects.filter(status="failed", created_at__gte=timezone.now() - timedelta(days=1)).count()
             if failed:
                 warn("Local AI jobs", f"{failed} failed in the last 24 hours (Settings → Local AI → AI jobs)")
+
+    def _ocr_checks(self, report, warn, info):
+        """Change Set Q: PaddleOCR / PP-OCRv5 — versions, models, a real inference self-test, queue and storage."""
+        from apps.core import config
+        from apps.core.models import Job
+        from apps.library import ocr_admin, ocr_engines
+
+        if not config.get("processing.ocr_enabled"):
+            info("OCR", "turned off in Settings → OCR & processing")
+            return
+        engine = config.get("processing.ocr_engine")
+        info("OCR default engine", ocr_engines.ENGINE_LABELS.get(engine, engine))
+        st = ocr_engines.paddle_status(refresh=True)
+        (report if engine == "paddleocr" else lambda n, ok, d: (info if ok else warn)(n, d))(
+            "PaddleOCR installed", bool(st.get("installed") and not st.get("error")),
+            (f"PaddleOCR {st.get('paddleocr')}, PaddlePaddle {st.get('paddle')} ({st.get('python')})" if st.get("installed")
+             else f"{st.get('python')} missing") + (f" — {st.get('error')}" if st.get("error") else "")
+            + ("" if st.get("installed") else " → sudo personaldocs repair"))
+        if st.get("installed") and st.get("cpu_avx") is False:
+            report("CPU supports AVX (needed by PaddlePaddle)", False, "set the container CPU type to host / x86-64-v2-AES or newer")
+        if st.get("installed"):
+            report("PP-OCRv5 models for the offered language profiles", not st.get("missing_models"),
+                   "all present" if not st.get("missing_models") else "missing: " + ", ".join(st["missing_models"])
+                   + " → sudo personaldocs ocr install-models")
+            res = ocr_engines.paddle_selftest()
+            report("PaddleOCR inference self-test (import alone is not enough)", bool(res.get("healthy")),
+                   f"read “{res.get('text', '')}” in {res.get('seconds', '?')} s" if res.get("ok") else str(res.get("message")))
+        tess = ocr_engines.tesseract_version()
+        info("Tesseract (Legacy / fallback)", tess)
+        info("OCR language profiles offered", ", ".join(ocr_engines.offered_profiles()))
+        info("OCR queue", f"{Job.objects.filter(kind='ocr_run', status=Job.QUEUED).count()} queued, "
+                          f"{Job.objects.filter(kind='ocr_run', status=Job.RUNNING).count()} running, "
+                          f"{config.get('processing.heavy_concurrency')} at a time, PaddleOCR limit {config.get('processing.paddle_memory_mb')} MB")
+        tmp = Path(settings.TMP_DIR)
+        if tmp.exists():
+            mode = tmp.stat().st_mode & 0o777
+            (info if not mode & 0o007 else warn)("OCR temporary directory", f"{tmp} (mode {oct(mode)})" +
+                                               ("" if not mode & 0o007 else " — readable by other users; chmod 750"))
+        usage = ocr_admin.storage_usage()
+        orphans = ocr_admin.orphan_analysis(summary=True)
+        info("OCR data stored", f"{usage['total'] // 1024} KB (text, blocks, searchable copies, AI chunks)")
+        if orphans["count"]:
+            warn("Orphaned OCR data", f"{orphans['count']} item(s), {orphans['bytes'] // 1024} KB — Settings → OCR & processing → "
+                                      "Existing OCR Data → Analyze / Clean")
 
     def _operations_checks(self, report, warn, info):
         """Change Set M: antivirus, signatures, host helper, exposure, storage thresholds, pending reboot."""

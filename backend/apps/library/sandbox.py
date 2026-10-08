@@ -17,7 +17,7 @@ SAFE_ENV_KEYS = {"PATH", "LANG", "LC_ALL", "TESSDATA_PREFIX"}
 
 
 def run(cmd: list[str], *, timeout: int, cwd: Path | None = None, memory_mb: int | None = None,
-        extra_env: dict | None = None) -> subprocess.CompletedProcess:
+        extra_env: dict | None = None, cpu_seconds: int | None = None) -> subprocess.CompletedProcess:
     memory_mb = memory_mb or settings.PROCESS_MEMORY_LIMIT_MB
     env = {k: v for k, v in os.environ.items() if k in SAFE_ENV_KEYS}
     env.setdefault("PATH", "/usr/local/bin:/usr/bin:/bin")
@@ -35,7 +35,8 @@ def run(cmd: list[str], *, timeout: int, cwd: Path | None = None, memory_mb: int
             resource.setrlimit(resource.RLIMIT_AS, (mem, mem))
         except (ValueError, OSError):
             pass
-        resource.setrlimit(resource.RLIMIT_CPU, (timeout + 5, timeout + 10))
+        cpu = cpu_seconds or timeout + 5  # multi-threaded tools (PaddleOCR) use CPU time faster than wall time
+        resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu + 5))
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
         os.nice(10)
 

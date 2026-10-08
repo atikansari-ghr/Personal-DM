@@ -136,7 +136,7 @@ Server/NAS paths (one per line) from which the main administrator may import. So
 
 ### Text recognition (OCR) (`processing.ocr_enabled`)
 
-Master switch for local OCR (Tesseract). Which documents are recognised is decided per document type below.
+Master switch for local OCR (PaddleOCR PP-OCRv5, or Tesseract Legacy). Which documents are recognised is decided per document type below.
 
 - **Default:** `True`
 - **Allowed values:** bool
@@ -146,9 +146,129 @@ Master switch for local OCR (Tesseract). Which documents are recognised is decid
 - **Restart needed:** no
 - **Learn more:** [ocr-corrections#selective](guides/ocr-corrections.md#selective)
 
-### OCR languages offered (`processing.ocr_languages`)
+### OCR engine (`processing.ocr_engine`)
 
-Languages people can choose when running OCR. The installer installs the matching Tesseract language packs; the health check reports missing ones.
+PaddleOCR PP-OCRv5 is the default engine. Tesseract stays available as Legacy while results are compared. Changing the engine never re-processes existing documents.
+
+- **Default:** `'paddleocr'`
+- **Allowed values:** paddleocr, tesseract
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Applies to OCR runs requested from now on. Existing recognised text keeps its engine label.
+- **Restart needed:** no
+- **Learn more:** [ocr-engines#engine](guides/ocr-engines.md#engine)
+
+### Use Tesseract when PaddleOCR is unavailable (`processing.ocr_engine_fallback`)
+
+If PaddleOCR is not installed or fails its health check, run Tesseract instead and record that the fallback was used. Off: the OCR job fails with a clear message.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** processing.ocr_engine
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [ocr-engines#fallback](guides/ocr-engines.md#fallback)
+
+### OCR language profiles offered (`processing.ocr_profiles`)
+
+Language profiles people can choose when running OCR. Each profile routes to the matching PP-OCRv5 recognition models (and to the Tesseract language packs for Legacy runs).
+
+- **Default:** `['en', 'ar_en', 'hi_en']`
+- **Allowed values:** en, ar_en, hi_en, te_en, ta_en
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Run `sudo personaldocs ocr install-models` after adding a profile (the upgrade and repair do it too).
+- **Restart needed:** no
+- **Learn more:** [ocr-engines#profiles](guides/ocr-engines.md#profiles)
+
+### Default language profile (`processing.ocr_default_profile`)
+
+Used when the document type has no profile of its own.
+
+- **Default:** `'en'`
+- **Allowed values:** en, ar_en, hi_en, te_en, ta_en
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [ocr-engines#profiles](guides/ocr-engines.md#profiles)
+
+### PP-OCRv5 model size (advanced) (`processing.paddle_model`)
+
+Mobile models are fast and small enough for a 2 vCPU / 6 GB container. Server detection is more accurate on dense pages but slower and uses more memory.
+
+- **Default:** `'mobile'`
+- **Allowed values:** mobile, server
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Server detection needs its model downloaded (`sudo personaldocs ocr install-models`).
+- **Restart needed:** no
+- **Learn more:** [ocr-engines#advanced](guides/ocr-engines.md#advanced)
+
+### PaddleOCR CPU threads (advanced) (`processing.paddle_cpu_threads`)
+
+CPU threads one OCR job may use. Keep at or below the number of vCPUs minus one so the web app stays responsive.
+
+- **Default:** `2`
+- **Allowed values:** 1–16
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [ocr-engines#advanced](guides/ocr-engines.md#advanced)
+
+### Detect page orientation (PaddleOCR) (`processing.paddle_orientation`)
+
+Turn sideways or upside-down photos and scans the right way before recognition.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [ocr-engines#preprocessing](guides/ocr-engines.md#preprocessing)
+
+### Detect text-line orientation (PaddleOCR) (`processing.paddle_textline`)
+
+Reads individual upside-down lines correctly. Costs a little time.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [ocr-engines#preprocessing](guides/ocr-engines.md#preprocessing)
+
+### Flatten curved photos (PaddleOCR) (`processing.paddle_unwarping`)
+
+Straightens photographed pages that are bent or curved. Can make clean flat scans worse, so it is off by default; compare results in Test OCR before turning it on.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [ocr-engines#preprocessing](guides/ocr-engines.md#preprocessing)
+
+### PaddleOCR memory limit (MB) (`processing.paddle_memory_mb`)
+
+Hard limit for one OCR process. A job above it fails safely instead of slowing the whole server.
+
+- **Default:** `3000`
+- **Allowed values:** 1024–32768
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** About 1.5 GB is used by a two-language profile; 3000 leaves room for large pages.
+- **Restart needed:** no
+- **Learn more:** [ocr-engines#limits](guides/ocr-engines.md#limits)
+
+### OCR languages offered (Tesseract Legacy) (`processing.ocr_languages`)
+
+Tesseract language packs offered for Legacy OCR runs. The installer installs the matching packs; the health check reports missing ones.
 
 - **Default:** `['eng', 'ara', 'hin']`
 - **Allowed values:** eng, ara, hin, urd, tel, tam, mal, kan, ben, mar, guj, pan, fra, deu, spa, fas, tur

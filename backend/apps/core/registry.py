@@ -76,6 +76,9 @@ _OCR_LANGS = {
     "mal": "Malayalam", "kan": "Kannada", "ben": "Bengali", "mar": "Marathi", "guj": "Gujarati", "pan": "Punjabi",
     "fra": "French", "deu": "German", "spa": "Spanish", "fas": "Persian", "tur": "Turkish",
 }
+# OCR language profiles (Change Set Q). Labels only; routing lives in apps/library/ocr_engines.py.
+OCR_PROFILES = {"en": "English", "ar_en": "Arabic + English", "hi_en": "Hindi (Devanagari) + English",
+                "te_en": "Telugu + English", "ta_en": "Tamil + English"}
 LAYOUTS = ("three_panel", "full_page")
 
 
@@ -255,11 +258,55 @@ SETTINGS: list[SettingDef] = [
                help="folder-imports#server", example="/mnt/nas/old-documents"),
     # ---- Processing
     SettingDef("processing.ocr_enabled", "Text recognition (OCR)",
-               "Master switch for local OCR (Tesseract). Which documents are recognised is decided per document type below.",
+               "Master switch for local OCR (PaddleOCR PP-OCRv5, or Tesseract Legacy). Which documents are recognised is decided per document type below.",
                "bool", True, "processing", effect="When off, nothing is recognised; documents are still stored, previewed and searchable by their details.",
                help="ocr-corrections#selective"),
-    SettingDef("processing.ocr_languages", "OCR languages offered",
-               "Languages people can choose when running OCR. The installer installs the matching Tesseract language packs; the health check reports missing ones.",
+    SettingDef("processing.ocr_engine", "OCR engine",
+               "PaddleOCR PP-OCRv5 is the default engine. Tesseract stays available as Legacy while results are compared. "
+               "Changing the engine never re-processes existing documents.",
+               "choice", "paddleocr", "processing", choices=("paddleocr", "tesseract"),
+               choice_labels={"paddleocr": "PaddleOCR PP-OCRv5 (recommended)", "tesseract": "Tesseract (Legacy)"},
+               effect="Applies to OCR runs requested from now on. Existing recognised text keeps its engine label.",
+               help="ocr-engines#engine"),
+    SettingDef("processing.ocr_engine_fallback", "Use Tesseract when PaddleOCR is unavailable",
+               "If PaddleOCR is not installed or fails its health check, run Tesseract instead and record that the "
+               "fallback was used. Off: the OCR job fails with a clear message.",
+               "bool", True, "processing", depends_on=("processing.ocr_engine",), help="ocr-engines#fallback"),
+    SettingDef("processing.ocr_profiles", "OCR language profiles offered",
+               "Language profiles people can choose when running OCR. Each profile routes to the matching PP-OCRv5 "
+               "recognition models (and to the Tesseract language packs for Legacy runs).",
+               "choice_list", ["en", "ar_en", "hi_en"], "processing", choices=tuple(OCR_PROFILES),
+               choice_labels=OCR_PROFILES, effect="Run `sudo personaldocs ocr install-models` after adding a profile "
+               "(the upgrade and repair do it too).", help="ocr-engines#profiles"),
+    SettingDef("processing.ocr_default_profile", "Default language profile",
+               "Used when the document type has no profile of its own.", "choice", "en", "processing",
+               choices=tuple(OCR_PROFILES), choice_labels=OCR_PROFILES, help="ocr-engines#profiles"),
+    SettingDef("processing.paddle_model", "PP-OCRv5 model size (advanced)",
+               "Mobile models are fast and small enough for a 2 vCPU / 6 GB container. Server detection is more "
+               "accurate on dense pages but slower and uses more memory.", "choice", "mobile", "processing",
+               choices=("mobile", "server"), choice_labels={"mobile": "Mobile (recommended)", "server": "Server detection"},
+               effect="Server detection needs its model downloaded (`sudo personaldocs ocr install-models`).",
+               help="ocr-engines#advanced"),
+    SettingDef("processing.paddle_cpu_threads", "PaddleOCR CPU threads (advanced)",
+               "CPU threads one OCR job may use. Keep at or below the number of vCPUs minus one so the web app stays responsive.",
+               "int", 2, "processing", min=1, max=16, help="ocr-engines#advanced"),
+    SettingDef("processing.paddle_orientation", "Detect page orientation (PaddleOCR)",
+               "Turn sideways or upside-down photos and scans the right way before recognition.", "bool", True,
+               "processing", help="ocr-engines#preprocessing"),
+    SettingDef("processing.paddle_textline", "Detect text-line orientation (PaddleOCR)",
+               "Reads individual upside-down lines correctly. Costs a little time.", "bool", True, "processing",
+               help="ocr-engines#preprocessing"),
+    SettingDef("processing.paddle_unwarping", "Flatten curved photos (PaddleOCR)",
+               "Straightens photographed pages that are bent or curved. Can make clean flat scans worse, so it is off by "
+               "default; compare results in Test OCR before turning it on.", "bool", False, "processing",
+               help="ocr-engines#preprocessing"),
+    SettingDef("processing.paddle_memory_mb", "PaddleOCR memory limit (MB)",
+               "Hard limit for one OCR process. A job above it fails safely instead of slowing the whole server.",
+               "int", 3000, "processing", min=1024, max=32768,
+               effect="About 1.5 GB is used by a two-language profile; 3000 leaves room for large pages.",
+               help="ocr-engines#limits"),
+    SettingDef("processing.ocr_languages", "OCR languages offered (Tesseract Legacy)",
+               "Tesseract language packs offered for Legacy OCR runs. The installer installs the matching packs; the health check reports missing ones.",
                "choice_list", ["eng", "ara", "hin"], "processing", choices=tuple(_OCR_LANGS),
                choice_labels=_OCR_LANGS, effect="Run `sudo personaldocs repair` after adding a language to install its pack.",
                help="ocr-corrections#languages"),

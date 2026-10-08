@@ -7,4 +7,4 @@ class LibraryConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
 
     def ready(self):
-        from . import imports, ocr_runs, processing  # noqa: F401 - registers job handlers
+        from . import imports, ocr_admin, ocr_runs, processing  # noqa: F401 - registers job handlers

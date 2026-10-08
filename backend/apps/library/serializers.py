@@ -150,9 +150,13 @@ def document_detail(ctx: P.AccessContext, d: Document) -> dict:
 def ocr_json(d: Document) -> dict:
     from . import ocr_policy
 
+    from . import ocr_engines
+
     return {"state": d.ocr_state, "mode": ocr_policy.mode_for(d), "sources": d.ocr_sources or [],
             "languages": d.ocr_languages or [], "default_languages": ocr_policy.default_languages(d),
-            "error": d.ocr_error, "updated_at": d.ocr_updated_at, "ai_allowed": ocr_policy.ai_allowed(d)}
+            "error": d.ocr_error, "updated_at": d.ocr_updated_at, "ai_allowed": ocr_policy.ai_allowed(d),
+            "override": d.ocr_override, "profile": d.ocr_profile, "default_profile": ocr_engines.profile_for(d),
+            "embedded_text_hidden": d.ignore_embedded_text}
 
 
 def _link(ctx, d):

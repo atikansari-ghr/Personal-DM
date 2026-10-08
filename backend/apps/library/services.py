@@ -313,8 +313,11 @@ def set_current_version(*, actor, doc: Document, version: DocumentVersion) -> No
         DocumentVersion.objects.filter(pk=version.pk).update(is_additional=False)
         version.is_additional = False
     doc.current_version = version
-    doc.content_text = version.text
-    doc.save(update_fields=["current_version", "content_text", "updated_at"])
+    doc.save(update_fields=["current_version", "updated_at"])
+    from .ocr_runs import document_text
+
+    doc.content_text = document_text(doc)  # same assembly as everywhere else (OCR source set included)
+    doc.save(update_fields=["content_text", "updated_at"])
     from .search import update_search_vector
 
     update_search_vector(doc)

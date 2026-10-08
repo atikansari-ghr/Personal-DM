@@ -1,0 +1,6 @@
+# PaddleOCR / PP-OCRv5 runtime (Change Set Q). Installed into its own virtual environment
+# (/opt/personaldocs/paddle-venv) so these libraries can never break the application's own dependencies.
+# PaddlePaddle 3.3.x crashes on CPU in its oneDNN path for these models; 3.2.2 is the validated version.
+paddlepaddle==3.2.2
+paddleocr==3.7.0
+paddlex==3.7.2

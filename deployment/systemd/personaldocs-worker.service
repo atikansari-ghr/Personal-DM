@@ -18,8 +18,12 @@ TimeoutStopSec=900
 Nice=5
 UMask=0027
 NoNewPrivileges=yes
-MemoryHigh=2800M
-MemoryMax=3200M
+# One OCR process at a time (processing.heavy_concurrency = 1). PaddleOCR PP-OCRv5 needs about 1.5 GB for a two-language
+# profile and is limited to processing.paddle_memory_mb (default 3000 MB) on its own; these limits keep the web app,
+# PostgreSQL and ClamAV safe on a 6 GB container. Lower CPUWeight: web requests win over OCR when both want CPU.
+MemoryHigh=3400M
+MemoryMax=4000M
+CPUWeight=50
 
 [Install]
 WantedBy=multi-user.target
