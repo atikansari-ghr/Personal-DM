@@ -55,7 +55,7 @@ Source: `MASTER_PROMPT_PERSONAL_DOCUMENTS.md` v1.0 (20 Sep 2026), the original r
 
 | ID | Requirement |
 |---|---|
-| UI-1 | Navigation: Overview, Folders, Shared with me, Offline files, Notifications, Archive, Settings. |
+| UI-1 | Navigation: Overview, Folders, Shared with me, Offline access, Notifications, Archive, Settings. |
 | UI-2 | Login, recovery and TOTP; setup; Overview; import mapping; three-panel browser; full-page viewer; upload, version and review flows; family administration; sharing; offline manager; notifications; archive; profile; settings; searchable help. |
 | UI-3 | Per-account themes (Green, Blue, Black & White) with accessible contrast, visible focus, and non-colour status. |
 | UI-4 | Responsive layout without horizontal overflow. PWA with camera/file upload, share-in and share-out with fallbacks. |
@@ -366,6 +366,36 @@ Decision: [ADR 0017](adr/0017-ui-layout-primitives.md).
 | UI-7 | An automated audit covers the screens of the change prompt's audit scope at 1920×1080, 1440×900, 1366×768, tablet landscape and portrait, and about 430 and 390 px; geometry of the document header is regression-tested against a reviewed baseline. |
 | UI-8 | Menus, dropdowns and dialogs stay inside the viewport and are keyboard and touch reachable; icon-only buttons have accessible names; focus stays visible; DOM order stays logical. |
 | UI-9 | Arabic and mixed-character metadata and file names do not break the audited layouts (the application itself stays left-to-right). |
+
+## Change set S (2026-10): offline access, PWA identity, premium themes and public screenshot quality
+
+Acceptance tests AT-251…AT-275 (the change prompt called this "Change Set R" with AT-226…AT-250; prompt AT-n =
+AT-(n+25); see [TRACEABILITY.md](TRACEABILITY.md), section *Change set S*). Guides:
+[offline access](guides/offline-export.md), [phone and tablet (PWA)](guides/mobile-pwa.md), [themes](guides/themes.md),
+[public screenshots](guides/screenshots.md). Decisions: [ADR 0018](adr/0018-offline-device-scope.md),
+[ADR 0019](adr/0019-theme-tokens-glass.md).
+
+| ID | Requirement |
+|---|---|
+| OF-1 | Offline state is scoped by account + device (browser profile or installed app) + folder/document; a choice on one device or account never downloads anything for another. |
+| OF-2 | The folder **⋮** menu offers *Make available offline… / Update offline copy / Remove offline copy* only with download permission; making a folder available offers *This folder and all subfolders* (default, recommended) or *This folder only*, and shows document and subfolder counts, estimated size, free storage and large-download / quota warnings. |
+| OF-3 | The document **⋮** menu offers *Make available offline / Update offline copy / Remove offline copy*. |
+| OF-4 | Offline status per document — available, downloading/updating with progress, update available, outdated, failed, locked, not available — is shown with icon and text, never colour alone, and announced to assistive technology while it changes. |
+| OF-5 | The Offline access page shows the current device, offline folders and documents, counts, storage used and limits, last sync, pending updates and failures, with Sync now, Update all, Manage storage and Remove offline copy; other devices of the account can be renamed or forgotten. |
+| OF-6 | Every sync re-validates access server-side (download permission, archive, antivirus quarantine, deselection, account and global capability) before new content is downloaded, and deletes anything no longer permitted. |
+| OF-7 | Sign-out follows the administrator's policy (remove unless the person chose to keep, or always remove); copies lock after a configurable number of days without a sync; the limitation that an offline device cannot be erased remotely is documented. |
+| OF-8 | Caching of recognised/extracted text offline is an independent administrator policy, off by default; removed OCR disappears from devices at the next sync. App shell, originals, offline text, index and API answers are stored separately; protected originals are never in a shared or generic cache. |
+| OF-9 | The main administrator can turn offline copies on/off globally and per person, request removal from a device, and set automatic updates, the sign-out policy, the lock period, the suggested per-device space and the large-download threshold (Settings → Offline & PWA). |
+| PW-1 | The installed app identity is *Personal DM* with a green document-and-shield icon generated from one master SVG: 512/192 *any*, 512/192 *maskable* (artwork inside the safe zone), 180 Apple touch icon (opaque), 32/16 favicons and `favicon.ico`. |
+| PW-2 | Manifest `id`, `name`, `short_name`, `start_url`, `scope`, `display`, `theme_color`, `background_color`, icon paths, types, sizes and purposes validate; identity files load without authentication with correct content types; missing file paths answer 404 instead of the app page. |
+| PW-3 | Apple touch icon, `apple-mobile-web-app-title` and `-capable` markup is explicit; doctor and check-access report missing icons and proxies that require sign-in for them; the fresh-install procedure for iPhone/iPad is documented. |
+| TH-1 | Themes use semantic tokens (surfaces, elevation, navigation, text, borders, accent, status, focus, shadow, radius, overlay, viewer, glass); components do not hard-code theme colours. |
+| TH-2 | Presets: Default Green (default, unchanged), Blue, Dark, Glass Light, Glass Dark (Black & White kept), selectable per account through preview cards with Reset to default; the choice follows the account to every device and never changes another person's theme. |
+| TH-3 | Glass effects are selective (navigation, top bar, cards, menus, dialogs; never nested), content stays readable, an opaque fallback applies without `backdrop-filter` or with reduced transparency, and phones use a reduced effect budget. |
+| TH-4 | Every theme keeps visible focus, sufficient contrast, status meaning without colour alone, and respects reduced motion; document pages stay on white. |
+| SS-1 | Public screenshots are captures of the real application with synthetic demo data, at a consistent 1440×900 (phones 390×844) and device pixel ratio 2, after fonts and animations settle. |
+| SS-2 | Captures pass automated quality (no overflow, clipped text, broken images) and privacy gates (no e-mail outside example domains, no IP outside documentation ranges, no token-like strings) and a documented human review. |
+| SS-3 | The capture workflow is repeatable from a fresh instance (`scripts/e2e.sh`); the README tells the product story in a fixed order with accurate captions. |
 
 ## Later phases
 

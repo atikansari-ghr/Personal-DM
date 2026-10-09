@@ -80,7 +80,7 @@ function PwaIdentityCard() {
       {problems === null ? null : problems.length === 0
         ? <div className="alert ok"><Icon name="check" size={16} /> Manifest and icons load without signing in, with image types.</div>
         : <div className="alert error"><strong>Some app icons cannot be loaded without signing in.</strong> Phones fetch these without your session; a reverse proxy that requires sign-in for them makes iPhone show a letter instead of the icon. <ul>{problems.map((p) => <li key={p} className="mono small">{p}</li>)}</ul></div>}
-      <p className="small muted">After changing icons, remove the old Home Screen shortcut and add it again: iOS keeps the icon it saw when the shortcut was created. See Help → Installing the app.</p>
+      <p className="small muted">After changing icons, remove the old Home Screen shortcut and add it again: iOS keeps the icon it saw when the shortcut was created. See Help → Phone and tablet (PWA).</p>
     </div>
   );
 }

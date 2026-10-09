@@ -1885,6 +1885,92 @@ Critical storage alert.
 - **Restart needed:** no
 - **Learn more:** [security-center#storage](guides/security-center.md#storage)
 
+## Section: offline
+
+### Offline copies (`offline.enabled`)
+
+Allow people to keep chosen folders and documents on their own devices for use without a connection. Turning it off removes offline copies at each device's next sync.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Devices remove their offline copies at the next sync.
+- **Restart needed:** no
+- **Learn more:** [offline-export#admin](guides/offline-export.md#admin)
+
+### Update offline copies automatically (`offline.auto_update`)
+
+When a newer version of an offline document exists, devices download it at the next sync. Off: the copy is marked 'Update available' until the person updates it.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** offline.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [offline-export#updates](guides/offline-export.md#updates)
+
+### Keep recognised text offline (`offline.cache_text`)
+
+Also store recognised (OCR) and extracted text on devices, so offline copies can show their text. Off by default for privacy. When OCR is removed from a document, its offline text is removed at the next sync.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** offline.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [offline-export#text](guides/offline-export.md#text)
+
+### On sign-out (`offline.logout_policy`)
+
+What happens to a person's offline copies on a device when they sign out.
+
+- **Default:** `'user_choice'`
+- **Allowed values:** user_choice, always_clear
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [offline-export#signout](guides/offline-export.md#signout)
+
+### Lock offline copies after (days without sync) (`offline.max_days_without_sync`)
+
+Offline copies stay readable without a connection for this many days after the last successful sync, then are locked until the device connects and signs in again. 0 = never lock.
+
+- **Default:** `30`
+- **Allowed values:** 0–365
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [offline-export#signout](guides/offline-export.md#signout)
+
+### Suggested space per device (MB) (`offline.device_quota_mb`)
+
+People are warned before an offline selection would use more than this on one device. Browsers also enforce their own limit.
+
+- **Default:** `2048`
+- **Allowed values:** 100–200000
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [offline-export#quota](guides/offline-export.md#quota)
+
+### Large download warning (MB) (`offline.large_download_mb`)
+
+Ask for confirmation before making a folder available offline when it is larger than this.
+
+- **Default:** `500`
+- **Allowed values:** 10–100000
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [offline-export#quota](guides/offline-export.md#quota)
+
 ## Section: appearance
 
 ### Theme (`me.theme`)
@@ -1892,7 +1978,7 @@ Critical storage alert.
 Colour theme for your account on every device.
 
 - **Default:** `'green'`
-- **Allowed values:** green, blue, mono
+- **Allowed values:** green, blue, dark, glass_light, glass_dark, mono
 - **Scope:** user · **Editable by:** each user
 - **Depends on:** nothing
 - **Effect of changing:** Applies immediately on all your devices.

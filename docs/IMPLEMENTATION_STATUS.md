@@ -81,6 +81,76 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
 - Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
 
+## Change set S: offline access, PWA identity, premium themes, public screenshots {#change-set-s}
+
+**Numbering.** The change prompt called this "Change Set R" with AT-226…AT-250; here it is **Change Set S** with
+**AT-251…AT-275** (prompt AT-n → AT-(n+25); mapping in [TRACEABILITY.md](TRACEABILITY.md)). Decisions:
+[ADR 0018](adr/0018-offline-device-scope.md), [ADR 0019](adr/0019-theme-tokens-glass.md).
+
+**Investigation (before implementing).**
+
+| Area | What was there before | What was missing |
+| --- | --- | --- |
+| Offline | Per-document only: a localStorage index and a Cache Storage bucket per account; revocation through `/api/offline/validate`; removed at sign-out unless "keep" | Folders, devices, update handling, server policy |
+| Service worker | Caches only the app shell; never API answers or files (unchanged) | — |
+| Manifest | Correct basic fields | `id`; maskable icons for small sizes |
+| Apple icon | Pointed at the 192 px icon | No Apple title |
+
+Further findings:
+
+- The SPA catch-all answered `/apple-touch-icon.png`, `/apple-touch-icon-precomposed.png` and `/favicon.ico` with
+  `200 text/html`.
+- WhiteNoise served the manifest as `application/octet-stream`.
+- Themes swapped five brand variables; 165 colour literals in `styles.css` (white surfaces everywhere).
+- Public screenshots: 50 images, all at 1×, mixed 1366/1440 widths. Four (login audit, Local AI, security access,
+  passkeys) had no capture script left and showed older UI.
+
+**iPhone "A" icon.** The physical device could not be tested here. Defects that produce exactly this symptom were
+found and fixed:
+
+- HTML answered for the conventional Apple icon paths;
+- no Apple title or 180 px icon.
+
+Also documented: a proxy that requires sign-in for icon files gives the same symptom (now checked by `check-access`).
+iOS keeps old shortcut icons, so a fresh install is required.
+
+**Implemented.**
+
+- Backend:
+  - `apps/library/offline.py` (devices, estimate, selections, sync, admin);
+  - models `OfflineDevice`, `OfflineSelection`, `User.offline_allowed`;
+  - 7 settings in section *Offline & PWA*;
+  - session payload `offline`;
+  - 404 for missing file paths;
+  - manifest MIME type;
+  - doctor and check-access icon checks.
+- Frontend:
+  - `offline.ts` sync engine;
+  - `components/OfflineUI.tsx` (menus, dialog, badges, tree marker);
+  - `pages/Offline.tsx`;
+  - `pages/settings/OfflineAdmin.tsx`;
+  - `components/ThemeGallery.tsx`;
+  - token-based `styles.css` with the Dark, Glass Light and Glass Dark presets;
+  - `theme-hint.js` and theme-color.
+- Icons: `public/icon.svg` (master) and generated PNG/ICO by `scripts/make_icons.mjs`.
+- Tests:
+  - `tests/test_offline_sync.py` (9) and `tests/test_pwa_identity.py` (4);
+  - `tests/e2e/offline.mjs` (9 steps), `pwa.mjs` (4), `themes.mjs` (6), `screenshots.mjs` (5);
+  - `a11y.mjs` in 6 themes;
+  - `parity.mjs` screenshots through `snap()` (2×, 1440×900, privacy gate).
+
+**Not run here (need real devices or platforms):**
+
+- iPhone/iPad Add to Home Screen;
+- Android and desktop installs;
+- offline behaviour on a real phone;
+- glass performance on low-end phones;
+- browsers other than Chromium.
+
+These are on the release checklist.
+
+**Next step:** the release checklist items above on a real Debian 13 LXC and devices.
+
 ## Change set R: UI alignment, responsive layout and visual regression {#change-set-r}
 
 **Numbering.** The change prompt called this "Change Set Q" with AT-211…AT-225. Those numbers belong to the PaddleOCR

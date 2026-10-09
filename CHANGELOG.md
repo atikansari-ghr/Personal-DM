@@ -4,6 +4,56 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-09) — Offline access, PWA identity, premium themes, public screenshots (Change Set S)
+- **Offline access per account and device.**
+  - Folder **⋮ → Make available offline…** with *This folder and all subfolders* (recommended) or *This folder only*. The dialog shows counts, size, free storage and large-download / quota warnings.
+  - Document **⋮ → Make available offline / Update offline copy / Remove offline copy**.
+  - Status in words and icons: available, downloading/updating with progress, update available, outdated, failed, locked.
+  - New **Offline access** page:
+    - this device, offline folders and documents, storage, last sync, pending updates and failures;
+    - Sync now, Update all, Manage storage;
+    - your other devices, which you can rename or forget.
+- **Server-checked sync.** Each sync re-checks download permission, archive, antivirus quarantine and capability.
+  - Removed access deletes the copy; newer versions update automatically or show *Update available*.
+  - Copies saved with the old "Save for offline use" are kept and adopted.
+- **Settings → Offline & PWA** (main administrator):
+  - on/off globally and per person;
+  - automatic updates;
+  - recognised text offline (off by default; removed OCR disappears at the next sync);
+  - sign-out policy (remove unless kept, or always remove);
+  - lock after N days without sync;
+  - suggested space per device and large-download warning;
+  - per-device removal;
+  - app icon check.
+- **Installed-app identity "Personal DM"**: a new green document-and-shield icon from one master SVG (`scripts/make_icons.mjs`).
+  - Icons: 512/192 *any* and *maskable*, a 180 Apple touch icon, favicons and `favicon.ico`.
+  - Explicit Apple Home Screen tags (`apple-mobile-web-app-title`, `-capable`).
+  - The manifest has `id`, `short_name` "Personal DM", descriptions and maskable icons.
+  - The sidebar and sign-in page show the app icon.
+- **Themes:** Dark, Glass Light and Glass Dark join Default Green (unchanged default), Blue and Black & White.
+  - Preview cards with *Reset to default* replace the theme drop-down.
+  - All colours are now semantic design tokens (ADR 0019).
+  - Glass is selective, with an opaque fallback and a lighter effect on phones.
+  - Short transitions are disabled under reduced motion; the browser theme colour follows the theme.
+- **Tests:**
+  - `tests/e2e/offline.mjs`, `pwa.mjs`, `themes.mjs` and `screenshots.mjs`;
+  - backend `tests/test_offline_sync.py` and `test_pwa_identity.py`;
+  - the accessibility audit runs in all six themes.
+- **Guides:** [offline access](docs/guides/offline-export.md), [phone and tablet](docs/guides/mobile-pwa.md), [themes](docs/guides/themes.md), [public screenshots](docs/guides/screenshots.md); ADR 0018, ADR 0019.
+- **Migrations:** `library.0011_offline_devices`, `accounts.0008_offline_allowed` (additive).
+
+### Fixed (2026-10-09) — Change Set S
+- **iPhone Home Screen showed a letter ("A") instead of the app icon.** Contributing causes found:
+  - Requests for `/apple-touch-icon.png`, `/apple-touch-icon-precomposed.png` and `/favicon.ico`, which iOS and browsers request on their own, were answered by the app's catch-all route with **HTTP 200 and the HTML page**. iOS cannot use that as an icon and falls back to a letter tile from the page title (the application name).
+  - There was no 180 px Apple icon and no Apple title tag.
+
+  Missing file paths now answer 404, real files exist for all of them, and `check-access` reports a reverse proxy that requires sign-in for icon files (the same symptom). iOS keeps the icon it saw when a shortcut was created, so remove the old shortcut and add it again.
+- **The manifest was served as `application/octet-stream`.** It is now `application/manifest+json`.
+- **Low-detail public screenshots.**
+  - They were captured at 1× pixel density with mixed 1366/1440 widths, as side effects of functional tests, and four were never regenerated after UI changes (login audit, Local AI, security access, passkeys).
+  - Every public capture is now 1440×900 (phones 390×844) at 2×, after fonts and animations settle, through automated quality and privacy gates.
+  - The stale images were recaptured.
+
 ### Fixed (2026-10-08) — UI alignment and responsive layout (Change Set R)
 - **Document preview header.** The title wrapped word by word in a narrow column while the pane had free width (746 px pane, 192 px title at 1920×1080). Badges and the shield were detached, and "file · size · version" broke item by item.
   - Root cause: the shared header row gave the title `flex: 1` (basis 0), so the wrapping row never wrapped and the action buttons took the space.
