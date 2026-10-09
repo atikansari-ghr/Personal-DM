@@ -74,7 +74,8 @@ def test_at263_spa_never_answers_file_paths_with_html(client, settings, tmp_path
     dist.mkdir()
     (dist / "index.html").write_text("<!doctype html><title>app</title>")
     settings.FRONTEND_DIST = dist
-    for p in ("/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/favicon.ico", "/missing.webmanifest", "/x/y.js"):
+    # paths that do not exist (real icon files in a built dist/ are served by WhiteNoise before the app)
+    for p in ("/apple-touch-icon-120x120.png", "/apple-touch-icon-152x152-precomposed.png", "/favicon-64.ico", "/missing.webmanifest", "/x/y.js"):
         r = client.get(p)
         assert r.status_code == 404 and r["Content-Type"].startswith("text/plain"), p
     r = client.get("/folders/some-folder")
