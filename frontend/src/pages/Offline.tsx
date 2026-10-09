@@ -69,7 +69,7 @@ export default function OfflinePage() {
       {isLocked(st) && <div className="alert warn" role="alert"><Icon name="lock" size={16} /> Offline copies are locked: this device has not synced for more than {st.policy?.max_days_without_sync} days. Connect and sign in to unlock them.</div>}
       {st.lastError && !offline && <div className="alert error">Last sync failed: {st.lastError}</div>}
 
-      <div className="grid stats">
+      <div className="grid stats offline-stats">
         <div className="card stat"><Icon name="monitor" size={30} /><div>
           <div className="muted small">This device</div>
           <div className="num" style={{ fontSize: "1.15rem" }}>{thisDevice?.label || st.deviceLabel || "Not set up yet"}</div>

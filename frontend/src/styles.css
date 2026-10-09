@@ -933,3 +933,4 @@ code.temp-password { font-size: 1.15rem; padding: .4rem .6rem; letter-spacing: .
 .theme-preview .tp-badge { margin-left: auto; padding: 1px 5px; border-radius: 999px; background: var(--ok-bg); color: var(--ok-ink); font-weight: 700; font-size: 8.5px; white-space: nowrap; }
 .theme-preview .tp-muted { color: var(--muted); }
 .theme-preview .tp-btn { justify-self: start; background: var(--brand); color: var(--brand-ink); border-radius: 5px; padding: 2px 7px; font-weight: 700; }
+.offline-stats { grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
