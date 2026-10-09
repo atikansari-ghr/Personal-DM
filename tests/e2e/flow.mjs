@@ -133,8 +133,8 @@ await step("family & access settings", async () => {
 
 await step("profile page and blue theme applies", async () => {
   await page.goto(BASE + "/settings/account?tab=appearance");
-  await page.selectOption("#s-me\\.theme", "blue");
-  await page.click("text=Save settings");
+  await page.click('[data-theme-option="blue"]');
+  await page.waitForSelector('[data-theme-option="blue"][aria-checked="true"]');
   await page.waitForFunction(() => document.documentElement.dataset.theme === "blue");
   await page.goto(BASE + "/settings/account");
   await page.waitForSelector("text=Profile information");

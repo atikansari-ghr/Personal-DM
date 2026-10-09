@@ -10,8 +10,12 @@ interface Ctx {
 }
 const SessionContext = createContext<Ctx>(null as any);
 
+// Browser/OS chrome colour (address bar, installed-app title bar) per theme.
+const THEME_COLOR: Record<string, string> = { green: "#1f5135", blue: "#1d4e89", mono: "#111111", dark: "#0f1513", glass_light: "#eef4f1", glass_dark: "#0b1411" };
+
 export function applyThemeAttr(theme: string) {
   document.documentElement.dataset.theme = theme || "green";
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLOR[theme] || THEME_COLOR.green);
   try {
     localStorage.setItem("pd-theme", theme || "green");
   } catch {

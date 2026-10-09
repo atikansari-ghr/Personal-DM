@@ -1,0 +1,121 @@
+[
+ {
+  "file": "offline-folder-dialog.png",
+  "caption": "Make a folder available offline: with or without subfolders, count and size",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "offline-access.png",
+  "caption": "Offline access on this device: folders, documents, status, storage and Update all",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "settings-offline-pwa.png",
+  "caption": "Settings \u2192 Offline & PWA: policy, per-person access, devices and app icons",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "readme-document.png",
+  "caption": "Document with preview, status badges and offline status",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "readme-viewer.png",
+  "caption": "Full-page viewer: zoom, fit page / width",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "readme-notifications.png",
+  "caption": "Notification Center",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "readme-security.png",
+  "caption": "Security Health, antivirus and storage",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "security-access.png",
+  "caption": "Country/IP access policy and GeoIP",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "login-audit.png",
+  "caption": "Login audit",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "local-ai.png",
+  "caption": "Local AI profiles (optional)",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "settings-security-passkeys.png",
+  "caption": "Password, authenticator app and passkeys",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "settings-themes.png",
+  "caption": "Theme gallery: Default Green, Blue, Dark, Glass Light, Glass Dark, Black & White",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "theme-glass-dark.png",
+  "caption": "glass dark theme",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "theme-glass-light.png",
+  "caption": "glass light theme",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "theme-dark.png",
+  "caption": "dark theme",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "theme-blue.png",
+  "caption": "blue theme",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "mobile-offline.png",
+  "caption": "Phone: offline access",
+  "source": "real application, synthetic demo data",
+  "viewport": "390x844",
+  "pixelRatio": 2
+ }
+]

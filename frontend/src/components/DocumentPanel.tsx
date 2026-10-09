@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, formatBytes, formatDateTime, upload } from "../api";
-import { saveOffline } from "../offline";
-import { useSession } from "../session";
 import type { DocDetail, DocRow, Meta } from "../types";
 import PermissionsDialog from "./PermissionsDialog";
 import { Confirm, CopyButton, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useToast } from "./ui";
 import AISuggestions from "./AISuggestions";
 import DocumentDetails, { DetailsBadge } from "./DocumentDetails";
 import Menu from "./Menu";
+import { OfflineBadge, useOfflineMenus } from "./OfflineUI";
 import OcrPanel, { OcrStateBadge } from "./OcrPanel";
 import { AvBadge } from "../pages/settings/SecurityCenter";
 import DocViewer from "./DocViewer";
@@ -186,7 +185,6 @@ function EditDialog({ doc, onClose, onDone }: { doc: DocDetail; onClose: () => v
 }
 
 export default function DocumentPanel({ id, full, onChanged }: { id: string; full?: boolean; onChanged?: () => void }) {
-  const { session } = useSession();
   const nav = useNavigate();
   const toast = useToast();
   const ai = useAiStatus();
@@ -196,6 +194,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
   const [dialog, setDialog] = useState<string>("");
   const [typeReq, setTypeReq] = useState(0);
   const [ocrReq, setOcrReq] = useState<{ action: string; n: number } | undefined>();
+  const offlineMenus = useOfflineMenus();
   const ocrAction = (action: string) => { setTab("text"); setOcrReq((r) => ({ action, n: (r?.n || 0) + 1 })); };
 
   const [similar, setSimilar] = useState<(DocRow & { reasons: string[] })[] | null>(null);
@@ -220,7 +219,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
       <header className="doc-header">
         <div className="doc-header-main">
           <h2 className={`doc-title${full ? " full" : ""}`}>{doc.title}</h2>
-          <div className="doc-badges"><StateBadge state={doc.state} />{doc.ocr && doc.ocr.state !== "not_processed" && <OcrStateBadge state={doc.ocr.state} />}<ExpiryBadge expiry={doc.expiry} /><AvBadge status={v?.antivirus?.status} />{doc.archived && <span className="badge neutral">Archived</span>}</div>
+          <div className="doc-badges"><StateBadge state={doc.state} />{doc.ocr && doc.ocr.state !== "not_processed" && <OcrStateBadge state={doc.ocr.state} />}<ExpiryBadge expiry={doc.expiry} /><AvBadge status={v?.antivirus?.status} /><OfflineBadge docId={doc.id} />{doc.archived && <span className="badge neutral">Archived</span>}</div>
           {v && <div className="doc-meta small muted"><span className="doc-file" title={v.original_name}>{v.original_name}</span><span>{formatBytes(v.size)}</span><span>v{v.number}</span></div>}
           {v?.antivirus?.blocked && <div className="alert error" role="alert" style={{ marginTop: ".5rem" }}><strong>Quarantined by the antivirus ({v.antivirus.signature}).</strong> Preview, download, OCR and Local AI are blocked for this file. The main administrator can review it in Settings → Security → Antivirus.</div>}
           {v?.antivirus && ["not_scanned", "size_limit", "failed"].includes(v.antivirus.status) && <div className="small muted" style={{ marginTop: ".3rem" }}>Antivirus: {v.antivirus.detail || "not scanned"}</div>}
@@ -235,7 +234,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
             { label: "Upload new version (better scan)…", hidden: !can("version"), onSelect: () => setDialog("version") },
             { label: "Add another side or copy…", hidden: !can("version"), onSelect: () => setDialog("additional") },
             { label: "Add renewed document…", hidden: !doc.folder, onSelect: () => setDialog("renew") },
-            { label: "Save for offline use", hidden: !(can("download") && v), onSelect: async () => { try { await saveOffline(session!.user!.id, doc, v!); toast("Saved for offline use on this device"); } catch (e: any) { toast(e.message, "error"); } } },
+            ...(v ? offlineMenus.documentItems({ id: doc.id, title: doc.title, caps: doc.caps }) : []),
             { label: "Who has access", onSelect: () => setDialog("perms") },
             { label: doc.ocr && doc.ocr.state !== "not_processed" && doc.ocr.state !== "removed" ? "Re-run OCR…" : "Run OCR…", hidden: !can("edit") || doc.ocr?.mode === "disabled", onSelect: () => ocrAction("run") },
             { label: "View OCR text", onSelect: () => ocrAction("view") },
@@ -293,6 +292,8 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
           confirmLabel="Archive" danger onClose={() => setDialog("")}
           onConfirm={async () => { await api(`documents/${doc.id}/archive`, { method: "POST" }); toast("Document archived"); setDialog(""); onChanged?.(); if (full) nav("/folders"); }} />
       )}
+      {offlineMenus.dialog}
+      <p className="small muted doc-offline-line">Offline on this device: <OfflineBadge docId={doc.id} showNone /></p>
       <p className="small muted">Added {formatDateTime(doc.created_at)}. Viewing a document shows its content; disabling download cannot prevent screenshots.</p>
     </div>
   );

@@ -104,8 +104,9 @@ jobs:
             docs/images/screenshots/
             docs/a11y-report.json
             docs/layout-report.json
-            tests/e2e/out/layout/
+            tests/e2e/out/
             docs/parity-report.json
+            docs/images/screenshot-manifest.json
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

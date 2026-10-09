@@ -58,8 +58,35 @@ async function signIn(ctx, user = "admin", pw = PW) {
   return page;
 }
 
+
+// ------------------------------------------------------------------ public screenshots (Change Set S)
+// Every image written to docs/images/screenshots/ goes through snap(): device pixel ratio 2 (set on the contexts),
+// desktop captures at exactly 1440×900 CSS px, fonts loaded, animations finished, no loading placeholders, and a
+// privacy check of the visible text (only synthetic/documentation data may appear). See docs/guides/screenshots.md.
+const PRIVATE_PATTERNS = [
+  [/[A-Z0-9._%+-]+@(?!example\.(com|org|net)\b|family\.example\b|test\b|invalid\b|localhost\b)[A-Z0-9.-]+\.[A-Z]{2,}/i, "e-mail address outside example domains"],
+  [/\b(?!(?:127|10|192\.0\.2|198\.51\.100|203\.0\.113)\.)(?:\d{1,3}\.){3}\d{1,3}\b/, "IP address outside documentation ranges"],
+  [/(?<![A-Za-z0-9_-])(?![A-Za-z0-9_-]*[-_][A-Za-z]{4,}[-_][A-Za-z]{4,})[A-Za-z0-9_-]{40,}(?![A-Za-z0-9_-])/, "token-like string"], // file names made of words are not tokens
+  [/\b(?:ghp|gho|sk|xox[bap])_[A-Za-z0-9]{10,}/, "API key"],
+];
+async function snap(p, opts) {
+  const vp = p.viewportSize();
+  const desktop = vp && vp.width >= 1000 && !opts.clip;
+  if (desktop && (vp.width !== 1440 || vp.height !== 900)) await p.setViewportSize({ width: 1440, height: 900 });
+  await p.evaluate(() => document.fonts.ready);
+  await p.waitForFunction(() => !document.querySelector(".skeleton"), null, { timeout: 8000 }).catch(() => undefined);
+  await p.waitForTimeout(350); // menus, dialogs and colour transitions finish
+  const text = await p.evaluate(() => document.body.innerText);
+  for (const [re, what] of PRIVATE_PATTERNS) {
+    const m = text.match(re);
+    if (m) throw new Error(`${opts.path}: ${what} visible in a public screenshot: "${m[0].slice(0, 60)}"`);
+  }
+  await p.screenshot(opts);
+  if (desktop && (vp.width !== 1440 || vp.height !== 900)) await p.setViewportSize(vp);
+}
+
 // ------------------------------------------------------------------ desktop
-const desk = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const desk = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
 const page = await signIn(desk);
 const ids = {};
 
@@ -104,7 +131,7 @@ await step("AT-62 file-type icons with readable labels in list and grid", async 
   for (const k of ["pdf", "jpeg", "png", "webp", "text", "word"]) expect(await page.locator(`.list-pane .ftype-${k}`).count() > 0, `missing ${k} icon`);
   const label = await page.locator(".list-pane .ftype-jpeg").first().getAttribute("aria-label");
   expect(label === "JPEG image", `label ${label}`);
-  await page.screenshot({ path: `${SHOTS}/folders-file-types.png` });
+  await snap(page, { path: `${SHOTS}/folders-file-types.png` });
   await page.click("button[aria-label='Thumbnails view']");
   await page.waitForSelector(".doc-grid");
   expect(await page.locator(".doc-grid .ftype").count() >= 6, "grid icons");
@@ -141,7 +168,7 @@ await step("AT-85 overflow menus are not clipped, stay in the viewport and work 
   let c = await check();
   expect(c.inside && c.topmost && c.parent && c.n >= 6, `folder menu ${JSON.stringify(c)}`);
   for (const t of ["Open", "Rename…", "Change icon…", "Move to…", "Share / who has access", "Archive folder…"]) expect(await menu.locator(`[role=menuitem]:text-is('${t}')`).count() === 1, `folder menu item ${t}`);
-  await page.screenshot({ path: `${SHOTS}/folder-actions-menu.png` });
+  await snap(page, { path: `${SHOTS}/folder-actions-menu.png` });
   // one menu at a time
   await page.click("button[aria-label='More actions for Sample policy (3 pages)']");
   expect(await page.locator(".menu-pop").count() === 1, "opening a row menu closes the folder menu");
@@ -242,7 +269,7 @@ await step("AT-89 list, thumbnails and details views; sorting; preference syncs"
   expect(await ordered("ascending"), "rows sorted by name A–Z");
   await page.click("table.details-table th button:has-text('Name')");
   expect(await ordered("descending"), "rows sorted by name Z–A");
-  await page.screenshot({ path: `${SHOTS}/folders-details-view.png` });
+  await snap(page, { path: `${SHOTS}/folders-details-view.png` });
   const other = await desk.browser().newContext({ viewport: { width: 1366, height: 900 }, storageState: await desk.storageState() });
   const op = await other.newPage();
   await op.goto(`${BASE}/folders/${ids.parity}`);
@@ -273,7 +300,7 @@ await step("AT-90 files dropped from the desktop upload into the drop target", a
   const card = await page.locator(".drop-progress").innerText();
   expect(card.includes("2 of 2"), card);
   await page.waitForSelector(".doc-card:has-text('dropped-one')");
-  await page.screenshot({ path: `${SHOTS}/drop-upload.png` });
+  await snap(page, { path: `${SHOTS}/drop-upload.png` });
   await page.click("button[aria-label='Close upload summary']");
 });
 
@@ -292,14 +319,14 @@ await step("AT-101/106/112 selective OCR: manual by default, chosen pages and la
   await page.selectOption("#ocr-engine", "tesseract");
   for (const lang of ["English", "Arabic", "Hindi"]) expect(await page.locator(`.modal label:has-text('${lang}')`).count() === 1, `Tesseract language ${lang} offered`);
   await page.selectOption("#ocr-engine", "paddleocr");
-  await page.screenshot({ path: `${SHOTS}/ocr-run.png` });
+  await snap(page, { path: `${SHOTS}/ocr-run.png` });
   await page.click(".modal button:has-text('Run OCR')");
   await page.waitForSelector(".toast:has-text('Text recognition queued')");
   await page.waitForSelector("text=OCR: Needs review", { timeout: 90000 });
   expect(await page.locator(".badge:has-text('OCR confidence')").count() >= 1, "confidence shown");
   await page.goto(BASE + "/ocr-review");
   await page.waitForSelector("text=Sample residence card");
-  await page.screenshot({ path: `${SHOTS}/ocr-review.png` });
+  await snap(page, { path: `${SHOTS}/ocr-review.png` });
   // a photo can be re-run with a forced rotation
   await page.goto(`${BASE}/documents/${ids["Sample scan"]}`);
   await page.click("[role=tab]:has-text('Text (OCR)')");
@@ -393,7 +420,7 @@ await step("AT-81 PDF viewer: zoom, percentage, fit page/width, 100%, pages, key
   await page.setViewportSize({ width: 1366, height: 900 });
   expect(await page.locator(".viewer-toolbar button:has-text('Full screen')").count() === 1, "full screen control");
   expect((await page.locator(".viewer-toolbar a[aria-label=Download]").getAttribute("href")).includes("download=1"), "download link");
-  await page.screenshot({ path: `${SHOTS}/document-viewer.png` });
+  await snap(page, { path: `${SHOTS}/document-viewer.png` });
   const after = (await api(page, `/api/documents/${ids["Sample policy (3 pages)"]}`)).data.current_version.sha256;
   expect(before === after, "the stored original is never changed by viewing");
 });
@@ -465,7 +492,7 @@ await step("AT-116..121/125/127 Overview: customize, weather city, calendar and 
   await page.waitForFunction((l) => document.querySelector("[data-widget=calendar] strong")?.textContent === l, label);
   expect(await page.locator("[data-widget=holidays] li").count() > 0, "upcoming holidays listed");
   await page.waitForTimeout(400);
-  await page.screenshot({ path: `${SHOTS}/overview.png` });
+  await snap(page, { path: `${SHOTS}/overview.png` });
   // edit layout: style, size, keyboard reorder, remove, add; then save
   await page.click("button:has-text('Customize Overview')");
   await page.waitForSelector(".ov-editbar");
@@ -480,7 +507,7 @@ await step("AT-116..121/125/127 Overview: customize, weather city, calendar and 
   await page.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll("main, .main, .content").forEach((m) => m.scrollTo?.(0, 0)); });
   await page.mouse.move(0, 0);
   await page.waitForTimeout(300);
-  await page.screenshot({ path: `${SHOTS}/overview-customize.png` });
+  await snap(page, { path: `${SHOTS}/overview-customize.png` });
   await page.click("button:has-text('Save layout')");
   await page.waitForSelector(".toast:has-text('Overview saved')");
   await page.reload();
@@ -501,7 +528,7 @@ await step("AT-123/124 holiday countries and corrections in settings", async () 
   expect(await page.locator(".chip").count() === 2, "back to SA + IN");
   await page.waitForSelector("text=Holiday corrections");
   await page.waitForSelector(".badge:has-text('Provisional'), .badge:has-text('Confirmed')");
-  await page.screenshot({ path: `${SHOTS}/settings-overview.png` });
+  await snap(page, { path: `${SHOTS}/settings-overview.png` });
 });
 
 await step("AT-68 optional notification matrix persists; critical events locked", async () => {
@@ -514,7 +541,7 @@ await step("AT-68 optional notification matrix persists; critical events locked"
   await page.waitForSelector("table.matrix");
   expect(await page.locator("input[aria-label='OCR / processing finished by In-app']").isChecked(), "choice persisted");
   expect(await page.locator(".crit-list li").count() > 3, "critical list");
-  await page.screenshot({ path: `${SHOTS}/notifications.png` });
+  await snap(page, { path: `${SHOTS}/notifications.png` });
 });
 
 await step("AT-71 backup frequency shows the right fields and the next run", async () => {
@@ -530,7 +557,7 @@ await step("AT-71 backup frequency shows the right fields and the next run", asy
   await page.waitForSelector(".toast:has-text('Settings saved')");
   await page.reload();
   await page.waitForSelector("text=Monthly on day 31");
-  await page.screenshot({ path: `${SHOTS}/settings-backup.png` });
+  await snap(page, { path: `${SHOTS}/settings-backup.png` });
   await api(page, "/api/settings", { method: "PUT", body: { values: { "backup.frequency": "daily", "backup.month_day": 1 } } });
 });
 
@@ -548,7 +575,7 @@ await step("AT-63/64 import into a chosen sub-folder with the exact final hierar
   await page.waitForSelector(".import-tree");
   const tree = await page.locator(".import-tree").innerText();
   expect(tree.includes("Address Update 22July2026") && tree.includes("new") && tree.includes("existing"), tree);
-  await page.screenshot({ path: `${SHOTS}/import-folder.png` });
+  await snap(page, { path: `${SHOTS}/import-folder.png` });
   await page.click("button:has-text('Start import')");
   await page.waitForSelector("text=Open folders", { timeout: 30000 });
   const f = (await api(page, "/api/folders")).data.folders;
@@ -583,7 +610,7 @@ await step("AT-138/140/141 antivirus: background scan, quarantine and release (E
   await page.goto(BASE + "/settings/security?view=antivirus");
   await page.waitForSelector("td:has-text('eicar-test.txt')");
   await page.waitForSelector(".badge:has-text('Eicar')");
-  await page.screenshot({ path: `${SHOTS}/security-antivirus.png` });
+  await snap(page, { path: `${SHOTS}/security-antivirus.png` });
   await page.click("tr:has-text('eicar-test.txt') button:has-text('Release…')");
   await page.waitForSelector(".modal:has-text('ClamAV detected malware')");
   expect(await page.locator(".modal button:has-text('Release file')").isDisabled(), "release needs confirmation and a reason");
@@ -598,7 +625,7 @@ await step("AT-149/150/156/159 security center: health score, Internet test, sto
   await page.goto(BASE + "/settings/security");
   await page.waitForSelector(".score-ring");
   await page.waitForSelector("text=Internet exposure");
-  await page.screenshot({ path: `${SHOTS}/security-overview.png` });
+  await snap(page, { path: `${SHOTS}/security-overview.png` });
   await page.goto(BASE + "/settings/security?view=test");
   await page.click("button:has-text('Run Security Test')");
   await page.waitForSelector(".toast:has-text('Security test started')");
@@ -610,11 +637,11 @@ await step("AT-149/150/156/159 security center: health score, Internet test, sto
   await page.reload();
   await page.waitForSelector("text=Latest result");
   expect(await page.locator(".finding-group").count() >= 6, "finding categories shown");
-  await page.screenshot({ path: `${SHOTS}/security-test.png` });
+  await snap(page, { path: `${SHOTS}/security-test.png` });
   await page.goto(BASE + "/settings/security?view=storage");
   await page.waitForSelector("text=Storage Health");
   await page.waitForSelector("text=Documents (originals)");
-  await page.screenshot({ path: `${SHOTS}/security-storage.png` });
+  await snap(page, { path: `${SHOTS}/security-storage.png` });
   for (const [view, text] of [["updates", "Debian security updates"], ["firewall", "Firewall status"], ["records", "Security records"]]) {
     await page.goto(`${BASE}/settings/security?view=${view}`);
     await page.waitForSelector(`h2:has-text('${text}')`);
@@ -658,7 +685,7 @@ await step("AT-161..175 document types: set from Details, suggestion, safe chang
   for (const label of ["Passport number", "Full name", "Nationality", "Expiry date", "Place of issue"]) expect(await page.locator(`.details-panel .k:has-text('${label}')`).count() > 0, `template field ${label}`);
   expect(await page.locator(".details-panel .prov-src:has-text('OCR')").count() > 0, "provenance shown");
   await page.locator(".details-panel").scrollIntoViewIfNeeded();
-  await page.screenshot({ path: `${SHOTS}/document-details-type.png` });
+  await snap(page, { path: `${SHOTS}/document-details-type.png` });
   // AT-171: one-off detail
   await page.selectOption(".add-detail select", "__new");
   await page.fill(".add-detail input[aria-label='Detail name']", "Old passport number");
@@ -670,12 +697,12 @@ await step("AT-161..175 document types: set from Details, suggestion, safe chang
   const ins = (await api(page, "/api/document-types")).data.types.find((t) => t.name === "Insurance policy");
   await page.selectOption("#type-select", String(ins.id));
   await page.waitForSelector(".type-plan .alert.warn");
-  await page.screenshot({ path: `${SHOTS}/type-change-review.png` });
+  await snap(page, { path: `${SHOTS}/type-change-review.png` });
   await page.click(".modal button:has-text('Apply type')");
   await page.waitForSelector("text=Previous details — needs review");
   expect(await page.locator(".unmapped-row").count() >= 2, "previous values listed");
   await page.locator(".unmapped").scrollIntoViewIfNeeded();
-  await page.screenshot({ path: `${SHOTS}/document-details-previous.png` });
+  await snap(page, { path: `${SHOTS}/document-details-previous.png` });
   await page.locator(".unmapped-row").first().locator("button:has-text('Keep as detail')").click();
   await page.waitForTimeout(500);
   const d = (await api(page, `/api/documents/${id}`)).data;
@@ -700,7 +727,7 @@ await step("AT-161..175 document types: set from Details, suggestion, safe chang
   await page.waitForSelector(".tfields :text('Blood group')");
   await page.click(".modal button[aria-label='Move Blood group up']");
   await page.waitForTimeout(400);
-  await page.screenshot({ path: `${SHOTS}/settings-document-types.png` });
+  await snap(page, { path: `${SHOTS}/settings-document-types.png` });
   const t = (await api(page, "/api/document-types/admin")).data.types.find((x) => x.id === pid);
   const bg = t.fields.find((f) => f.key === "blood_group");
   expect(t.fields.sort((a, b) => a.order - b.order).findIndex((f) => f.key === "blood_group") < t.fields.length - 1, "reordered");
@@ -729,7 +756,7 @@ await step("AT-176..186 rich notifications: TEST messages, Notification Center, 
   await page.goto(BASE + "/folders");
   await page.waitForSelector(".note-banner.sev-critical");
   expect(await page.locator(".note-banner").count() <= 3, "at most three banners");
-  await page.screenshot({ path: `${SHOTS}/notification-banner.png` });
+  await snap(page, { path: `${SHOTS}/notification-banner.png` });
   // AT-179: Notification Center
   await page.goto(BASE + "/notifications");
   await page.waitForSelector(".note-card");
@@ -739,7 +766,7 @@ await step("AT-176..186 rich notifications: TEST messages, Notification Center, 
   await expiryCard.locator("button:has-text('Show details')").click();
   await expiryCard.locator("dt:has-text('Expiry date')").waitFor();
   expect(await expiryCard.locator("a:has-text('Open Document')").count() === 1, "primary action");
-  await page.screenshot({ path: `${SHOTS}/notification-center.png` });
+  await snap(page, { path: `${SHOTS}/notification-center.png` });
   await page.selectOption("select[aria-label='Severity']", "critical");
   await page.waitForFunction(() => [...document.querySelectorAll(".note-card .sev-badge")].every((b) => b.textContent === "Critical"))
     .catch(async (e) => { throw new Error(`severity filter: ${await page.locator(".note-card .sev-badge").allTextContents()} ${e}`); });
@@ -748,11 +775,13 @@ await step("AT-176..186 rich notifications: TEST messages, Notification Center, 
   // track the card itself: background jobs (e.g. a PP-OCRv5 run finishing) may add new unread cards meanwhile
   await page.waitForLoadState("networkidle");  // the Unread list has reloaded
   await page.waitForSelector(".note-card.unread");
-  const [label, sameBefore] = await page.evaluate(() => {
+  // the Unread list can re-render (briefly empty) after the selector matched: read the cards only once they exist
+  const [label, sameBefore] = await (await page.waitForFunction(() => {
     const cards = [...document.querySelectorAll(".note-card")];
+    if (!cards.length) return null;
     const l = cards[0].getAttribute("aria-label");
     return [l, cards.filter((c) => c.getAttribute("aria-label") === l).length];
-  });
+  })).jsonValue();
   await page.locator(".note-card").first().locator("button:has-text('Mark read')").click();
   await page.waitForFunction(([l, n]) => [...document.querySelectorAll(".note-card")].filter((c) => c.getAttribute("aria-label") === l).length === n - 1, [label, sameBefore])
     .catch((e) => { throw new Error(`mark read (${label}, ${sameBefore}): ${e}`); });
@@ -764,10 +793,10 @@ await step("AT-176..186 rich notifications: TEST messages, Notification Center, 
   await page.fill("#t-title", "{document_type} renewal due in {days_remaining} days");
   await page.waitForFunction(() => document.querySelector("iframe.email-preview")?.srcdoc.includes("Passport renewal due in 45 days"));
   await page.waitForTimeout(400);
-  await page.screenshot({ path: `${SHOTS}/notification-template-email.png` });
+  await snap(page, { path: `${SHOTS}/notification-template-email.png` });
   await page.click(".modal [role=tab]:has-text('Telegram')");
   await page.waitForSelector(".tg-bubble");
-  await page.screenshot({ path: `${SHOTS}/notification-template-telegram.png` });
+  await snap(page, { path: `${SHOTS}/notification-template-telegram.png` });
   await page.click(".modal [role=tab]:has-text('Push')");
   await page.waitForSelector(".push-preview");
   expect(!(await page.locator(".push-preview").innerText()).includes("Sample Person"), "push preview has no names");
@@ -789,8 +818,8 @@ await step("AT-146 authentik settings and sign-in button", async () => {
     window.scrollBy(0, -90); // keep the heading below the sticky top bar
   });
   await page.waitForTimeout(300);
-  await page.screenshot({ path: `${SHOTS}/settings-authentik.png` });
-  const anon = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await snap(page, { path: `${SHOTS}/settings-authentik.png` });
+  const anon = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
   const lp = await anon.newPage();
   await lp.goto(BASE + "/login");
   await lp.waitForSelector("a:has-text('Sign in with authentik')");
@@ -799,7 +828,7 @@ await step("AT-146 authentik settings and sign-in button", async () => {
 });
 
 await step("AT-196 Sign in with Passkey on the first sign-in screen", async () => {
-  const anon = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const anon = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
   const lp = await anon.newPage();
   await lp.goto(BASE + "/login");
   const btn = lp.locator("button:has-text('Sign in with Passkey')");
@@ -807,7 +836,7 @@ await step("AT-196 Sign in with Passkey on the first sign-in screen", async () =
   expect(await btn.isEnabled(), "passkey button enabled on a secure origin");
   expect((await lp.getAttribute("#username", "autocomplete")).includes("webauthn"), "passkey autofill hint on the username field");
   expect(await lp.locator("#password").isVisible(), "password sign-in stays available");
-  await lp.screenshot({ path: `${SHOTS}/login-passkey.png` });
+  await snap(lp, { path: `${SHOTS}/login-passkey.png` });
   await anon.close();
 });
 
@@ -818,7 +847,7 @@ await step("AT-200/201 administrator resets a password: temporary password shown
   await page.goto(BASE + "/settings/family");
   await page.click(`tr:has-text('${target.display_name}') button:has-text('Reset password…')`);
   await page.waitForSelector(".modal:has-text('Generate temporary password')");
-  await page.screenshot({ path: `${SHOTS}/admin-reset-password.png` });
+  await snap(page, { path: `${SHOTS}/admin-reset-password.png` });
   await page.click(".modal button:has-text('Generate temporary password')");
   const reauth = page.locator(".modal:has-text('Confirm it') #rp");
   if (await reauth.isVisible({ timeout: 1500 }).catch(() => false)) {
@@ -844,7 +873,7 @@ await step("AT-205..207 antivirus: Diagnose / Repair panel and clean + EICAR sel
   await page.waitForSelector("text=Diagnose / Repair antivirus");
   await page.waitForSelector("text=Effective socket path");
   await page.locator("h2:has-text('Diagnose / Repair antivirus')").scrollIntoViewIfNeeded();
-  await page.screenshot({ path: `${SHOTS}/security-antivirus-diagnose.png` });
+  await snap(page, { path: `${SHOTS}/security-antivirus-diagnose.png` });
 });
 
 await step("AT-213/217/218 OCR engine label, Remove OCR data and Disable OCR for this document", async () => {
@@ -859,7 +888,7 @@ await step("AT-213/217/218 OCR engine label, Remove OCR data and Disable OCR for
   await page.click("button[aria-label='More actions']");
   await page.click("[role=menuitem]:has-text('Remove OCR data…')");
   await page.waitForSelector(".modal:has-text('Remove OCR data')");
-  await page.screenshot({ path: `${SHOTS}/ocr-remove.png` });
+  await snap(page, { path: `${SHOTS}/ocr-remove.png` });
   await page.click(".modal button.danger:has-text('Remove OCR data')");
   await page.waitForSelector(".toast:has-text('OCR data removed')");
   expect((await api(page, "/api/documents?q=2345678901")).data.total === 0, "no longer found by OCR-only text");
@@ -885,12 +914,12 @@ await step("AT-211/221/225/226 OCR engines, Existing OCR data, orphans and Test 
   expect(eng.paddle.healthy === !!eng.paddle.installed, `health follows the real self-test (installed ${eng.paddle.installed})`);
   await page.waitForSelector("h3:has-text('PaddleOCR (PP-OCRv5)') .badge:has-text('Healthy'), h3:has-text('PaddleOCR (PP-OCRv5)') .badge:has-text('Not installed')");
   await page.locator("h2:has-text('OCR engines')").evaluate((el) => { el.scrollIntoView({ block: "start" }); window.scrollBy(0, -90); });
-  await page.screenshot({ path: `${SHOTS}/settings-ocr-engines.png` });
+  await snap(page, { path: `${SHOTS}/settings-ocr-engines.png` });
   await page.waitForSelector("h2:has-text('Existing OCR data')");
   await page.click("button:has-text('Analyze (dry run)')");
   await page.waitForSelector("text=Never touched:");
   await page.locator("h2:has-text('Existing OCR data')").evaluate((el) => { el.scrollIntoView({ block: "start" }); window.scrollBy(0, -90); });
-  await page.screenshot({ path: `${SHOTS}/settings-ocr-existing.png` });
+  await snap(page, { path: `${SHOTS}/settings-ocr-existing.png` });
   // bulk preview only (nothing confirmed): the preview names what is kept
   await page.selectOption("#ocr-bulk-action", "remove");
   await page.click("button:has-text('Preview for all')");
@@ -903,20 +932,20 @@ await step("AT-211/221/225/226 OCR engines, Existing OCR data, orphans and Test 
   await page.waitForSelector("text=Temporary files removed: yes", { timeout: 120000 });
   expect(await page.locator("text=accuracy").count() >= 1, "accuracy reported");
   await page.locator("h2:has-text('Test OCR / Compare engines')").evaluate((el) => { el.scrollIntoView({ block: "start" }); window.scrollBy(0, -90); });
-  await page.screenshot({ path: `${SHOTS}/settings-ocr-compare.png` });
+  await snap(page, { path: `${SHOTS}/settings-ocr-compare.png` });
 });
 
 await step("screens for the README (desktop)", async () => {
   await page.goto(`${BASE}/folders/${ids.parity}/${ids["Sample policy (3 pages)"]}`);
   await page.waitForSelector(".detail-pane .viewer canvas");
-  await page.screenshot({ path: `${SHOTS}/folders-preview.png` });
+  await snap(page, { path: `${SHOTS}/folders-preview.png` });
   for (const [file, url, wait] of [["settings-security-passkeys.png", "/settings/account?tab=security", "text=Passkeys"],
     ["local-ai.png", "/settings/ai", "text=Local AI"], ["login-audit.png", "/settings/activity?view=logins", "text=Login audit"],
     ["security-access.png", "/settings/security?view=access", "text=Geographic access control"]]) {
     await page.goto(BASE + url);
     await page.waitForSelector(wait);
     await page.waitForTimeout(500);
-    await page.screenshot({ path: `${SHOTS}/${file}` });
+    await snap(page, { path: `${SHOTS}/${file}` });
   }
 });
 
@@ -924,7 +953,7 @@ await step("AT-128/130 every sign-in design keeps the same sign-in methods (desk
   await api(page, "/api/settings", { method: "PUT", body: { values: { "auth.allow_passkeys": true, "auth.allow_passwordless": true } } });
   for (const [design, w, h] of [["minimal", 1440, 900], ["nature", 1440, 900], ["travel", 1440, 900], ["family", 1440, 900], ["neutral", 1440, 900], ["travel", 390, 844]]) {
     await api(page, "/api/settings", { method: "PUT", body: { values: { "login.design": design } } });
-    const anon = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 500, hasTouch: w < 500 });
+    const anon = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 500, hasTouch: w < 500, deviceScaleFactor: 2 });
     const lp = await anon.newPage();
     watch(lp, `login-${design}`);
     await lp.goto(BASE + "/login");
@@ -934,9 +963,9 @@ await step("AT-128/130 every sign-in design keeps the same sign-in methods (desk
     expect(o.over <= 1, `${design}: overflow ${o.over}`);
     if (w < 500) {
       expect(o.formTop < 260, `phone: the form comes first (top ${o.formTop})`);
-      await lp.screenshot({ path: `${SHOTS}/mobile-login.png` });
+      await snap(lp, { path: `${SHOTS}/mobile-login.png` });
     } else if (["minimal", "nature", "travel", "family"].includes(design)) {
-      await lp.screenshot({ path: `${SHOTS}/${design === "minimal" ? "login" : `login-${design}`}.png` });
+      await snap(lp, { path: `${SHOTS}/${design === "minimal" ? "login" : `login-${design}`}.png` });
     }
     if (design === "travel" && w > 500) {
       await lp.fill("#username", "son1");
@@ -949,7 +978,7 @@ await step("AT-128/130 every sign-in design keeps the same sign-in methods (desk
   await page.goto(BASE + "/settings/overview");
   await page.waitForSelector(".design-grid");
   await page.locator(".design-grid").scrollIntoViewIfNeeded();
-  await page.screenshot({ path: `${SHOTS}/settings-login-design.png` });
+  await snap(page, { path: `${SHOTS}/settings-login-design.png` });
   await api(page, "/api/settings", { method: "PUT", body: { values: { "login.design": "minimal", "auth.allow_passwordless": false } } });
 });
 
@@ -962,7 +991,7 @@ const VIEWPORTS = [["tablet", 820, 1180], ["mobile-portrait", 390, 844], ["mobil
 const state = await desk.storageState();
 
 for (const [vname, w, h] of VIEWPORTS) {
-  const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: vname !== "tablet", hasTouch: true, storageState: state });
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: vname !== "tablet", hasTouch: true, storageState: state, deviceScaleFactor: 2 });
   const mp = await ctx.newPage();
   watch(mp, vname);
   await step(`AT-76/77 ${vname}: every screen renders without horizontal overflow`, async () => {
@@ -992,7 +1021,7 @@ for (const [vname, w, h] of VIEWPORTS) {
     await mp.tap("button[aria-label='Zoom in']");
     expect(await mp.locator(".zoom-value").innerText() !== z0, "tap zooms");
     await mp.tap(".viewer-toolbar button:has-text('Fit width')");
-    if (vname === "mobile-portrait") await mp.screenshot({ path: `${SHOTS}/mobile-viewer.png` });
+    if (vname === "mobile-portrait") await snap(mp, { path: `${SHOTS}/mobile-viewer.png` });
   });
   await step(`AT-175 ${vname}: Details, type selection and previous values work by touch without clipping`, async () => {
     await mp.goto(`${BASE}/documents/${ids.typed}`);
@@ -1008,7 +1037,7 @@ for (const [vname, w, h] of VIEWPORTS) {
     const m = await mp.evaluate(() => { const r = document.querySelector(".modal").getBoundingClientRect(); return r.right <= window.innerWidth + 1 && r.left >= -1; });
     expect(m, "type dialog fits the screen");
     await mp.tap(".modal button:has-text('Cancel')");
-    if (vname === "mobile-portrait") { await mp.locator(".details-panel").scrollIntoViewIfNeeded(); await mp.screenshot({ path: `${SHOTS}/mobile-details.png` }); }
+    if (vname === "mobile-portrait") { await mp.locator(".details-panel").scrollIntoViewIfNeeded(); await snap(mp, { path: `${SHOTS}/mobile-details.png` }); }
   });
   await step(`AT-194 ${vname}: Notification Center cards, filters and actions by touch without clipping`, async () => {
     await mp.goto(`${BASE}/notifications`);
@@ -1020,7 +1049,7 @@ for (const [vname, w, h] of VIEWPORTS) {
     });
     expect(r.over <= 1 && r.off === 0 && r.small === 0, `notifications: overflow ${r.over}, off-screen ${r.off}, small ${r.small}`);
     await mp.locator(".note-card").first().locator("button:has-text('Show details')").tap().catch(() => undefined);
-    if (vname === "mobile-portrait") await mp.screenshot({ path: `${SHOTS}/mobile-notifications.png` });
+    if (vname === "mobile-portrait") await snap(mp, { path: `${SHOTS}/mobile-notifications.png` });
   });
   if (vname !== "tablet") {
     await step(`AT-75 ${vname}: Move to… by touch, and back navigation`, async () => {
@@ -1037,7 +1066,7 @@ for (const [vname, w, h] of VIEWPORTS) {
       await mp.waitForSelector("text=Back to folder");
       await mp.tap("text=Back to folder");
       await mp.waitForSelector(".list-pane .doc-card");
-      if (vname === "mobile-portrait") await mp.screenshot({ path: `${SHOTS}/mobile-folders.png` });
+      if (vname === "mobile-portrait") await snap(mp, { path: `${SHOTS}/mobile-folders.png` });
     });
   }
   if (vname === "mobile-portrait") {
@@ -1047,7 +1076,7 @@ for (const [vname, w, h] of VIEWPORTS) {
       expect(await mp.locator("[data-widget=shared]").count() === 0, "widget choice synced to mobile");
       const one = await mp.evaluate(() => getComputedStyle(document.querySelector(".ov-grid")).gridTemplateColumns.split(" ").length);
       expect(one === 1, `phone uses one column (${one})`);
-      await mp.screenshot({ path: `${SHOTS}/mobile-overview.png` });
+      await snap(mp, { path: `${SHOTS}/mobile-overview.png` });
       await api(mp, "/api/settings", { method: "PUT", body: { values: { "me.theme": "blue" } } });
       await page.goto(BASE + "/");
       await page.waitForFunction(() => document.documentElement.dataset.theme === "blue");

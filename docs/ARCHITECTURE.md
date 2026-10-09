@@ -323,3 +323,19 @@ web app (personaldocs user):                                   runuser PING as p
   `security/center.py::security_health` gives Unavailable and Error 0 points and forces At Risk. The hourly check runs
   `self_test` once a day and after a failure. `doctor` prints the root diagnosis before the app checks.
 - Migrations `accounts.0007_passkey_mode`, `notify.0003_template_brand_footer`. No new dependencies.
+
+## Offline copies, PWA identity and themes (change set S)
+
+- **Offline:** `apps/library/offline.py` keeps devices (`OfflineDevice`, one per browser profile or installed app and
+  account) and selections (`OfflineSelection`: folder ± subfolders, or document). `POST /api/offline/sync` is
+  authoritative: it recomputes the permitted set with `permissions.AccessContext` (download capability; archived and
+  quarantined excluded) and returns what to keep, update and delete.
+  - The browser side (`frontend/src/offline.ts`) stores originals, optional text and the index separately per account.
+  - The service worker caches only the app shell.
+  - See [ADR 0018](adr/0018-offline-device-scope.md).
+- **PWA identity:**
+  - icons are generated from `frontend/public/icon.svg` (`scripts/make_icons.mjs`) and served by WhiteNoise from the
+    built `dist/` root with explicit types;
+  - unknown file paths answer 404 instead of the SPA page.
+- **Themes:** semantic CSS tokens per `data-theme` on `<html>`, set early by `theme-hint.js` and authoritatively from
+  the account preference; glass presets add selective `backdrop-filter`. See [ADR 0019](adr/0019-theme-tokens-glass.md).

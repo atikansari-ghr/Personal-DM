@@ -48,7 +48,7 @@ More: [authenticator app and recovery codes](guides/totp-recovery.md), [passkeys
 | Profile | Name, email (needed for email notifications), [profile photo](guides/getting-started.md#profile-photo) |
 | Password & security | Change password, authenticator app, recovery codes, passkeys, passwordless sign-in, signed-in devices, **Link authentik account** (when the administrator turned authentik on) |
 | Linked accounts | Link Google sign-in (optional) |
-| Appearance | Theme (Green, Blue, Black & White), layout, Overview widgets |
+| Appearance | Theme (Default Green, Blue, Dark, Glass Light, Glass Dark, Black & White), layout, Overview widgets |
 | Notifications | Critical notifications (read-only), your optional notifications per channel, Telegram link, push notifications on this device and their lock-screen detail |
 | Email imports | Import attachments from your own mailbox by rule |
 
@@ -292,16 +292,31 @@ See [archive](guides/archive.md).
 
 ## 13. Offline, phone and tablet {#offline}
 
-- Install the app on your phone's home screen. Every feature is available on phones and tablets.
-- **Save for offline use** keeps a document on that device for your account only; **Offline files** lists them.
+- Install the app on your phone's Home Screen; it is called **Personal DM**. Every feature is available on phones and
+  tablets.
+- **Folders:** **⋮ → Make available offline…** keeps a folder on *this device*, either with all its subfolders
+  (recommended) or the folder only. You see the number of documents and the size first.
+- **Documents:** **⋮ → Make available offline** keeps one document. **Update offline copy** and **Remove offline copy**
+  are in the same menus.
+- Each document shows its status in words: *Available offline*, *Downloading*, *Update available*, *Outdated*, *Offline
+  copy failed*, or *Not available offline*.
+- **Offline access** (sidebar) lists your offline folders and documents on this device, storage, pending updates and
+  failures, with **Sync now** and **Update all**.
+- Copies are for your account on this device only. They are removed when you sign out, unless you choose to keep them.
+  Copies you lose access to are removed at the next sync.
 - **Export** downloads a ZIP of folders you may download.
+- iPhone shows a letter instead of the icon? Remove the shortcut and add it again from Safari (see the guide).
 
-See [phone and tablet](guides/mobile-pwa.md) and [offline and export](guides/offline-export.md).
+See [phone and tablet](guides/mobile-pwa.md) and [offline access and export](guides/offline-export.md).
 
 ## 14. Appearance {#appearance}
 
-Pick Green & White, Blue & White or Black & White, and the three-panel or full-page layout. Your choice applies on
-all your devices. See [themes](guides/themes.md).
+In **Settings → My account → Appearance**, pick a theme from the preview cards: **Default Green**, **Blue**, **Dark**,
+**Glass Light**, **Glass Dark** or **Black & White**. **Reset to default** returns to Default Green. You can also pick
+the three-panel or full-page layout.
+
+Your choice applies on all your devices; other family members keep their own. Glass themes fall back to solid
+surfaces if your device asks for less transparency. See [themes](guides/themes.md).
 
 ## 15. Troubleshooting {#troubleshooting}
 

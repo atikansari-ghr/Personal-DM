@@ -34,3 +34,12 @@ $PY tests/e2e/make_parity_fixtures.py "$LOGDIR/parity" >/dev/null
 BASE=http://localhost:8000 PARITY="$LOGDIR/parity" node tests/e2e/parity.mjs
 # application-wide layout audit at seven viewport classes + document-header geometry regression (Change Set R)
 BASE=http://localhost:8000 node tests/e2e/layout.mjs
+# offline access per account + device, installed-app identity, premium themes (Change Set S)
+BASE=http://localhost:8000 node tests/e2e/offline.mjs
+BASE=http://localhost:8000 node tests/e2e/pwa.mjs
+BASE=http://localhost:8000 node tests/e2e/themes.mjs
+# repeatable public screenshots with quality and privacy gates; smaller files when pngquant is installed
+BASE=http://localhost:8000 node tests/e2e/screenshots.mjs
+if command -v pngquant >/dev/null 2>&1; then
+  pngquant --force --skip-if-larger --quality 85-98 --ext .png docs/images/screenshots/*.png || true
+fi

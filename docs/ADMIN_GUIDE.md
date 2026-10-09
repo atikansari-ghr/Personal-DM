@@ -408,6 +408,36 @@ Guide: [security center](guides/security-center.md).
 
 Guide: [security & access](guides/security-access.md#login-audit).
 
+## 12a. Offline copies and the installed app {#offline}
+
+**Settings → Offline & PWA**:
+
+- **Policy:**
+  - offline copies on/off;
+  - automatic updates;
+  - keep recognised text offline (off by default);
+  - sign-out behaviour (remove unless the person chose to keep, or always remove);
+  - lock after N days without sync (default 30);
+  - suggested space per device and large-download warning.
+- **People and devices:**
+  - turn offline copies off for one person;
+  - see every device with its copies, size, failures and last sync;
+  - **Remove copies** from one device.
+
+  Every change takes effect at that device's next sync. A device that stays offline cannot be erased remotely; it
+  locks its copies after the configured days.
+- **Installed app:** previews of all app icons, and a check that they load without signing in.
+
+If family members see a letter instead of the app icon on iPhone:
+
+1. Run `sudo personaldocs check-access` (step 5 checks the icons from outside).
+2. Make sure the reverse proxy serves `/manifest.webmanifest`, `/apple-touch-icon*.png`, `/icon-*.png`, `/favicon*` and
+   `/icon.svg` without authentication.
+3. Have them remove and re-add the Home Screen shortcut.
+
+`personaldocs doctor` reports missing icon files. See [offline access](guides/offline-export.md#admin) and
+[phone and tablet](guides/mobile-pwa.md#ios-icon).
+
 ## 13. Backups and restore {#backup}
 
 - **Settings → Storage & backup:**

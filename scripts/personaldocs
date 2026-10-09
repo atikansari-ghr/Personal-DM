@@ -922,6 +922,18 @@ cmd_check_access() { # explain, step by step, why the app is (not) reachable thr
     *) info_ "$origin/api/health answered HTTP $code" ;;
   esac
   rm -f /tmp/pd-access.err
+  if [ "$code" = 200 ]; then
+    echo "5. App icons and manifest without signing in (phones fetch these without your session)"
+    local p res
+    for p in /manifest.webmanifest /apple-touch-icon.png /icon-192.png /icon-maskable-512.png /favicon.ico; do
+      res=$(curl -sS -o /dev/null -m 15 -w '%{http_code} %{content_type}' "$origin$p" 2>/dev/null || true)
+      case "$res" in
+        "200 image/"*|"200 application/manifest+json"*) ok_ "$p → $res" ;;
+        "200 text/html"*|30[1278]*) bad_ "$p → $res (a sign-in page instead of the file)" "let the proxy serve /manifest.webmanifest, /apple-touch-icon*.png, /icon-*.png, /favicon* and /icon.svg without authentication (Pangolin: resource rules → bypass; authentik forward auth: skip these paths). Otherwise iPhone shows a letter instead of the app icon." ;;
+        *) bad_ "$p → ${res:-no answer}" "run sudo personaldocs upgrade (the files ship with the app) and check the proxy" ;;
+      esac
+    done
+  fi
   echo
   if [ "$bad" -eq 0 ]; then c_ok "No problems found."; else c_err "$bad problem(s) found; fix them in the order shown."; return 1; fi
 }

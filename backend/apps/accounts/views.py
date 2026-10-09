@@ -127,6 +127,10 @@ def session_state(request):
             "doc_view": config.get_user(u, "me.doc_view"),
             "doc_sort": config.get_user(u, "me.doc_sort"),
         }
+        from apps.library import offline as offline_lib
+
+        ok, why = offline_lib.allowed_for(u)
+        data["offline"] = {"allowed": ok, "reason": why, **offline_lib.policy()}
         data["date_format"] = config.get("general.date_format")
         data["timezone"] = config.get("general.timezone")
         data["delegations"] = [{"group": d.group.name, "group_id": str(d.group_id), "scopes": d.scopes}

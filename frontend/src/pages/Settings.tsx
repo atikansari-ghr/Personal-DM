@@ -5,6 +5,7 @@ import { ActivityPanel, AuthPanel, ConnectionsPanel, DocumentsPanel, Notificatio
 import FamilyPanel from "./settings/Family";
 import LocalAIPanel from "./settings/LocalAI";
 import OverviewAdminPanel from "./settings/OverviewAdmin";
+import OfflineAdminPanel from "./settings/OfflineAdmin";
 import { LoginAuditPanel, TrafficPanel } from "./settings/Security";
 import SecurityCenter from "./settings/SecurityCenter";
 import SettingsForm from "../components/SettingsForm";
@@ -12,7 +13,7 @@ import SettingsForm from "../components/SettingsForm";
 const ADMIN_TABS: [string, string][] = [
   ["general", "General"], ["family", "Family & access"], ["documents", "Documents & folders"], ["processing", "OCR & processing"],
   ["notifications", "Notifications"], ["connections", "Connections"], ["authentication", "Authentication"], ["storage", "Storage & backup"],
-  ["security", "Security"], ["activity", "Activity & health"], ["ai", "Local AI"], ["overview", "Overview & sign-in"],
+  ["security", "Security"], ["activity", "Activity & health"], ["ai", "Local AI"], ["offline", "Offline & PWA"], ["overview", "Overview & sign-in"],
 ];
 
 export default function SettingsPage() {
@@ -41,6 +42,7 @@ export default function SettingsPage() {
       {active === "security" && (admin || secAdmin) && <SecurityCenter />}
       {active === "activity" && admin && <ActivityTabs />}
       {active === "ai" && admin && <LocalAIPanel />}
+      {active === "offline" && admin && <OfflineAdminPanel />}
       {active === "overview" && admin && <OverviewAdminPanel />}
     </div>
   );

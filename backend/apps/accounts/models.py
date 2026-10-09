@@ -33,6 +33,7 @@ class User(AbstractUser):
                                        help_text="Group whose head receives this person's expiry reminders")
     session_epoch = models.IntegerField(default=0, help_text="Incremented to invalidate all sessions")
     passwordless_enabled = models.BooleanField(default=False, help_text="Person opted in to passwordless passkey sign-in")
+    offline_allowed = models.BooleanField(default=True, help_text="May keep offline copies on their devices (set by the administrator)")
 
     class Meta:
         ordering = ["sort_order", "display_name"]
