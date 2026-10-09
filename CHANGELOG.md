@@ -48,6 +48,7 @@ The first implementation of the full initial-release scope. See `docs/IMPLEMENTA
   - There was no 180 px Apple icon and no Apple title tag.
 
   Missing file paths now answer 404, real files exist for all of them, and `check-access` reports a reverse proxy that requires sign-in for icon files (the same symptom). iOS keeps the icon it saw when a shortcut was created, so remove the old shortcut and add it again.
+- **Overview "circle" widgets were stretched into ovals.** The card grew to the row height (`flex: 1`), overriding `aspect-ratio`; circles now keep their size and are centred.
 - **The manifest was served as `application/octet-stream`.** It is now `application/manifest+json`.
 - **Low-detail public screenshots.**
   - They were captured at 1× pixel density with mixed 1366/1440 widths, as side effects of functional tests, and four were never regenerated after UI changes (login audit, Local AI, security access, passkeys).
