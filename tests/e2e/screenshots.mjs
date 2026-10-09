@@ -40,7 +40,8 @@ async function session(viewport, user = "admin", pw = PW, mobile = false) {
   await page.fill("#username", user);
   await page.fill("#password", pw);
   await page.click("button:has-text('Sign in')");
-  await page.waitForSelector(".sidebar, .topbar");
+  await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 30000 });
+  await page.waitForLoadState("networkidle");
   return { ctx, page };
 }
 

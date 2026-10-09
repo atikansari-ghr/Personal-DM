@@ -346,11 +346,13 @@ async function download(uid: string, it: { document: string; version: string; si
 async function syncText(uid: string, docId: string, hash: string | null, allowed: boolean) {
   const local = current(uid).items[docId];
   if (!local) return;
-  const cache = await caches.open(textCacheName(uid));
   if (!allowed || !hash) {
-    if (local.text) { await cache.delete(`/offline-text/${docId}`); patchItem(uid, docId, { text: null }); }
+    // never create the text cache just to delete from it (caches.open creates an empty bucket)
+    if (local.text && (await caches.has(textCacheName(uid)))) await (await caches.open(textCacheName(uid))).delete(`/offline-text/${docId}`);
+    if (local.text) patchItem(uid, docId, { text: null });
     return;
   }
+  const cache = await caches.open(textCacheName(uid));
   if (local.text === hash) return;
   try {
     const r = await api<{ text: string }>(`documents/${docId}/text`, { query: { version: local.versionId } });
@@ -362,8 +364,8 @@ async function syncText(uid: string, docId: string, hash: string | null, allowed
 async function deleteCopy(uid: string, docId: string) {
   const it = current(uid).items[docId];
   if (it && offlineSupported()) {
-    await (await caches.open(cacheName(uid))).delete(`/offline/${it.versionId}`);
-    await (await caches.open(textCacheName(uid))).delete(`/offline-text/${docId}`);
+    if (await caches.has(cacheName(uid))) await (await caches.open(cacheName(uid))).delete(`/offline/${it.versionId}`);
+    if (await caches.has(textCacheName(uid))) await (await caches.open(textCacheName(uid))).delete(`/offline-text/${docId}`);
   }
   patch(uid, (s) => { const items = { ...s.items }; delete items[docId]; return { ...s, items }; });
   api("offline/audit", { body: { action: "remove", documents: [docId] } }).catch(() => undefined);
@@ -404,6 +406,8 @@ async function clearAll(uid: string, { keepDevice = true } = {}) {
  *  keep their copies on this device. The device registration (an id, not a secret) is kept so the same device is
  *  recognised after signing in again. */
 export async function onSignOut(uid: string) {
+  // let a running sync finish first, so it cannot write copies back after they were removed
+  if (running) await running.catch(() => undefined);
   const policy = current(uid).policy;
   if (policy?.logout_policy !== "always_clear" && keepAfterSignOut(uid)) return;
   await clearAll(uid);
