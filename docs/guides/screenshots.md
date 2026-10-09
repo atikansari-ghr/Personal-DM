@@ -37,7 +37,7 @@ When `pngquant` is installed, the images are recompressed losslessly enough for 
 - **Privacy gate:** the capture fails if the visible text contains any of these:
   - an e-mail address outside `example.com/.org/.net`, `family.example`, `.test` or `.invalid`;
   - an IP address outside loopback, `10.x` and the documentation ranges (192.0.2.x, 198.51.100.x, 203.0.113.x);
-  - a token-like string of 40+ characters.
+  - a token-like string of 40+ characters (names made of words joined by - or _, such as long file names, are not tokens).
 - **Demo data only:** documents are generated (`tests/fixtures.py`, `tests/e2e/make_parity_fixtures.py`) and say they
   are samples. The family names are the demo identities. No real passport, ID, Iqama, bank or medical scan may ever be
   used, even blurred.
