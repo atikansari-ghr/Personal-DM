@@ -903,8 +903,9 @@ code.temp-password { font-size: 1.15rem; padding: .4rem .6rem; letter-spacing: .
 .member:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
 .modal { animation: pd-pop var(--dur) var(--ease); }
 .menu-pop { animation: pd-fade var(--dur) var(--ease); }
-@keyframes pd-pop { from { opacity: 0; transform: translateY(6px) scale(0.99); } to { opacity: 1; transform: none; } }
-@keyframes pd-fade { from { opacity: 0; } to { opacity: 1; } }
+/* movement only, never opacity: text is at full contrast from the first frame (axe and real readers alike) */
+@keyframes pd-pop { from { transform: translateY(6px) scale(0.99); } to { transform: none; } }
+@keyframes pd-fade { from { transform: translateY(-3px); } to { transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
