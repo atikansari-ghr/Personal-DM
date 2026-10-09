@@ -775,11 +775,13 @@ await step("AT-176..186 rich notifications: TEST messages, Notification Center, 
   // track the card itself: background jobs (e.g. a PP-OCRv5 run finishing) may add new unread cards meanwhile
   await page.waitForLoadState("networkidle");  // the Unread list has reloaded
   await page.waitForSelector(".note-card.unread");
-  const [label, sameBefore] = await page.evaluate(() => {
+  // the Unread list can re-render (briefly empty) after the selector matched: read the cards only once they exist
+  const [label, sameBefore] = await (await page.waitForFunction(() => {
     const cards = [...document.querySelectorAll(".note-card")];
+    if (!cards.length) return null;
     const l = cards[0].getAttribute("aria-label");
     return [l, cards.filter((c) => c.getAttribute("aria-label") === l).length];
-  });
+  })).jsonValue();
   await page.locator(".note-card").first().locator("button:has-text('Mark read')").click();
   await page.waitForFunction(([l, n]) => [...document.querySelectorAll(".note-card")].filter((c) => c.getAttribute("aria-label") === l).length === n - 1, [label, sameBefore])
     .catch((e) => { throw new Error(`mark read (${label}, ${sameBefore}): ${e}`); });
