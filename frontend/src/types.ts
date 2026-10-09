@@ -42,6 +42,7 @@ export interface Session {
   date_format?: string;
   timezone?: string;
   delegations?: { group: string; group_id: string; scopes: string[] }[];
+  offline?: import("./offline").OfflinePolicy & { allowed: boolean; reason: string };
 }
 export interface Expiry {
   days: number | null;

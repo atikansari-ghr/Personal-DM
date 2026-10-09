@@ -25,7 +25,7 @@ SECTIONS = [
     ("notifications", "Notifications"), ("connections", "Connections"), ("authentication", "Authentication"),
     ("storage", "Storage & Backup"), ("security", "Security & Access"), ("activity", "Activity & Health"), ("appearance", "Appearance"),
     ("my_notifications", "My notifications"), ("ai", "Local AI"), ("overview", "Overview widgets"), ("login", "Sign-in page"),
-    ("antivirus", "Antivirus"), ("identity", "External identity providers"), ("security_center", "Security center"),
+    ("antivirus", "Antivirus"), ("identity", "External identity providers"), ("security_center", "Security center"), ("offline", "Offline & PWA"),
 ]
 ADMIN_SECTIONS = ("antivirus", "security_center")  # visible (read, and editable where allowed) to Administrators
 

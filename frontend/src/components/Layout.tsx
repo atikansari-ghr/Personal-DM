@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
-import { onSignOut } from "../offline";
+import { onSignOut, startAutoSync } from "../offline";
 import { useSession } from "../session";
 import { Avatar, Icon } from "./ui";
 import { useAiStatus } from "../ai";
@@ -85,6 +85,8 @@ export default function Layout({ children }: { children: ReactNode }) {
     api<{ views: any[] }>("views").then((r) => setViews(r.views.filter((v) => v.show_in_sidebar))).catch(() => undefined);
   }, [loc.pathname, offline]);
 
+  useEffect(() => (user ? startAutoSync(user.id) : undefined), [user?.id]);
+
   const signOut = async () => {
     if (user) await onSignOut(user.id);
     await api("auth/logout", { method: "POST" }).catch(() => undefined);
@@ -95,7 +97,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="shell">
       <aside className={`sidebar ${open ? "open" : ""}`} aria-label="Main navigation">
-        <Link to="/" className="brand"><Icon name="shield" size={26} /> {session?.app_name || "Personal Documents Management System"}</Link>
+        <Link to="/" className="brand"><img src="/icon.svg" alt="" width={30} height={30} className="brand-mark" /> {session?.app_name || "Personal Documents Management System"}</Link>
         <nav className="nav">
           {NAV.filter(([p]) => p !== "/archive" || user?.is_main_admin).map(([path, icon, label]) => (
             <NavLink key={path} to={path} end={path === "/"} className={({ isActive }) => (isActive ? "active" : "")}>

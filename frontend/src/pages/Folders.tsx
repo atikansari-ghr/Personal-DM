@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, formatBytes, formatDate } from "../api";
 import DocumentPanel, { ShareDialog } from "../components/DocumentPanel";
 import Menu, { type MenuItem } from "../components/Menu";
+import { FolderOfflineMark, OfflineBadge, useOfflineMenus } from "../components/OfflineUI";
 import { collectDropped, isExternalFileDrag, uploadDropped, type DropProgress } from "../dropUpload";
 import { DOC_VIEWS, normaliseView, SORT_LABELS, type DocView } from "../docview";
 import { PanelHandles, usePanelWidths } from "../components/PanelResizer";
@@ -75,6 +76,7 @@ function TreeNode({ node, active, expanded, toggle, select, level, me, dnd, menu
         <button className="caret" tabIndex={-1} aria-label={open ? "Collapse" : "Expand"} onClick={(e) => { e.stopPropagation(); toggle(node.id); }} style={{ visibility: children.length ? "visible" : "hidden" }}>{open ? "▾" : "▸"}</button>
         <FolderIcon f={node} />
         <span>{folderLabel(node, me)}</span>
+        <FolderOfflineMark folderId={node.id} />
         {node.count > 0 && <span className="count">{node.count}</span>}
         {!node.path_only && <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} style={{ marginLeft: node.count > 0 ? 0 : "auto", display: "inline-flex" }}>
           <Menu label={`Actions for folder ${folderLabel(node, me)}`} className="icon-btn node-menu" items={menu(node)} />
@@ -247,6 +249,7 @@ export default function FoldersPage() {
   };
 
   // ---- action menus (only actions the person may perform are listed)
+  const offlineMenus = useOfflineMenus();
   const folderMenu = (f: FolderNode): MenuItem[] => {
     const c = (x: string) => f.caps.includes(x);
     return [
@@ -260,6 +263,8 @@ export default function FoldersPage() {
       { label: "Apply folder template", hidden: !c("organize"), onSelect: () => api<{ created: number }>(`folders/${f.id}/apply-template`, { method: "POST" }).then((r) => { toast(r.created ? `${r.created} template folder(s) added` : "All template folders already exist"); loadFolders(); }).catch((e) => toast(e.message, "error")) },
       { label: "Download folder (ZIP)", hidden: !c("download"), href: `/api/export/download?folder=${f.id}` },
       "separator",
+      ...offlineMenus.folderItems(f),
+      "separator",
       { label: "Archive folder…", danger: true, hidden: !c("archive") || f.kind !== "normal", onSelect: () => setFdlg({ kind: "archive", f }) },
     ];
   };
@@ -272,6 +277,8 @@ export default function FoldersPage() {
       { label: d.type ? "Change document type…" : "Set document type…", hidden: !c("edit"), onSelect: () => setDdlg({ kind: "type", d }) },
       { label: "Download", hidden: !c("download"), href: `/api/documents/${d.id}/file?download=1` },
       { label: "Share…", hidden: !c("share") && !c("download"), onSelect: () => setDdlg({ kind: "share", d }) },
+      "separator",
+      ...offlineMenus.documentItems(d),
       "separator",
       { label: "Archive…", danger: true, hidden: !c("archive"), onSelect: () => setDdlg({ kind: "archive", d }) },
       { label: "Delete permanently…", danger: true, hidden: !session?.user?.is_main_admin, onSelect: () => setDdlg({ kind: "purge", d }) },
@@ -386,7 +393,7 @@ export default function FoldersPage() {
               <FileTypeIcon kind={d.file_kind} label={d.file_label} />
               <div className="grow doc-card-main">{openBtn(d)}
                 <div className="doc-meta small muted"><span>{d.file_label}</span><span>{formatBytes(d.size)}</span><span>{formatDate(d.created_at)}</span></div>
-                <div className="doc-badges"><StateBadge state={d.state} /><AvBadge status={d.av_status} compact />{d.expiry && d.expiry.level !== "ok" && <ExpiryBadge expiry={d.expiry} />}</div>
+                <div className="doc-badges"><StateBadge state={d.state} /><AvBadge status={d.av_status} compact /><OfflineBadge docId={d.id} compact />{d.expiry && d.expiry.level !== "ok" && <ExpiryBadge expiry={d.expiry} />}</div>
               </div>
               {rowMenu(d)}
             </div>
@@ -401,7 +408,7 @@ export default function FoldersPage() {
                   {openBtn(d, "small")}
                   {rowMenu(d)}
                 </div>
-                <ExpiryBadge expiry={d.expiry} />
+                <div className="doc-badges"><ExpiryBadge expiry={d.expiry} /><OfflineBadge docId={d.id} compact /></div>
               </div>
             ))}</div>
           ) : (
@@ -420,7 +427,7 @@ export default function FoldersPage() {
                   <td className="opt">{formatBytes(d.size)}</td>
                   <td>{d.expiry_date ? <>{formatDate(d.expiry_date)} {d.expiry && d.expiry.level !== "ok" && <ExpiryBadge expiry={d.expiry} />}</> : d.expiry?.level === "none" ? <ExpiryBadge expiry={d.expiry} /> : "—"}</td>
                   <td className="opt">{formatDate(d.created_at)}</td>
-                  <td className="opt"><StateBadge state={d.state} /><AvBadge status={d.av_status} compact /></td>
+                  <td className="opt"><StateBadge state={d.state} /><AvBadge status={d.av_status} compact /><OfflineBadge docId={d.id} compact /></td>
                   <td>{rowMenu(d)}</td>
                 </tr>
               ))}</tbody>
@@ -437,6 +444,7 @@ export default function FoldersPage() {
           ) : <div className="empty">Select a document to preview it here.</div>}
         </section>
       </div>
+      {offlineMenus.dialog}
       {dropState && (
         <div className="card drop-progress" role="status" aria-live="polite">
           <div className="row between">

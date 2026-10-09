@@ -689,6 +689,32 @@ SETTINGS: list[SettingDef] = [
                "security_center", min=50, max=99, editable_by=ADMIN, help="security-center#storage"),
     SettingDef("storage.critical_percent", "Storage critical at (% used)", "Critical storage alert.", "int", 90, "security_center",
                min=51, max=100, editable_by=ADMIN, help="security-center#storage"),
+    # ---- Offline & PWA (Change Set S)
+    SettingDef("offline.enabled", "Offline copies", "Allow people to keep chosen folders and documents on their own devices "
+               "for use without a connection. Turning it off removes offline copies at each device's next sync.", "bool", True,
+               "offline", effect="Devices remove their offline copies at the next sync.", help="offline-export#admin"),
+    SettingDef("offline.auto_update", "Update offline copies automatically",
+               "When a newer version of an offline document exists, devices download it at the next sync. Off: the copy "
+               "is marked 'Update available' until the person updates it.", "bool", True, "offline", depends_on=("offline.enabled",),
+               help="offline-export#updates"),
+    SettingDef("offline.cache_text", "Keep recognised text offline",
+               "Also store recognised (OCR) and extracted text on devices, so offline copies can show their text. Off by "
+               "default for privacy. When OCR is removed from a document, its offline text is removed at the next sync.",
+               "bool", False, "offline", depends_on=("offline.enabled",), help="offline-export#text"),
+    SettingDef("offline.logout_policy", "On sign-out", "What happens to a person's offline copies on a device when they sign out.",
+               "choice", "user_choice", "offline", choices=("user_choice", "always_clear"),
+               choice_labels={"user_choice": "Remove, unless the person chose to keep them on that device",
+                              "always_clear": "Always remove"}, help="offline-export#signout"),
+    SettingDef("offline.max_days_without_sync", "Lock offline copies after (days without sync)",
+               "Offline copies stay readable without a connection for this many days after the last successful sync, then "
+               "are locked until the device connects and signs in again. 0 = never lock.", "int", 30, "offline", min=0, max=365,
+               help="offline-export#signout"),
+    SettingDef("offline.device_quota_mb", "Suggested space per device (MB)",
+               "People are warned before an offline selection would use more than this on one device. Browsers also "
+               "enforce their own limit.", "int", 2048, "offline", min=100, max=200000, help="offline-export#quota"),
+    SettingDef("offline.large_download_mb", "Large download warning (MB)",
+               "Ask for confirmation before making a folder available offline when it is larger than this.", "int", 500,
+               "offline", min=10, max=100000, help="offline-export#quota"),
     # ---- Per-user
     SettingDef("me.theme", "Theme", "Colour theme for your account on every device.", "choice", "green", "appearance",
                scope=USER, editable_by=SELF, choices=THEMES, effect="Applies immediately on all your devices.",

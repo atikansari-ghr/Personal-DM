@@ -34,7 +34,7 @@ export function AuthWallpaper({ b, preview }: { b: LoginBranding; preview?: bool
       {b.wallpaper ? <div className="auth-wallpaper" style={{ backgroundImage: `url(${b.wallpaper})`, backgroundPosition: b.position || "center" }} /> : <LoginArt design={b.design} />}
       {b.overlay > 0 && <div className="auth-overlay" style={{ opacity: b.overlay / 100 }} />}
       <div className="auth-brand">
-        <div className="brand">{b.logo ? <img src={b.logo} alt="" className="auth-logo" /> : <Icon name="shield" size={34} />}</div>
+        <div className="brand">{b.logo ? <img src={b.logo} alt="" className="auth-logo" /> : <img src="/icon.svg" alt="" width={40} height={40} className="brand-mark" />}</div>
         <h1>{b.title}</h1>
         {b.tagline && <p className="auth-tagline">{b.tagline}</p>}
       </div>

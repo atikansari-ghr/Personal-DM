@@ -51,6 +51,11 @@ class Command(BaseCommand):
         report("free disk > 2 GB", du.free > 2 * 1024 ** 3, f"{du.free // 1024 ** 2} MB free")
         report("public origin uses HTTPS", settings.PUBLIC_ORIGIN.startswith("https://"), settings.PUBLIC_ORIGIN)
         report("frontend built", (settings.FRONTEND_DIST / "index.html").exists())
+        icons = ["manifest.webmanifest", "apple-touch-icon.png", "icon-192.png", "icon-512.png", "icon-maskable-512.png",
+                 "favicon.ico", "favicon-32.png"]
+        missing = [f for f in icons if not (settings.FRONTEND_DIST / f).exists()]
+        report("app icons and manifest (PWA identity)", not missing,
+               ("missing: " + ", ".join(missing)) if missing else "served without sign-in; check the proxy with: sudo personaldocs check-access")
         from apps.ops.backup import BackupError, check_target
 
         try:

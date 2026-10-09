@@ -715,3 +715,17 @@ code.temp-password { font-size: 1.15rem; padding: .4rem .6rem; letter-spacing: .
 /* help / markdown tables: columns keep a readable minimum width; a table wider than the page scrolls sideways
    (structurally appropriate for tables) instead of crushing its text into narrow columns */
 .markdown th, .markdown td { min-width: 9rem; vertical-align: top; }
+
+/* ---------- offline access (Change Set S) */
+.offline-mark { display: inline-flex; color: var(--brand); margin-left: 0.15rem; }
+.offline-badge svg { flex: none; }
+.offline-estimate { display: grid; gap: 0.35rem; margin: 0.8rem 0; padding: 0.8rem 1rem; }
+.radio-cards { border: 0; padding: 0; margin: 0.6rem 0; display: grid; gap: 0.5rem; }
+.radio-cards .check { align-items: flex-start; border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.75rem; }
+.radio-cards .check:has(input:checked) { border-color: var(--brand); background: var(--brand-softer); }
+.radio-cards .check input { margin-top: 0.15rem; }
+.meter { height: 6px; border-radius: 999px; background: var(--brand-soft); overflow: hidden; margin: 0.35rem 0; }
+.meter > span { display: block; height: 100%; background: var(--brand); }
+.doc-offline-line { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.pwa-icon-preview { margin: 0; display: grid; justify-items: center; gap: 0.3rem; }
+.pwa-icon-preview img { border-radius: 22%; box-shadow: var(--shadow); }

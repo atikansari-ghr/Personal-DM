@@ -395,3 +395,47 @@ class OcrRun(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class OfflineDevice(models.Model):
+    """One browser or installed app (PWA) of one account that keeps offline copies (Change Set S).
+
+    Offline state is scoped by user + device + folder/document: a selection made on one device never downloads
+    anything on another device or for another account. The id is issued by the server and kept by the device; it
+    is not a secret and grants nothing by itself (every request is still authenticated and authorised)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="offline_devices")
+    label = models.CharField(max_length=80, help_text="Friendly name, e.g. 'Chrome on Windows' or 'iPhone app'")
+    platform = models.CharField(max_length=80, blank=True, help_text="Browser / operating system summary")
+    installed_app = models.BooleanField(default=False, help_text="Running as an installed app (standalone display)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_sync_at = models.DateTimeField(null=True, blank=True)
+    reported_items = models.PositiveIntegerField(default=0)
+    reported_bytes = models.BigIntegerField(default=0)
+    reported_failures = models.PositiveIntegerField(default=0)
+    wipe_requested_at = models.DateTimeField(null=True, blank=True,
+                                             help_text="Remove all protected offline data at the next sync")
+
+    class Meta:
+        ordering = ["-last_sync_at", "-created_at"]
+        indexes = [models.Index(fields=["user", "last_sync_at"])]
+
+
+class OfflineSelection(models.Model):
+    """A folder (optionally with its subfolders) or a single document chosen for offline use on one device."""
+
+    id = models.BigAutoField(primary_key=True)
+    device = models.ForeignKey(OfflineDevice, on_delete=models.CASCADE, related_name="selections")
+    folder = models.ForeignKey(Folder, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    document = models.ForeignKey(Document, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    recursive = models.BooleanField(default=True, help_text="Folder: include all subfolders")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=Q(folder__isnull=False, document__isnull=True) | Q(folder__isnull=True, document__isnull=False),
+                                   name="offline_selection_one_target"),
+            models.UniqueConstraint(fields=["device", "folder"], condition=Q(folder__isnull=False), name="uniq_offline_folder"),
+            models.UniqueConstraint(fields=["device", "document"], condition=Q(document__isnull=False), name="uniq_offline_document"),
+        ]

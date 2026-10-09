@@ -1,13 +1,14 @@
 /// <reference lib="webworker" />
-// Service worker: caches only the static app shell. API responses, documents, previews and public share
-// pages are NEVER put into runtime caches. Explicit offline copies are managed by the page (offline.ts).
+// Service worker: caches only the static app shell (no user data) in "pd-shell-*". API responses, documents,
+// previews and public share pages are NEVER put into runtime caches. Offline copies chosen by a person live in
+// separate per-account caches managed by the page (offline.ts) and are removed at sign-out per policy.
 // It also receives files shared from the OS share sheet (Web Share Target, where supported).
 const sw = self as unknown as ServiceWorkerGlobalScope;
-const SHELL = "pd-shell-v1";
+const SHELL = "pd-shell-v2";
 const INBOX = "pd-share-inbox";
 
 sw.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(SHELL).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icon.svg", "/theme-hint.js"])).then(() => sw.skipWaiting()));
+  event.waitUntil(caches.open(SHELL).then((c) => c.addAll(["/", "/manifest.webmanifest", "/icon.svg", "/icon-192.png", "/apple-touch-icon.png", "/favicon.ico", "/theme-hint.js"])).then(() => sw.skipWaiting()));
 });
 
 sw.addEventListener("activate", (event) => {
@@ -24,7 +25,7 @@ sw.addEventListener("fetch", (event) => {
     return;
   }
   if (event.request.method !== "GET") return;
-  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/s/") || url.pathname.startsWith("/offline/")) return; // never cached
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/s/") || url.pathname.startsWith("/offline/") || url.pathname.startsWith("/offline-text/")) return; // never cached here
   if (url.pathname.startsWith("/static/")) {
     // hashed, immutable build assets: cache-first
     event.respondWith(
@@ -70,7 +71,7 @@ sw.addEventListener("push", (event) => {
   const title = data.title || "Personal Documents";
   event.waitUntil(sw.registration.showNotification(title, {
     body: data.body || "Open the app to read the notification.",
-    icon: "/icon-192.png", badge: "/icon-192.png", tag: data.tag || undefined,
+    icon: "/icon-192.png", badge: "/favicon-32.png", tag: data.tag || undefined,
     requireInteraction: data.severity === "critical",
     data: { url: typeof data.url === "string" && data.url.startsWith("/") && !data.url.startsWith("//") ? data.url : "/notifications" },
   }));

@@ -54,6 +54,7 @@ const paths: Record<string, string> = {
   globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.8 3.8 5.8 3.8 9s-1.3 6.2-3.8 9c-2.5-2.8-3.8-5.8-3.8-9s1.3-6.2 3.8-9z",
   key: "M15 7a4 4 0 1 1-3.9 5H8v3H5v-3H3V9h8.1A4 4 0 0 1 15 7zM15.5 10.5h.01",
   monitor: "M3 4h18v12H3zM8 20h8M12 16v4",
+  offline: "M12 3v10m0 0l-4-4m4 4l4-4M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4M9 18h6",
 };
 export function Icon({ name, size = 20, className }: { name: string; size?: number; className?: string }) {
   return (

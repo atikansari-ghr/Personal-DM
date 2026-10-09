@@ -1,3 +1,5 @@
+import re
+
 from django.conf import settings
 from django.http import FileResponse, Http404, HttpResponse
 from django.urls import path, re_path
@@ -10,6 +12,7 @@ from apps.security import views_av as avv
 from apps.security import views_center as sc
 from apps.core import overview_views as ov
 from apps.core import views as core
+from apps.library import offline as offl
 from apps.library import export, ocr_views as ocrv, views as lib, views_import as imp, views_share as share, views_types as vt
 from apps.mailimport import views as mail
 from apps.notify import views as notify, views_rich as nrich
@@ -17,8 +20,15 @@ from apps.ops import views as ops
 from apps.security import views as sec
 
 
+# Paths that name a file (icons, manifests, scripts…) are never answered with the app page: a missing icon must be a
+# 404, not "200 text/html". Answering /apple-touch-icon.png with HTML is what made iPhones fall back to a letter tile.
+_FILE_EXT = re.compile(r"\.(png|ico|svg|webmanifest|json|js|mjs|css|map|txt|xml|jpe?g|webp|gif|woff2?|ttf)$", re.I)
+
+
 def spa(request, *args, **kwargs):
     """Serve the built single-page app for any non-API route."""
+    if _FILE_EXT.search(request.path):
+        return HttpResponse("Not found", status=404, content_type="text/plain")
     index = settings.FRONTEND_DIST / "index.html"
     if not index.exists():
         return HttpResponse("Frontend not built. Run `npm run build` in frontend/.", status=503, content_type="text/plain")
@@ -209,6 +219,15 @@ api = [
     path("export/download", export.export_download),
     path("offline/validate", export.offline_validate),
     path("offline/audit", export.offline_audit),
+    path("offline/devices", offl.devices),
+    path("offline/devices/<uuid:pk>", offl.device_detail),
+    path("offline/estimate", offl.estimate),
+    path("offline/selections", offl.selections),
+    path("offline/selections/<int:pk>", offl.selection_detail),
+    path("offline/sync", offl.sync),
+    path("admin/offline", offl.admin_overview),
+    path("admin/offline/users/<uuid:pk>", offl.admin_user),
+    path("admin/offline/devices/<uuid:pk>/wipe", offl.admin_device_wipe),
     # notifications
     path("notifications", nrich.notifications),
     path("notifications/read", nrich.mark_read),
