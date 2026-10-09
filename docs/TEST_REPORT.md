@@ -1,6 +1,6 @@
 # Test report
 
-Date: 2026-10-03, updated 2026-10-06 (change sets K and L), 2026-10-07 (change sets M, N, O and P) and 2026-10-08 (change sets Q and R). Revision: the branch head at the commit that adds this file.
+Date: 2026-10-03, updated 2026-10-06 (change sets K and L), 2026-10-07 (change sets M, N, O and P) and 2026-10-08 (change sets Q and R) and 2026-10-09 (change set S). Revision: the branch head at the commit that adds this file.
 
 ## Environment actually used
 
@@ -22,6 +22,7 @@ Date: 2026-10-03, updated 2026-10-06 (change sets K and L), 2026-10-07 (change s
 | `scripts/verify.sh` (compile, `manage.py check`, `makemigrations --check`, settings reference, `bash -n` + shellcheck, pytest, `tsc` + `vite build`, repository hygiene) | **All passed** |
 | `pytest` (`tests/`) | **232 passed**, 0 failed, 0 skipped (OCR and LibreOffice tests ran; 2026-10-05, change set J: `test_browsing_v3` 7, `test_ocr_quality` 6) |
 | Change sets K and L (`tests/test_selective_ocr.py` 11, `tests/test_overview.py` 15, `tests/test_family_setup.py`; full `pytest tests` run on 2026-10-06) | **All passed**; full backend suite: 264 tests passed (`scripts/verify.sh`, which also ran the 18 stubbed installer checks, 17 frontend unit tests, type check, build and privacy check). Selective OCR policy, custom/archived types (409 for built-in or in-use types), source and page selection, front and back as one job, primary source, Remove OCR data and search, re-runs keep confirmed values, English/Arabic/Hindi with missing packs reported, states, review queue permissions, limits, cancel and pause, AI only for permitted types; Overview widgets, layout limits and styles, Gregorian/Hijri in the installation timezone, calendar, Saudi and Indian holidays with status and source, countries and corrections, weather off by default and against a **fake local weather server** (cache, stale, unavailable), sign-in presets, wallpaper upload/rejections/removal, identical sign-in methods; setup with only the Main Administrator, optional members, members added later, earlier six-account installations kept, deactivation keeps documents (DELETE 405) |
+| Change set S (2026-10-09: `tests/test_offline_sync.py` 9, `tests/test_pwa_identity.py` 4; browser `offline.mjs` 9, `pwa.mjs` 4, `themes.mjs` 6, `screenshots.mjs` 5; accessibility audit in 6 themes) | Full backend suite: **all passed** (about 380 passed, 5 skipped live tests, 0 failed). Final `scripts/e2e.sh` from a fresh database: flow 14, accessibility **no serious or critical violations in Default Green, Blue, Dark, Glass Light, Glass Dark and Black & White**, parity, layout **25 PASS, 0 FAIL**, offline **9/9**, PWA **4/4**, themes **6/6**. The screenshot step first failed on false positives of its own privacy gate (a deliberately long synthetic file name); after fixing the rule, flow + parity + screenshots were run again: see below. Defects found and fixed by these tests: Offline page cards squeezed at 390–430 px (layout audit); manifest served as `application/octet-stream`; offline text cache re-created after sign-out by a still-running sync; theme colour applied late on reload |
 | Change set R (`tests/e2e/layout.mjs`, AT-231…AT-245; 2026-10-08) | **25 PASS, 0 FAIL**, 0 layout defects. 27 screens × 7 viewports (1920×1080, 1440×900, 1366×768, 1180×820, 820×1180, 430×932, 390×844); header geometry baseline written and reviewed. Run against the unfixed build: **137 defects, 24 of 25 steps failed**. Full browser suite: flow + accessibility + parity **89 PASS, 0 FAIL**, no serious or critical accessibility violations |
 | Change set Q (`tests/test_ocr_engines_lifecycle.py` 21 incl. 3 live, AT-211…AT-230; 2026-10-08) | **All 21 passed**: 18 via the fake worker protocol, and **3 live against the real PP-OCRv5 runtime** (self-test + document run, Arabic + English, Hindi + English upright). Full backend suite: **372 passed**, 0 failed, 0 skipped (live PP-OCRv5 tests included). `manage.py doctor` with the real runtime: all OCR checks OK, including the inference self-test ("PERSONAL DOCUMENTS OCR SELF TEST 2027" read in 2.6–3.8 s) |
 | `scripts/ocr_engine_benchmark.py` (21 synthetic samples, PP-OCRv5 mobile vs Tesseract 5.3.4; 2026-10-08) | PP-OCRv5 mean character accuracy **98.8 %** vs Tesseract **93.7 %**; English word F1 1.00 vs 0.97; 5.7 vs 2.6 s/page; peak child RSS 1.9 GB vs 0.5 GB. A first run with text-line orientation on read Hindi + English at 20 % (every line flipped), so that option now defaults to off. Real-document categories: **Not Run**. See [benchmark](OCR_BENCHMARK.md#engines) |
@@ -55,14 +56,56 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
-## Acceptance summary (AT-01…AT-245) {#summary}
+## Change set S: offline access, PWA identity, themes, screenshots {#change-set-s}
 
-235 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
+**Investigation and root causes.**
+- *iPhone shows "A" instead of the icon.* It could not be reproduced on a physical device here. Found in the code:
+  - `/apple-touch-icon.png`, `/apple-touch-icon-precomposed.png` and `/favicon.ico` were answered with `200 text/html`
+    (the app page);
+  - there was no 180 px Apple icon and no `apple-mobile-web-app-title`.
+
+  iOS cannot use HTML as an icon and builds a letter tile from the page title. A reverse proxy that requires sign-in
+  for icon files produces the same symptom; `check-access` now tests for it. iOS keeps a shortcut's first icon, so a
+  fresh install is required.
+- *Low-detail screenshots.*
+  - All 50 were captured at 1× with mixed 1366/1440 widths, as side effects of functional tests.
+  - Four had no capture code left and showed older UI.
+  - Now: 1440×900 / 390×844 at 2×, settled, with quality and privacy gates.
+- *Themes.* 165 colour literals made dark/glass themes impossible without white islands. They are replaced by semantic
+  tokens.
+
+**Measured.**
+- Glass themes on a phone viewport: 2 blurred layers (navigation, top bar); about 60 fps scrolling the folder list
+  under 4× CPU throttling in headless Chromium (`tests/e2e/out/themes/effects.json`).
+- Contrast measured on rendered pixels: lowest ratio 5.08:1 (muted text on a card), all ≥ 4.5:1
+  (`tests/e2e/out/themes/contrast.json`).
+
+**Acceptance AT-251…AT-275** (prompt AT-226…AT-250):
+
+| Result | Tests |
+| --- | --- |
+| Passed | AT-251…AT-260, AT-263…AT-266, AT-268…AT-275 |
+| Partly | AT-261: markup and assets passed; a physical iPhone/iPad is **Not Run** |
+| Partly | AT-262: Chromium installability passed; real Android and desktop installs are **Not Run** |
+| Passed in emulation | AT-267: real low-end phones **Not Run** |
+
+**Not run here:**
+- a physical iPhone/iPad, Android device and installed desktop apps;
+- Firefox and Safari;
+- offline use on a real phone in airplane mode;
+- glass performance on real low-end devices;
+- a real Debian 13 upgrade.
+
+These are on the [release checklist](RELEASE_CHECKLIST.md).
+
+## Acceptance summary (AT-01…AT-275) {#summary}
+
+260 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
 
 | Result | Count | Scenarios |
 |---|---|---|
-| Passed (automated tests, or for AT-136 and AT-245 a documented review) | 181 | all scenarios not listed below |
-| Passed in automated tests; real-environment validation pending | 47 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195, 197, 202, 205, 206, 208, 211, 212, 214, 216, 228, 229, 230 |
+| Passed (automated tests, or for AT-136, AT-245, AT-270, AT-272 and AT-274 including a documented review) | 203 | all scenarios not listed below |
+| Passed in automated tests; real-environment validation pending | 50 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195, 197, 202, 205, 206, 208, 211, 212, 214, 216, 228, 229, 230, 261 (physical iPhone/iPad), 262 (real Android/desktop installs), 267 (real low-end phones) |
 | Blocked (external environment) | 5 | AT-14, AT-26; AT-24, AT-27, AT-30 (partly automated, the rest needs a real Debian 13 LXC) |
 | Not run (manual steps, not automated, or no environment) | 2 | AT-15, AT-241 (installed PWA on a real device) |
 

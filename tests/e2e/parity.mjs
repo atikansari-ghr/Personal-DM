@@ -66,7 +66,7 @@ async function signIn(ctx, user = "admin", pw = PW) {
 const PRIVATE_PATTERNS = [
   [/[A-Z0-9._%+-]+@(?!example\.(com|org|net)\b|family\.example\b|test\b|invalid\b|localhost\b)[A-Z0-9.-]+\.[A-Z]{2,}/i, "e-mail address outside example domains"],
   [/\b(?!(?:127|10|192\.0\.2|198\.51\.100|203\.0\.113)\.)(?:\d{1,3}\.){3}\d{1,3}\b/, "IP address outside documentation ranges"],
-  [/\b(?![A-Za-z0-9]*(?:[-_][A-Za-z]{4,}){2})[A-Za-z0-9_-]{40,}\b/, "token-like string"], // file names made of words are not tokens
+  [/(?<![A-Za-z0-9_-])(?![A-Za-z0-9_-]*[-_][A-Za-z]{4,}[-_][A-Za-z]{4,})[A-Za-z0-9_-]{40,}(?![A-Za-z0-9_-])/, "token-like string"], // file names made of words are not tokens
   [/\b(?:ghp|gho|sk|xox[bap])_[A-Za-z0-9]{10,}/, "API key"],
 ];
 async function snap(p, opts) {
