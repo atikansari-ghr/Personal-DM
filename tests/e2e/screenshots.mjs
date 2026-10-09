@@ -94,6 +94,8 @@ await step("AT-270 offline access screens (folder dialog, Offline page, phone)",
   await D.page.goto(BASE + "/offline");
   await D.page.waitForSelector("text=Offline folders");
   await D.page.waitForSelector("[data-offline-status=available]");
+  await D.page.waitForSelector("button:has-text('Sync now')", { timeout: 60000 }); // sync finished
+  await D.page.waitForFunction(() => !document.body.innerText.includes("Not synced yet"));
   await capture(D.page, "offline-access.png", "Offline access on this device: folders, documents, status, storage and Update all");
   await D.page.goto(BASE + "/settings/offline");
   await D.page.waitForSelector("text=People and devices");
@@ -106,8 +108,19 @@ await step("AT-271 document, OCR text, viewer and notifications", async () => {
     if (!(await D.page.locator(".detail-pane .doc-header").count())) await D.page.goto(`${BASE}/documents/${card.id}`);
     await D.page.waitForSelector(".doc-header");
     await capture(D.page, "readme-document.png", "Document with preview, status badges and offline status");
+  }
+  // a document that really has recognised text (parity runs OCR on some and removes it from others)
+  let ocrDoc = null;
+  for (const d of await search("Sample")) {
+    const st = (await api(D.page, `/api/documents/${d.id}/ocr`)).data;
+    if (st && st.state && !["not_processed", "removed", "disabled", "failed", "queued", "processing"].includes(st.state)) { ocrDoc = d; break; }
+  }
+  if (ocrDoc) {
+    await D.page.goto(`${BASE}/documents/${ocrDoc.id}`);
+    await D.page.waitForSelector(".doc-header");
     await D.page.click("[role=tab]:has-text('Text (OCR)')");
     await D.page.waitForSelector(".ocr-panel");
+    await D.page.evaluate(() => { document.querySelector("[role=tablist]").scrollIntoView({ block: "start" }); window.scrollBy(0, -110); });
     await capture(D.page, "readme-ocr.png", "Recognised text with engine, confidence and actions");
   }
   if (photo) {
@@ -140,7 +153,7 @@ await step("AT-273 themes: gallery and each preset on real screens", async () =>
   await D.page.waitForSelector(".theme-grid");
   await D.page.locator(".theme-grid").scrollIntoViewIfNeeded();
   await capture(D.page, "settings-themes.png", "Theme gallery: Default Green, Blue, Dark, Glass Light, Glass Dark, Black & White");
-  for (const [theme, path, file] of [["glass_dark", "/", "theme-glass-dark.png"], ["glass_light", "/folders", "theme-glass-light.png"], ["dark", "/offline", "theme-dark.png"], ["blue", "/", "theme-blue.png"]]) {
+  for (const [theme, path, file] of [["glass_dark", "/folders", "theme-glass-dark.png"], ["glass_light", "/", "theme-glass-light.png"], ["dark", "/offline", "theme-dark.png"], ["blue", "/", "theme-blue.png"]]) {
     await api(D.page, "/api/settings", { method: "PUT", body: { values: { "me.theme": theme } } });
     await D.page.goto(BASE + path);
     await D.page.waitForFunction((t) => document.documentElement.dataset.theme === t, theme);
