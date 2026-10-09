@@ -172,6 +172,13 @@ def device_detail(request, pk):
         dev.delete()
         audit.record("offline.device_removed", request=request, target_type="offline_device", target_id=str(pk))
         return Response(status=204)
+    report = request.data.get("report")
+    if isinstance(report, dict):  # counts after a sync finished (no titles or content)
+        dev.reported_items = max(0, int(report.get("items") or 0))
+        dev.reported_bytes = max(0, int(report.get("bytes") or 0))
+        dev.reported_failures = max(0, int(report.get("failures") or 0))
+        dev.save(update_fields=["reported_items", "reported_bytes", "reported_failures"])
+        return Response(_device_row(dev))
     label = str(request.data.get("label") or "").strip()[:80]
     if not label:
         return Response({"error": "Enter a name for this device."}, status=400)

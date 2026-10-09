@@ -144,9 +144,13 @@ await step("AT-251 offline state is scoped to this account on this device", asyn
   await B.page.waitForSelector("h1:has-text('Offline access')");
   const s = await localState(B.page, B.uid);
   expect(s.items.length === 0 && s.blobs === 0, "second device received offline copies");
-  const devs = (await api(B.page, "/api/offline/devices")).data.devices;
+  let devs = [];
+  for (let i = 0; i < 20 && !devs.some((d) => d.items === 2); i++) {  // the first device reports its counts after its sync
+    devs = (await api(B.page, "/api/offline/devices")).data.devices;
+    if (!devs.some((d) => d.items === 2)) await B.page.waitForTimeout(500);
+  }
   expect(devs.length >= 1, "first device not registered");
-  expect(devs.some((d) => d.items === 2), "device report missing");
+  expect(devs.some((d) => d.items === 2), "device report missing: " + JSON.stringify(devs.map((d) => d.items)));
   await B.ctx.close();
 });
 
@@ -336,7 +340,9 @@ await step("AT-258 sign-out removes protected copies per policy", async () => {
   await A.page.waitForSelector(".sidebar");
   await api(A.page, "/api/settings", { method: "PUT", body: { values: { "offline.logout_policy": "user_choice" } } });
   await A.page.goto(BASE + "/offline");
-  await A.page.waitForFunction((uid) => Object.keys(JSON.parse(localStorage.getItem(`pd-offline-index-${uid}`) || "{}").items || {}).length >= 2, A.uid, { timeout: 20000 });
+  // the device learns the policy at its next sync
+  await A.page.waitForFunction((uid) => { const s = JSON.parse(localStorage.getItem(`pd-offline-index-${uid}`) || "{}");
+    return Object.keys(s.items || {}).length >= 2 && s.policy?.logout_policy === "user_choice"; }, A.uid, { timeout: 20000 });
   await A.page.locator("label:has-text('Keep my offline copies') input").check();
   await signOut(A.page);
   await A.page.waitForSelector("#username");

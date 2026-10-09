@@ -60,6 +60,9 @@ def test_at251_offline_state_is_user_and_device_scoped(family, clients, tree):
     other = clients["daughter"]
     assert other.post("/api/offline/selections", {"device": laptop, "folder": str(tree["trip"].id)}, format="json").status_code == 404
     assert _sync(other, laptop)["known_device"] is False
+    # the device reports its counts after the sync; another account cannot write them
+    assert c.patch(f"/api/offline/devices/{laptop}", {"report": {"items": 2, "bytes": 1234}}, format="json").json()["items"] == 2
+    assert other.patch(f"/api/offline/devices/{laptop}", {"report": {"items": 9}}, format="json").status_code == 404
     assert other.get("/api/offline/devices").json()["devices"] == []
 
 

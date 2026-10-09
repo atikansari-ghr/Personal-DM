@@ -280,7 +280,10 @@ async function doSync(uid: string, opts: { force?: string[] | "all" }): Promise<
       await syncText(uid, it.document, it.text, res.policy.cache_text);
     }
     patch(uid, (s) => ({ ...s, lastSync: res.server_time, lastError: undefined }));
-    api("offline/audit", { body: { action: "update", documents: [] } }).catch(() => undefined);
+    // tell the server what this device holds now (counts and bytes only), for Offline & PWA and "Your other devices"
+    const held = Object.values(current(uid).items);
+    api(`offline/devices/${device}`, { method: "PATCH", body: { report: { items: held.length, bytes: held.reduce((n, i) => n + (i.size || 0), 0),
+      failures: held.filter((i) => i.status === "failed").length } } }).catch(() => undefined);
   } catch (e: any) {
     out.error = e?.message || "Sync failed";
     patch(uid, (s) => ({ ...s, lastError: out.error }));
