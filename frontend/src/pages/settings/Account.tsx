@@ -4,6 +4,7 @@ import { api, formatDate, formatDateTime } from "../../api";
 import PasskeysCard from "../../components/Passkeys";
 import PhotoEditor from "../../components/PhotoEditor";
 import { Reauth, withReauth } from "../../components/Reauth";
+import ThemeGallery from "../../components/ThemeGallery";
 import SettingsForm from "../../components/SettingsForm";
 import { Avatar, CopyButton, Icon, Skeleton, useAsync, useToast } from "../../components/ui";
 import { FolderSelect } from "../../components/UploadDialog";
@@ -35,7 +36,7 @@ function Profile() {
       </form>
       <div className="stack">
         <div className="card"><h2>Profile photo</h2><PhotoEditor user={u} endpoint="me/photo" onChanged={refresh} /></div>
-        <div className="card row between"><div><h3>Offline documents</h3><p className="small muted">Access saved documents without a connection.</p></div><Link className="btn" to="/offline">Manage saved files</Link></div>
+        <div className="card row between"><div><h3>Offline access</h3><p className="small muted">Folders and documents kept on this device for use without a connection.</p></div><Link className="btn" to="/offline">Manage offline access</Link></div>
         <div className="card row between"><div><h3>My activity</h3><p className="small muted">Sign-ins and actions on your account.</p></div><Link className="btn" to="/settings/account?tab=security">View</Link></div>
       </div>
     </div>
@@ -372,7 +373,7 @@ export default function AccountSettings() {
       {tab === "profile" && <Profile />}
       {tab === "security" && <><Security /><AuthentikLink /></>}
       {tab === "linked" && <Linked />}
-      {tab === "appearance" && <SettingsForm section="appearance" title="Appearance"><p className="small muted">Your theme applies to your account on every device. Other family members choose their own. Black & White is a monochrome light theme.</p></SettingsForm>}
+      {tab === "appearance" && <div className="stack"><ThemeGallery /><SettingsForm section="appearance" title="Layout and views" exclude={["me.theme"]} /></div>}
       {tab === "notifications" && <Channels />}
       {tab === "email" && <EmailImports />}
     </div>

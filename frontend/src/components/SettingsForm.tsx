@@ -120,13 +120,13 @@ export function CountryListInput({ value, names, disabled, onChange, label }: { 
   );
 }
 
-export default function SettingsForm({ section, keys, title, children }: { section?: string; keys?: string[]; title?: string; children?: React.ReactNode }) {
+export default function SettingsForm({ section, keys, exclude, title, children }: { section?: string; keys?: string[]; exclude?: string[]; title?: string; children?: React.ReactNode }) {
   const toast = useToast();
   const [defs, setDefs] = useState<SettingDef[] | null>(null);
   const [draft, setDraft] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const load = () => api<{ settings: SettingDef[] }>("settings").then((r) => {
-    setDefs(r.settings.filter((s) => (keys ? keys.includes(s.key) : s.section === section)));
+    setDefs(r.settings.filter((s) => (keys ? keys.includes(s.key) : s.section === section) && !exclude?.includes(s.key)));
     setDraft({});
     setErrors({});
   });

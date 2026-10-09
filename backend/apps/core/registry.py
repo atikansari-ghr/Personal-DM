@@ -69,7 +69,9 @@ class SettingDef:
 
 
 CHANNELS = ("in_app", "email", "telegram", "push")
-THEMES = ("green", "blue", "mono")
+THEMES = ("green", "blue", "dark", "glass_light", "glass_dark", "mono")
+THEME_LABELS = {"green": "Default Green", "blue": "Blue", "dark": "Dark", "glass_light": "Glass Light", "glass_dark": "Glass Dark",
+                "mono": "Black & White"}
 # Tesseract language packs offered for OCR (Debian package tesseract-ocr-<code>)
 _OCR_LANGS = {
     "eng": "English", "ara": "Arabic", "hin": "Hindi (Devanagari)", "urd": "Urdu", "tel": "Telugu", "tam": "Tamil",
@@ -717,7 +719,7 @@ SETTINGS: list[SettingDef] = [
                "offline", min=10, max=100000, help="offline-export#quota"),
     # ---- Per-user
     SettingDef("me.theme", "Theme", "Colour theme for your account on every device.", "choice", "green", "appearance",
-               scope=USER, editable_by=SELF, choices=THEMES, effect="Applies immediately on all your devices.",
+               scope=USER, editable_by=SELF, choices=THEMES, choice_labels=THEME_LABELS, effect="Applies immediately on all your devices.",
                help="themes#choose"),
     SettingDef("me.layout", "Default document layout", "Three-panel browser or full-page viewer.", "choice",
                "three_panel", "appearance", scope=USER, editable_by=SELF, choices=LAYOUTS, help="themes#layout"),

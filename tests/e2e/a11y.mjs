@@ -1,4 +1,4 @@
-// Automated accessibility audit (axe-core, WCAG 2.1 A/AA rules) across the main screens in all three themes,
+// Automated accessibility audit (axe-core, WCAG 2.1 A/AA rules) across the main screens in every theme,
 // plus a keyboard check of the resizable panels. Run against an instance prepared by flow.mjs:
 //   BASE=http://localhost:8000 node tests/e2e/a11y.mjs
 // Fails on any "serious" or "critical" violation; lists moderate/minor ones for information.
@@ -11,7 +11,7 @@ const AXE = fs.readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 const BASE = process.env.BASE || "http://localhost:8000";
 const USER = process.env.A11Y_USER || "admin";
 const PW = process.env.A11Y_PASSWORD || "Sample-Passw0rd!";
-const THEMES = ["green", "blue", "mono"];
+const THEMES = ["green", "blue", "dark", "glass_light", "glass_dark", "mono"];
 const PAGES = [
   ["login", "/login", false],
   ["dashboard", "/", true],
@@ -19,6 +19,7 @@ const PAGES = [
   ["search", "/search?q=sample", true],
   ["notifications", "/notifications", true],
   ["offline", "/offline", true],
+  ["settings-offline-pwa", "/settings/offline", true],
   ["archive", "/archive", true],
   ["settings-account", "/settings/account", true],
   ["settings-security", "/settings/account?tab=security", true],

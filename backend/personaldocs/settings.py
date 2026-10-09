@@ -172,6 +172,8 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [d for d in [FRONTEND_DIST / "assets"] if d.exists()]
 WHITENOISE_ROOT = FRONTEND_DIST if FRONTEND_DIST.exists() else None
+# Installed-app identity files need their proper types (Python's mimetypes has no entry for .webmanifest).
+WHITENOISE_MIMETYPES = {".webmanifest": "application/manifest+json", ".ico": "image/x-icon"}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

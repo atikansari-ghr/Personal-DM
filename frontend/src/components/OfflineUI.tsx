@@ -66,7 +66,7 @@ export function useOfflineMenus() {
 
   const report = (r: { downloaded: number; updated: number; removed: number; failed: number; error?: string }, done: string) => {
     if (r.error) return toast(r.error, "error");
-    toast(r.failed ? `${done} ${r.failed} file(s) could not be downloaded; see Offline files.` : done, r.failed ? "error" : "ok");
+    toast(r.failed ? `${done} ${r.failed} file(s) could not be downloaded; see Offline access.` : done, r.failed ? "error" : "ok");
   };
 
   const folderItems = (f: { id: string; name: string; caps: string[]; path_only?: boolean }): MenuItem[] => {
