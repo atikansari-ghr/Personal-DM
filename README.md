@@ -16,8 +16,8 @@ subscription, and no document ever leaving your hardware.
 
 | | |
 |---|---|
-| ![Folders and preview](docs/images/screenshots/folders-preview.png) *2 · Folders and documents: tree, list and preview* | ![Full-page viewer](docs/images/screenshots/readme-viewer.png) *3 · Viewer: zoom, fit page / width* |
-| ![Offline access](docs/images/screenshots/offline-access.png) *4 · Offline access on this device, per folder or document* | ![Recognised text](docs/images/screenshots/readme-ocr.png) *5 · Local OCR text with engine and confidence* |
+| ![Folders and preview](docs/images/screenshots/folders-preview.png) *2 · Folders and documents: tree, list and preview* | ![Full-page viewer](docs/images/screenshots/document-viewer.png) *3 · Viewer: zoom, fit page / width, pages* |
+| ![Offline access](docs/images/screenshots/offline-access.png) *4 · Offline access on this device, per folder or document* | ![OCR review](docs/images/screenshots/ocr-review.png) *5 · Local OCR: suggested details to accept, correct or reject* |
 | ![Notification Center](docs/images/screenshots/readme-notifications.png) *6 · Notification Center* | ![Security Health](docs/images/screenshots/readme-security.png) *7 · Security Health, antivirus and storage* |
 | ![Theme gallery](docs/images/screenshots/settings-themes.png) *8 · Themes: Default Green, Blue, Dark, Glass Light, Glass Dark* | ![Glass Dark theme](docs/images/screenshots/theme-glass-dark.png) *Glass Dark* |
 

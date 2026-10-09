@@ -109,20 +109,7 @@ await step("AT-271 document, OCR text, viewer and notifications", async () => {
     await D.page.waitForSelector(".doc-header");
     await capture(D.page, "readme-document.png", "Document with preview, status badges and offline status");
   }
-  // a document that really has recognised text (parity runs OCR on some and removes it from others)
-  let ocrDoc = null;
-  for (const d of await search("Sample")) {
-    const st = (await api(D.page, `/api/documents/${d.id}/ocr`)).data;
-    if (st && st.state && !["not_processed", "removed", "disabled", "failed", "queued", "processing"].includes(st.state)) { ocrDoc = d; break; }
-  }
-  if (ocrDoc) {
-    await D.page.goto(`${BASE}/documents/${ocrDoc.id}`);
-    await D.page.waitForSelector(".doc-header");
-    await D.page.click("[role=tab]:has-text('Text (OCR)')");
-    await D.page.waitForSelector(".ocr-panel");
-    await D.page.evaluate(() => { document.querySelector("[role=tablist]").scrollIntoView({ block: "start" }); window.scrollBy(0, -110); });
-    await capture(D.page, "readme-ocr.png", "Recognised text with engine, confidence and actions");
-  }
+  // The OCR story uses parity's ocr-review.png (a fresh, high-confidence recognition with suggested details).
   if (photo) {
     await D.page.goto(`${BASE}/documents/${photo.id}`);
     await D.page.waitForSelector(".viewer");
