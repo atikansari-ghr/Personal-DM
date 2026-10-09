@@ -55,7 +55,7 @@ async function capture(page, file, caption) {
     if (document.documentElement.scrollWidth > innerWidth + 1) issues.push("page scrolls sideways");
     for (const img of document.images) if (img.offsetParent && img.complete && img.naturalWidth === 0) issues.push(`broken image ${img.getAttribute("src")}`);
     for (const el of document.querySelectorAll("h1, h2, h3, .btn, .badge, .nav a, label")) {
-      if (!el.offsetParent) continue;
+      if (!el.offsetParent || el.closest(".sr-only")) continue; // visually hidden labels for screen readers are 1 px on purpose
       const cs = getComputedStyle(el);
       if (cs.overflow === "hidden" && cs.textOverflow !== "ellipsis" && el.scrollWidth > el.clientWidth + 2) issues.push(`clipped text: ${el.textContent.trim().slice(0, 40)}`);
     }
