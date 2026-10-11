@@ -11,6 +11,7 @@ export default function HelpPage() {
   const { slug } = useParams();
   const loc = useLocation();
   const [q, setQ] = useState("");
+  const [navOpen, setNavOpen] = useState(false); // phone/tablet: the list is rendered only while "Browse guides" is open
   const [query, setQuery] = useState("");
   useEffect(() => { const t = setTimeout(() => setQuery(q), 250); return () => clearTimeout(t); }, [q]);
   const index = useAsync(() => api<{ guides: Guide[]; categories: string[]; version: string }>("help", { query: { q: query } }), [query]);
@@ -52,7 +53,7 @@ export default function HelpPage() {
     <div className="help-layout docs">
       <aside className="card help-nav" aria-label="Documentation">
         <h2>Help & documentation</h2>
-        <details className="help-nav-mobile"><summary>Browse guides</summary>{nav}</details>
+        <details className="help-nav-mobile" onToggle={(e) => setNavOpen((e.currentTarget as HTMLDetailsElement).open)}><summary>Browse guides</summary>{navOpen && nav}</details>
         <div className="help-nav-desktop">{nav}</div>
         <p className="small muted">Personal Documents Management System {all.data?.version} by Atik Ansari. The guides are bundled with the app and match this version.</p>
       </aside>
