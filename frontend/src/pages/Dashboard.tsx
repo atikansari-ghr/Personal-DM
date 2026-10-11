@@ -7,6 +7,7 @@ import { useSession } from "../session";
 import FileTypeIcon from "../components/FileTypeIcon";
 import { ActivityWidget, CalendarWidget, DateWidget, DocList, HolidaysWidget, SummaryWidget, WeatherWidget } from "../components/OverviewWidgets";
 import { HealthSummary } from "./settings/SecurityCenter";
+import { HealthBadge } from "./settings/Backup";
 import type { DocRow, User, WidgetCfg } from "../types";
 
 function greeting() {
@@ -43,16 +44,16 @@ export function DocTable({ docs, empty }: { docs: DocRow[]; empty: string }) {
 export const WIDGET_LABELS: Record<string, string> = {
   date: "Today (Gregorian + Hijri)", weather: "Weather", summary: "Documents summary", calendar: "Month calendar",
   holidays: "Upcoming holidays", upcoming: "Expiring soon", shared: "Shared with me", recent: "Recent documents",
-  activity: "Recent activity", review_queue: "Review queue", backup: "Backup status", family: "Family library",
+  activity: "Recent activity", review_queue: "Review queue", backup: "Backup & Recovery Health", my_recovery: "My Recovery", family: "Family library",
   saved_views: "Saved views", documents: "Documents (count)", members: "Family members (count)",
   expiring: "Expiring in 90 days (count)", storage: "Storage used", review: "Needs review (count)",
   security: "Security Health",
 };
-export const DEFAULT_WIDGETS = ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity", "review_queue", "backup", "security"];
+export const DEFAULT_WIDGETS = ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity", "review_queue", "backup", "my_recovery", "security"];
 const STYLE_LABELS: Record<string, string> = { rect: "Rectangular", compact: "Compact rectangular", circle: "Circular", compact_circle: "Compact circular" };
 const WIDGET_ICON: Record<string, string> = {
   date: "calendar", weather: "cloud-sun", summary: "grid", calendar: "calendar", holidays: "gift", upcoming: "clock", shared: "share",
-  recent: "file", activity: "list", review_queue: "eye", backup: "db", family: "users", saved_views: "list",
+  recent: "file", activity: "list", review_queue: "eye", backup: "db", my_recovery: "refresh", family: "users", saved_views: "list",
   documents: "file", members: "users", expiring: "clock", storage: "db", review: "eye", security: "shield",
 };
 const LINKS: Record<string, [string, string]> = {
@@ -168,15 +169,20 @@ export default function Dashboard() {
     ) : <div className="ov-empty small">Mark a saved view “Show on Overview” to see it here.</div>,
     review_queue: () => data.review.length > 0 ? <DocTable docs={data.review} empty="" /> : (editing ? <div className="ov-empty small">Nothing waits for review.</div> : null),
     security: () => data.security_health ? <HealthSummary h={data.security_health} compact /> : null,
-    backup: () => data.admin ? (
-      <div className="row between">
-        <div className="row">
-          <Icon name={data.admin.backup.last_success && !data.admin.backup.last_error ? "check" : "info"} />
-          <strong>{data.admin.backup.last_success ? (data.admin.backup.last_error ? "Last backup failed" : "Last backup successful") : "No backup yet"}</strong>
-          <span className="muted">{data.admin.backup.last_success ? formatDateTime(data.admin.backup.last_success) : "Configure a NAS destination in Settings → Storage & backup."}</span>
-          {data.admin.failed_jobs > 0 && <span className="badge danger">{data.admin.failed_jobs} failed jobs</span>}
-        </div>
-        <Link to="/settings/storage" className="small">View activity ›</Link>
+    backup: () => data.admin ? (data.admin.backup_health ? (
+      <div className="stack backup-widget" data-health={data.admin.backup_health.state}>
+        <div className="row between"><HealthBadge state={data.admin.backup_health.state} label={data.admin.backup_health.label} />
+          <span className="small muted">{data.admin.backup_health.latest_verified ? `${data.admin.backup_health.latest_verified.kind === "full" ? "Full" : "Incremental"} · ${formatDateTime(data.admin.backup_health.latest_verified.created_at)}` : "No verified recovery point yet"}</span></div>
+        <div className="small">Latest Full: {data.admin.backup_health.latest_full ? formatDateTime(data.admin.backup_health.latest_full.created_at) : "—"} · Destinations: {data.admin.backup_health.destinations.filter((d: any) => d.health === "healthy").length}/{data.admin.backup_health.destinations.length} healthy · Readiness: {data.admin.backup_health.readiness.label} · {data.admin.backup_health.validation.label.replace("Recovery Validation: ", "Validation: ")}</div>
+        {data.admin.backup_health.warnings.slice(0, 3).map((w: string) => <div key={w} className="small"><Icon name="alert" size={14} /> {w}</div>)}
+        <div className="row small" style={{ gap: 12 }}><Link to="/settings/backup">Backups</Link><Link to="/recovery">Recovery Explorer</Link>{data.admin.failed_jobs > 0 && <span className="badge danger">{data.admin.failed_jobs} failed jobs</span>}</div>
+      </div>
+    ) : <div className="ov-empty small">Backup health is unavailable.</div>) : null,
+    my_recovery: () => data.my_recovery ? (
+      <div className="stack">
+        <div className="row"><Icon name={data.my_recovery.protected ? "check" : "alert"} /><strong>{data.my_recovery.protected ? "Your documents are protected" : "Not protected yet"}</strong></div>
+        <span className="small muted">{data.my_recovery.last_successful_backup ? `Last successful backup ${formatDateTime(data.my_recovery.last_successful_backup)} · ${data.my_recovery.points_available} recovery point(s)` : data.my_recovery.message}</span>
+        <Link to="/recovery" className="small">Recovery Explorer ›</Link>
       </div>
     ) : null,
   };

@@ -281,8 +281,50 @@ the Home Screen), go to **My account → Notifications → Push notifications on
 device** and **Send test push**, then tick **Push** for the events you want. **Lock-screen detail** decides what the
 lock screen shows (Minimal, Standard or Detailed). Repeat on each device.
 
+**Routing, quiet hours and digests.** Under **My account → Notifications → Routing**:
+
+- choose the channels for each category at once (Security, Backup & Recovery, Documents, Reminders, …);
+- add a **fallback chain**, for example *Telegram, then Email*. The fallback is used once, only when the first channel
+  fails;
+- set **Quiet Hours**. Normal messages wait until morning; critical ones still arrive;
+- pick a daily or weekly **digest** per category.
+
+**My deliveries** shows where each of your messages went and whether it arrived.
+
+**Discord and WhatsApp Personal**, if your administrator turned them on:
+
+- **Discord:** add your own Discord webhook ([Discord](guides/discord.md)).
+- **WhatsApp Personal (experimental):** link your phone with a QR code, like WhatsApp Web. It sends notifications only
+  to your own number ([WhatsApp Personal](guides/whatsapp-personal.md)).
+
+Neither is turned on until you set it up.
+
 See [notifications](guides/notifications.md), [push](guides/notifications.md#push) and
 [critical and optional notifications](guides/expiry-rules.md#critical).
+
+### Sign-in security {#signin-security}
+
+**My account → Sign-in security** shows your recent sign-ins on a map and in a list. Each sign-in shows its location
+(your home network appears by its Trusted Zone name, for example *Home*), device and risk level, with **Why**.
+
+Under **Recognised devices**, use **Mark Unrecognized** for a device you do not know. That device is signed out at
+once and is never trusted again. You are then offered next steps, such as changing your password.
+
+See [sign-in security and map](guides/security-map.md).
+
+### Recovering deleted documents or older versions {#recovery}
+
+Open **Recovery** in the menu. The Recovery Explorer lists what you may recover from the encrypted backups: your own
+documents and the ones you can see today.
+
+1. Pick a date.
+2. Choose a document, a version or a folder.
+3. Review the **impact analysis**.
+4. Choose what happens when the item still exists: **Keep both** (default), **Replace** or **Skip**.
+
+The **My Recovery** card on the Overview shows when your documents were last protected.
+
+See [backup and restore](guides/backup-restore.md).
 
 ## 12. Archive {#archive}
 

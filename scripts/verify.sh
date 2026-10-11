@@ -19,6 +19,9 @@ step "Migrations are up to date"
 step "Settings reference is current"
 (cd backend && PD_DEBUG=1 ../$PY manage.py settings_reference --check)
 
+step "Documentation (links, anchors, screenshots, help links, review dates)"
+$PY scripts/check_docs.py
+
 step "Shell scripts"
 bash -n scripts/personaldocs scripts/verify.sh scripts/dev-server.sh scripts/easy-install.sh scripts/proxmox-create-lxc.sh
 if command -v shellcheck >/dev/null; then shellcheck -S warning personal-DM.sh; shellcheck -S error scripts/personaldocs scripts/verify.sh scripts/dev-server.sh scripts/easy-install.sh scripts/proxmox-create-lxc.sh; fi

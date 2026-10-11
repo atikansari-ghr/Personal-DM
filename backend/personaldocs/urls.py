@@ -16,8 +16,9 @@ from apps.library import offline as offl
 from apps.library import export, ocr_views as ocrv, views as lib, views_import as imp, views_share as share, views_types as vt
 from apps.mailimport import views as mail
 from apps.notify import views as notify, views_rich as nrich
-from apps.ops import views as ops
+from apps.ops import bk_views as bk, views as ops
 from apps.security import views as sec
+from apps.security import views_signins as signin
 
 
 # Paths that name a file (icons, manifests, scripts…) are never answered with the app page: a missing icon must be a
@@ -241,6 +242,12 @@ api = [
     path("notifications/test", notify.test_channel),
     path("notifications/deliveries", nrich.delivery_history),
     path("notifications/problems", notify.delivery_problems),
+    path("notifications/routing", notify.my_routing),
+    path("notifications/discord", notify.my_discord),
+    path("notifications/whatsapp", notify.my_whatsapp),
+    path("notifications/channel-test", notify.my_channel_test),
+    path("notifications/my-deliveries", notify.my_deliveries),
+    path("notifications/health", notify.delivery_health),
     path("notifications/preview", notify.template_preview),
     path("notifications/run", notify.run_reminders_now),
     # settings, admin, ops
@@ -254,8 +261,38 @@ api = [
     path("backup", ops.backup_status),
     path("backup/run", ops.backup_now),
     path("backup/nas", ops.nas_api),
+    # Backup & Recovery (Change Set T)
+    path("backup/overview", bk.overview),
+    path("backup/stepup", bk.stepup),
+    path("backup/stepup/options", bk.stepup_options),
+    path("backup/policies", bk.policies),
+    path("backup/policies/<int:pk>", bk.policy_detail),
+    path("backup/destinations", bk.destinations),
+    path("backup/destinations/<int:pk>", bk.destination_detail),
+    path("backup/destinations/<int:pk>/test", bk.destination_test),
+    path("backup/now", bk.run_now),
+    path("backup/points/<uuid:pk>/delete", bk.point_delete),
+    path("backup/points/<uuid:pk>/download", bk.point_download),
+    path("backup/points/<uuid:pk>/<str:action>", bk.point_action),
+    path("backup/key/reveal", bk.key_reveal),
+    path("backup/key/rotate", bk.key_rotate),
+    path("backup/emergency", bk.emergency_export),
+    path("backup/post-recovery", bk.post_recovery),
+    path("recovery/points", bk.recovery_points),
+    path("recovery/points/<uuid:pk>", bk.recovery_explore),
+    path("recovery/points/<uuid:pk>/compare/<uuid:doc>", bk.recovery_compare),
+    path("recovery/restore", bk.recovery_restore),
+    path("recovery/runs", bk.recovery_runs),
+    path("recovery/runs/<uuid:pk>", bk.recovery_run_detail),
+    path("recovery/mine", bk.my_recovery),
     path("integrity", ops.integrity_api),
     path("admin/security/logins", sec.logins),
+    path("security/zones", signin.zones),
+    path("security/zones/<int:pk>", signin.zone_detail),
+    path("security/zones/test", signin.zone_test),
+    path("security/map", signin.signin_map),
+    path("security/devices", signin.devices),
+    path("security/devices/<uuid:pk>/unrecognize", signin.device_unrecognize),
     path("admin/security/policy", sec.access_policy),
     path("admin/security/policy/rollback", sec.access_policy_rollback),
     path("admin/security/policy/test", sec.access_policy_test),
@@ -268,6 +305,7 @@ api = [
     path("admin/security/traffic", sec.traffic_api),
     path("admin/security/traffic/report.html", sec.traffic_html),
     path("help", core.help_index),
+    path("help/asset/<path:path>", core.help_asset),
     path("help/<str:slug>", core.help_guide),
 ]
 

@@ -4,6 +4,8 @@
 
 Every uploaded file is stored byte-for-byte as an ordinary file on the server, made read-only, with a SHA-256 checksum. OCR and previews create separate copies; the original is never altered.
 
+![A document with its preview, status badges, versions and offline status](../images/screenshots/readme-document.png)
+
 ## Better scan or renewal? {#version-or-renewal}
 
 | Situation | Use | Result |

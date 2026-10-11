@@ -47,25 +47,38 @@ def test_daily_weekly_monthly_occurrences(family):
 
 
 def test_at71_scheduler_runs_each_schedule_once_survives_restart_and_catches_up(family, tmp_path):
+    """Change Set T: the legacy backup folder is adopted as a destination + policy (same schedule); scheduled runs are
+    encrypted Full recovery points (job kind backup_point)."""
+    from apps.ops.models import BackupPolicy
+
     config.set_value("general.timezone", "Asia/Riyadh")
     config.set_value("backup.target", str(tmp_path))
+    config.set_value("backup.require_mount", False)
     config.set_value("backup.schedule_time", "02:30")
     config.set_value("backup.frequency", "weekly")
     config.set_value("backup.weekday", "wed")
-    assert _tick(at(2026, 10, 7, 2, 0)) == 0  # Wednesday, before the time
-    assert _tick(at(2026, 10, 7, 2, 31)) == 1
-    assert _tick(at(2026, 10, 7, 2, 32)) == 1  # not twice (state is in the database, so a restart is the same)
-    assert _tick(at(2026, 10, 8, 2, 31)) == 1  # Thursday: nothing
+
+    def full_jobs(now):
+        _tick(now)
+        return Job.objects.filter(kind="backup_point", payload__kind="full").count()
+
+    assert full_jobs(at(2026, 10, 7, 2, 0)) == 0  # Wednesday, before the time
+    pol = BackupPolicy.objects.get()
+    assert (pol.full_frequency, pol.full_weekday, pol.full_time, pol.incremental_hours) == ("weekly", "wed", "02:30", 0)
+    assert full_jobs(at(2026, 10, 7, 2, 31)) == 1
+    assert full_jobs(at(2026, 10, 7, 2, 32)) == 1  # not twice (state is in the database, so a restart is the same)
+    assert full_jobs(at(2026, 10, 8, 2, 31)) == 1  # Thursday: nothing
     # server off over the scheduled time: the missed backup runs once at the next tick
-    assert _tick(at(2026, 10, 15, 9, 0)) == 2
-    assert _tick(at(2026, 10, 15, 9, 1)) == 2
-    config.set_value("backup.frequency", "monthly")
-    config.set_value("backup.month_day", 31)
-    assert _tick(at(2026, 10, 30, 3, 0)) == 2
-    assert _tick(at(2026, 10, 31, 3, 0)) == 3
-    assert _tick(at(2026, 11, 30, 3, 0)) == 4  # 30 November stands in for the 31st
-    config.set_value("backup.enabled", False)
-    assert _tick(at(2026, 12, 31, 3, 0)) == 4
+    assert full_jobs(at(2026, 10, 15, 9, 0)) == 2
+    assert full_jobs(at(2026, 10, 15, 9, 1)) == 2
+    pol.full_frequency, pol.full_month_day = "monthly", 31
+    pol.save()
+    assert full_jobs(at(2026, 10, 30, 3, 0)) == 2
+    assert full_jobs(at(2026, 10, 31, 3, 0)) == 3
+    assert full_jobs(at(2026, 11, 30, 3, 0)) == 4  # 30 November stands in for the 31st
+    pol.enabled = False
+    pol.save()
+    assert full_jobs(at(2026, 12, 31, 3, 0)) == 4
 
 
 def test_backup_status_shows_schedule_next_run_and_retention(family, clients, tmp_path):

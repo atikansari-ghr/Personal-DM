@@ -545,20 +545,26 @@ await step("AT-68 optional notification matrix persists; critical events locked"
 });
 
 await step("AT-71 backup frequency shows the right fields and the next run", async () => {
-  await page.goto(BASE + "/settings/storage");
-  await page.waitForSelector("#s-backup\\.frequency");
-  await page.selectOption("#s-backup\\.frequency", "weekly");
-  await page.waitForSelector("#s-backup\\.weekday");
-  expect(await page.locator("#s-backup\\.month_day").count() === 0, "month day hidden for weekly");
-  await page.selectOption("#s-backup\\.frequency", "monthly");
-  await page.waitForSelector("#s-backup\\.month_day");
-  await page.fill("#s-backup\\.month_day", "31");
-  await page.click("section.card:has(#s-backup\\.frequency) button:has-text('Save settings')");
-  await page.waitForSelector(".toast:has-text('Settings saved')");
+  // Change Set T: the schedule lives in Settings -> Backup & Recovery -> Policies & schedule
+  await page.goto(BASE + "/settings/backup?view=policies");
+  await page.click("button:has-text('Add policy')");
+  await page.fill("#pol-name", "Parity schedule");
+  await page.selectOption("#pol-freq", "weekly");
+  await page.waitForSelector("#pol-day");
+  expect(await page.locator("#pol-md").count() === 0, "month day hidden for weekly");
+  await page.selectOption("#pol-freq", "monthly");
+  await page.waitForSelector("#pol-md");
+  expect(await page.locator("#pol-day").count() === 0, "weekday hidden for monthly");
+  await page.fill("#pol-md", "31");
+  await page.click("[role=dialog] button:has-text('Save')");
+  await page.waitForSelector("td:has-text('Monthly on day 31')");
   await page.reload();
-  await page.waitForSelector("text=Monthly on day 31");
+  await page.waitForSelector("td:has-text('Monthly on day 31')");
   await snap(page, { path: `${SHOTS}/settings-backup.png` });
-  await api(page, "/api/settings", { method: "PUT", body: { values: { "backup.frequency": "daily", "backup.month_day": 1 } } });
+  // leave no policy behind: the recovery suite starts from an unconfigured installation
+  expect((await api(page, "/api/backup/stepup", { body: { password: PW } })).status === 200, "step-up");
+  const ov = await api(page, "/api/backup/overview");
+  for (const pol of ov.data.policies) expect((await api(page, `/api/backup/policies/${pol.id}`, { method: "DELETE" })).status === 204, "policy removed");
 });
 
 await step("AT-63/64 import into a chosen sub-folder with the exact final hierarchy", async () => {

@@ -81,10 +81,39 @@ def channel_issue(user, channel: str) -> str | None:
             return "Push notifications are turned off by the administrator."
         if not user.push_subscriptions.exists():
             return "No device is registered for push notifications."
+    if channel == "discord":
+        if not config.get("discord.enabled"):
+            return "Discord is turned off by the administrator."
+        hook = getattr(user, "discord_webhook", None) if _has(user, "discord_webhook") else None
+        if hook is None or not hook.enabled:
+            return "Discord webhook not added."
+        if hook.status == "removed_by_discord":
+            return "Discord webhook was deleted in Discord."
+    if channel == "whatsapp":
+        if not config.get("whatsapp.enabled"):
+            return "WhatsApp Personal is turned off by the administrator."
+        link = getattr(user, "whatsapp_link", None) if _has(user, "whatsapp_link") else None
+        if link is None or not link.enabled:
+            return "WhatsApp is not linked."
+        if link.state != "connected":
+            return "WhatsApp needs to be reconnected." if link.state == "reconnect_required" else "WhatsApp is disconnected."
     return None
 
 
+def _has(user, rel: str) -> bool:
+    try:
+        getattr(user, rel)
+        return True
+    except Exception:  # noqa: BLE001 - RelatedObjectDoesNotExist
+        return False
+
+
+MAIN_ADMIN_PREFIXES = ("backup.", "recovery.")
+
+
 def applies_to(user, key: str) -> bool:
+    if key.startswith(MAIN_ADMIN_PREFIXES) and key != "recovery.restore":
+        return bool(user.is_main_admin)  # backups contain everyone's data: main administrator only
     return not EVENTS[key].admins_only or user.is_main_admin or getattr(user, "is_admin", False)
 
 
@@ -95,6 +124,10 @@ def channel_configured(channel: str) -> bool:
         return bool(config.get("telegram.enabled"))
     if channel == "push":
         return bool(config.get("notifications.push_enabled"))
+    if channel == "discord":
+        return bool(config.get("discord.enabled"))
+    if channel == "whatsapp":
+        return bool(config.get("whatsapp.enabled"))
     return True
 
 

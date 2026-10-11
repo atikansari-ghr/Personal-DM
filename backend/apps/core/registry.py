@@ -68,7 +68,7 @@ class SettingDef:
         }
 
 
-CHANNELS = ("in_app", "email", "telegram", "push")
+CHANNELS = ("in_app", "email", "telegram", "push", "discord", "whatsapp")
 THEMES = ("green", "blue", "dark", "glass_light", "glass_dark", "mono")
 THEME_LABELS = {"green": "Default Green", "blue": "Blue", "dark": "Dark", "glass_light": "Glass Light", "glass_dark": "Glass Dark",
                 "mono": "Black & White"}
@@ -96,7 +96,8 @@ WIDGETS = {
     "recent": "Recent documents",
     "upcoming": "Upcoming expiries",
     "review_queue": "Review queue",
-    "backup": "Backup status (administrators)",
+    "backup": "Backup & Recovery Health (main administrator)",
+    "my_recovery": "My Recovery",
     "date": "Today (Gregorian + Hijri date)",
     "weather": "Weather",
     "summary": "Documents summary",
@@ -108,7 +109,7 @@ WIDGETS = {
 }
 # What a new account sees first (existing accounts keep the widgets they chose).
 DEFAULT_WIDGETS = ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity",
-                   "review_queue", "backup", "security"]
+                   "review_queue", "backup", "my_recovery", "security"]
 STAT_WIDGETS = ("documents", "members", "expiring", "storage", "review")
 
 
@@ -412,6 +413,23 @@ SETTINGS: list[SettingDef] = [
                help="telegram#setup"),
     SettingDef("telegram.bot_token", "Telegram bot token", "Token from @BotFather. Stored encrypted.", "secret", "",
                "connections", help="telegram#setup"),
+    # Change Set T: Discord (official webhooks, one per person) and WhatsApp Personal (experimental bridge)
+    SettingDef("discord.enabled", "Discord webhooks", "Let people send their own notifications to a Discord channel through an "
+               "official Discord webhook they add in My account → Notifications. Each webhook is stored encrypted.", "bool", False,
+               "connections", effect="When off, Discord delivery stops for everyone; saved webhooks are kept.", help="discord#setup"),
+    SettingDef("whatsapp.enabled", "WhatsApp Personal (experimental, unofficial)",
+               "Optional self-hosted bridge that links each person's own WhatsApp account as a linked device and sends them their "
+               "Personal DM notifications. It is not the WhatsApp Business Platform and is not supported or endorsed by WhatsApp "
+               "or Meta; WhatsApp may disconnect linked devices at any time.", "bool", False, "connections",
+               effect="Install the bridge first (sudo personaldocs whatsapp-bridge install). Off by default; never enabled automatically.",
+               help="whatsapp-personal#enable"),
+    SettingDef("whatsapp.bridge_url", "WhatsApp bridge address", "Local address of the personaldocs-whatsapp service. Only "
+               "loopback addresses are accepted.", "url", "http://127.0.0.1:8095", "connections", depends_on=("whatsapp.enabled",),
+               max=100, help="whatsapp-personal#bridge"),
+    SettingDef("notifications.fallback_after_attempts", "Fall back after failed attempts",
+               "When a person set a fallback chain (for example WhatsApp → Telegram → Email), the next channel is tried after this "
+               "many failed delivery attempts. A disconnected channel falls back at once.", "int", 2, "notifications", min=1, max=5,
+               help="notifications#fallback"),
     SettingDef("telegram.bot_username", "Telegram bot username", "Used to build the link shown to users.", "str", "",
                "connections", max=64, help="telegram#setup", example="MyFamilyDocsBot"),
     SettingDef("whatsapp.status", "WhatsApp", "Personal WhatsApp notifications are a later-phase feature.", "choice",
@@ -478,7 +496,7 @@ SETTINGS: list[SettingDef] = [
                validator=_validate_plain, help="backup-restore#nas"),
     SettingDef("nas.version", "Protocol version", "NFS version (3, 4, 4.1) or SMB dialect (3.0, 2.1).", "str", "", "storage",
                max=10, validator=_validate_version, help="backup-restore#nas", example="4.1"),
-    SettingDef("backup.target", "Backup destination", "Mounted NAS/file-share path for backups.", "path", "",
+    SettingDef("backup.target", "Legacy backup folder", "Folder of backups made before encrypted recovery points (format 1). New backups use Backup & Recovery destinations; this value was migrated into a destination.", "path", "",
                "storage", effect="Backups are refused when this path is not a mount point or lacks the marker file.",
                help="backup-restore#target", example="/mnt/nas-backup/personaldocs"),
     SettingDef("backup.require_mount", "Require mounted destination",
@@ -495,15 +513,31 @@ SETTINGS: list[SettingDef] = [
                choices=("mon", "tue", "wed", "thu", "fri", "sat", "sun"), depends_on=("backup.frequency",), help="backup-restore#schedule"),
     SettingDef("backup.month_day", "Day of the month", "Used when the frequency is monthly. 29–31 run on the last day of shorter months.",
                "int", 1, "storage", min=1, max=31, depends_on=("backup.frequency",), help="backup-restore#schedule", example="1"),
-    SettingDef("backup.keep_daily", "Backups to keep", "Number of most recent successful backups retained, whatever the frequency (proposed default, not a user decision).",
+    SettingDef("backup.keep_daily", "Legacy backups to keep", "Only for the old folder backups (format 1). Encrypted recovery points use the policy retention (default 4 weeks).",
                "int", 14, "storage", min=1, max=365, effect="Older backups beyond this count are pruned; the newest verified backup is never pruned.",
                help="backup-restore#retention"),
     SettingDef("backup.include_keys", "Include encryption key in backup",
                "Include the integration-secret encryption key so restores can decrypt SMTP/Telegram/email credentials. Protect the backup share accordingly.",
                "bool", True, "storage", help="backup-restore#keys"),
+    SettingDef("recovery.validation_database", "Recovery validation database",
+               "PostgreSQL URL of a SEPARATE, isolated database used only for Automated Recovery Validation "
+               "(postgresql://user:password@host:5432/dbname). Stored encrypted. Leave empty to keep validation off.",
+               "secret", "", "storage", help="backup-restore#validation", example="postgresql://pdvalidate:…@192.0.2.20/pd_validation"),
+    SettingDef("recovery.validation_dir", "Recovery validation folder",
+               "Empty folder for the restored files during validation (must not be the production data folder).",
+               "path", "", "storage", help="backup-restore#validation", example="/srv/pd-validation"),
     SettingDef("audit.retention_days", "Audit log retention (days)", "Audit events older than this are deleted. 0 keeps forever.",
                "int", 730, "activity", min=0, max=36500, help="settings#activity"),
     # ---- Security & access
+    SettingDef("security.map_enabled", "Sign-in map", "Show sign-ins on a map (Trusted Zone pins and approximate GeoIP "
+               "positions). Uses online map tiles; sign-in addresses are never sent to the tile server or a geolocation service.",
+               "bool", True, "security", help="security-map#map"),
+    SettingDef("security.map_tile_url", "Map tile server", "Address template of a privacy-conscious tile server (https, with "
+               "{z}/{x}/{y}). The browser requests ordinary picture tiles from it.", "url",
+               "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "security", depends_on=("security.map_enabled",), max=300,
+               validator=lambda v: _validate_tiles(v), help="security-map#tiles", example="https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+    SettingDef("security.map_attribution", "Map attribution", "Credit line required by the tile provider.", "str",
+               "© OpenStreetMap contributors", "security", depends_on=("security.map_enabled",), max=200, help="security-map#tiles"),
     SettingDef("security.login_audit_retention_days", "Login audit retention (days)",
                "Sign-in records older than this are deleted by the nightly maintenance. 0 keeps them forever.",
                "int", 365, "security", min=0, max=3650, effect="Applies at the next nightly maintenance run.",
@@ -750,7 +784,60 @@ SETTINGS: list[SettingDef] = [
                {}, "appearance_hidden", scope=USER, editable_by=SELF, help="overview#customize"),
     SettingDef("me.weather_city", "Weather city", "City for your weather widget.", "json", None, "appearance_hidden",
                scope=USER, editable_by=SELF, help="overview#weather"),
+    # Change Set T: routing, fallback, quiet hours and digests (per person)
+    SettingDef("me.notification_routing", "Notification routing", "Per category: fallback chain (first available channel "
+               "wins) and delivery (immediately, daily or weekly digest).", "json", {}, "my_notifications_hidden", scope=USER,
+               editable_by=SELF, validator=lambda v: _validate_routing(v), help="notifications#routing"),
+    SettingDef("me.quiet_hours", "Quiet hours", "Hold normal notifications on external channels during these hours. Critical "
+               "security and backup alerts are never held.", "json", {"enabled": False, "start": "22:00", "end": "07:00"},
+               "my_notifications_hidden", scope=USER, editable_by=SELF, validator=lambda v: _validate_quiet(v), help="notifications#quiet-hours"),
+    SettingDef("me.timezone", "My timezone", "Used for quiet hours and digests. Empty = the installation timezone.", "str", "",
+               "my_notifications_hidden", scope=USER, editable_by=SELF, max=60, validator=lambda v: _validate_tz(v),
+               help="notifications#quiet-hours", example="Europe/Berlin"),
+    SettingDef("me.digest_time", "Digest time", "Local time when daily and weekly digests are sent (weekly: Mondays).", "time",
+               "08:00", "my_notifications_hidden", scope=USER, editable_by=SELF, help="notifications#digests"),
 ]
+
+
+def _validate_tiles(v):
+    if v and (not v.startswith("https://") or not all(x in v for x in ("{z}", "{x}", "{y}"))):
+        raise SettingError("Use an https:// tile address containing {z}, {x} and {y}.")
+
+
+def _validate_tz(v):
+    if v:
+        try:
+            zoneinfo.ZoneInfo(v)
+        except Exception:
+            raise SettingError("Unknown timezone. Use a name like Asia/Riyadh.") from None
+
+
+def _validate_quiet(v):
+    if not isinstance(v, dict):
+        raise SettingError("Quiet hours must be {enabled, start, end}.")
+    for k in ("start", "end"):
+        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(v.get(k, ""))):
+            raise SettingError("Use 24-hour HH:MM for the quiet hours.")
+    if set(v) - {"enabled", "start", "end"}:
+        raise SettingError("Unknown quiet-hours field.")
+
+
+def _validate_routing(v):
+    from apps.notify.event_defs import CHANNELS as NCH
+    from apps.notify.event_defs import DIGEST_CHOICES, ROUTE_CATEGORIES
+
+    if not isinstance(v, dict):
+        raise SettingError("Routing must map categories to settings.")
+    for cat, conf in v.items():
+        if cat not in ROUTE_CATEGORIES or not isinstance(conf, dict):
+            raise SettingError(f"Unknown notification category: {cat}.")
+        fb = conf.get("fallback", [])
+        if not isinstance(fb, list) or any(c not in NCH or c == "in_app" for c in fb) or len(set(fb)) != len(fb):
+            raise SettingError("A fallback chain lists external channels once each, in order.")
+        if conf.get("digest", "immediate") not in DIGEST_CHOICES:
+            raise SettingError("Delivery must be immediately, daily digest or weekly digest.")
+        if set(conf) - {"fallback", "digest"}:
+            raise SettingError("Unknown routing field.")
 
 BY_KEY = {s.key: s for s in SETTINGS}
 

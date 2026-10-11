@@ -127,8 +127,12 @@ def test_at69_login_alert_template_has_ip_country_method_device(family, clients)
                                    device="desktop", flags=["new_country"])
     alerts.on_login_event(ev)
     msg = OutboxMessage.objects.get(user=son1, channel="email", kind="security")
-    for part in ("IP address: 5.42.0.7", "Country: Saudi Arabia", "Sign-in method: password+passkey", "Device: Firefox · Linux · desktop"):
+    # Change Set T (AT-326): routine notifications show the approximate location and network; the full public
+    # address is only under Security details in the app.
+    for part in ("Location: Saudi Arabia", "Network: Unknown network", "IP address: public address", "Sign-in method: password+passkey",
+                 "Device: Firefox · Linux · desktop"):
         assert part in msg.body
+    assert "5.42.0.7" not in msg.body
     # "every sign-in" information is optional and off by default
     assert not Notification.objects.filter(user=son1, title="New sign-in to your account").exists()
 

@@ -3,10 +3,11 @@
 //   * 1440×900 CSS px at device pixel ratio 2 (phones 390×844 at 2), consistent across all images;
 //   * after fonts load and animations settle (reduced motion), with no loading placeholders or toasts;
 //   * passes a quality gate (no horizontal overflow, no clipped text, all images decoded) and a privacy gate
-//     (no e-mail address outside example domains, no IP outside documentation ranges, no token-like strings).
+//     (no e-mail address outside example domains, no public IP outside documentation ranges, no token-like strings).
 // Output: docs/images/screenshots/ (PUBLIC_SHOTS overrides) and a manifest with the source of each image.
 // Usage: BASE=http://localhost:8000 node tests/e2e/screenshots.mjs
 import { chromium } from "playwright";
+import crypto from "node:crypto";
 import fs from "node:fs";
 
 const BASE = process.env.BASE || "http://localhost:8000";
@@ -23,11 +24,22 @@ const step = async (name, fn) => {
 const expect = (cond, msg) => { if (!cond) throw new Error(msg); };
 const PRIVATE = [
   [/[A-Z0-9._%+-]+@(?!example\.(com|org|net)\b|family\.example\b|test\b|invalid\b|localhost\b)[A-Z0-9.-]+\.[A-Z]{2,}/i, "e-mail address outside example domains"],
-  [/\b(?!(?:127|10|192\.0\.2|198\.51\.100|203\.0\.113)\.)(?:\d{1,3}\.){3}\d{1,3}\b/, "IP address outside documentation ranges"],
+  // public addresses only from the documentation ranges; private networks (Trusted Zones) cannot identify anyone
+  [/\b(?!(?:127|10|192\.168|172\.(?:1[6-9]|2\d|3[01])|192\.0\.2|198\.51\.100|203\.0\.113)\.)(?:\d{1,3}\.){3}\d{1,3}\b/, "IP address outside documentation and private ranges"],
   [/(?<![A-Za-z0-9_-])(?![A-Za-z0-9_-]*[-_][A-Za-z]{4,}[-_][A-Za-z]{4,})[A-Za-z0-9_-]{40,}(?![A-Za-z0-9_-])/, "token-like string"], // file names made of words are not tokens
 ];
 
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
+// Map tiles are the only outside requests. In sandboxes that reach the Internet only through an HTTPS proxy
+// (HTTPS_PROXY set), the browser uses it for https:// requests.
+// If that proxy re-signs TLS, PD_E2E_PROXY_CA names its CA certificate: Chromium then trusts exactly that key
+// (an SPKI pin); certificate verification stays on.
+const PROXY = process.env.HTTPS_PROXY || process.env.https_proxy || "";
+const pin = (file) => crypto.createHash("sha256").update(new crypto.X509Certificate(fs.readFileSync(file)).publicKey.export({ type: "spki", format: "der" })).digest("base64");
+// Only https:// goes through the proxy; the app on http://localhost is always reached directly. (Playwright's own
+// proxy option would also route localhost through the proxy.)
+const args = PROXY ? [`--proxy-server=https=${new URL(PROXY).host}`] : [];
+if (PROXY && process.env.PD_E2E_PROXY_CA) args.push(`--ignore-certificate-errors-spki-list=${pin(process.env.PD_E2E_PROXY_CA)}`);
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args });
 const api = (page, url, opts = {}) => page.evaluate(async ([url, opts]) => {
   const csrf = decodeURIComponent((document.cookie.match(/pd_csrftoken=([^;]+)/) || [])[1] || "");
   const r = await fetch(url, { method: opts.method || (opts.body ? "POST" : "GET"), headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, body: opts.body ? JSON.stringify(opts.body) : undefined });
@@ -156,6 +168,96 @@ await step("AT-274 phone: overview and offline access (installed-app size)", asy
   await M.page.waitForSelector("h1:has-text('Offline access')");
   await capture(M.page, "mobile-offline.png", "Phone: offline access");
   await M.ctx.close();
+});
+
+await step("AT-333 Backup & Recovery, Recovery Explorer, notifications and sign-in security (documentation screenshots)", async () => {
+  // state from recovery.mjs: a local destination, a verified recovery point, a Trusted Zone "Home"
+  const P = D.page;
+  const dismiss = async () => { await P.keyboard.press("Escape"); await P.waitForTimeout(200); };
+  await api(P, "/api/settings", { method: "PUT", body: { values: { "discord.enabled": true, "whatsapp.enabled": true } } });
+  await P.goto(BASE + "/settings/backup");
+  await P.waitForSelector("[data-health]");
+  await P.waitForLoadState("networkidle");
+  await capture(P, "backup-overview.png", "Backup & Recovery: health, newest verified point, readiness and destinations");
+  await P.goto(BASE + "/settings/backup?view=policies");
+  await P.click("tr:has-text('Default') button:has-text('Edit')");
+  await P.waitForSelector("[role=dialog] #pol-freq");
+  await capture(P, "backup-policy-dialog.png", "Policy: weekly Full backup, incremental every 4 hours, keep 4 weeks");
+  await dismiss();
+  await P.goto(BASE + "/settings/backup?view=destinations");
+  await P.click("button:has-text('Add destination')");
+  await P.fill("#dst-name", "Second disk");
+  await P.fill("#dst-path", "/srv/backups/personaldocs");
+  await capture(P, "backup-destination-dialog.png", "Add destination: a local folder on another disk");
+  await dismiss();
+  await P.goto(BASE + "/settings/backup?view=points");
+  await P.waitForSelector(".points-table");
+  await capture(P, "backup-points.png", "Recovery points with copies per destination and actions");
+  await P.click(".points-table tbody tr >> nth=0 >> button:has-text('Delete')");
+  await P.waitForSelector("[role=dialog] >> text=This is a protected deletion");
+  await capture(P, "backup-delete-dialog.png", "Protected deletion: dependants, coverage and step-up");
+  await dismiss();
+  await P.goto(BASE + "/settings/backup?view=key");
+  await P.waitForSelector("text=Emergency Recovery Package");
+  await capture(P, "backup-key.png", "Recovery Key page: key hidden, readiness, export and rotation");
+  await P.click("button:has-text('Reveal Recovery Key…')");
+  await P.waitForSelector("[role=dialog] #su-pw");
+  await capture(P, "backup-stepup.png", "Step-up confirmation before revealing the Recovery Key");
+  await dismiss();
+  await P.goto(BASE + "/recovery");
+  await P.waitForSelector(".recovery-doc");
+  await capture(P, "recovery-explorer.png", "Recovery Explorer: restore points, folders, documents and versions");
+  await P.locator(".recovery-doc button:has-text('Restore…')").first().click();
+  await P.click("[role=dialog] button:has-text('Analyse impact')");
+  await P.waitForSelector("[role=dialog] >> text=Restore Impact Analysis");
+  await capture(P, "recovery-impact.png", "Restore Impact Analysis before anything changes");
+  await dismiss();
+  await P.goto(BASE + "/settings/account?tab=notifications");
+  await P.waitForSelector("#routing");
+  await P.locator("#routing").scrollIntoViewIfNeeded();
+  await capture(P, "notifications-routing.png", "Routing by category: channels, fallback chain and digests");
+  await P.waitForSelector("#discord");
+  await P.locator("#discord").scrollIntoViewIfNeeded();
+  await capture(P, "notifications-channels.png", "Discord webhook and WhatsApp Personal (experimental) cards");
+  await P.goto(BASE + "/settings/notifications");
+  await P.waitForSelector("text=Notification delivery health");
+  await P.locator("text=Notification delivery health").scrollIntoViewIfNeeded();
+  await capture(P, "admin-delivery-health.png", "Notification delivery health for administrators (counts only)");
+  await P.goto(BASE + "/settings/activity?view=map");
+  await P.waitForSelector("td:has-text('Home')");
+  await capture(P, "security-trusted-zones.png", "Trusted Zones with several networks and a configured map pin");
+  // a second device so the device list has something to distrust
+  const other = await session({ width: 1280, height: 800 });
+  await other.ctx.close();
+  await P.goto(BASE + "/settings/account?tab=signins");
+  await P.waitForSelector(".signin-map");
+  await P.waitForFunction(() => { const t = [...document.querySelectorAll(".leaflet-tile")]; return t.length > 0 && t.every((i) => i.complete); }, null, { timeout: 30000 }).catch(() => undefined);
+  await capture(P, "security-signin-map.png", "Sign-in map: Trusted Zone pin, recent sign-ins with explainable risk");
+  await P.locator("#devices").scrollIntoViewIfNeeded();
+  const mark = P.locator("#devices button:has-text('Mark Unrecognized')").first();
+  if (await mark.count()) { await mark.click(); await P.waitForSelector("[role=dialog] >> text=Mark this device Unrecognized?"); }
+  await capture(P, "security-devices.png", "Mark Unrecognized: sessions end, follow-up actions are offered");
+  await dismiss();
+});
+
+await step("AT-334 guide screenshots load in Help (after capture)", async () => {
+  const P = D.page;
+  for (const slug of ["backup-restore", "notifications", "security-map", "discord"]) {
+    await P.goto(BASE + "/help/" + slug);
+    await P.waitForSelector(".breadcrumbs");
+    expect(await P.locator("img.doc-shot").count() > 0, `${slug}: screenshots next to the steps`);
+    // guide images are lazy-loaded, so load and decode each one explicitly instead of waiting for off-screen ones
+    const bad = await P.evaluate(async () => {
+      const out = [];
+      for (const img of document.querySelectorAll("img.doc-shot")) {
+        const probe = new Image();
+        probe.src = img.currentSrc || img.src;
+        try { await probe.decode(); if (!probe.naturalWidth) out.push(img.alt); } catch { out.push(img.alt); }
+      }
+      return out;
+    });
+    expect(!bad.length, `${slug}: images that do not load: ${bad.join("; ")}`);
+  }
 });
 
 await D.ctx.close();

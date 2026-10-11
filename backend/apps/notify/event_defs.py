@@ -3,8 +3,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-CHANNELS = ("in_app", "email", "telegram", "push")
-CATEGORIES = ("documents", "expiry", "ocr", "security", "system", "sharing")
+CHANNELS = ("in_app", "email", "telegram", "push", "discord", "whatsapp")
+EXTERNAL = ("email", "telegram", "push", "discord", "whatsapp")
+CHANNEL_LABELS = {"in_app": "In-app", "email": "Email", "telegram": "Telegram", "push": "Push", "discord": "Discord",
+                  "whatsapp": "WhatsApp Personal"}
+# Routing categories (Change Set T): the per-person routing matrix, fallback chains, quiet hours and digests work on
+# these. Every event belongs to exactly one.
+ROUTE_CATEGORIES = {
+    "documents": "Documents & expiry", "sharing": "Sharing & new documents", "security": "Security & sign-in",
+    "backup": "Backup & recovery", "ocr": "OCR & processing", "antivirus": "Antivirus", "system": "System & updates",
+    "storage": "Storage", "admin": "Import & administration",
+}
+DIGEST_CHOICES = ("immediate", "daily", "weekly")
+CATEGORIES = ("documents", "expiry", "ocr", "security", "system", "sharing", "backup")
 SEVERITIES = ("critical", "warning", "success", "info")
 
 
@@ -49,6 +60,9 @@ EVENTS: dict[str, Event] = {e.key: e for e in [
     Event("security.admin_recovery", "Two-step verification reset", "An administrator (or the server console) reset two-step verification.", "security", default_critical=True, category="security", severity="critical", icon="shield", mandatory=(NOT_YOU,)),
     Event("security.new_country", "Unusual sign-in (new country)", "Your account signed in from a country it never used before.", "security", default_critical=True, category="security", severity="warning", icon="globe_location", mandatory=(NOT_YOU,)),
     Event("security.new_ip", "Sign-in from a new address", "Your account signed in from a new IP address.", "security", default_channels=("in_app",), category="security", severity="info", icon="globe_location", mandatory=(NOT_YOU,)),
+    Event("security.risky_signin", "Unusual sign-in", "A sign-in with high risk signals (for example an impossible change of location). Informational: GeoIP never blocks a sign-in by itself.", "security", default_critical=True, category="security", severity="warning", icon="alarm", mandatory=(NOT_YOU,)),
+    Event("security.device_unrecognized", "Device marked Unrecognized", "A device was marked Unrecognized: its sessions ended and it is no longer trusted.", "security", default_critical=True, category="security", severity="warning", icon="device",
+          mandatory=("Review your recent sign-ins, passkeys and linked sign-in methods. Change your password if you suspect someone else used your account.",)),
     Event("account.login", "New sign-in", "Each successful sign-in to your account, with device, address and country.", "security", default_channels=(), category="security", severity="info", icon="key", mandatory=(NOT_YOU,)),
     # administrators
     Event("security.failed_logins", "Repeated failed sign-ins", "Repeated failures and automatic temporary blocks.", "security", admins_only=True, default_critical=True, category="security", severity="critical", icon="alarm"),
@@ -66,7 +80,30 @@ EVENTS: dict[str, Event] = {e.key: e for e in [
     Event("antivirus.unavailable", "Antivirus unavailable or scan failed", "ClamAV could not be reached or a scan failed; files stay usable but are marked Not scanned.", "security", admins_only=True, default_critical=True, always_critical=True, category="security", severity="critical", icon="alarm"),
     Event("antivirus.definitions", "Antivirus definitions stale or update failed", "Virus signatures are out of date or the signature update failed.", "security", admins_only=True, default_critical=True, always_critical=True, category="security", severity="warning", icon="shield"),
     Event("security.operations", "Security operations", "OS security updates, reboots, security-test results with Critical/High findings, storage warnings and log purges.", "security", admins_only=True, default_critical=True, category="system", severity="warning", icon="system"),
-    Event("backup.failed", "Backup failed", "The scheduled or manual backup did not complete.", "system", admins_only=True, default_critical=True, category="system", severity="critical", icon="backup"),
+    Event("backup.failed", "Backup failed", "A scheduled, manual or safety backup did not produce any usable copy.", "system", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="backup"),
+    # Backup & Recovery (Change Set T): main administrator only - backups hold every family member's data
+    Event("backup.succeeded", "Backup completed", "A recovery point was created and verified on every destination.", "system", admins_only=True, default_channels=("in_app",), category="backup", severity="success", icon="backup"),
+    Event("backup.partial", "Backup partly failed", "A recovery point is stored and verified on some destinations, but not all.", "system", admins_only=True, default_critical=True, category="backup", severity="warning", icon="backup"),
+    Event("backup.verification", "Backup verification warning or failure", "Deep verification found a problem in a stored backup copy.", "system", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="backup"),
+    Event("backup.destination", "Backup destination problem", "A destination is unavailable, needs authorisation again, or is out of space.", "system", admins_only=True, default_critical=True, category="backup", severity="warning", icon="storage"),
+    Event("backup.retention", "Backup retention cleanup", "Expired recovery points were removed by the retention policy (or could not be removed).", "system", admins_only=True, default_channels=("in_app",), category="backup", severity="info", icon="backup"),
+    Event("backup.pre_change", "Safety backup before a change", "A verified safety backup was made before a high-risk operation.", "system", admins_only=True, default_channels=("in_app",), category="backup", severity="success", icon="backup"),
+    Event("backup.pre_change_blocked", "High-risk operation blocked", "A safety backup could not be verified, so the high-risk operation was blocked.", "system", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="alarm"),
+    Event("backup.config_changed", "Backup configuration changed", "A backup policy or destination was created, changed or removed.", "system", admins_only=True, default_critical=True, category="backup", severity="warning", icon="system"),
+    Event("backup.deleted", "Backup deleted manually", "The main administrator deleted a recovery point (and its dependents).", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="alarm",
+          mandatory=("If you did not delete this backup, change your password, review sessions and passkeys, and check the remaining recovery points now.",)),
+    Event("backup.downloaded", "Encrypted backup downloaded", "A complete encrypted backup package was downloaded from the web interface.", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="warning", icon="backup",
+          mandatory=("If you did not download this backup, change your password and review your sessions immediately.",)),
+    Event("recovery.key_revealed", "Backup Recovery Key revealed", "The Backup Recovery Key was shown or copied after step-up authentication.", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="key",
+          mandatory=("The key itself is never sent in a notification.", "If you did not reveal the key, rotate the Recovery Key and change your password now.")),
+    Event("recovery.key_rotated", "Backup Recovery Key rotated", "A new Recovery Key generation was created and retained backups were re-encrypted.", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="warning", icon="key",
+          mandatory=("Export a new Emergency Recovery Package: the previous one is now outdated.",)),
+    Event("recovery.emergency", "Emergency Recovery Package", "An Emergency Recovery Package was exported, or the exported package is outdated.", "security", admins_only=True, default_critical=True, category="backup", severity="warning", icon="key"),
+    Event("recovery.restore", "Restore started, completed or failed", "A restore from a backup ran (version, document, folder, user or full system).", "system", default_channels=("in_app", "email"), category="backup", severity="info", icon="backup"),
+    Event("recovery.full", "Full system recovery", "The whole application was restored from a recovery point.", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="backup"),
+    Event("recovery.compromise", "Compromise recovery performed", "The system was recovered in Compromise/Cyberattack mode: sessions and device trust were reset.", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="alarm",
+          mandatory=("A security review is required: open the Recovery & Security Report and complete the follow-up actions.",)),
+    Event("recovery.validation", "Recovery validation result", "Automated recovery validation restored a backup into the isolated environment (or failed).", "system", admins_only=True, default_channels=("in_app", "email"), category="backup", severity="info", icon="backup"),
     Event("integrity.failed", "Integrity problems", "The storage integrity check found missing or changed files.", "system", admins_only=True, default_critical=True, category="system", severity="critical", icon="storage"),
     # documents
     Event("expiry.reminder", "Expiry reminders", "Reminders before a confirmed expiry date (90/60/30/7/0 days by default).", "documents", category="expiry", severity="warning", icon="calendar"),
@@ -81,3 +118,22 @@ EVENTS: dict[str, Event] = {e.key: e for e in [
 
 DEFAULT_CRITICAL = [k for k, e in EVENTS.items() if e.default_critical]
 LABELS = {k: e.label for k, e in EVENTS.items()}
+
+
+_ROUTE_OVERRIDES = {"document.added": "sharing", "document.shared": "sharing", "import.finished": "admin",
+                    "integrity.failed": "storage", "security.operations": "system", "security.health": "system",
+                    "security.policy_change": "admin", "security.auth_policy": "admin"}
+
+
+def route_of(key: str) -> str:
+    """Routing category of an event."""
+    if key in _ROUTE_OVERRIDES:
+        return _ROUTE_OVERRIDES[key]
+    if key.startswith("antivirus."):
+        return "antivirus"
+    if key.startswith(("backup.", "recovery.")):
+        return "backup"
+    ev = EVENTS.get(key)
+    cat = ev.category if ev else "system"
+    return {"expiry": "documents", "documents": "documents", "sharing": "sharing", "ocr": "ocr", "security": "security",
+            "backup": "backup"}.get(cat, "system")

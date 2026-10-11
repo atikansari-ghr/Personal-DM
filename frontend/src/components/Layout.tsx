@@ -13,6 +13,7 @@ const NAV = [
   ["/shared", "users", "Shared with me"],
   ["/ocr-review", "eye", "OCR review"],
   ["/offline", "offline", "Offline access"],
+  ["/recovery", "refresh", "Recovery"],
   ["/notifications", "bell", "Notifications"],
   ["/archive", "archive", "Archive"],
   ["/settings", "settings", "Settings"],

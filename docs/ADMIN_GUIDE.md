@@ -153,6 +153,17 @@ Guides: [notifications](guides/notifications.md) ([templates](guides/notificatio
 [delivery history](guides/notifications.md#delivery), [noise control](guides/notifications.md#noise),
 [privacy](guides/notifications.md#privacy)) and [critical and optional notifications](guides/expiry-rules.md#critical).
 
+### Discord, WhatsApp Personal, routing and delivery health {#channels-t}
+
+- Turn **Discord** on under Settings → Connections. Each person then adds their own webhook ([Discord](guides/discord.md)).
+- **WhatsApp Personal** is experimental and unofficial. It needs the optional bridge
+  (`sudo personaldocs whatsapp-bridge install`), and each person links their own phone. It only sends notifications to
+  that person ([WhatsApp Personal](guides/whatsapp-personal.md)).
+- Neither channel is turned on for anyone automatically.
+- People choose channels per category, fallback chains, quiet hours and digests themselves. **Settings →
+  Notifications → Notification delivery health** shows counts per channel only, never message content
+  ([notifications](guides/notifications.md#delivery-health)).
+
 ## 6. OCR and processing {#ocr}
 
 - **Engines:** **PaddleOCR (PP-OCRv5)** is the default engine; **Tesseract (Legacy)** stays available as the fallback
@@ -308,6 +319,19 @@ In an emergency, `PD_ACCESS_POLICY_DISABLED=1` in `/etc/personaldocs/personaldoc
 
 Guides: [security & access](guides/security-access.md), [reverse proxy](guides/reverse-proxy.md).
 
+### Trusted Zones and the sign-in map {#trusted-zones}
+
+**Settings → Activity & health → Sign-in map & Trusted Zones**:
+
+- Name your home, VPN and office networks. A zone can have several IPv4/IPv6 networks, and the most specific network
+  wins.
+- Optional: place a map pin for each zone.
+- Every sign-in gets an explainable risk level. Risk never blocks a sign-in.
+- People see their own sign-ins and devices under My account → Sign-in security, where they can use **Mark
+  Unrecognized**.
+
+Guide: [sign-in security and map](guides/security-map.md).
+
 ## 10. Antivirus {#antivirus}
 
 **Settings → Security → Antivirus** (main administrator and Administrators):
@@ -438,23 +462,36 @@ If family members see a letter instead of the app icon on iPhone:
 `personaldocs doctor` reports missing icon files. See [offline access](guides/offline-export.md#admin) and
 [phone and tablet](guides/mobile-pwa.md#ios-icon).
 
-## 13. Backups and restore {#backup}
+## 13. Backup & Recovery {#backup}
 
-- **Settings → Storage & backup:**
-  - Connect the NAS (NFS or SMB) or use a mounted path containing the marker file.
-  - Choose **daily**, **weekly** (a day) or **monthly** (a day of the month; 29–31 means the last day in shorter
-    months) and a time.
-  - Retention keeps N successful backups regardless of frequency.
-- The status card shows the schedule, the next run, the last success and the last failure.
-- A backup contains the database, originals, derivatives, settings, the sign-in branding files and (optionally) the
-  encryption key. The GeoIP
-  file is not included; update it after a restore. Files in the antivirus quarantine are not included either.
-- Pre-update backups from Settings → Security → OS updates are local (`<data>/pre-update-backups`, newest 3) and do not
-  replace the NAS backup.
-- **Restore** only from the console: `sudo personaldocs restore <backup-dir>`. Drill it on a second container.
-- `sudo personaldocs integrity` checks every stored file against its checksum.
+All of this is in **Settings → Backup & Recovery** and is for the main administrator only.
 
-Guide: [backup & restore](guides/backup-restore.md).
+- **Policies & schedule.**
+  - Every policy backs up the whole system: database, documents and versions, OCR data, settings and encrypted
+    secrets.
+  - Recommended: a weekly **Full** backup, an **incremental** every 4 hours, kept for 4 weeks.
+  - Ordinary uploads and edits never start a backup.
+- **Destinations:** local folder or USB, NAS share (connect it in **Storage & NAS** first), S3-compatible storage,
+  Google Drive and OneDrive. Each copy has its own status. A full or unreachable destination fails alone and is
+  retried for 24 hours.
+- **Encryption.** Every recovery point is encrypted with a key wrapped by the **Backup Recovery Key**.
+  - Showing the key needs step-up authentication: your password, plus your authenticator code or passkey.
+  - Export the **Emergency Recovery Package** and keep it offline. Without the key or the package, backups cannot be
+    opened by anyone.
+  - **Rotate** the key after a suspected leak.
+- **Verification.** Every copy is deep-verified after writing. **Test restore** restores into a scratch database.
+  **Automated Recovery Validation** restores into an isolated database and folder that you configure.
+- **Pre-change safety backups.** Upgrades and other high-risk operations first make and verify a recovery point. If
+  that fails, they are blocked.
+- **Recovery Explorer** (the **Recovery** page). Restore a version, a document, a folder tree or a person's library,
+  with a Restore Impact Analysis first. People can restore what they are allowed to see today.
+- **Deleting** a recovery point shows which incrementals depend on it and needs step-up authentication. **Download**
+  gives an encrypted `.tar`.
+- **Console:** `sudo personaldocs backup run|list|health|verify` and `sudo personaldocs integrity`.
+- Folder backups from earlier releases stay listed. They can still be restored with
+  `sudo personaldocs restore <backup-dir>`.
+
+Guides: [backup & restore](guides/backup-restore.md), [disaster recovery](guides/disaster-recovery.md).
 
 ## 14. Recovery {#recovery}
 
@@ -467,6 +504,8 @@ Guide: [backup & restore](guides/backup-restore.md).
 | Country policy locked everyone out | `sudo personaldocs access-policy off` (or `rollback`) |
 | Services broken after a failed change | `sudo personaldocs repair` |
 | Bad upgrade | `sudo personaldocs rollback` (when the schema allows) or restore the pre-upgrade backup |
+| Server lost, data corrupted or suspected attack | Installer → **Recover Existing Installation**, or `sudo personaldocs recover` ([disaster recovery](guides/disaster-recovery.md)) |
+| A device you do not recognise signed in | My account → Sign-in security → **Mark Unrecognized** ([sign-in security](guides/security-map.md#unrecognized)) |
 
 There is no web-based bypass of two-step verification or of the access policy.
 

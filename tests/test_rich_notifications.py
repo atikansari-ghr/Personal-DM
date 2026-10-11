@@ -97,7 +97,7 @@ def test_at177_html_email_with_plain_text_fallback(family):
     assert "Review Activity" in sec.html and "203.0.113.9" in sec.html and "Warning" in sec.html
     admin = family["dad"]
     bk = Notification.objects.get(user=admin, event="backup.failed")
-    assert bk.severity == "critical" and bk.data["actions"][0]["path"] == "/settings/storage"
+    assert bk.severity == "critical" and bk.data["actions"][0]["path"] == "/settings/backup"  # Change Set T: Backup & Recovery page
 
 
 def test_at178_telegram_html_escaping_and_buttons(family):

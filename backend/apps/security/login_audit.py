@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import re
 
-from . import geoip, netutil
+from . import netutil
 
 log = logging.getLogger("personaldocs.security")
 
@@ -34,8 +34,11 @@ def record(request, *, result: str, user=None, username: str = "", method: str =
     from .models import LoginEvent
 
     try:
+        from . import location
+
         ip = netutil.client_ip(request)
-        geo = geoip.lookup(ip) if ip else None
+        where = location.resolve(ip)  # Trusted Zone first; GeoIP only for public addresses, locally
+        geo = (where["country"], where["country_name"]) if where.get("country") else None
         browser, system, device = parse_user_agent((request.META.get("HTTP_USER_AGENT") or "") if request else "")
         flags = list(flags or [])
         decision = getattr(request, "access_decision", None)
@@ -57,8 +60,15 @@ def record(request, *, result: str, user=None, username: str = "", method: str =
             browser=browser, os=system, device=device,
             correlation=(session.get("device", "") if session is not None else "")[:64],
             totp_used="totp" in method or "recovery" in method, passkey_used="passkey" in method,
-            oidc_used="google" in method, flags=sorted(set(flags)),
+            oidc_used="google" in method or "authentik" in method, flags=sorted(set(flags)),
+            zone=where.get("zone"), zone_name=where.get("zone_name", ""), network=where["network"], location=where["location"][:120],
+            lat=where.get("lat"), lon=where.get("lon"), coord_source=where.get("coord_source", ""),
+            recognized_device=getattr(request, "_pd_device", None) if result == LoginEvent.SUCCESS else None,
+            new_device=bool(getattr(request, "_pd_device_new", False)) if result == LoginEvent.SUCCESS else False,
         )
+        if result == LoginEvent.SUCCESS and event.user_id:
+            event.risk, event.risk_reasons = location.classify(event)
+            LoginEvent.objects.filter(pk=event.pk).update(risk=event.risk, risk_reasons=event.risk_reasons)
     except Exception:  # noqa: BLE001
         log.exception("login audit failed")
         return None

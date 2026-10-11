@@ -397,6 +397,51 @@ AT-(n+25); see [TRACEABILITY.md](TRACEABILITY.md), section *Change set S*). Guid
 | SS-2 | Captures pass automated quality (no overflow, clipped text, broken images) and privacy gates (no e-mail outside example domains, no IP outside documentation ranges, no token-like strings) and a documented human review. |
 | SS-3 | The capture workflow is repeatable from a fresh instance (`scripts/e2e.sh`); the README tells the product story in a fixed order with accurate captions. |
 
+## Change set T (2026-10): encrypted backup and recovery, notification routing and channels, sign-in security, rich guides
+
+Acceptance tests AT-276…AT-335. The change prompt numbered them AT-251…AT-310: prompt AT-n = AT-(n+25). See
+[TRACEABILITY.md](TRACEABILITY.md), section *Change set T*.
+
+Guides: [backup and restore](guides/backup-restore.md), [disaster recovery](guides/disaster-recovery.md),
+[notifications](guides/notifications.md), [Discord](guides/discord.md), [WhatsApp Personal](guides/whatsapp-personal.md),
+[sign-in security and map](guides/security-map.md), [documentation](guides/documentation.md).
+
+Decisions: [ADR 0020](adr/0020-encrypted-recovery-points.md), [ADR 0021](adr/0021-notification-routing-channels.md),
+[ADR 0022](adr/0022-trusted-zones-signin-map-risk.md).
+
+| ID | Requirement |
+|---|---|
+| BR-1 | A recovery point contains everything needed to rebuild the application: database, every document version and original, OCR text and derived files, profile photos, branding, settings and protected secrets. |
+| BR-2 | Recovery points are encrypted. Each point has its own key, wrapped by the Backup Recovery Key. Each file is authenticated in chunks, so truncation and tampering are detected. No plaintext secret reaches a destination, log or notification. There is no separate compression stage. |
+| BR-3 | Full and incremental chains, with a configurable schedule. Recommended: weekly Full, incremental every 4 hours, kept 4 weeks. Retention never deletes a base that a kept point needs. Ordinary activity never starts a backup. |
+| BR-4 | A policy can write to several destinations (local/USB, NAS, S3-compatible, Google Drive, OneDrive). Each destination has its own status, free space and retries. One failing or full destination never invalidates or deletes the other copies. |
+| BR-5 | Every copy is deep-verified: checksums, authenticated decryption, manifest, chain and database dump. Health is derived from verified recovery state, never from the scheduler running. |
+| BR-6 | A verified pre-change safety backup is made before upgrades and other high-risk operations. If it fails, the operation is blocked and a critical notification is sent. |
+| BR-7 | The Recovery Key is revealed only to the main administrator after step-up authentication, and is never logged, audited, notified or written to diagnostics. Rotation re-encrypts every reachable copy and names any destination it could not reach. |
+| BR-8 | An Emergency Recovery Package (passphrase-sealed key and instructions) can be exported. Recovery Readiness is Ready, Not Ready or Outdated, and records nothing about where the package is kept. |
+| BR-9 | The Recovery Explorer shows each person only what they may recover with their current permissions. Version, document, folder-tree and person restores offer Keep both, Replace and Skip for conflicts. A Restore Impact Analysis comes first. A deleted account can be recreated, transferred or restored into a staging folder. |
+| BR-10 | Deleting a recovery point shows the points that depend on it, needs step-up and is audited. Downloads are encrypted packages, authorised server-side and audited. |
+| BR-11 | The administrator Backup Health widget and Automated Recovery Validation are provided. Validation restores only into a separately configured, isolated environment, never production, with delivery disabled. My Recovery never shows destinations or paths. |
+| DR-1 | The installer offers *Recover Existing Installation*. Recovery accepts local/USB, `.tar`, NAS, S3, Google Drive and OneDrive sources, with temporary bootstrap credentials that are never stored. |
+| DR-2 | Integrity, key and compatibility checks run before anything changes. Recovery is resumable. The web application answers 503 until recovery is complete. |
+| DR-3 | Normal mode restores everything as completely as possible. Compromise mode ends all sessions and untrusts all devices, keeps MFA unless explicitly reset, never relinks WhatsApp automatically, and requires a security review. |
+| DR-4 | Restored integrations stay on hold until a safe connection test passes. A secret-free Recovery & Security Report is written. |
+| NR-1 | New backup and recovery notification events exist. Main-administrator events go only to the main administrator. |
+| NR-2 | People can add their own Discord webhook: stored encrypted, shown masked, tested without posting, removable. |
+| NR-3 | WhatsApp Personal (experimental) runs through an optional, separately installed bridge. Each person has an isolated session. It is notification-only: no composer, no contacts, no other recipients. The bridge version is pinned, with controlled update and rollback. A bridge failure never affects other channels. |
+| NR-4 | Channels are chosen per route category, with a fallback chain. A fallback is used once and never after a successful primary delivery. |
+| NR-5 | Quiet Hours hold normal messages; critical messages are delivered. Daily and weekly digests are available; critical messages stay immediate. |
+| NR-6 | People see their own delivery history; administrators see counts only. Discord and WhatsApp are never enabled automatically for existing people. Signal is not offered. |
+| SZ-1 | Trusted Zones have a friendly name and several IPv4/IPv6 networks. The most specific network wins. A Trusted Zone replaces "Unknown country". |
+| SZ-2 | The sign-in map uses Leaflet with configurable online tiles. Sign-in addresses are never sent to the tile server or any geolocation service. Configured pins are labelled as such and never called GeoIP. |
+| SZ-3 | People see their own sign-ins, delegates with the membership scope their group, the main administrator everyone. This is enforced server-side. |
+| SZ-4 | Every sign-in gets an explainable risk level (Normal, Low, Warning, High) from zone, device, method, country history and impossible travel. Risk never blocks a sign-in. |
+| SZ-5 | Recognised devices are listed. *Mark Unrecognized* ends the device's sessions, removes its recognition, audits, notifies, and offers next steps. |
+| SZ-6 | Sign-in, map and device records are kept 1 year by default. Current security state (active devices) is kept. |
+| DOC-1 | Rich guides cover the new features, with screenshots next to the steps, callouts, review dates and in-app navigation (categories, search, breadcrumbs, table of contents, previous/next). |
+| DOC-2 | `scripts/check_docs.py` fails on broken links or anchors, missing images or alt text, orphan screenshots, broken *Learn more* links, outdated UI terms and missing review dates. |
+| DOC-3 | Screenshots use synthetic data only: no real names, documents, keys, tokens, webhook addresses, WhatsApp QR or session data, real public IPs, or production backup locations. |
+
 ## Later phases
 
-Personal WhatsApp notifications, native apps, scanning enhancement, in-browser Office editing, DICOM viewing.
+Native apps, scanning enhancement, in-browser Office editing, DICOM viewing.

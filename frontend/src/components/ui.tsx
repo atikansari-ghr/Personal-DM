@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { Expiry, UserMini } from "../types";
 
 // ---------------------------------------------------------------- icons (inline SVG, no external assets)
@@ -143,7 +144,8 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
       prev?.focus();
     };
   }, [onClose]);
-  return (
+  // rendered at the end of <body>: an ancestor with a transform or filter would otherwise clip the fixed overlay
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} ref={ref} tabIndex={-1}>
         <div className="modal-head">
@@ -154,7 +156,8 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -251,8 +254,17 @@ function esc(s: string) {
 function slug(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9 -]/g, "").trim().replace(/ /g, "-");
 }
+function imgSrc(src: string): string | null {
+  if (/^\.\.\/images\/[A-Za-z0-9/_.-]+\.(png|webp|svg|jpg)$/.test(src)) return `/api/help/asset/${src.slice("../images/".length)}`;
+  if (/^\/api\/help\/asset\/[A-Za-z0-9/_.-]+$/.test(src)) return src;
+  return null;
+}
 function inline(s: string) {
   let out = esc(s);
+  out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, alt, src) => {
+    const u = imgSrc(String(src));
+    return u ? `<img class="doc-shot" src="${u}" alt="${alt}" loading="lazy" decoding="async">` : alt;
+  });
   out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/\*([^*]+)\*/g, "<em>$1</em>");
@@ -276,6 +288,21 @@ export function renderMarkdown(md: string): string {
     table = [];
   };
   const closeList = () => { if (inList) { html.push(`</${inList}>`); inList = ""; } };
+  let quote: string[] = [];
+  // GitHub alert syntax (> [!NOTE] / [!TIP] / [!IMPORTANT] / [!WARNING] / [!CAUTION]) becomes a callout. A first bold
+  // word "Experimental", "Privacy" or "Expected result" picks that style, so the same file reads well on GitHub.
+  const flushQuote = () => {
+    if (!quote.length) return;
+    const first = quote[0].match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*$/i);
+    const body = first ? quote.slice(1) : quote;
+    let kind = first ? ({ NOTE: "info", TIP: "tip", IMPORTANT: "result", WARNING: "warning", CAUTION: "critical" } as Record<string, string>)[first[1].toUpperCase()] : "alert";
+    const lead = body.join(" ").match(/^\*\*(Experimental|Privacy|Expected result)\b/i);
+    if (lead) kind = ({ experimental: "experimental", privacy: "privacy", "expected result": "result" } as Record<string, string>)[lead[1].toLowerCase()];
+    const label = ({ info: "Info", tip: "Tip", result: "Expected result", warning: "Warning", critical: "Critical", experimental: "Experimental", privacy: "Privacy", alert: "" } as Record<string, string>)[kind];
+    const paras = body.join("\n").split(/\n\s*\n/).map((p) => p.split("\n").map((l) => l.replace(/^\s*[-*]\s+/, "• ")).join("<br>"));
+    html.push(`<div class="callout ${kind}" role="note">${label && !lead ? `<strong class="callout-label">${label}</strong>` : ""}${paras.map((p) => `<p>${inline(p).replace(/&lt;br&gt;/g, "<br>")}</p>`).join("")}</div>`);
+    quote = [];
+  };
   for (const line of lines) {
     if (line.startsWith("```")) {
       closeList(); flushTable();
@@ -294,11 +321,11 @@ export function renderMarkdown(md: string): string {
       html.push(`<li>${inline((ul || ol)![1])}</li>`);
       continue;
     }
+    if (line.startsWith(">")) { closeList(); quote.push(line.replace(/^>\s?/, "")); continue; } else flushQuote();
     closeList();
-    if (line.startsWith("> ")) html.push(`<blockquote class="alert">${inline(line.slice(2))}</blockquote>`);
-    else if (line.trim()) html.push(`<p>${inline(line)}</p>`);
+    if (line.trim()) html.push(`<p>${inline(line)}</p>`);
   }
-  closeList(); flushTable();
+  closeList(); flushTable(); flushQuote();
   return html.join("\n");
 }
 

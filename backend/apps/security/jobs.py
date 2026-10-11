@@ -59,7 +59,16 @@ def retention() -> int:
     days = int(config.get("security.login_audit_retention_days"))
     removed = 0
     if days:
-        removed = LoginEvent.objects.filter(at__lt=timezone.now() - timedelta(days=days)).delete()[0]
+        cutoff = timezone.now() - timedelta(days=days)
+        removed = LoginEvent.objects.filter(at__lt=cutoff).delete()[0]
+        # sign-in map / device history follows the same security retention; devices still in use are kept
+        from apps.accounts.models import UserSession
+
+        from .models import RecognizedDevice
+
+        in_use = UserSession.objects.filter(revoked_at__isnull=True, ended_at__isnull=True, recognized_device__isnull=False) \
+            .values_list("recognized_device_id", flat=True)
+        RecognizedDevice.objects.filter(last_seen__lt=cutoff).exclude(pk__in=in_use).delete()
     BlockedStat.objects.filter(day__lt=timezone.localdate() - timedelta(days=400)).delete()
     IPRule.objects.filter(automatic=True, expires_at__lt=timezone.now() - timedelta(days=30)).delete()
     return removed

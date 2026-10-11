@@ -359,3 +359,13 @@ def test_apply_settings_command_validates_and_deletes_file(db, tmp_path):
     with pytest.raises(CommandError):
         call_command("apply_settings", str(f), stdout=io.StringIO())
     assert not f.exists()
+
+
+def test_at332_at334_documentation_checker_passes():
+    """Guides: links, anchors, images with alt text, no orphan screenshots, Learn more links, review dates (AT-332..334)."""
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parent.parent
+    proc = subprocess.run([sys.executable, str(root / "scripts" / "check_docs.py")], capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stdout

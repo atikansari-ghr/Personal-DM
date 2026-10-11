@@ -56,13 +56,10 @@ class Command(BaseCommand):
         missing = [f for f in icons if not (settings.FRONTEND_DIST / f).exists()]
         report("app icons and manifest (PWA identity)", not missing,
                ("missing: " + ", ".join(missing)) if missing else "served without sign-in; check the proxy with: sudo personaldocs check-access")
-        from apps.ops.backup import BackupError, check_target
-
         try:
-            check_target()
-            report("backup destination", True)
-        except BackupError as exc:
-            report("backup destination", False, str(exc))
+            self._recovery_checks(report, warn, info)
+        except Exception as exc:  # noqa: BLE001 - diagnostics must not crash
+            warn("backup & recovery checks could not run", exc.__class__.__name__)
         from apps.core.models import Job
 
         failed = Job.objects.filter(status="failed").count()
@@ -190,6 +187,69 @@ class Command(BaseCommand):
         if orphans["count"]:
             warn("Orphaned OCR data", f"{orphans['count']} item(s), {orphans['bytes'] // 1024} KB — Settings → OCR & processing → "
                                       "Existing OCR Data → Analyze / Clean")
+
+    def _recovery_checks(self, report, warn, info):
+        """Change Set T: backup & recovery, notification channels, GeoIP and map - never prints a secret."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.core import config
+        from apps.notify.models import OutboxMessage, SchedulerRun
+        from apps.ops import bk_engine, bk_keys
+        from apps.ops.bk_destinations import DestError, provider
+        from apps.ops.models import BackupDestination, RecoveryCopy, RecoveryPoint
+
+        hb = SchedulerRun.objects.filter(name="scheduler_heartbeat").first()
+        report("scheduler running", bool(hb and hb.last_run_at and timezone.now() - hb.last_run_at < timedelta(minutes=5)),
+               f"last tick {hb.last_run_at:%Y-%m-%d %H:%M} UTC" if hb and hb.last_run_at else "no heartbeat (systemctl status personaldocs-scheduler)")
+        h = bk_engine.health()
+        lv = h.get("latest_verified")
+        report("backup & recovery health (from verified recovery points)", h["state"] != "critical",
+               f"{h['label']}" + (f"; newest verified {lv['kind']} {lv['created_at'][:16]}" if lv else "; no verified recovery point"))
+        for w in h["warnings"]:
+            warn("backup", w)
+        broken = [p for p in RecoveryPoint.objects.filter(deleted_at__isnull=True, kind="incremental")[:200]
+                  if any(x.deleted_at or x.status == "failed" for x in p.chain()[:-1])]
+        report("full/incremental chains intact", not broken, f"{len(broken)} incremental point(s) with a missing base" if broken else "")
+        for d in BackupDestination.objects.filter(enabled=True):
+            try:
+                r = provider(d).test()
+                report(f"backup destination “{d.name}” ({d.kind})", True, (f"{r['free'] // 1024 ** 3} GB free" if r.get("free") else "reachable"))
+            except DestError as exc:
+                report(f"backup destination “{d.name}” ({d.kind})", False, f"{exc.code}: {exc}")
+        report("Recovery Readiness (Emergency Recovery Package)", h["readiness"]["state"] in ("ready", "no_key"), h["readiness"]["label"])
+        info("recovery validation", h["validation"]["label"])
+        pending = RecoveryCopy.objects.filter(state__in=["retry_pending", "unavailable"]).count()
+        if pending:
+            warn("backup copies waiting for a retry", str(pending))
+        if bk_keys.active() is None:
+            info("Backup Recovery Key", "created with the first encrypted backup")
+        if bk_engine.legacy_backups():
+            info("legacy folder backups (format 1)", f"{len(bk_engine.legacy_backups())} kept; restorable with personaldocs restore")
+        from apps.notify import whatsapp
+
+        if config.get("whatsapp.enabled"):
+            st = whatsapp.bridge_status()
+            report("WhatsApp Personal bridge (experimental)", st["state"] == "healthy",
+                   f"{st['label']} {st.get('version', '')} (tested: {st.get('pinned')})")
+        else:
+            info("WhatsApp Personal bridge", "disabled (optional)")
+        from apps.notify.models import DiscordWebhook
+
+        info("Discord", f"{'on' if config.get('discord.enabled') else 'off'}; {DiscordWebhook.objects.count()} webhook(s) configured")
+        stuck = OutboxMessage.objects.filter(status="pending", created_at__lt=timezone.now() - timedelta(hours=6)).exclude(hold="quiet_hours").count()
+        report("notification queue moving", stuck == 0, f"{stuck} message(s) waiting more than 6 hours" if stuck else "")
+        from apps.security import geoip
+
+        report("GeoIP database available", geoip.db_path().exists(), str(geoip.db_path()) if geoip.db_path().exists() else
+               "not installed; locations show as approximate country only when available (Settings → Security → Access)")
+        from apps.core.registry import BY_KEY
+
+        if "security.map_tile_url" in BY_KEY:
+            url = config.get("security.map_tile_url") or ""
+            ok_map = not config.get("security.map_enabled") or (url.startswith("https://") and "{z}" in url and "{x}" in url and "{y}" in url)
+            report("login map tile source", ok_map, url.split("/{")[0] if url else "map off")
 
     def _operations_checks(self, report, warn, info):
         """Change Set M: antivirus, signatures, host helper, exposure, storage thresholds, pending reboot."""

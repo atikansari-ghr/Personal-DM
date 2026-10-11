@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import OcrTypes from "./OcrTypes";
 import { OcrEngineStatus, OcrExistingData, OcrTest } from "./OcrEngines";
@@ -91,6 +92,7 @@ export function NotificationsAdmin() {
         <div className="alert small">Expiry reminders go to the document owner and the head of their reminder group (plus delegates with “receive reminders”), once per threshold, and stop after the expiry day. Only confirmed expiry dates count. Critical notifications cannot be turned off by family members; everything else is chosen by each person under My account → Notifications.</div>
       </SettingsForm>
       <DeliveryProblems />
+      <DeliveryHealth />
       <NotificationTemplates />
       <div className="card row between">
         <div><h2>Reminder check</h2><p className="small muted">Reminders are checked daily at the send time. Run the check now to queue due reminders and deliver waiting messages.</p></div>
@@ -190,20 +192,15 @@ export function StoragePanel() {
   const [plan, setPlan] = useState<string[] | null>(null);
   return (
     <div className="stack">
-      {st.data && (
-        <div className="card">
-          <h2>Backup status <button className="btn small primary" disabled={!st.data.destination.ok || st.data.running} onClick={() => api("backup/run", { method: "POST" }).then(() => { toast("Backup started"); st.reload(); }).catch((e) => toast(e.message, "error"))}>{st.data.running ? "Backup running…" : "Back up now"}</button></h2>
-          <p>Destination: {st.data.target || "not configured"} — {st.data.destination.ok ? <span className="badge ok">Reachable</span> : <span className="badge danger">Not available</span>}</p>
-          {!st.data.destination.ok && <div className="alert warn">{st.data.destination.error}</div>}
-          <p>Last success: {st.data.status.last_success ? formatDateTime(st.data.status.last_success) : "never"} {st.data.status.last_verified === true && <span className="badge ok">Verified</span>}
-            {st.data.status.last_bytes !== undefined && <span className="muted small"> · {formatBytes(st.data.status.last_bytes)} in {st.data.status.last_seconds}s</span>}</p>
-          {st.data.status.last_error && <div className="alert error">Last attempt failed{st.data.status.last_failure ? ` (${formatDateTime(st.data.status.last_failure)})` : ""}: {st.data.status.last_error}</div>}
-          <p>Schedule: <strong>{st.data.schedule}</strong>{st.data.next_run && <> · next backup {formatDateTime(st.data.next_run)}</>} · keeps the last {st.data.keep} successful backups</p>
-          <p className="small muted">Restores are done from the server console (<code>personaldocs restore</code>) so a web session can never overwrite the library. A Proxmox snapshot is a useful extra layer but is not a verified application backup.</p>
-        </div>
-      )}
+      <div className="card row between">
+        <div><h2>Backups moved to Backup & Recovery</h2>
+          <p className="small muted">Encrypted full-system recovery points, policies, destinations, the Recovery Key and restores are in their own section. Connect a NAS share here, then add it there as a destination.</p></div>
+        <Link className="btn primary" to="/settings/backup">Open Backup & Recovery</Link>
+      </div>
       <NasCard onChange={st.reload} />
-      <SettingsForm keys={["backup.target", "backup.require_mount", "backup.enabled", "backup.frequency", "backup.weekday", "backup.month_day", "backup.schedule_time", "backup.keep_daily", "backup.include_keys"]} title="Backup settings" />
+      <details className="card"><summary>Legacy folder backups (before encrypted recovery points)</summary>
+        <SettingsForm keys={["backup.target", "backup.require_mount", "backup.keep_daily"]} title="Legacy settings" />
+      </details>
       <div className="card">
         <h2>Integrity check</h2>
         <p className="small muted">Looks for missing or altered originals, broken version references and orphaned files. Repairs never delete originals or regenerate keys.</p>
@@ -269,6 +266,27 @@ export function ActivityPanel() {
         ) : <Skeleton />}
         <p className="small muted">The audit log records actions without passwords, tokens, codes, full document numbers or document text. It is not tamper-proof against someone with root access to the server.</p>
       </div>
+    </div>
+  );
+}
+
+
+/** Notification Delivery Health: counts per channel only (no message text, addresses or secrets). */
+function DeliveryHealth() {
+  const h = useAsync<any>(() => api("notifications/health"), []);
+  if (!h.data) return null;
+  const b = h.data.whatsapp.bridge;
+  return (
+    <div className="card">
+      <h2>Notification delivery health (last 7 days)</h2>
+      <div className="table-wrap"><table className="table"><thead><tr><th>Channel</th><th>Delivered</th><th>Waiting</th><th>Fallback used</th><th>Failed</th><th>Not delivered</th></tr></thead>
+        <tbody>{h.data.channels.map((c: any) => <tr key={c.channel}><td>{c.label}</td><td>{c.counts.sent || 0}</td><td>{(c.counts.pending || 0) + (c.counts.digest || 0)}</td><td>{c.counts.fallback || 0}</td><td>{c.counts.failed || 0}</td><td>{c.counts.skipped || 0}</td></tr>)}</tbody></table></div>
+      <p className="small">{h.data.stuck > 0 ? <span className="badge danger">{h.data.stuck} message(s) waiting more than 6 hours</span> : <span className="badge ok">Queue moving</span>} · {h.data.fallbacks} fallback deliveries ·
+        Discord: {h.data.discord_webhooks.total} webhook(s){h.data.discord_webhooks.broken ? `, ${h.data.discord_webhooks.broken} broken` : ""}</p>
+      <h3>WhatsApp Personal bridge <span className="badge warn">Experimental</span></h3>
+      <p className="small">{b.enabled ? <>Status: <strong>{b.label}</strong>{b.version && ` · version ${b.version}`} · tested version {b.pinned}{b.update_available && " · a tested update is available: run sudo personaldocs whatsapp-bridge update"}</> : "Off. Install with sudo personaldocs whatsapp-bridge install, then turn it on under Connections."}
+        {b.enabled && ` · ${h.data.whatsapp.connected} of ${h.data.whatsapp.links} linked person(s) connected${h.data.whatsapp.reconnect_required ? `, ${h.data.whatsapp.reconnect_required} need to link again` : ""}`}</p>
+      <p className="small muted"><a href="/help/notifications#delivery-health">Learn more</a></p>
     </div>
   );
 }

@@ -14,6 +14,69 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to Change Set T (encrypted recovery, notification routing, sign-in map) {#change-set-t}
+
+```
+sudo personaldocs upgrade
+# or: bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)" -- upgrade
+sudo personaldocs doctor        # includes the new recovery, destination, readiness, Discord, WhatsApp and map checks
+sudo personaldocs backup health
+```
+
+(The change prompt numbered its tests AT-251..AT-310. Here they are **AT-276..AT-335**: prompt AT-n = AT-(n+25).)
+
+### What the upgrade does
+
+1. The usual verified pre-upgrade backup runs first, with the previous release's backup code.
+2. It applies these migrations. All are additive; nothing is deleted:
+   - `ops.0001_initial`: recovery points, copies, destinations, policies, key generations and restore runs.
+   - `ops.0002_migrate_backup_settings`: turns your existing backup folder (`backup.target`) into the destination
+     **Existing backup share**, and your schedule into the policy **Default**. Incrementals are **off**, so nothing
+     runs more often than before.
+   - `notify.0004_routing_discord_whatsapp`.
+   - `security.0004_…`: Trusted Zones, recognised devices, sign-in location and risk.
+   - `accounts.0009_usersession_recognized_device`.
+3. It rebuilds the web app. Leaflet (the map library) is bundled, so nothing is loaded from a CDN.
+
+Existing email, Telegram, in-app and push notifications keep their settings. Discord and WhatsApp are **not** turned on
+for anyone.
+
+### After the upgrade (main administrator)
+
+1. Open **Settings → Backup & Recovery → Overview**. Folder backups made by earlier releases are listed under *Legacy
+   folder backups* and can still be verified and restored.
+2. In **Policies & schedule**, edit *Default*:
+   - Set **Incremental every** to `4` hours (recommended).
+   - Check the Full backup day and time, and **Keep Full backups** (4 weeks recommended).
+3. In **Destinations**, click **Test** on *Existing backup share*. Add a second destination if you can, for example a
+   USB disk, S3 or a cloud drive.
+4. Click **Back up now**. The first encrypted backup creates the **Backup Recovery Key**.
+5. In **Recovery Key**:
+   - Click **Show** and store the key in your password manager.
+   - Click **Export Emergency Recovery Package** and keep the `.pdrp` file offline, together with its passphrase.
+
+   *Recovery Readiness* then shows **Ready**.
+6. Optional, under **Settings → Activity & health → Sign-in map & Trusted Zones**: add a **Trusted Zone** for your home
+   network (and VLANs, VPN), with a map pin.
+7. Optional, under **Settings → Connections**:
+   - turn **Discord** on, so that people can add their own webhooks;
+   - install the experimental WhatsApp bridge with `sudo personaldocs whatsapp-bridge install` (it needs Node.js 20 or
+     newer), then turn **WhatsApp Personal** on.
+8. Each person can then choose channels per category, quiet hours and digests under **My account → Notifications**.
+
+### Behind a reverse proxy
+
+The sign-in map loads picture tiles from `https://tile.openstreetmap.org` by default. The app adds that origin to its
+own `img-src` Content-Security-Policy automatically. If your proxy sets its own CSP header, add the tile origin there
+too, or set another tile server in **Settings → Security → Map tile server**. To show only the list, turn **Sign-in
+map** off.
+
+### Rollback
+
+`sudo personaldocs rollback` switches back to the previous release. The new tables stay, unused. Encrypted recovery
+points made by this release can only be read by this release or newer. Keep the pre-upgrade folder backup until you
+have a verified encrypted recovery point and an exported Emergency Recovery Package.
+
 ## Upgrading to Change Set Q (PaddleOCR PP-OCRv5 and the complete OCR lifecycle) {#change-set-q}
 
 ```

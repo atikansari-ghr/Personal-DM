@@ -82,6 +82,9 @@ def default_actions(event: str, *, link: str = "", context: dict | None = None) 
         acts += [Action("review_activity", "Review Activity", "/settings/account?tab=security", primary=True),
                  Action("sessions", "Manage Sessions", "/settings/account?tab=security"),
                  Action("change_password", "Change Password", "/settings/account?tab=security")]
+    elif event in ("security.risky_signin", "security.device_unrecognized"):
+        acts += [Action("security_details", "View Security Details", "/settings/account?tab=signins", primary=True),
+                 Action("change_password", "Change Password", "/settings/account?tab=security")]
     elif event in ("security.failed_logins", "security.policy_exception"):
         acts += [Action("review_activity", "Review Activity", "/settings/activity?view=logins", primary=True),
                  Action("access_policy", "Access policy", "/settings/security?view=access")]
@@ -93,8 +96,17 @@ def default_actions(event: str, *, link: str = "", context: dict | None = None) 
     elif event == "security.operations":
         acts += [Action("system_status", "View System Status", "/settings/security", primary=not link),
                  Action("update_logs", "View Update Details", "/settings/security?view=updates")]
-    elif event in ("backup.failed", "integrity.failed"):
+    elif event == "integrity.failed":
         acts.append(Action("storage", "Open Storage & backup", "/settings/storage", primary=True))
+    elif event.startswith("backup.") or event in ("recovery.key_revealed", "recovery.key_rotated", "recovery.emergency",
+                                                   "recovery.validation"):
+        acts += [Action("backups", "Open Backup & Recovery", "/settings/backup", primary=True),
+                 Action("guide", "Troubleshooting guide", "/help/backup-restore#troubleshooting")]
+    elif event in ("recovery.full", "recovery.compromise"):
+        acts += [Action("report", "Recovery & Security Report", "/settings/backup?view=restores", primary=True),
+                 Action("sessions", "Review sessions", "/settings/account?tab=security")]
+    elif event == "recovery.restore":
+        acts.append(Action("explorer", "Recovery Explorer", "/recovery", primary=True))
     elif event == "import.finished" and link:
         acts.append(Action("report", "View Import Report", link, primary=True))
     if link and not any(a.primary for a in acts):
@@ -212,6 +224,37 @@ def import_finished(session) -> None:
                title=f"{len(owned)} file{'s' if len(owned) != 1 else ''} imported to your account",
                lines=[f"Imported by {session.created_by.display_name}."], facts=[("Folder", where)],
                items=[d.title for d in owned], link=f"/folders/{owned[0].folder_id}" if len(folders) == 1 else "/folders")
+
+
+BACKUP_TITLES = {
+    "backup.succeeded": "Backup completed and verified", "backup.partial": "Backup stored on some destinations only",
+    "backup.failed": "Backup failed", "backup.verification": "Backup verification problem",
+    "backup.destination": "Backup destination needs attention", "backup.retention": "Backup retention cleanup",
+    "backup.pre_change": "Safety backup made before a change", "backup.pre_change_blocked": "High-risk operation blocked: no verified safety backup",
+    "backup.config_changed": "Backup configuration changed", "backup.deleted": "A backup was deleted",
+    "backup.downloaded": "An encrypted backup was downloaded", "recovery.key_revealed": "Backup Recovery Key revealed",
+    "recovery.key_rotated": "Backup Recovery Key rotated", "recovery.emergency": "Emergency Recovery Package",
+    "recovery.full": "Full system recovery completed", "recovery.compromise": "Compromise recovery performed",
+    "recovery.validation": "Recovery validation", "recovery.restore": "Restore from backup",
+}
+
+
+def backup_event(event: str, *, point=None, detail: str = "", severity: str = "", tag: str = "", actor=None, users=None,
+                 title: str = "") -> None:
+    """Backup & Recovery notifications. Never contain keys, credentials, webhook addresses or file contents."""
+    from apps.accounts.models import User
+
+    recipients = list(users) if users is not None else list(User.objects.filter(is_main_admin=True, is_active=True))
+    facts = []
+    if point is not None:
+        facts += [("Recovery point", f"{point.kind.title()} · {point.created_at:%Y-%m-%d %H:%M} UTC"), ("Status", point.status)]
+    if actor is not None:
+        facts.append(("By", actor.display_name or actor.username))
+    key = f"{event}:{getattr(point, 'id', '')}:{tag or _stamp()}"
+    for u in recipients:
+        notify(u, event, kind="backup", key=key, title=title or BACKUP_TITLES.get(event, event), icon="backup",
+               severity=severity, summary=detail[:400], facts=facts,
+               link="/recovery" if event == "recovery.restore" else "/settings/backup")
 
 
 def backup_failed(reason: str) -> None:

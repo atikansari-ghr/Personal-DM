@@ -7,8 +7,13 @@
 #   personaldocs post-upgrade                  (set up components a new release adds: ClamAV, host helper; safe to repeat)
 #   personaldocs rollback
 #   personaldocs repair
-#   personaldocs status | doctor | backup | integrity [...] | logs [web|worker|scheduler]
-#   personaldocs restore BACKUP_DIR [--verify-only] [--no-key]
+#   personaldocs status | doctor | integrity [...] | logs [web|worker|scheduler|whatsapp]
+#   personaldocs backup [--incremental] | backup list | backup health | backup verify POINT
+#                                               (encrypted full-system recovery points, Settings → Backup & Recovery)
+#   personaldocs recover                        (disaster recovery: restore the whole application from an encrypted
+#                                                recovery point; normal or compromise mode; works on a clean server)
+#   personaldocs restore BACKUP_DIR [--verify-only] [--no-key]   (legacy unencrypted folder backups, format 1)
+#   personaldocs whatsapp-bridge install|update|rollback|status|disable  (EXPERIMENTAL optional WhatsApp Personal bridge)
 #   personaldocs recover-admin USERNAME [--generate] [--reset-totp]
 #   personaldocs antivirus status|repair|selftest  (ClamAV daemon/socket diagnosis, repair and clean + EICAR self-test)
 #   personaldocs ocr status|install-models|selftest|reinstall  (PaddleOCR PP-OCRv5 runtime, models and inference test)
@@ -715,9 +720,10 @@ cmd_upgrade() {
   new=$(build_release | tail -1)
   if [ "$new" = "$old" ]; then c_ok "Already at $(basename "$new")."; return; fi
   if [ "${OPT_SKIP_BACKUP:-0}" != 1 ]; then
-    if manage shell -c "from apps.core import config; import sys; sys.exit(0 if config.get('backup.target') else 1)" 2>/dev/null; then
-      log "pre-upgrade application backup"
-      manage backup || die "pre-upgrade backup failed (fix the NAS or rerun with --skip-backup if you have a verified backup)"
+    if manage shell -c "from apps.core import config; import sys; sys.exit(0 if config.get('backup.target') else 1)" 2>/dev/null \
+       || manage shell -c "from apps.ops.models import BackupPolicy; import sys; sys.exit(0 if BackupPolicy.objects.filter(enabled=True).exists() else 1)" 2>/dev/null; then
+      log "pre-upgrade safety backup (verified before the upgrade continues)"
+      manage backup --pre-change "Before upgrading to $(basename "$new")" || die "pre-upgrade backup failed or could not be verified (fix the destination, or rerun with --skip-backup if you have a verified backup)"
     else
       c_warn "No backup destination configured: only a local database snapshot is taken."
     fi
@@ -809,12 +815,130 @@ cmd_repair() {
 cmd_status() {
   load_env
   echo "Version:  $(version_of "$(readlink -f "$CURRENT" 2>/dev/null || echo /nonexistent)") ($(cat "$CURRENT/REVISION" 2>/dev/null | cut -c1-10))"
-  for u in "${UNITS[@]}" clamav-daemon clamav-freshclam personaldocs-host.path; do printf '%-26s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"; done
+  for u in "${UNITS[@]}" clamav-daemon clamav-freshclam personaldocs-host.path personaldocs-whatsapp; do printf '%-26s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"; done
+  manage backup health 2>/dev/null | head -3 || true
   [ -f /run/reboot-required ] && c_warn "Reboot required (updated system packages)."
   if health; then c_ok "Health:   OK ($PD_BIND)"; else c_err "Health:   FAILED"; fi
 }
 
 cmd_doctor_inner() { manage doctor; }
+
+# ------------------------------------------------------------------ WhatsApp Personal bridge (experimental, optional)
+WA_PREFIX=$PREFIX/whatsapp-bridge
+cmd_whatsapp_bridge() { # whatsapp-bridge install|update|rollback|status|disable
+  need_root; load_env
+  local action=${1:-status} src rel ver prev
+  src=$(readlink -f "$CURRENT")/bridge/whatsapp
+  case "$action" in
+    status)
+      printf 'Installed: %s\n' "$(basename "$(readlink -f "$WA_PREFIX/current" 2>/dev/null)" 2>/dev/null || echo no)"
+      printf 'Tested (this release): %s\n' "$(jq -r '.pinned + " (" + .library + ")"' "$src/compat.json" 2>/dev/null || echo unknown)"
+      printf 'Service: %s\n' "$(systemctl is-active personaldocs-whatsapp 2>/dev/null || true)"
+      manage shell -c "from apps.notify import whatsapp; import json; s=whatsapp.bridge_status(); print('Bridge:', s.get('label'), s.get('version',''))" 2>/dev/null || true;;
+    install|update)
+      [ -f "$src/server.mjs" ] || die "this release has no WhatsApp bridge"
+      command -v node >/dev/null && command -v npm >/dev/null || { apt-get install -y -q nodejs npm >>"$LOG" 2>&1 || die "could not install nodejs/npm"; }
+      local major; major=$(node -p 'process.versions.node.split(".")[0]')
+      [ "$major" -ge 20 ] || die "Node.js 20 or newer is required (found $(node -v))"
+      ver=$(jq -r .pinned "$src/compat.json")
+      jq -e --arg v "$ver" '.tested_versions | index($v)' "$src/compat.json" >/dev/null || die "version $ver is not in the tested list; refusing to install"
+      rel=$WA_PREFIX/releases/$ver-$(date +%Y%m%d%H%M%S)
+      install -d -m 0755 "$WA_PREFIX/releases"
+      install -d -m 0700 -o $APP -g $APP "$DATA_DIR/whatsapp" "$DATA_DIR/whatsapp/sessions"
+      [ -f "$CONF_DIR/whatsapp-bridge.token" ] || { umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' >"$CONF_DIR/whatsapp-bridge.token"; chown root:$APP "$CONF_DIR/whatsapp-bridge.token"; chmod 0640 "$CONF_DIR/whatsapp-bridge.token"; }
+      # protect the encrypted sessions and configuration before touching the bridge
+      tar -C "$DATA_DIR/whatsapp" -cf "$DATA_DIR/whatsapp/sessions-before-$(date +%Y%m%d%H%M%S).tar" sessions 2>/dev/null || true
+      ls -1t "$DATA_DIR"/whatsapp/sessions-before-*.tar 2>/dev/null | tail -n +4 | xargs -r rm -f
+      cp -a "$src" "$rel"
+      (cd "$rel" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund >>"$LOG" 2>&1) || { rm -rf "$rel"; die "npm ci failed (see $LOG); the previous bridge is unchanged"; }
+      runuser -u $APP -- env PD_WA_DATA="$DATA_DIR/whatsapp/selftest" node "$rel/server.mjs" --selftest >/dev/null || { rm -rf "$rel"; die "bridge self-test failed; the previous bridge is unchanged"; }
+      prev=$(readlink -f "$WA_PREFIX/current" 2>/dev/null || true)
+      ln -sfn "$rel" "$WA_PREFIX/current.new" && mv -T "$WA_PREFIX/current.new" "$WA_PREFIX/current"
+      install -m 0644 "$(readlink -f "$CURRENT")/deployment/systemd/personaldocs-whatsapp.service" /etc/systemd/system/
+      systemctl daemon-reload; systemctl enable personaldocs-whatsapp >/dev/null 2>&1; systemctl restart personaldocs-whatsapp
+      sleep 4
+      if ! curl -fsS -H "Authorization: Bearer $(cat "$CONF_DIR/whatsapp-bridge.token")" http://127.0.0.1:8095/health >/dev/null; then
+        c_err "The new bridge did not become healthy."
+        if [ -n "$prev" ] && [ -d "$prev" ]; then ln -sfn "$prev" "$WA_PREFIX/current"; systemctl restart personaldocs-whatsapp; die "rolled back to $(basename "$prev")"; fi
+        die "bridge unhealthy; see journalctl -u personaldocs-whatsapp"
+      fi
+      [ -n "$prev" ] && echo "$prev" >"$STATE/whatsapp-previous"
+      ls -1dt "$WA_PREFIX"/releases/* 2>/dev/null | tail -n +4 | xargs -r rm -rf
+      manage shell -c "from apps.core import audit; audit.record('whatsapp.bridge_$action', actor=None, actor_label='console', version='$ver')" >/dev/null 2>&1 || true
+      c_ok "WhatsApp Personal bridge $ver is running (experimental, unofficial). Turn it on in Settings → Connections.";;
+    rollback)
+      prev=$(cat "$STATE/whatsapp-previous" 2>/dev/null || true)
+      [ -n "$prev" ] && [ -d "$prev" ] || die "no previous bridge version recorded"
+      ln -sfn "$prev" "$WA_PREFIX/current"; systemctl restart personaldocs-whatsapp
+      c_ok "Bridge rolled back to $(basename "$prev").";;
+    disable)
+      systemctl disable --now personaldocs-whatsapp >/dev/null 2>&1 || true
+      manage shell -c "from apps.core import config; config.set_value('whatsapp.enabled', False)" >/dev/null 2>&1 || true
+      c_ok "Bridge stopped and WhatsApp Personal turned off. Linked sessions stay encrypted on disk until people unlink.";;
+    *) die "usage: personaldocs whatsapp-bridge install|update|rollback|status|disable";;
+  esac
+}
+
+# ------------------------------------------------------------------ disaster recovery (interactive)
+cmd_recover() {
+  need_root; load_env; with_lock
+  cat <<'TXT'
+Recover Existing Installation
+  Restores the whole application (database, documents, versions, OCR data, settings, encrypted secrets) from an
+  encrypted recovery point. Recreating the Proxmox host / LXC container / operating system is outside this tool.
+TXT
+  local src kind path mode key_choice keyfile pkg passfile point
+  echo; echo "Where is the encrypted backup?"
+  echo "  1) Local folder or USB stick (a destination folder, or an extracted download)"
+  echo "  2) A downloaded package file (.tar)"
+  echo "  3) NAS share (mounted temporarily with credentials you type now; not stored)"
+  echo "  4) S3-compatible storage (temporary access key; not stored)"
+  echo "  5) Google Drive (temporary access token; not stored)"
+  echo "  6) Microsoft OneDrive (temporary access token; not stored)"
+  read -rp "Choose 1-6: " kind
+  case "$kind" in
+    1) read -rp "Folder: " path; src="local:$path";;
+    2) read -rp "Package file: " path; src="local:$path";;
+    3) read -rp "NAS type (nfs/smb): " t; read -rp "Server: " srv; read -rp "Share/export: " share
+       install -d -m 0700 /mnt/pd-recovery
+       if [ "$t" = smb ]; then read -rp "Username: " u; read -rsp "Password: " pw; echo
+         mount -t cifs "//$srv/$share" /mnt/pd-recovery -o "ro,username=$u,password=$pw" || die "mount failed"; unset pw
+       else mount -t nfs -o ro "$srv:$share" /mnt/pd-recovery || die "mount failed"; fi
+       read -rp "Folder on the share [/]: " sub; src="local:/mnt/pd-recovery/${sub#/}";;
+    4) read -rp "Endpoint/bucket/prefix (https://s3.example.com/bucket/personaldocs): " path
+       read -rp "Access key: " PD_RECOVER_S3_ACCESS_KEY; read -rsp "Secret key: " PD_RECOVER_S3_SECRET_KEY; echo
+       export PD_RECOVER_S3_ACCESS_KEY PD_RECOVER_S3_SECRET_KEY; src="s3:$path";;
+    5) read -rp "Drive folder id: " path; read -rsp "Temporary access token: " PD_RECOVER_ACCESS_TOKEN; echo; export PD_RECOVER_ACCESS_TOKEN; src="gdrive:$path";;
+    6) read -rp "OneDrive folder [Apps/PersonalDocs]: " path; read -rsp "Temporary access token: " PD_RECOVER_ACCESS_TOKEN; echo; export PD_RECOVER_ACCESS_TOKEN; src="onedrive:${path:-Apps/PersonalDocs}";;
+    *) die "cancelled";;
+  esac
+  [ "$kind" = 2 ] && chown $APP:$APP "$path" 2>/dev/null || true
+  echo; manage recover list --source "$src" || die "cannot read the source"
+  read -rp "Recovery point id [latest]: " point; point=${point:-latest}
+  echo "Key: 1) Backup Recovery Key   2) Emergency Recovery Package + passphrase"
+  read -rp "Choose 1-2: " key_choice
+  local args=(--source "$src" --point "$point")
+  keyfile=$(mktemp -p /run); chmod 600 "$keyfile"; chown $APP "$keyfile"
+  if [ "$key_choice" = 2 ]; then read -rp "Package file (.pdrp): " pkg; read -rsp "Passphrase: " pp; echo; printf '%s' "$pp" >"$keyfile"; unset pp
+    args+=(--emergency-package "$pkg" --passphrase-file "$keyfile")
+  else read -rsp "Backup Recovery Key (PDRK1-…): " k; echo; printf '%s' "$k" >"$keyfile"; unset k; args+=(--key-file "$keyfile"); fi
+  echo; echo "== Restore Impact Analysis"; manage recover analyze "${args[@]}" || { rm -f "$keyfile"; die "analysis failed"; }
+  echo; echo "Mode: 1) Normal disaster recovery   2) Compromise / cyberattack recovery (ends all sessions, revokes device trust)"
+  read -rp "Choose 1-2: " mode; [ "$mode" = 2 ] && args+=(--mode compromise) || args+=(--mode normal)
+  read -rp "This REPLACES the current database and files. Type RECOVER to continue: " ans
+  [ "$ans" = RECOVER ] || { rm -f "$keyfile"; die "cancelled"; }
+  systemctl stop "${UNITS[@]}" personaldocs-whatsapp 2>/dev/null || true
+  if manage recover run "${args[@]}" --yes; then
+    rm -f "$keyfile"; mountpoint -q /mnt/pd-recovery && umount /mnt/pd-recovery || true
+    for u in "${UNITS[@]}"; do systemctl start "$u"; done
+    systemctl is-enabled personaldocs-whatsapp >/dev/null 2>&1 && systemctl start personaldocs-whatsapp || true
+    health && c_ok "Recovery complete. Sign in and open Settings → Storage & backup → Backup & Recovery for the Recovery & Security Report." \
+      || die "recovered, but the web service is unhealthy: run sudo personaldocs repair"
+  else
+    rm -f "$keyfile"
+    die "recovery stopped; the application stays closed (503). Fix the cause and run 'sudo personaldocs recover' again to resume."
+  fi
+}
 
 cmd_local_access() { # local-access on|off|status — opt-in plain-HTTP access from the home network
   need_root; load_env
@@ -971,7 +1095,9 @@ case "$CMD" in
           manage doctor || exit 1;;   # failed checks are listed above; not a script error
   antivirus) cmd_antivirus "${ARGS[@]}" || exit 1;;
   ocr) cmd_ocr "${ARGS[@]}" || exit 1;;
-  backup) need_root; load_env; manage backup;;
+  backup) need_root; load_env; manage backup "${ARGS[@]}";;
+  recover) cmd_recover;;
+  whatsapp-bridge) cmd_whatsapp_bridge "${ARGS[@]}";;
   integrity) need_root; load_env; manage integrity "${ARGS[@]}";;
   restore)
     need_root; load_env; with_lock
@@ -991,7 +1117,7 @@ case "$CMD" in
   check-access) need_root; cmd_check_access || exit 1;;
   local-access) cmd_local_access "${ARGS[@]}";;
   access-policy) need_root; load_env; manage access_policy "${ARGS[@]}"; policy_note;;
-  logs) journalctl -f -u "personaldocs-${ARGS[0]:-web}";;
+  logs) journalctl -f -u "personaldocs-${ARGS[0]:-web}";;  # web|worker|scheduler|whatsapp
   manage) need_root; load_env; manage "${ARGS[@]}";;
   help|-h|--help) usage;;
   *) usage; exit 2;;

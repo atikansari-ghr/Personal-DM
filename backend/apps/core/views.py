@@ -189,11 +189,28 @@ def _guides_dir() -> Path:
     return Path(dj.DOCS_DIR) / "guides"
 
 
+# Help navigation (Change Set T): categories in reading order. Guides not listed fall under "More guides".
+HELP_CATEGORIES = [
+    ("Getting started", ["getting-started", "setup", "overview", "ui-layout", "themes", "mobile-pwa"]),
+    ("Documents", ["originals-versions", "search", "sharing", "archive", "folder-imports", "offline-export", "document-types",
+                   "ocr-corrections", "ocr-engines", "office-dicom", "expiry-rules", "extended-family", "local-ai"]),
+    ("Backup & Recovery", ["backup-restore", "disaster-recovery"]),
+    ("Security & sign-in", ["security-map", "passkeys", "totp-recovery", "password-reset", "security-access", "security-center",
+                            "antivirus", "google", "authentik", "login-designs"]),
+    ("Notifications", ["notifications", "smtp", "telegram", "discord", "whatsapp-personal"]),
+    ("Installation & operations", ["installation", "upgrades", "reverse-proxy", "settings", "troubleshooting", "private-github"]),
+    ("For contributors", ["architecture", "testing", "screenshots", "documentation"]),
+]
+
+
 def _guide_meta(path: Path) -> dict:
     text = path.read_text(encoding="utf-8")
     title = next((ln[2:].strip() for ln in text.splitlines() if ln.startswith("# ")), path.stem)
-    audience = "admin" if "<!-- audience: admin -->" in text else "all"
-    return {"slug": path.stem, "title": title, "audience": audience}
+    audience = "admin" if "<!-- audience: admin -->" in text else ("maintainer" if "<!-- audience: maintainer -->" in text else "all")
+    m = re.search(r"<!-- reviewed: ([0-9-]+) -->", text)
+    cat = next((c for c, slugs in HELP_CATEGORIES if path.stem in slugs), "More guides")
+    order = next((slugs.index(path.stem) for c, slugs in HELP_CATEGORIES if path.stem in slugs), 99)
+    return {"slug": path.stem, "title": title, "audience": audience, "category": cat, "order": order, "reviewed": m.group(1) if m else None}
 
 
 @api_view(["GET"])
@@ -210,7 +227,25 @@ def help_index(request):
             i = text.find(q)
             meta["excerpt"] = re.sub(r"\s+", " ", text[max(0, i - 80): i + 120])
         out.append(meta)
-    return Response({"guides": out, "version": dj.APP_VERSION})
+    cats = [c for c, _ in HELP_CATEGORIES] + ["More guides"]
+    out.sort(key=lambda g: (cats.index(g["category"]), g["order"], g["title"]))
+    return Response({"guides": out, "categories": cats, "version": dj.APP_VERSION})
+
+
+@api_view(["GET"])
+@permission_classes([IsActiveAuthenticated])
+def help_asset(request, path):
+    """Screenshots and diagrams referenced by the guides (docs/images only, images only)."""
+    from django.http import FileResponse
+
+    base = (Path(dj.DOCS_DIR) / "images").resolve()
+    target = (base / path).resolve()
+    types = {".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml", ".jpg": "image/jpeg"}
+    if not str(target).startswith(str(base) + "/") or target.suffix.lower() not in types or not target.is_file():
+        raise Http404
+    resp = FileResponse(open(target, "rb"), content_type=types[target.suffix.lower()])
+    resp["Cache-Control"] = "private, max-age=3600"
+    return resp
 
 
 @api_view(["GET"])

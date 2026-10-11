@@ -57,6 +57,14 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] `sudo personaldocs doctor` starts with the ClamAV diagnosis and its three app ClamAV checks pass
 - [ ] Settings → Notifications: **Include document numbers in email/Telegram**, **Push notifications (PWA)** and the repeat cooldown set as intended; Templates reviewed (customised events still read correctly)
 
+- [ ] After an upgrade across Change Set T: migrations `ops.0001`/`0002`, `notify.0004`, `security.0004`, `accounts.0009` applied; Settings → Backup & Recovery shows the policy *Default* with the previous schedule and the destination *Existing backup share*; legacy folder backups listed
+- [ ] **Back up now** → a Full point *Verified* on every destination; an incremental after 4 h stores only new objects; `sudo personaldocs backup health` Healthy
+- [ ] Recovery Key shown after step-up and stored in the password manager; Emergency Recovery Package exported and opened once on another machine (`personaldocs recover` → Emergency Recovery Package); Recovery Readiness *Ready*
+- [ ] **Disaster-recovery drill on a clean Debian 13 LXC**: installer → *Recover Existing Installation* from the USB/NAS copy; Normal mode; sign-in, permissions, versions, OCR text, settings, integrations verified; report saved; then a Compromise-mode drill (sessions ended, devices Unrecognized, passkeys kept)
+- [ ] Rotation with one destination unreachable names it; retry after it returns completes; old generation retired
+- [ ] Recovery Explorer: restore a deleted synthetic document and an older version (Keep both) as a member; impact analysis shown
+- [ ] Trusted Zone for the home network (and VLANs) set; a sign-in from the LAN shows *Home*; the sign-in map shows tiles through the reverse proxy (CSP not blocking)
+
 ## Integrations (when configured)
 - [ ] SMTP test email and a real expiry reminder (no document number in the message)
 - [ ] Telegram link and reminder
@@ -78,6 +86,11 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Security notices (temporary password issued, password reset completed, account locked) show the red mandatory text in email and in-app and the bold ⚠️ lines in Telegram
 - [ ] Weather stays off unless the family wants it; if enabled, **Test connection** succeeds and only city coordinates are sent
 - [ ] Local AI profile test, analysis, assistant and semantic search against a LAN AI server; AI server off → core features unaffected
+- [ ] S3 destination (MinIO or a provider): Test, backup, deep verification, recovery bootstrap with temporary keys
+- [ ] Google Drive and OneDrive destinations with a real account: connect, backup, verify, recovery bootstrap with a temporary token
+- [ ] Discord webhook: **Send test** arrives as an embed; removing the webhook stops delivery; fallback to email when the webhook is deleted on the Discord side
+- [ ] WhatsApp Personal: `sudo personaldocs whatsapp-bridge install`, link a test phone by QR, **Send test** arrives on the own number only; `systemctl stop personaldocs-whatsapp` → other channels unaffected and the fallback is used; `update` and `rollback` keep the session
+- [ ] Quiet Hours and a daily digest observed over one night on a real phone
 
 ## Documentation
 - [ ] `VERSION` bumped; `CHANGELOG.md` updated
@@ -89,6 +102,8 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Notification screenshots (`notification-center.png`, `notification-banner.png`, `notification-template-email.png`, `notification-template-telegram.png`, `mobile-notifications.png`) show only synthetic names, documents and 203.0.113.x addresses
 - [ ] Change Set P screenshots (`login-passkey.png`, `admin-reset-password.png`, `security-antivirus-diagnose.png`) show only synthetic names; the reset dialog shows no real password
 - [ ] Screenshot and documentation names are demo labels only (A. Ansari, Mom, Son1, Son2, Son3, Daughter), described as added in the optional setup step
+- [ ] `python3 scripts/check_docs.py` passes (links, anchors, alt text, orphan screenshots, Learn more links, review dates)
+- [ ] Change Set T screenshots (`backup-*.png`, `recovery-*.png`, `notifications-*.png`, `security-signin-map.png`, `security-trusted-zones.png`, `security-devices.png`, `admin-delivery-health.png`) show only synthetic data: no real Recovery Key, webhook address, WhatsApp QR, public IP or production backup path
 
 ## Public repository (only when the owner decides to publish)
 - [x] License: MIT (`LICENSE`, README badge and section)

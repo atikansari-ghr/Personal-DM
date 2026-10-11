@@ -25,21 +25,26 @@ KINDS = {
 }
 
 
-def _get(kind: str, field: str):
+def _get(kind, field: str):
+    if isinstance(kind, dict):  # a backup policy's Full schedule (Change Set T)
+        return kind.get(field)
     key = KINDS[kind][field]
     return config.get(key) if key else None
 
 
-def _at(kind: str = "backup") -> time | None:
+def _at(kind="backup") -> time | None:
     hhmm = _get(kind, "time")
-    enabled = _get(kind, "enabled") if KINDS[kind]["enabled"] else _get(kind, "frequency") not in (None, "disabled")
+    if isinstance(kind, dict):
+        enabled = kind.get("enabled", True)
+    else:
+        enabled = _get(kind, "enabled") if KINDS[kind]["enabled"] else _get(kind, "frequency") not in (None, "disabled")
     if not hhmm or not enabled:
         return None
     h, m = (int(x) for x in hhmm.split(":"))
     return time(h, m)
 
 
-def runs_on(day: date, kind: str = "backup") -> bool:
+def runs_on(day: date, kind="backup") -> bool:
     freq = _get(kind, "frequency")
     if freq == "weekly":
         return WEEKDAYS[day.weekday()] == _get(kind, "weekday")
@@ -49,7 +54,7 @@ def runs_on(day: date, kind: str = "backup") -> bool:
     return True
 
 
-def last_occurrence(now_local: datetime, kind: str = "backup") -> datetime | None:
+def last_occurrence(now_local: datetime, kind="backup") -> datetime | None:
     """Most recent scheduled moment at or before ``now_local`` (looks back up to ~2 months)."""
     at = _at(kind)
     if at is None:
@@ -63,7 +68,7 @@ def last_occurrence(now_local: datetime, kind: str = "backup") -> datetime | Non
     return None
 
 
-def next_occurrence(now_local: datetime, kind: str = "backup") -> datetime | None:
+def next_occurrence(now_local: datetime, kind="backup") -> datetime | None:
     at = _at(kind)
     if at is None:
         return None
@@ -76,7 +81,7 @@ def next_occurrence(now_local: datetime, kind: str = "backup") -> datetime | Non
     return None
 
 
-def due(now_local: datetime, last_run_at: datetime | None, kind: str = "backup") -> datetime | None:
+def due(now_local: datetime, last_run_at: datetime | None, kind="backup") -> datetime | None:
     """The occurrence to run now, or None. ``last_run_at`` is when the previous scheduled run was started."""
     occ = last_occurrence(now_local, kind)
     if occ is None or (last_run_at is not None and last_run_at >= occ):
@@ -84,6 +89,17 @@ def due(now_local: datetime, last_run_at: datetime | None, kind: str = "backup")
     if last_run_at is None and occ.date() != now_local.date():
         return None  # first schedule ever: start with the next occurrence (or today's), not an old one
     return occ
+
+
+def describe_spec(spec: dict) -> str:
+    at = spec.get("time")
+    freq = spec.get("frequency")
+    if freq == "weekly":
+        return f"Every {WEEKDAY_NAMES.get(spec.get('weekday'), spec.get('weekday'))} at {at}"
+    if freq == "monthly":
+        d = int(spec.get("month_day") or 1)
+        return f"Monthly on day {d}{' (or the month' + chr(39) + 's last day)' if d > 28 else ''} at {at}"
+    return f"Every day at {at}"
 
 
 def describe() -> str:

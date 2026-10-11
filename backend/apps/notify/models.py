@@ -34,6 +34,7 @@ class OutboxMessage(models.Model):
     """External delivery (email/telegram). `key` makes retries and scheduler restarts idempotent."""
 
     PENDING, SENT, FAILED, SKIPPED = "pending", "sent", "failed", "skipped"
+    DIGEST, DIGESTED, FALLBACK = "digest", "digested", "fallback"  # waiting for a digest / sent in one / failed over
 
     key = models.CharField(max_length=250, unique=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="+")
@@ -50,6 +51,13 @@ class OutboxMessage(models.Model):
     is_test = models.BooleanField(default=False)
     document = models.ForeignKey("library.Document", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     status = models.CharField(max_length=10, default=PENDING, db_index=True)
+    # Change Set T: routing. route = direct | primary | fallback | mandatory | digest; hold = quiet_hours | digest
+    route = models.CharField(max_length=10, default="direct")
+    fallback_chain = models.JSONField(default=list, blank=True, help_text="Channels still to try if this one fails")
+    fallback_of = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="fallbacks")
+    hold = models.CharField(max_length=12, blank=True, help_text="Why delivery waits: quiet_hours | digest")
+    digest = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="digested",
+                               help_text="The digest message this item was delivered in")
     attempts = models.IntegerField(default=0)
     next_attempt_at = models.DateTimeField(null=True, blank=True)
     last_error = models.CharField(max_length=500, blank=True)
@@ -139,3 +147,31 @@ class ExpirySnooze(models.Model):
 
     class Meta:
         unique_together = [("user", "document")]
+
+
+class DiscordWebhook(models.Model):
+    """One official Discord webhook per person (Change Set T). The URL contains the secret and is stored encrypted."""
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="discord_webhook")
+    url_enc = models.TextField()
+    hint = models.CharField(max_length=40, help_text="Non-secret display form: server/channel id prefix")
+    enabled = models.BooleanField(default=True)
+    status = models.CharField(max_length=20, default="untested")  # untested | connected | failed | removed_by_discord
+    last_error = models.CharField(max_length=200, blank=True)
+    last_tested_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class WhatsAppLink(models.Model):
+    """A person's own WhatsApp account linked to the self-hosted bridge as a linked device (experimental, unofficial).
+    The session credentials live only in the bridge's per-person encrypted store, never in this table."""
+
+    CONNECTED, DISCONNECTED, DEGRADED, RELINK, PENDING = "connected", "disconnected", "degraded", "reconnect_required", "pending"
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="whatsapp_link")
+    session = models.CharField(max_length=40, unique=True, help_text="Opaque bridge session id (random, per person)")
+    state = models.CharField(max_length=20, default=PENDING)
+    number_hint = models.CharField(max_length=20, blank=True, help_text="Last digits of the linked number")
+    enabled = models.BooleanField(default=True)
+    linked_at = models.DateTimeField(null=True, blank=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=200, blank=True)

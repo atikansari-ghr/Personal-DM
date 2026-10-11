@@ -1,9 +1,11 @@
+<!-- reviewed: 2026-10-11 -->
 # Notifications
 
 Every notification is built once from a structured message (event, severity, category, icon, title, summary,
 details, actions and guidance) and then rendered for each channel: the in-app **Notification Center**, email (HTML
 with a plain-text part), Telegram and push notifications on your phone or computer. The wording is the same
-everywhere; each channel only gets the layout it can show.
+everywhere; each channel only gets the layout it can show. Discord and the experimental WhatsApp Personal bridge
+use the same structured message.
 
 Examples use the demo labels A. Ansari (administrator), Mom, Son1, Son2, Son3 and Daughter and synthetic values only
 ("Sample Person", "Testland", "Sample City", addresses from 203.0.113.0/24).
@@ -63,8 +65,11 @@ label; email and Telegram use the emoji.
 | **Email** | A responsive HTML message plus a plain-text part (see below) | SMTP configured by the administrator and an email address on your profile |
 | **Telegram** | A formatted message with an emoji per detail and buttons | Telegram configured by the administrator and linked by you |
 | **Push** | A short notification on the lock screen or desktop of a device you turned on | The HTTPS address, push allowed by the administrator, and turned on per device (see [push](#push)) |
+| **Discord** | A short embed in a Discord channel you control | Discord allowed by the administrator and **your own** webhook (see [Discord](discord.md)) |
+| **WhatsApp Personal** | A message to yourself in your own WhatsApp (experimental, unofficial) | The bridge installed and turned on by the administrator, and **your own** account linked by QR code (see [WhatsApp Personal](whatsapp-personal.md)) |
 
-WhatsApp is planned for a later release and is not available.
+Signal is not supported. New channels are never switched on automatically: existing people keep exactly the channels
+they had until they choose otherwise.
 
 **Email.** Each email has two parts. The HTML part has a header with the application name, the severity and
 category as text badges, the headline, a short summary, a table of details with icons, buttons for the actions,
@@ -338,6 +343,109 @@ messages are marked.
 
 "Sent" and "accepted by the provider" mean the mail server, Telegram or the push service took the message. These
 providers do not report whether it was shown on the device or read.
+
+## Routing by category {#routing}
+
+**My account → Notifications → Routing by category** sets several things at once for a whole category:
+
+| Category | Contains |
+| --- | --- |
+| Documents & expiry | Expiry reminders, archived or changed documents |
+| Sharing & new documents | Access given to you, documents added to your folders |
+| Security & sign-in | Sign-ins, passkeys, authenticator app, unusual sign-ins, devices marked Unrecognized |
+| Backup & recovery | Backups, verification, destinations, Recovery Key, restores (main administrator; restores also for the person who restored) |
+| OCR & processing | Recognition finished or failed |
+| Antivirus | Malware found, scanner problems (administrators) |
+| System & updates | OS updates, GeoIP and traffic reports (administrators) |
+| Storage | Integrity problems (administrators) |
+| Import & administration | Imports, access and authentication policy changes |
+
+To change a category:
+
+1. **Channels:** tick a channel to turn it on for every optional event of the category. A partly filled box means some
+   events use it and some do not; fine-tune them in the matrix above. Channels the administrator has not set up are
+   greyed out.
+2. **Fallback chain:** add channels in order (for example WhatsApp Personal → Telegram → Email). See
+   [Fallback chains](#fallback).
+3. **Delivery:** *Immediately*, *Daily digest* or *Weekly digest*. See [Digests](#digests).
+
+![Routing by category with channels, a fallback chain and digests](../images/screenshots/notifications-routing.png)
+
+> [!NOTE]
+> Critical notifications (chosen by the administrator) always arrive on their required channels, whatever the routing.
+> In-app always shows every notification.
+
+## Fallback chains {#fallback}
+
+With a chain, the channels in it are **not** used at the same time:
+
+1. The first ready channel is used. A disconnected channel (for example WhatsApp not linked, or a Discord webhook
+   deleted) is skipped at once and recorded as *Channel Disconnected*.
+2. If delivery fails, the next channel is tried once. This happens after the number of attempts the administrator
+   sets in *Fall back after failed attempts* (default 2).
+3. When the first channel succeeds, nothing is sent on the others: there are no duplicates.
+
+A channel that the administrator requires for an event is always delivered on its own, in addition to the chain. Every
+attempt, retry and fallback is shown in [My delivery status](#delivery-status).
+
+## Quiet hours {#quiet-hours}
+
+**My account → Notifications → Quiet hours**: tick **Quiet hours on**, choose **From** and **Until**, optionally
+**My timezone** (for example `Europe/Berlin`; empty means the installation timezone), then click **Save**.
+
+During quiet hours, normal notifications to Email, Telegram, Discord, WhatsApp and Push wait until the period ends.
+They are never held:
+
+- critical security and account-compromise alerts;
+- critical backup and recovery alerts;
+- notifications the administrator made critical.
+
+In-app notifications are silent and always arrive at once.
+
+## Digests {#digests}
+
+For a category set to **Daily digest** or **Weekly digest**, normal notifications to external channels are collected.
+They are sent as one summary per channel at **Digest time**: daily, or on Mondays for weekly digests. Critical security
+alerts and critical backup failures always arrive immediately. Each item in a digest shows **Sent in digest** in your
+delivery status.
+
+## My delivery status {#delivery-status}
+
+**My account → Notifications → My delivery status** lists what happened to each message on each channel:
+
+| Status | Meaning |
+| --- | --- |
+| **Delivered** | Accepted by the channel. |
+| **Retrying** | A temporary failure; it is tried again automatically. |
+| **Failed** | Gave up after the retries. |
+| **Fallback Used** | This channel failed and the next one of your chain took over. |
+| **Channel Disconnected** | The channel was not ready (not linked, webhook deleted, no email address). |
+| **Held (quiet hours)** | Waiting for the end of your quiet hours. |
+| **Waiting for digest** / **Sent in digest** | Collected for your daily or weekly summary. |
+| **Not Selected** | You did not choose this channel for the event. |
+
+You only ever see your own messages.
+
+## Delivery health (administrators) {#delivery-health}
+
+**Settings → Notifications → Notification delivery health** shows, for the last 7 days:
+
+- the number of messages per channel and status;
+- messages waiting more than 6 hours;
+- how many fallbacks were used;
+- broken Discord webhooks;
+- the state of the WhatsApp Personal bridge.
+
+It shows counts only: no message text, addresses or secrets.
+
+![Notification delivery health for administrators](../images/screenshots/admin-delivery-health.png)
+
+## Test notifications {#test}
+
+- **Email and Telegram:** Settings → Connections → *Send test* (administrator).
+- **Discord and WhatsApp Personal:** *Send test* on their cards in My account → Notifications. Each is a clearly
+  marked TEST message, sent only to your own webhook or your own WhatsApp. The test text cannot be changed.
+- **Templates:** Template Manager → *Send TEST* (see [Preview and TEST](#preview)).
 
 ## Noise control {#noise}
 

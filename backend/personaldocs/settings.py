@@ -25,6 +25,8 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 
 DEBUG = env_bool("DEBUG", False)
+# Recovery validation runs the application against a restored copy: no notifications, no integrations.
+SANDBOX = env_bool("SANDBOX", False)
 
 # Data/config locations (production defaults; overridden in development via env)
 DATA_DIR = Path(env("DATA_DIR", "/var/lib/personaldocs"))
@@ -111,6 +113,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "apps.security.traffic.AccessLogMiddleware",  # outermost: logs the final status (incl. policy denials)
+    "apps.core.middleware.RecoveryInProgressMiddleware",  # 503 while a full-system recovery runs
     "apps.core.middleware.LocalAccessCookieMiddleware",  # adjusts the final response
     "apps.security.middleware.AccessPolicyMiddleware",  # country/IP policy, before sessions and authentication
     "django.middleware.security.SecurityMiddleware",

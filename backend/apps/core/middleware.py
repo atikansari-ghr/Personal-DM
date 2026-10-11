@@ -38,9 +38,33 @@ class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
+    _tiles = {"at": 0.0, "origin": ""}
+
+    @classmethod
+    def tile_origin(cls) -> str:
+        """Origin of the configured map tile server (images only), cached for a minute."""
+        import time
+        import urllib.parse
+
+        if time.monotonic() - cls._tiles["at"] > 60:
+            origin = ""
+            try:
+                from apps.core import config
+
+                if config.get("security.map_enabled"):
+                    u = urllib.parse.urlsplit(config.get("security.map_tile_url") or "")
+                    if u.scheme == "https" and u.hostname and "{" not in u.hostname.replace("{s}", ""):
+                        origin = f"https://{u.netloc}".replace("{s}", "*")
+            except Exception:  # noqa: BLE001 - before migrations / without a database
+                origin = ""
+            cls._tiles.update(at=time.monotonic(), origin=origin)
+        return cls._tiles["origin"]
+
     def __call__(self, request):
         response = self.get_response(request)
-        response.setdefault("Content-Security-Policy", self.CSP)
+        tiles = self.tile_origin()
+        csp = self.CSP.replace("img-src 'self' data: blob:", f"img-src 'self' data: blob: {tiles}") if tiles else self.CSP
+        response.setdefault("Content-Security-Policy", csp)
         response.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)")
         path = request.path
         if path.startswith("/api/") or path.startswith("/s/"):
@@ -48,3 +72,25 @@ class SecurityHeadersMiddleware:
             response["Cache-Control"] = "no-store, private"
             response["Pragma"] = "no-cache"
         return response
+
+
+class RecoveryInProgressMiddleware:
+    """While a full-system recovery runs (marker written by ``personaldocs recover``), the instance never presents
+    itself as healthy or usable: every request gets 503 until recovery, validation and the report are finished."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from pathlib import Path
+
+        from django.conf import settings
+        from django.http import HttpResponse, JsonResponse
+
+        if (Path(settings.DATA_DIR) / "recovery-in-progress").exists():
+            if request.path.startswith("/api/"):
+                return JsonResponse({"error": "Recovery in progress. The application opens when the recovery has finished.",
+                                     "code": "recovery_in_progress"}, status=503, headers={"Retry-After": "60"})
+            return HttpResponse("Personal Documents Management System: recovery in progress. Please try again later.",
+                                status=503, content_type="text/plain", headers={"Retry-After": "60"})
+        return self.get_response(request)

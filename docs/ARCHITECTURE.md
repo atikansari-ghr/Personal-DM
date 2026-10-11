@@ -339,3 +339,53 @@ web app (personaldocs user):                                   runuser PING as p
   - unknown file paths answer 404 instead of the SPA page.
 - **Themes:** semantic CSS tokens per `data-theme` on `<html>`, set early by `theme-hint.js` and authoritatively from
   the account preference; glass presets add selective `backdrop-filter`. See [ADR 0019](adr/0019-theme-tokens-glass.md).
+
+## Encrypted recovery, notification routing and sign-in security (change set T)
+
+**Backup & Recovery** (`apps/ops`, ADR 0020):
+
+```
+scheduler.backup_tick ──► job backup_point ──► bk_engine.create_point
+                                                 ├─ build in DATA_DIR/backup-staging (pg_dump → STREAM AES-256-GCM, objects, settings, secrets)
+                                                 ├─ replicate ──► bk_destinations: local | nas | s3 | gdrive | onedrive  (RecoveryCopy per destination)
+                                                 └─ verify_copy (re-read, decrypt, manifest, chain, pg_restore --list) ──► health()
+```
+
+| Module | Role |
+| --- | --- |
+| `bk_crypto` | Recovery Key format, KEK/DEK wrapping, STREAM file encryption, Emergency Recovery Package (scrypt). |
+| `bk_keys` | Key generations, reveal, readiness. |
+| `bk_rotate` | Re-encrypts copies under a new generation. |
+| `bk_engine` | Points, chains, replication, verification, retention, pre-change backups, health. |
+| `bk_validation` | Test restore into a scratch database; Automated Recovery Validation into an isolated database. |
+| `bk_restore` | Recovery Explorer, scoped by today's permissions; restore plans with impact analysis. |
+| `bk_recover` | Disaster recovery from bootstrap sources, resumable, Normal/Compromise, report. Used by `manage.py recover`, `personaldocs recover` and installer option 2. |
+| `bk_integrations` | Hold and verification of restored integrations. |
+| `bk_views` | HTTP API, step-up authentication and job handlers. |
+
+How the pieces stay safe:
+
+- A PostgreSQL advisory lock serialises backups and rotations.
+- `RecoveryInProgressMiddleware` answers 503 while `DATA_DIR/recovery-in-progress` exists.
+- `PD_SANDBOX` disables delivery and the scheduler for validation restores.
+
+**Notifications** (`apps/notify`, ADR 0021):
+
+```
+event ─► expiry.dispatch ─► routing.plan (category, quiet hours, digest)
+                        └─► Outbox ─► deliver_one ─► email | telegram | push | discord | whatsapp (bridge on 127.0.0.1)
+                                                └─ on failure: _fallback ─► next channel (once)
+```
+
+The WhatsApp bridge (`bridge/whatsapp`, Node, Baileys pinned) is an optional systemd unit
+(`personaldocs-whatsapp.service`). It has a bearer token and one session folder per person.
+
+**Sign-in security** (`apps/security`, ADR 0022):
+
+- `location.resolve` checks a Trusted Zone first (longest prefix), then a private network, then local GeoIP.
+  `location.classify` assigns the risk level with its reasons.
+- `accounts.sessions.recognize` binds sessions to a hashed `pd_device` cookie.
+- The sign-in map is drawn by Leaflet (bundled). The CSP `img-src` includes the configured tile origin.
+
+**Help:** guides are served from `docs/guides`, and images through `/api/help/asset/`. `renderMarkdown` renders
+callouts, and `scripts/check_docs.py` keeps links, anchors and screenshots consistent.
