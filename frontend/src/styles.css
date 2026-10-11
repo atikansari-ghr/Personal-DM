@@ -1003,6 +1003,7 @@ tr.risk-high td { background: var(--danger-bg); }
 .help-article { min-width: 0; }
 .help-article img.doc-shot { display: block; max-width: 100%; height: auto; margin: 0.6rem 0 1rem; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); background: #fff; }
 .help-article pre { overflow-x: auto; }
+.markdown :not(pre) > code { overflow-wrap: anywhere; } /* long URLs and paths in guides wrap instead of widening the page */
 .help-article table { display: block; overflow-x: auto; max-width: 100%; }
 .breadcrumbs { color: var(--muted); margin-bottom: 0.5rem; }
 .breadcrumbs a { color: inherit; }

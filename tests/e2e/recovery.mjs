@@ -197,7 +197,7 @@ await step("AT-334 Help: categories, breadcrumbs, TOC, callouts and contextual L
   expect(await page.locator(".callout").count() > 0, "callouts rendered");
   const imgs = await page.locator("img.doc-shot").count();
   expect(imgs > 0, "screenshots next to the steps");
-  await page.waitForFunction(() => [...document.querySelectorAll("img.doc-shot")].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 });
+  // that every guide screenshot actually loads is checked after screenshots.mjs has captured them ("AT-334 guide screenshots load")
   // every Learn more link on the backup page resolves to an existing heading
   await page.goto(BASE + "/settings/backup");
   const hrefs = await page.locator("a[href^='/help/']").evaluateAll((as) => as.map((a) => a.getAttribute("href")));

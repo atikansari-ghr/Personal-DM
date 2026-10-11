@@ -228,6 +228,16 @@ await step("AT-333 Backup & Recovery, Recovery Explorer, notifications and sign-
   await dismiss();
 });
 
+await step("AT-334 guide screenshots load in Help (after capture)", async () => {
+  const P = D.page;
+  for (const slug of ["backup-restore", "notifications", "security-map", "discord", "documentation"]) {
+    await P.goto(BASE + "/help/" + slug);
+    await P.waitForSelector(".breadcrumbs");
+    expect(await P.locator("img.doc-shot").count() > 0, `${slug}: screenshots next to the steps`);
+    await P.waitForFunction(() => [...document.querySelectorAll("img.doc-shot")].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 });
+  }
+});
+
 await D.ctx.close();
 await browser.close();
 fs.writeFileSync(`${SHOTS}/../screenshot-manifest.json`, JSON.stringify(manifest, null, 1) + "\n");
