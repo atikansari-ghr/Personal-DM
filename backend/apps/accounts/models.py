@@ -150,6 +150,8 @@ class UserSession(models.Model):
     method = models.CharField(max_length=40, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
     ended_at = models.DateTimeField(null=True, blank=True)
+    recognized_device = models.ForeignKey("security.RecognizedDevice", null=True, blank=True, on_delete=models.SET_NULL,
+                                          related_name="sessions")
 
     class Meta:
         ordering = ["-last_seen_at"]

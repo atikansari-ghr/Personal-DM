@@ -529,6 +529,15 @@ SETTINGS: list[SettingDef] = [
     SettingDef("audit.retention_days", "Audit log retention (days)", "Audit events older than this are deleted. 0 keeps forever.",
                "int", 730, "activity", min=0, max=36500, help="settings#activity"),
     # ---- Security & access
+    SettingDef("security.map_enabled", "Sign-in map", "Show sign-ins on a map (Trusted Zone pins and approximate GeoIP "
+               "positions). Uses online map tiles; sign-in addresses are never sent to the tile server or a geolocation service.",
+               "bool", True, "security", help="security-map#map"),
+    SettingDef("security.map_tile_url", "Map tile server", "Address template of a privacy-conscious tile server (https, with "
+               "{z}/{x}/{y}). The browser requests ordinary picture tiles from it.", "url",
+               "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "security", depends_on=("security.map_enabled",), max=300,
+               validator=lambda v: _validate_tiles(v), help="security-map#tiles", example="https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+    SettingDef("security.map_attribution", "Map attribution", "Credit line required by the tile provider.", "str",
+               "© OpenStreetMap contributors", "security", depends_on=("security.map_enabled",), max=200, help="security-map#tiles"),
     SettingDef("security.login_audit_retention_days", "Login audit retention (days)",
                "Sign-in records older than this are deleted by the nightly maintenance. 0 keeps them forever.",
                "int", 365, "security", min=0, max=3650, effect="Applies at the next nightly maintenance run.",
@@ -788,6 +797,11 @@ SETTINGS: list[SettingDef] = [
     SettingDef("me.digest_time", "Digest time", "Local time when daily and weekly digests are sent (weekly: Mondays).", "time",
                "08:00", "my_notifications_hidden", scope=USER, editable_by=SELF, help="notifications#digests"),
 ]
+
+
+def _validate_tiles(v):
+    if v and (not v.startswith("https://") or not all(x in v for x in ("{z}", "{x}", "{y}"))):
+        raise SettingError("Use an https:// tile address containing {z}, {x} and {y}.")
 
 
 def _validate_tz(v):

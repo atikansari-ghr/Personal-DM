@@ -1,6 +1,8 @@
 """Login audit and geographic/IP access policy."""
 from __future__ import annotations
 
+import uuid
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -30,10 +32,64 @@ class LoginEvent(models.Model):
     passkey_used = models.BooleanField(default=False)
     oidc_used = models.BooleanField(default=False)
     flags = models.JSONField(default=list, blank=True)  # new_ip, new_country, policy_exception, escalated
+    # Change Set T: Trusted Zone / location resolution, map coordinates, device recognition and explainable risk
+    zone = models.ForeignKey("TrustedZone", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    zone_name = models.CharField(max_length=80, blank=True)
+    network = models.CharField(max_length=20, blank=True)  # trusted_zone | private | public | unknown
+    location = models.CharField(max_length=120, blank=True, help_text="Display location (zone label or approximate GeoIP place)")
+    lat = models.FloatField(null=True, blank=True)
+    lon = models.FloatField(null=True, blank=True)
+    coord_source = models.CharField(max_length=20, blank=True)  # zone_pin | geoip_city | geoip_country | ""
+    recognized_device = models.ForeignKey("RecognizedDevice", null=True, blank=True, on_delete=models.SET_NULL, related_name="events")
+    new_device = models.BooleanField(default=False)
+    risk = models.CharField(max_length=10, blank=True, db_index=True)  # normal | low | warning | high
+    risk_reasons = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["-at"]
         indexes = [models.Index(fields=["user", "-at"]), models.Index(fields=["result", "-at"])]
+
+
+class TrustedZone(models.Model):
+    """A named network (Home, VPN, Office …) with one or more IPv4/IPv6 CIDRs and an optional configured map pin.
+    Membership is one risk signal only: a sign-in from a Trusted Zone is not automatically safe."""
+
+    CLASSES = ("home", "vpn", "office", "family", "other")
+    id = models.BigAutoField(primary_key=True)
+    name = models.CharField(max_length=80, unique=True)
+    cidrs = models.JSONField(default=list)
+    classification = models.CharField(max_length=10, default="home")
+    description = models.CharField(max_length=200, blank=True)
+    pin_lat = models.FloatField(null=True, blank=True)
+    pin_lon = models.FloatField(null=True, blank=True)
+    pin_label = models.CharField(max_length=80, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        ordering = ["name"]
+
+
+class RecognizedDevice(models.Model):
+    """A browser/app a person signed in from. Identified by a random long-lived cookie (only its hash is stored)."""
+
+    RECOGNIZED, UNRECOGNIZED = "recognized", "unrecognized"
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="recognized_devices")
+    token_hash = models.CharField(max_length=64, db_index=True)
+    label = models.CharField(max_length=80, blank=True)
+    browser = models.CharField(max_length=40, blank=True)
+    os = models.CharField(max_length=40, blank=True)
+    device = models.CharField(max_length=10, blank=True)
+    first_seen = models.DateTimeField(default=timezone.now)
+    last_seen = models.DateTimeField(default=timezone.now)
+    last_ip = models.GenericIPAddressField(null=True, blank=True)
+    status = models.CharField(max_length=14, default=RECOGNIZED)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-last_seen"]
 
 
 class GeoPolicy(models.Model):

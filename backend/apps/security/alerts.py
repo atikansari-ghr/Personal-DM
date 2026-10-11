@@ -40,14 +40,26 @@ def _send(users, *, event: str, key: str, subject: str, body: str = "", facts=()
 
 
 def _where(event) -> str:
-    place = event.country_name or "unknown location"
-    return f"{event.ip or 'unknown address'} ({place})"
+    return event.location or event.country_name or "an unknown location"
+
+
+def _network(event) -> str:
+    if event.network == "trusted_zone":
+        return f"{event.zone_name} — Trusted Zone"
+    return {"private": "Private network", "public": "Public network"}.get(event.network, "Unknown network")
 
 
 def _login_facts(event) -> list:
+    """Routine notifications minimise the public address: location and network, the full address is under
+    Security details in the app (people see their own; authorised administrators see everyone's)."""
+    from .location import privacy_ip
+
     device = " · ".join(x for x in (event.browser, event.os, event.device) if x)
-    return [("IP address", event.ip or "unknown"), ("Country", event.country_name or event.country or "unknown"),
-            ("Sign-in method", event.method), ("Device", device)]
+    facts = [("Location", event.location or event.country_name or "unknown"), ("Network", _network(event)),
+             ("IP address", privacy_ip(event.ip, event.network)), ("Sign-in method", event.method), ("Device", device)]
+    if event.risk and event.risk != "normal":
+        facts.append(("Risk", f"{event.risk.title()}: " + "; ".join(event.risk_reasons[:2])))
+    return facts
 
 
 def on_login_event(event) -> None:
@@ -72,11 +84,17 @@ def on_login_event(event) -> None:
     if "new_country" in flags and config.get("alerts.new_country") and not _throttled(f"newc:{event.user_id}:{event.country}", 86400):
         _send({event.user, *_admins()}, event="security.new_country", key=f"sec:newc:{event.id}",
               subject="Sign-in from a new country",
-              body=f"{who} signed in from {_where(event)} for the first time. If this was not expected, change the password and sign out other devices.",
+              body=f"{who} signed in from {_where(event)} for the first time (location from GeoIP, approximate). If this was not expected, change the password and sign out other devices.",
               facts=_login_facts(event))
     elif "new_ip" in flags and config.get("alerts.new_ip") and not _throttled(f"newip:{event.user_id}:{event.ip}", 86400):
         _send({event.user, *_admins()}, event="security.new_ip", key=f"sec:newip:{event.id}",
               subject="Sign-in from a new address", body=f"{who} signed in from a new address.", facts=_login_facts(event))
+    if event.risk == "high" and not _throttled(f"risk:{event.user_id}", 3600):
+        _send({event.user, *_admins()}, event="security.risky_signin", key=f"sec:risk:{event.id}",
+              subject="Unusual sign-in detected",
+              body=f"{who} signed in from {_where(event)}. " + "; ".join(event.risk_reasons) + ". The sign-in was not blocked "
+                   "(GeoIP is approximate). If this was not you, mark the device as Unrecognized and change your password.",
+              facts=_login_facts(event), link="/settings/account?tab=signins")
     if "policy_exception" in flags and config.get("alerts.policy_exception") and not _throttled(f"exc:{event.user_id}", 3600):
         _send(_admins(), event="security.policy_exception", key=f"sec:exc:{event.id}",
               subject="Sign-in allowed by temporary country access",

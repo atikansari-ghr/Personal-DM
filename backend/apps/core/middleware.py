@@ -38,9 +38,33 @@ class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
+    _tiles = {"at": 0.0, "origin": ""}
+
+    @classmethod
+    def tile_origin(cls) -> str:
+        """Origin of the configured map tile server (images only), cached for a minute."""
+        import time
+        import urllib.parse
+
+        if time.monotonic() - cls._tiles["at"] > 60:
+            origin = ""
+            try:
+                from apps.core import config
+
+                if config.get("security.map_enabled"):
+                    u = urllib.parse.urlsplit(config.get("security.map_tile_url") or "")
+                    if u.scheme == "https" and u.hostname and "{" not in u.hostname.replace("{s}", ""):
+                        origin = f"https://{u.netloc}".replace("{s}", "*")
+            except Exception:  # noqa: BLE001 - before migrations / without a database
+                origin = ""
+            cls._tiles.update(at=time.monotonic(), origin=origin)
+        return cls._tiles["origin"]
+
     def __call__(self, request):
         response = self.get_response(request)
-        response.setdefault("Content-Security-Policy", self.CSP)
+        tiles = self.tile_origin()
+        csp = self.CSP.replace("img-src 'self' data: blob:", f"img-src 'self' data: blob: {tiles}") if tiles else self.CSP
+        response.setdefault("Content-Security-Policy", csp)
         response.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)")
         path = request.path
         if path.startswith("/api/") or path.startswith("/s/"):

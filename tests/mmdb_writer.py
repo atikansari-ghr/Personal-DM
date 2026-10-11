@@ -23,6 +23,8 @@ def _ctrl(type_num: int, size: int) -> bytes:
 
 
 def encode(value) -> bytes:
+    if isinstance(value, float):
+        return _ctrl(3, 8) + struct.pack(">d", value)
     if isinstance(value, str):
         raw = value.encode()
         return _ctrl(2, len(raw)) + raw
@@ -48,10 +50,15 @@ def build(networks: dict[str, tuple[str, str]], path) -> None:
     root = [None, None]
     data = b""
     offsets = {}
-    for cidr, (code, name) in networks.items():
+    for cidr, val in networks.items():
+        code, name = val[0], val[1]
         net = ipaddress.ip_network(cidr)
         rec = {"country": {"iso_code": code, "names": {"en": name}}}
-        key = (code, name)
+        if len(val) >= 4:  # City-style record with approximate coordinates (lat, lon[, city])
+            rec["location"] = {"latitude": float(val[2]), "longitude": float(val[3]), "accuracy_radius": ("u16", 50)}
+            if len(val) > 4:
+                rec["city"] = {"names": {"en": val[4]}}
+        key = tuple(val)
         if key not in offsets:
             offsets[key] = len(data)
             data += encode(rec)

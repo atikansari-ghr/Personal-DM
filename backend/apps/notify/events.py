@@ -82,6 +82,9 @@ def default_actions(event: str, *, link: str = "", context: dict | None = None) 
         acts += [Action("review_activity", "Review Activity", "/settings/account?tab=security", primary=True),
                  Action("sessions", "Manage Sessions", "/settings/account?tab=security"),
                  Action("change_password", "Change Password", "/settings/account?tab=security")]
+    elif event in ("security.risky_signin", "security.device_unrecognized"):
+        acts += [Action("security_details", "View Security Details", "/settings/account?tab=signins", primary=True),
+                 Action("change_password", "Change Password", "/settings/account?tab=security")]
     elif event in ("security.failed_logins", "security.policy_exception"):
         acts += [Action("review_activity", "Review Activity", "/settings/activity?view=logins", primary=True),
                  Action("access_policy", "Access policy", "/settings/security?view=access")]

@@ -18,6 +18,7 @@ from apps.mailimport import views as mail
 from apps.notify import views as notify, views_rich as nrich
 from apps.ops import bk_views as bk, views as ops
 from apps.security import views as sec
+from apps.security import views_signins as signin
 
 
 # Paths that name a file (icons, manifests, scripts…) are never answered with the app page: a missing icon must be a
@@ -286,6 +287,12 @@ api = [
     path("recovery/mine", bk.my_recovery),
     path("integrity", ops.integrity_api),
     path("admin/security/logins", sec.logins),
+    path("security/zones", signin.zones),
+    path("security/zones/<int:pk>", signin.zone_detail),
+    path("security/zones/test", signin.zone_test),
+    path("security/map", signin.signin_map),
+    path("security/devices", signin.devices),
+    path("security/devices/<uuid:pk>/unrecognize", signin.device_unrecognize),
     path("admin/security/policy", sec.access_policy),
     path("admin/security/policy/rollback", sec.access_policy_rollback),
     path("admin/security/policy/test", sec.access_policy_test),

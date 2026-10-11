@@ -14,4 +14,13 @@ class AccountStateMiddleware:
 
             if not user.is_active or request.session.get("epoch", 0) != user.session_epoch or not check(request):
                 logout(request)
-        return self.get_response(request)
+        response = self.get_response(request)
+        token = getattr(request, "_pd_device_cookie", None)
+        if token:  # set at sign-in for a new recognised device (HttpOnly, never readable by scripts)
+            from django.conf import settings
+
+            from .sessions import DEVICE_COOKIE, DEVICE_COOKIE_DAYS
+
+            response.set_cookie(DEVICE_COOKIE, token, max_age=DEVICE_COOKIE_DAYS * 86400, httponly=True, samesite="Lax",
+                                secure=getattr(settings, "SECURE_COOKIES", False), path="/")
+        return response
