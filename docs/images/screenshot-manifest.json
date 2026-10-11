@@ -15,7 +15,7 @@
  },
  {
   "file": "settings-offline-pwa.png",
-  "caption": "Settings \u2192 Offline & PWA: policy, per-person access, devices and app icons",
+  "caption": "Settings → Offline & PWA: policy, per-person access, devices and app icons",
   "source": "real application, synthetic demo data",
   "viewport": "1440x900",
   "pixelRatio": 2
@@ -116,6 +116,111 @@
   "caption": "Phone: offline access",
   "source": "real application, synthetic demo data",
   "viewport": "390x844",
+  "pixelRatio": 2
+ },
+ {
+  "file": "backup-overview.png",
+  "caption": "Backup & Recovery: health, newest verified point, readiness and destinations",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "backup-policy-dialog.png",
+  "caption": "Policy: weekly Full backup, incremental every 4 hours, keep 4 weeks",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "backup-destination-dialog.png",
+  "caption": "Add destination: a local folder on another disk",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "backup-points.png",
+  "caption": "Recovery points with copies per destination and actions",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "backup-delete-dialog.png",
+  "caption": "Protected deletion: dependants, coverage and step-up",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "backup-key.png",
+  "caption": "Recovery Key page: key hidden, readiness, export and rotation",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "backup-stepup.png",
+  "caption": "Step-up confirmation before revealing the Recovery Key",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "recovery-explorer.png",
+  "caption": "Recovery Explorer: restore points, folders, documents and versions",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "recovery-impact.png",
+  "caption": "Restore Impact Analysis before anything changes",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "notifications-routing.png",
+  "caption": "Routing by category: channels, fallback chain and digests",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "notifications-channels.png",
+  "caption": "Discord webhook and WhatsApp Personal (experimental) cards",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "admin-delivery-health.png",
+  "caption": "Notification delivery health for administrators (counts only)",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "security-trusted-zones.png",
+  "caption": "Trusted Zones with several networks and a configured map pin",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "security-signin-map.png",
+  "caption": "Sign-in map: Trusted Zone pin, recent sign-ins with explainable risk",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "security-devices.png",
+  "caption": "Mark Unrecognized: sessions end, follow-up actions are offered",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
   "pixelRatio": 2
  }
 ]

@@ -1,6 +1,6 @@
 # Test report
 
-Date: 2026-10-03, updated 2026-10-06 (change sets K and L), 2026-10-07 (change sets M, N, O and P) and 2026-10-08 (change sets Q and R) and 2026-10-09 (change set S). Revision: the branch head at the commit that adds this file.
+Date: 2026-10-03, updated 2026-10-06 (change sets K and L), 2026-10-07 (change sets M, N, O and P) and 2026-10-08 (change sets Q and R) 2026-10-09 (change set S) and 2026-10-11 (change set T). Revision: the branch head at the commit that adds this file.
 
 ## Environment actually used
 
@@ -56,6 +56,69 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
+## Change set T: encrypted backup and recovery, notification routing, sign-in security, rich guides {#change-set-t}
+
+**Numbering.** The change prompt numbered its tests AT-251…AT-310. Here they are **AT-276…AT-335** (prompt AT-n →
+AT-(n+25)). The per-scenario status is in [TRACEABILITY.md](TRACEABILITY.md).
+
+**Environment.** The same development container as above (Ubuntu 24.04, PostgreSQL 16, Python 3.13, Node 22, Chromium
+via Playwright). There was no Debian 13 host, no NAS, no S3, no Google or Microsoft account, no WhatsApp phone and no
+Discord server. OCRmyPDF ran as `python3.12 -m ocrmypdf` (`PD_OCRMYPDF_CMD`), because the container's system
+`ocrmypdf` is broken; the same tests fail on `main` without it.
+
+| Command | Result |
+|---|---|
+| `pytest tests/test_backup_engine.py tests/test_recovery_api.py tests/test_disaster_recovery.py tests/test_notification_channels.py tests/test_signin_security.py` | All passed: engine 16, recovery API 16, disaster recovery 7 (real `pg_dump`/`pg_restore` against the PostgreSQL test database, including a scratch-database test restore and a restore into a separate validation database), channels 13, sign-in security 9 |
+| Full `pytest` (2026-10-11) | **447 tests: 441 passed, 5 skipped (live-only tests), 1 failed.** The failure was `test_at332_at334_documentation_checker_passes`, run before the 15 new screenshots and this section existed; after they were added, `scripts/check_docs.py` passes (see below) |
+| `python3 scripts/check_docs.py` | **OK** after the 15 new screenshots were added (links, anchors, alt text, no orphan screenshots, Learn more links, review dates) |
+| `scripts/e2e.sh` (fresh database, `PD_E2E_PROXY_CA` set for map tiles behind the sandbox proxy) | **125 PASS, 0 FAIL** (final run, exit 0): flow 14; accessibility with **no serious or critical violations**; parity and layout (all 7 viewports); offline 9; PWA 4; themes 6; **recovery 10** (destination and policy, encrypted point, step-up Recovery Key reveal, Emergency Recovery Package, Recovery Explorer restore with impact analysis, protected deletion, routing and quiet hours, Trusted Zone and sign-in map, Help navigation, 390 px phone layout); **screenshots 7** (the 15 new documentation captures, and guide images load in Help). Earlier runs that failed are listed under defects below |
+| `bash -n` + `shellcheck` (`personal-DM.sh`, `scripts/personaldocs`, `scripts/verify.sh`, `scripts/e2e.sh`) | Clean |
+| `sudo bash tests/installer/test_personal_dm.sh` (includes menu option 2 *Recover Existing Installation*) | 18/18 passed (stubbed system commands) |
+| `scripts/privacy_check.sh` | **OK** |
+| `node bridge/whatsapp/server.mjs --selftest` | Passed; a live start produced a real WhatsApp QR code (no phone was linked) |
+
+**Defects found by these tests and the screenshot review, all fixed:**
+
+- Channel labels were renamed ("In-App", "PWA Push"), which broke existing screens and tests. The existing labels are
+  back.
+- Help on phones and tablets: the hidden guide list overlapped (layout audit), and a long inline URL widened the page by
+  25 px at 390 px.
+- A new device on a private, non-zone network was rated **Warning**. It is now **Low**, as documented; Warning is for
+  new devices on public networks.
+- Automated Recovery Validation compared database hosts literally, so `localhost` and an empty host (socket) counted as
+  different servers. It could therefore have restored into the production database. They are now the same server, and
+  the validation refuses.
+- Untyped text inputs (destination dialog, address test, timezone) were unstyled.
+- The selected restore point and folder in the Recovery Explorer were white text on pale green.
+- The map legend and timeline dots were positioned by a global `.dot` rule, so they appeared in a page corner.
+- The routing table squeezed its channel and delivery controls (it inherited fixed cell widths). The WhatsApp badges
+  were spread across the card header, and its callout repeated "Experimental".
+- Dialogs could be clipped by an ancestor element. They now render at the end of `<body>`.
+- Test-only fixes: parity steps follow the new notification and backup screens; the recovery suite keeps its backup
+  folder for the screenshot suite; guide images are lazy-loaded, so they are checked by decoding them; the screenshot
+  browser proxies only `https://` and pins the proxy CA (TLS checks stay on); the privacy gate allows private networks
+  and still blocks public addresses outside the documentation ranges.
+- The bridge's `node_modules` had been committed by mistake in an unpushed commit. It was removed from history before
+  the first push and is now ignored.
+
+**Screenshot review.** All 15 new captures were checked by eye:
+
+- synthetic names only;
+- the Recovery Key is never shown (only its non-secret fingerprint);
+- no webhook address and no WhatsApp QR code or session data;
+- private Trusted Zone networks and loopback only; no public IP address;
+- a synthetic destination path;
+- the zone map pin is a generic city-centre point;
+- real OpenStreetMap tiles, with the attribution visible.
+
+**Not run (needs real accounts or hardware), so not reported as passed:**
+
+- a clean Debian 13 LXC recovery drill (AT-302, real part);
+- live NAS, S3, Google Drive and OneDrive destinations and bootstrap recovery (AT-303/304);
+- linking a real WhatsApp phone and a live bridge update (AT-313/315);
+- a real Discord server (AT-317);
+- Firefox, Safari and real phones.
+
 ## Change set S: offline access, PWA identity, themes, screenshots {#change-set-s}
 
 **Investigation and root causes.**
@@ -98,16 +161,16 @@ Screenshots of the real application with synthetic data are in `docs/screenshots
 
 These are on the [release checklist](RELEASE_CHECKLIST.md).
 
-## Acceptance summary (AT-01…AT-275) {#summary}
+## Acceptance summary (AT-01…AT-335) {#summary}
 
-260 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
+320 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
 
 | Result | Count | Scenarios |
 |---|---|---|
-| Passed (automated tests, or for AT-136, AT-245, AT-270, AT-272 and AT-274 including a documented review) | 203 | all scenarios not listed below |
-| Passed in automated tests; real-environment validation pending | 50 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195, 197, 202, 205, 206, 208, 211, 212, 214, 216, 228, 229, 230, 261 (physical iPhone/iPad), 262 (real Android/desktop installs), 267 (real low-end phones) |
+| Passed (automated tests, or for AT-136, AT-245, AT-270, AT-272, AT-274 and AT-333 including a documented review) | 257 | all scenarios not listed below |
+| Passed in automated tests; real-environment validation pending | 55 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195, 197, 202, 205, 206, 208, 211, 212, 214, 216, 228, 229, 230, 261 (physical iPhone/iPad), 262 (real Android/desktop installs), 267 (real low-end phones), 302 (clean Debian 13 LXC recovery), 303 (live NAS/S3), 313 and 315 (real WhatsApp phone and live bridge update), 317 (real Discord server) |
 | Blocked (external environment) | 5 | AT-14, AT-26; AT-24, AT-27, AT-30 (partly automated, the rest needs a real Debian 13 LXC) |
-| Not run (manual steps, not automated, or no environment) | 2 | AT-15, AT-241 (installed PWA on a real device) |
+| Not run (manual steps, not automated, or no environment) | 3 | AT-15, AT-241 (installed PWA on a real device), AT-304 (Google Drive / OneDrive recovery needs real accounts) |
 
 Pending external validations for change set M (none reported as passed): a real authentik server; public DNS, a
 valid TLS certificate and an Internet-accessible staging site for Internet Ready; the real host helper on Debian 13

@@ -122,6 +122,11 @@ Installations upgraded from the previous release keep their schedule. The old da
 the Full schedule of the **Default** policy, and incrementals start switched off. To follow the recommendation, set
 **Incremental every** to 4.
 
+A monthly Full backup on day 29, 30 or 31 runs on the last day of shorter months. The table shows each policy's schedule
+and its next Full backup:
+
+![Policies & schedule with a monthly Full backup on day 31 and incrementals every 4 hours](../images/screenshots/settings-backup.png)
+
 ### Safety backups before high-risk changes {#pre-update}
 
 Some operations first make a safety backup and deep-verify it, then continue:

@@ -76,14 +76,12 @@
   "AT-123/124 holiday countries and corrections in settings"
  ],
  [
-  "FAIL",
-  "AT-68 optional notification matrix persists; critical events locked",
-  "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[aria-label=\\'OCR / processing finished by In-app\\']')\u001b[22m\n"
+  "PASS",
+  "AT-68 optional notification matrix persists; critical events locked"
  ],
  [
-  "FAIL",
-  "AT-71 backup frequency shows the right fields and the next run",
-  "TimeoutError: page.waitForSelector: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#s-backup\\\\.frequency') to be visible\u001b[22m\n"
+  "PASS",
+  "AT-71 backup frequency shows the right fields and the next run"
  ],
  [
   "PASS",
