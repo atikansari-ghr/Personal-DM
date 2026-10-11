@@ -90,7 +90,9 @@ They follow the same rules as the README images, plus:
 - **Sign-in map:** sign-in addresses come from the documentation ranges (`203.0.113.0/24`, `198.51.100.0/24`), with
   private Trusted Zone networks.
 
-The map shows real OpenStreetMap tiles. Their attribution stays visible.
+The map shows real OpenStreetMap tiles. Their attribution stays visible. Behind an HTTPS proxy (`HTTPS_PROXY`) the
+capture browser uses the proxy for the tiles. If the proxy re-signs TLS, set `PD_E2E_PROXY_CA` to its CA certificate:
+Chromium then trusts exactly that key, and certificate checks stay on.
 
 `scripts/check_docs.py` fails when a guide references a missing image, an image has no alt text, or a screenshot is not
 used by any document.

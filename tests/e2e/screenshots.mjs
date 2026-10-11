@@ -7,6 +7,7 @@
 // Output: docs/images/screenshots/ (PUBLIC_SHOTS overrides) and a manifest with the source of each image.
 // Usage: BASE=http://localhost:8000 node tests/e2e/screenshots.mjs
 import { chromium } from "playwright";
+import crypto from "node:crypto";
 import fs from "node:fs";
 
 const BASE = process.env.BASE || "http://localhost:8000";
@@ -27,7 +28,15 @@ const PRIVATE = [
   [/(?<![A-Za-z0-9_-])(?![A-Za-z0-9_-]*[-_][A-Za-z]{4,}[-_][A-Za-z]{4,})[A-Za-z0-9_-]{40,}(?![A-Za-z0-9_-])/, "token-like string"], // file names made of words are not tokens
 ];
 
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
+// Map tiles are the only outside requests. In sandboxes that reach the Internet only through an HTTPS proxy
+// (HTTPS_PROXY set), the browser uses it too; the app itself is always reached directly.
+// If that proxy re-signs TLS, PD_E2E_PROXY_CA names its CA certificate: Chromium then trusts exactly that key
+// (an SPKI pin); certificate verification stays on.
+const PROXY = process.env.HTTPS_PROXY || process.env.https_proxy || "";
+const pin = (file) => crypto.createHash("sha256").update(new crypto.X509Certificate(fs.readFileSync(file)).publicKey.export({ type: "spki", format: "der" })).digest("base64");
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined,
+  proxy: PROXY ? { server: PROXY, bypass: "localhost,127.0.0.1" } : undefined,
+  args: PROXY && process.env.PD_E2E_PROXY_CA ? [`--ignore-certificate-errors-spki-list=${pin(process.env.PD_E2E_PROXY_CA)}`] : [] });
 const api = (page, url, opts = {}) => page.evaluate(async ([url, opts]) => {
   const csrf = decodeURIComponent((document.cookie.match(/pd_csrftoken=([^;]+)/) || [])[1] || "");
   const r = await fetch(url, { method: opts.method || (opts.body ? "POST" : "GET"), headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, body: opts.body ? JSON.stringify(opts.body) : undefined });
