@@ -262,6 +262,10 @@ MAX_ATTEMPTS = 5
 
 
 def deliver_outbox(limit: int = 100) -> dict:
+    from django.conf import settings as dj
+
+    if getattr(dj, "SANDBOX", False):
+        return {"sent": 0, "failed": 0, "sandbox": True}  # recovery validation: production notifications never fire
     now = timezone.now()
     done = failed = 0
     for msg in OutboxMessage.objects.filter(status=OutboxMessage.PENDING, next_attempt_at__lte=now).select_related("user")[:limit]:

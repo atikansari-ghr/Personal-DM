@@ -84,7 +84,12 @@ def channel_issue(user, channel: str) -> str | None:
     return None
 
 
+MAIN_ADMIN_PREFIXES = ("backup.", "recovery.")
+
+
 def applies_to(user, key: str) -> bool:
+    if key.startswith(MAIN_ADMIN_PREFIXES) and key != "recovery.restore":
+        return bool(user.is_main_admin)  # backups contain everyone's data: main administrator only
     return not EVENTS[key].admins_only or user.is_main_admin or getattr(user, "is_admin", False)
 
 

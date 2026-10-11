@@ -25,6 +25,8 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 
 DEBUG = env_bool("DEBUG", False)
+# Recovery validation runs the application against a restored copy: no notifications, no integrations.
+SANDBOX = env_bool("SANDBOX", False)
 
 # Data/config locations (production defaults; overridden in development via env)
 DATA_DIR = Path(env("DATA_DIR", "/var/lib/personaldocs"))

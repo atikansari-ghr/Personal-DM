@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 CHANNELS = ("in_app", "email", "telegram", "push")
-CATEGORIES = ("documents", "expiry", "ocr", "security", "system", "sharing")
+CATEGORIES = ("documents", "expiry", "ocr", "security", "system", "sharing", "backup")
 SEVERITIES = ("critical", "warning", "success", "info")
 
 
@@ -66,7 +66,30 @@ EVENTS: dict[str, Event] = {e.key: e for e in [
     Event("antivirus.unavailable", "Antivirus unavailable or scan failed", "ClamAV could not be reached or a scan failed; files stay usable but are marked Not scanned.", "security", admins_only=True, default_critical=True, always_critical=True, category="security", severity="critical", icon="alarm"),
     Event("antivirus.definitions", "Antivirus definitions stale or update failed", "Virus signatures are out of date or the signature update failed.", "security", admins_only=True, default_critical=True, always_critical=True, category="security", severity="warning", icon="shield"),
     Event("security.operations", "Security operations", "OS security updates, reboots, security-test results with Critical/High findings, storage warnings and log purges.", "security", admins_only=True, default_critical=True, category="system", severity="warning", icon="system"),
-    Event("backup.failed", "Backup failed", "The scheduled or manual backup did not complete.", "system", admins_only=True, default_critical=True, category="system", severity="critical", icon="backup"),
+    Event("backup.failed", "Backup failed", "A scheduled, manual or safety backup did not produce any usable copy.", "system", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="backup"),
+    # Backup & Recovery (Change Set T): main administrator only - backups hold every family member's data
+    Event("backup.succeeded", "Backup completed", "A recovery point was created and verified on every destination.", "system", admins_only=True, default_channels=("in_app",), category="backup", severity="success", icon="backup"),
+    Event("backup.partial", "Backup partly failed", "A recovery point is stored and verified on some destinations, but not all.", "system", admins_only=True, default_critical=True, category="backup", severity="warning", icon="backup"),
+    Event("backup.verification", "Backup verification warning or failure", "Deep verification found a problem in a stored backup copy.", "system", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="backup"),
+    Event("backup.destination", "Backup destination problem", "A destination is unavailable, needs authorisation again, or is out of space.", "system", admins_only=True, default_critical=True, category="backup", severity="warning", icon="storage"),
+    Event("backup.retention", "Backup retention cleanup", "Expired recovery points were removed by the retention policy (or could not be removed).", "system", admins_only=True, default_channels=("in_app",), category="backup", severity="info", icon="backup"),
+    Event("backup.pre_change", "Safety backup before a change", "A verified safety backup was made before a high-risk operation.", "system", admins_only=True, default_channels=("in_app",), category="backup", severity="success", icon="backup"),
+    Event("backup.pre_change_blocked", "High-risk operation blocked", "A safety backup could not be verified, so the high-risk operation was blocked.", "system", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="alarm"),
+    Event("backup.config_changed", "Backup configuration changed", "A backup policy or destination was created, changed or removed.", "system", admins_only=True, default_critical=True, category="backup", severity="warning", icon="system"),
+    Event("backup.deleted", "Backup deleted manually", "The main administrator deleted a recovery point (and its dependents).", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="alarm",
+          mandatory=("If you did not delete this backup, change your password, review sessions and passkeys, and check the remaining recovery points now.",)),
+    Event("backup.downloaded", "Encrypted backup downloaded", "A complete encrypted backup package was downloaded from the web interface.", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="warning", icon="backup",
+          mandatory=("If you did not download this backup, change your password and review your sessions immediately.",)),
+    Event("recovery.key_revealed", "Backup Recovery Key revealed", "The Backup Recovery Key was shown or copied after step-up authentication.", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="key",
+          mandatory=("The key itself is never sent in a notification.", "If you did not reveal the key, rotate the Recovery Key and change your password now.")),
+    Event("recovery.key_rotated", "Backup Recovery Key rotated", "A new Recovery Key generation was created and retained backups were re-encrypted.", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="warning", icon="key",
+          mandatory=("Export a new Emergency Recovery Package: the previous one is now outdated.",)),
+    Event("recovery.emergency", "Emergency Recovery Package", "An Emergency Recovery Package was exported, or the exported package is outdated.", "security", admins_only=True, default_critical=True, category="backup", severity="warning", icon="key"),
+    Event("recovery.restore", "Restore started, completed or failed", "A restore from a backup ran (version, document, folder, user or full system).", "system", default_channels=("in_app", "email"), category="backup", severity="info", icon="backup"),
+    Event("recovery.full", "Full system recovery", "The whole application was restored from a recovery point.", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="backup"),
+    Event("recovery.compromise", "Compromise recovery performed", "The system was recovered in Compromise/Cyberattack mode: sessions and device trust were reset.", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="alarm",
+          mandatory=("A security review is required: open the Recovery & Security Report and complete the follow-up actions.",)),
+    Event("recovery.validation", "Recovery validation result", "Automated recovery validation restored a backup into the isolated environment (or failed).", "system", admins_only=True, default_channels=("in_app", "email"), category="backup", severity="info", icon="backup"),
     Event("integrity.failed", "Integrity problems", "The storage integrity check found missing or changed files.", "system", admins_only=True, default_critical=True, category="system", severity="critical", icon="storage"),
     # documents
     Event("expiry.reminder", "Expiry reminders", "Reminders before a confirmed expiry date (90/60/30/7/0 days by default).", "documents", category="expiry", severity="warning", icon="calendar"),

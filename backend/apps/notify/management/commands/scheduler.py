@@ -37,6 +37,10 @@ def tick() -> dict:
     from apps.notify import expiry, telegram
     from apps.notify.models import SchedulerRun
 
+    from django.conf import settings as dj
+
+    if getattr(dj, "SANDBOX", False):
+        return {"sandbox": True}  # recovery validation copy: no reminders, deliveries, imports or backups
     out = {}
     now_local = expiry.local_now()
     SchedulerRun.objects.update_or_create(name="scheduler_heartbeat", defaults={"last_run_at": timezone.now()})

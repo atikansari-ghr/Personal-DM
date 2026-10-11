@@ -41,7 +41,7 @@ SEVERITY: dict[str, tuple[str, str, str, str, str]] = {
 }
 
 CATEGORY_LABELS = {"documents": "Documents", "expiry": "Expiry & renewal", "ocr": "OCR & Local AI", "security": "Security",
-                   "system": "System", "sharing": "Sharing & access"}
+                   "system": "System", "sharing": "Sharing & access", "backup": "Backup & Recovery"}
 
 # a detail label from older call sites -> icon
 FACT_ICONS = {
