@@ -55,6 +55,17 @@ def backup_status(request):
 @api_view(["POST"])
 @permission_classes([IsMainAdmin])
 def backup_now(request):
+    from . import bk_engine
+
+    if bk_engine.configured():  # encrypted recovery points (Change Set T); the old folder format is legacy only
+        from .bk_views import jobs_running
+
+        if jobs_running():
+            return Response({"error": "A backup is already running."}, status=409)
+        jobs.enqueue("backup_point", {"policy": bk_engine.default_policy().id, "kind": "full", "trigger": "manual",
+                                      "actor": str(request.user.pk)}, max_attempts=1)
+        audit.record("backup.requested", request=request)
+        return Response({"status": "queued"})
     try:
         backup.check_target()
     except backup.BackupError as exc:

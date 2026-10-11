@@ -7,4 +7,4 @@ class OpsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
 
     def ready(self):
-        from . import views  # noqa: F401 - registers job handlers
+        from . import bk_views, views  # noqa: F401 - registers job handlers

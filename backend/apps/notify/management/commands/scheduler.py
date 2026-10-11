@@ -57,14 +57,10 @@ def tick() -> dict:
 
     for acc in due_accounts():
         jobs.enqueue("email_poll", {"account_id": acc.id}, idempotency_key=f"email:{acc.id}:{timezone.now():%Y%m%d%H%M}")
-    if config.get("backup.target"):
-        from apps.ops import schedule
-
-        row, _ = SchedulerRun.objects.get_or_create(name="backup")
-        occ = schedule.due(now_local, row.last_run_at)
-        if occ is not None:
-            jobs.enqueue("backup", {"scheduled_for": occ.isoformat()}, max_attempts=1, idempotency_key=f"backup:{occ.isoformat()}")
-            SchedulerRun.objects.filter(name="backup").update(last_local_date=now_local.date(), last_run_at=timezone.now())
+    try:
+        out["backup"] = backup_tick(now_local)
+    except Exception:  # noqa: BLE001 - backup scheduling problems must not stop reminders
+        log.exception("backup scheduling failed")
     if _due_daily("maintenance", "03:30", now_local):
         days = int(config.get("audit.retention_days"))
         if days:
@@ -79,6 +75,33 @@ def tick() -> dict:
     except Exception:  # noqa: BLE001 - security housekeeping must not stop reminders/backups
         log.exception("security maintenance failed")
     return out
+
+
+def backup_tick(now_local) -> dict:
+    """Encrypted recovery points per policy (Full on its schedule, incrementals every N hours), copy retries and
+    optional automated recovery validation. A configured legacy backup folder without policies is adopted as a
+    destination first (same as the upgrade migration), so no unencrypted folder backups are made any more."""
+    from apps.ops import bk_engine
+    from apps.ops.models import BackupPolicy, RestoreRun
+
+    if config.get("backup.target") and not BackupPolicy.objects.exists():
+        import importlib
+
+        from django.apps import apps as django_apps
+
+        importlib.import_module("apps.ops.migrations.0002_migrate_backup_settings").forwards(django_apps, None)
+    queued = []
+    for pol, kind, slot in bk_engine.due_points(now_local):
+        jobs.enqueue("backup_point", {"policy": pol.id, "kind": kind, "trigger": "scheduled", "slot": slot}, max_attempts=1,
+                     idempotency_key=f"bkp:{pol.id}:{kind}:{slot}")
+        queued.append(kind)
+    jobs.enqueue("backup_retry", {}, idempotency_key=f"bkretry:{timezone.now():%Y%m%d%H}{timezone.now().minute // 15}")
+    days = [p.validation_days for p in BackupPolicy.objects.filter(enabled=True, validation_days__gt=0)]
+    if days:
+        last = RestoreRun.objects.filter(kind="validation").first()
+        if last is None or timezone.now() - last.created_at >= timedelta(days=min(days)):
+            jobs.enqueue("recovery_validation", {}, max_attempts=1, idempotency_key=f"validate:{now_local.date()}")
+    return {"queued": queued}
 
 
 class Command(BaseCommand):

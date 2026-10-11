@@ -16,7 +16,7 @@ from apps.library import offline as offl
 from apps.library import export, ocr_views as ocrv, views as lib, views_import as imp, views_share as share, views_types as vt
 from apps.mailimport import views as mail
 from apps.notify import views as notify, views_rich as nrich
-from apps.ops import views as ops
+from apps.ops import bk_views as bk, views as ops
 from apps.security import views as sec
 
 
@@ -254,6 +254,29 @@ api = [
     path("backup", ops.backup_status),
     path("backup/run", ops.backup_now),
     path("backup/nas", ops.nas_api),
+    # Backup & Recovery (Change Set T)
+    path("backup/overview", bk.overview),
+    path("backup/stepup", bk.stepup),
+    path("backup/stepup/options", bk.stepup_options),
+    path("backup/policies", bk.policies),
+    path("backup/policies/<int:pk>", bk.policy_detail),
+    path("backup/destinations", bk.destinations),
+    path("backup/destinations/<int:pk>", bk.destination_detail),
+    path("backup/destinations/<int:pk>/test", bk.destination_test),
+    path("backup/now", bk.run_now),
+    path("backup/points/<uuid:pk>/delete", bk.point_delete),
+    path("backup/points/<uuid:pk>/download", bk.point_download),
+    path("backup/points/<uuid:pk>/<str:action>", bk.point_action),
+    path("backup/key/reveal", bk.key_reveal),
+    path("backup/key/rotate", bk.key_rotate),
+    path("backup/emergency", bk.emergency_export),
+    path("recovery/points", bk.recovery_points),
+    path("recovery/points/<uuid:pk>", bk.recovery_explore),
+    path("recovery/points/<uuid:pk>/compare/<uuid:doc>", bk.recovery_compare),
+    path("recovery/restore", bk.recovery_restore),
+    path("recovery/runs", bk.recovery_runs),
+    path("recovery/runs/<uuid:pk>", bk.recovery_run_detail),
+    path("recovery/mine", bk.my_recovery),
     path("integrity", ops.integrity_api),
     path("admin/security/logins", sec.logins),
     path("admin/security/policy", sec.access_policy),

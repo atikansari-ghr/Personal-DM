@@ -92,10 +92,12 @@ class LocalProvider(Provider):
             raise DestError("failed", "Enter an absolute folder path such as /srv/backups/personaldocs.")
         return Path(raw)
 
-    def check(self) -> Path:
+    def check(self, create: bool = False) -> Path:
         root = self.root()
         if not root.is_dir():
-            if self.kind == "local" and self.cfg.get("create", True):
+            # Created only by "Test destination" (on setup). A folder that disappears later (USB stick removed,
+            # mount lost) is reported as unavailable instead of silently re-created on the local disk.
+            if self.kind == "local" and create:
                 try:
                     root.mkdir(parents=True, exist_ok=True)
                 except OSError as exc:
@@ -107,7 +109,7 @@ class LocalProvider(Provider):
         return root
 
     def test(self) -> dict:
-        root = self.check()
+        root = self.check(create=True)
         free, total = self.space()
         return {"ok": True, "free": free, "total": total, "detail": f"Writable folder {root}"}
 
@@ -164,7 +166,7 @@ class NasProvider(LocalProvider):
 
     kind = "nas"
 
-    def check(self) -> Path:
+    def check(self, create: bool = False) -> Path:
         root = self.root()
         if not root.is_dir():
             raise DestError("unavailable", f"{root} is not reachable. Is the NAS share mounted?")
