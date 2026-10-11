@@ -5,7 +5,7 @@ import { HelpTip, Icon, Skeleton, useAsync, useToast } from "./ui";
 // My account → Notifications: routing per category (channels, fallback chain, digest), quiet hours, Discord,
 // WhatsApp Personal (experimental) and my delivery status. Labels match docs/guides/notifications.md.
 
-const LABEL: Record<string, string> = { in_app: "In-App", email: "Email", telegram: "Telegram", push: "PWA Push", discord: "Discord", whatsapp: "WhatsApp Personal" };
+const LABEL: Record<string, string> = { in_app: "In-app", email: "Email", telegram: "Telegram", push: "Push", discord: "Discord", whatsapp: "WhatsApp Personal" };
 const EXTERNAL = ["whatsapp", "telegram", "discord", "push", "email"];
 
 export function NotificationRouting({ data, reload }: { data: any; reload: () => void }) {
@@ -23,7 +23,7 @@ export function NotificationRouting({ data, reload }: { data: any; reload: () =>
           <thead><tr><th scope="col">Category</th><th scope="col">Channels</th><th scope="col">Fallback chain</th><th scope="col">Delivery</th></tr></thead>
           <tbody>{data.categories.map((c: any) => <RoutingRow key={c.key} cat={c} events={data.events.filter((e: any) => e.category === c.key)} configured={configured} put={put} />)}</tbody>
         </table></div>
-        <p className="small muted">In-App always shows every notification. A channel the administrator requires is always used on its own, whatever the chain.</p>
+        <p className="small muted">In-app always shows every notification. A channel the administrator requires is always used on its own, whatever the chain.</p>
       </div>
       <div className="card" id="quiet-hours">
         <h2>Quiet hours</h2>

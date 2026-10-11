@@ -17,7 +17,7 @@ export default function SigninMap({ events, zones, tileUrl, attribution, height 
     if (!el.current) return;
     const m = L.map(el.current, { worldCopyJump: true, zoomControl: true, attributionControl: true, scrollWheelZoom: false });
     map.current = m;
-    L.tileLayer(tileUrl, { attribution, maxZoom: 18, crossOrigin: true, referrerPolicy: "no-referrer" } as any).addTo(m);
+    L.tileLayer(tileUrl, { attribution, maxZoom: 18 }).addTo(m);
     m.setView([20, 10], 2);
     return () => { m.remove(); map.current = null; };
   }, [tileUrl, attribution]);

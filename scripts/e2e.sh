@@ -38,6 +38,8 @@ BASE=http://localhost:8000 node tests/e2e/layout.mjs
 BASE=http://localhost:8000 node tests/e2e/offline.mjs
 BASE=http://localhost:8000 node tests/e2e/pwa.mjs
 BASE=http://localhost:8000 node tests/e2e/themes.mjs
+# Backup & Recovery, Recovery Explorer, notification routing, sign-in security, rich Help (Change Set T)
+BASE=http://localhost:8000 node tests/e2e/recovery.mjs
 # repeatable public screenshots with quality and privacy gates; smaller files when pngquant is installed
 BASE=http://localhost:8000 node tests/e2e/screenshots.mjs
 if command -v pngquant >/dev/null 2>&1; then

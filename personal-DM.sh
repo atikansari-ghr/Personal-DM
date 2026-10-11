@@ -5,13 +5,15 @@
 #
 # Without a command it shows a menu. Commands for unattended use (add them after `--`, e.g.
 #   bash -c "$(curl -fsSL .../personal-DM.sh)" -- upgrade):
-#   install          fresh installation (guided questions; safe to run again)
+#   install          New Installation (guided questions; safe to run again)
+#   recover          Recover Existing Installation: install only what is needed, then restore the whole application
+#                    from an encrypted recovery point (no new administrator account is created first)
 #   upgrade          back up, then upgrade to the latest version (data is kept; rolls back on failure)
 #   repair           reinstall services and permissions, keep data
 #   doctor           run all health checks
 #   status           show services and version
 #   backup           make an application backup now (to the configured destination)
-#   restore DIR      restore an application backup (asks for confirmation)
+#   restore DIR      restore a legacy unencrypted folder backup (asks for confirmation)
 #   recover-admin U  reset the password/2FA of administrator U (prints a one-time password)
 #   help             this text
 # Options: --ref BRANCH|TAG (default main), --dry-run (show what would happen), --yes (no questions where possible)
@@ -203,6 +205,22 @@ do_restore() {
   personaldocs restore "$dir"
 }
 
+do_recover_install() { # Recover Existing Installation (disaster recovery on a clean or damaged server)
+  say "${B}Recover Existing Installation${N}"
+  say "Restores the whole application from an encrypted recovery point. You need the backup location and the"
+  say "Backup Recovery Key (or the Emergency Recovery Package and its passphrase)."
+  say "Recreating the Proxmox host or the container itself is outside Personal DM."
+  if ! installed; then
+    step "Installing the components needed for recovery"
+    say "Answer the installer questions (address, port). Do NOT complete the web setup or create accounts:"
+    say "the recovered database brings back every account."
+    PD_QUIET_TOKEN=1 do_install
+  fi
+  [ "$DRY" = 1 ] && { say "   [dry-run] personaldocs recover"; return; }
+  step "Starting the guided recovery"
+  personaldocs recover
+}
+
 do_recover() {
   need_installed
   local user=${ARGS[0]:-}
@@ -217,21 +235,22 @@ menu() {
   say "${B}Personal Documents Management System${N} — installer and maintenance"
   if installed; then say "Installed: $(cat "$PREFIX/current/VERSION" 2>/dev/null || echo yes)"; else say "Not installed on this machine yet."; fi
   say ""
-  say "  1) Install (fresh install or re-run the guided setup)"
-  say "  2) Upgrade to the latest version"
-  say "  3) Repair"
-  say "  4) Health check (doctor)"
-  say "  5) Status"
-  say "  6) Back up now"
-  say "  7) Restore a backup"
-  say "  8) Recover administrator access"
+  say "  1) New Installation (fresh install or re-run the guided setup)"
+  say "  2) Recover Existing Installation (restore everything from an encrypted backup)"
+  say "  3) Upgrade to the latest version"
+  say "  4) Repair"
+  say "  5) Health check (doctor)"
+  say "  6) Status"
+  say "  7) Back up now"
+  say "  8) Restore a legacy folder backup"
+  say "  9) Recover administrator access"
   say "  q) Quit"
   local c=""
-  read -rp "Choose [$(installed && echo 2 || echo 1)]: " c || true
-  c=${c:-$(installed && echo 2 || echo 1)}
+  read -rp "Choose [$(installed && echo 3 || echo 1)]: " c || true
+  c=${c:-$(installed && echo 3 || echo 1)}
   case "$c" in
-    1) do_install ;; 2) do_upgrade ;; 3) do_simple repair ;; 4) do_simple doctor ;; 5) do_simple status ;;
-    6) do_simple backup ;; 7) do_restore ;; 8) do_recover ;; q|Q) say "Bye." ;;
+    1) do_install ;; 2) do_recover_install ;; 3) do_upgrade ;; 4) do_simple repair ;; 5) do_simple doctor ;; 6) do_simple status ;;
+    7) do_simple backup ;; 8) do_restore ;; 9) do_recover ;; q|Q) say "Bye." ;;
     *) fail "Unknown choice: $c" ;;
   esac
 }
@@ -242,6 +261,7 @@ case "${CMD:-}" in
   upgrade) do_upgrade ;;
   repair|doctor|status|backup) do_simple "$CMD" ;;
   restore) do_restore ;;
+  recover) do_recover_install ;;
   recover-admin) do_recover ;;
   *) fail "Unknown command: $CMD (see: help)" ;;
 esac

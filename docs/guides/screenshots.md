@@ -65,11 +65,35 @@ The README shows the product in this order:
 4. Offline access and the installed app
 5. OCR
 6. Notifications
-7. Security
-8. Themes
+7. Security (including the sign-in map)
+8. Backup & Recovery
+9. Themes
 
 Keep captions short and factual. Images that only explain a concept (none today) must be labelled
 "Conceptual illustration".
+
+### Documentation screenshots (Change Set T) {#guide-shots}
+
+Step `AT-333` of `tests/e2e/screenshots.mjs` captures the screenshots used next to the steps in the guides:
+
+| Images | Guide |
+| --- | --- |
+| `backup-overview`, `backup-policy-dialog`, `backup-destination-dialog`, `backup-points`, `backup-key`, `backup-stepup`, `backup-delete-dialog`, `recovery-explorer`, `recovery-impact` | Backup and restore |
+| `notifications-routing`, `notifications-channels`, `admin-delivery-health` | Notifications, Discord |
+| `security-trusted-zones`, `security-signin-map`, `security-devices` | Sign-in security and map |
+
+They follow the same rules as the README images, plus:
+
+- **Recovery Key:** the key dialog is captured masked. The step-up dialog is captured empty.
+- **Destinations:** destination paths are synthetic (for example `/srv/backups/personaldocs`). No real NAS or cloud location appears.
+- **Notifications:** webhook addresses are masked. No WhatsApp QR code or session data is ever captured.
+- **Sign-in map:** sign-in addresses come from the documentation ranges (`203.0.113.0/24`, `198.51.100.0/24`), with
+  private Trusted Zone networks.
+
+The map shows real OpenStreetMap tiles. Their attribution stays visible.
+
+`scripts/check_docs.py` fails when a guide references a missing image, an image has no alt text, or a screenshot is not
+used by any document.
 
 ## Sources of the current images {#sources}
 

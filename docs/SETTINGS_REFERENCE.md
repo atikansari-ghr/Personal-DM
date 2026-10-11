@@ -479,8 +479,8 @@ Channels people cannot turn off for expiry reminders. In-app is always on.
 
 Events people cannot turn off. They always arrive in-app and on the critical channels below.
 
-- **Default:** `['security.password_reset_requested', 'security.password_admin_reset', 'security.temporary_password', 'security.password_changed', 'security.account_locked', 'security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.failed_logins', 'security.authentik', 'security.google', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'antivirus.threat', 'antivirus.released', 'antivirus.unavailable', 'antivirus.definitions', 'security.operations', 'backup.failed', 'integrity.failed']`
-- **Allowed values:** security.password_reset_requested, security.password_admin_reset, security.temporary_password, security.password_changed, security.account_locked, security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, account.login, security.failed_logins, security.authentik, security.google, security.policy_exception, security.policy_change, security.auth_policy, security.health, antivirus.threat, antivirus.released, antivirus.unavailable, antivirus.definitions, security.operations, backup.failed, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, document.changed, import.finished, processing.completed, processing.failed
+- **Default:** `['security.password_reset_requested', 'security.password_admin_reset', 'security.temporary_password', 'security.password_changed', 'security.account_locked', 'security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.risky_signin', 'security.device_unrecognized', 'security.failed_logins', 'security.authentik', 'security.google', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'antivirus.threat', 'antivirus.released', 'antivirus.unavailable', 'antivirus.definitions', 'security.operations', 'backup.failed', 'backup.partial', 'backup.verification', 'backup.destination', 'backup.pre_change_blocked', 'backup.config_changed', 'backup.deleted', 'backup.downloaded', 'recovery.key_revealed', 'recovery.key_rotated', 'recovery.emergency', 'recovery.full', 'recovery.compromise', 'integrity.failed']`
+- **Allowed values:** security.password_reset_requested, security.password_admin_reset, security.temporary_password, security.password_changed, security.account_locked, security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, security.risky_signin, security.device_unrecognized, account.login, security.failed_logins, security.authentik, security.google, security.policy_exception, security.policy_change, security.auth_policy, security.health, antivirus.threat, antivirus.released, antivirus.unavailable, antivirus.definitions, security.operations, backup.failed, backup.succeeded, backup.partial, backup.verification, backup.destination, backup.retention, backup.pre_change, backup.pre_change_blocked, backup.config_changed, backup.deleted, backup.downloaded, recovery.key_revealed, recovery.key_rotated, recovery.emergency, recovery.restore, recovery.full, recovery.compromise, recovery.validation, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, document.changed, import.finished, processing.completed, processing.failed
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
 - **Effect of changing:** Applies to the next notification; people see these locked on.
@@ -658,6 +658,58 @@ Token from @BotFather. Stored encrypted.
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
 - **Learn more:** [telegram#setup](guides/telegram.md#setup)
+
+### Discord webhooks (`discord.enabled`)
+
+Let people send their own notifications to a Discord channel through an official Discord webhook they add in My account → Notifications. Each webhook is stored encrypted.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** When off, Discord delivery stops for everyone; saved webhooks are kept.
+- **Restart needed:** no
+- **Learn more:** [discord#setup](guides/discord.md#setup)
+
+### WhatsApp Personal (experimental, unofficial) (`whatsapp.enabled`)
+
+Optional self-hosted bridge that links each person's own WhatsApp account as a linked device and sends them their Personal DM notifications. It is not the WhatsApp Business Platform and is not supported or endorsed by WhatsApp or Meta; WhatsApp may disconnect linked devices at any time.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Install the bridge first (sudo personaldocs whatsapp-bridge install). Off by default; never enabled automatically.
+- **Restart needed:** no
+- **Learn more:** [whatsapp-personal#enable](guides/whatsapp-personal.md#enable)
+
+### WhatsApp bridge address (`whatsapp.bridge_url`)
+
+Local address of the personaldocs-whatsapp service. Only loopback addresses are accepted.
+
+- **Default:** `'http://127.0.0.1:8095'`
+- **Allowed values:** –100
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** whatsapp.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [whatsapp-personal#bridge](guides/whatsapp-personal.md#bridge)
+
+## Section: notifications
+
+### Fall back after failed attempts (`notifications.fallback_after_attempts`)
+
+When a person set a fallback chain (for example WhatsApp → Telegram → Email), the next channel is tried after this many failed delivery attempts. A disconnected channel falls back at once.
+
+- **Default:** `2`
+- **Allowed values:** 1–5
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [notifications#fallback](guides/notifications.md#fallback)
+
+## Section: connections
 
 ### Telegram bot username (`telegram.bot_username`)
 
@@ -919,9 +971,9 @@ NFS version (3, 4, 4.1) or SMB dialect (3.0, 2.1).
 - **Learn more:** [backup-restore#nas](guides/backup-restore.md#nas)
 - **Example:** 4.1
 
-### Backup destination (`backup.target`)
+### Legacy backup folder (`backup.target`)
 
-Mounted NAS/file-share path for backups.
+Folder of backups made before encrypted recovery points (format 1). New backups use Backup & Recovery destinations; this value was migrated into a destination.
 
 - **Default:** `''`
 - **Allowed values:** path
@@ -1006,9 +1058,9 @@ Used when the frequency is monthly. 29–31 run on the last day of shorter month
 - **Learn more:** [backup-restore#schedule](guides/backup-restore.md#schedule)
 - **Example:** 1
 
-### Backups to keep (`backup.keep_daily`)
+### Legacy backups to keep (`backup.keep_daily`)
 
-Number of most recent successful backups retained, whatever the frequency (proposed default, not a user decision).
+Only for the old folder backups (format 1). Encrypted recovery points use the policy retention (default 4 weeks).
 
 - **Default:** `14`
 - **Allowed values:** 1–365
@@ -1030,6 +1082,32 @@ Include the integration-secret encryption key so restores can decrypt SMTP/Teleg
 - **Restart needed:** no
 - **Learn more:** [backup-restore#keys](guides/backup-restore.md#keys)
 
+### Recovery validation database (`recovery.validation_database`)
+
+PostgreSQL URL of a SEPARATE, isolated database used only for Automated Recovery Validation (postgresql://user:password@host:5432/dbname). Stored encrypted. Leave empty to keep validation off.
+
+- **Default:** (secret, not shown)
+- **Allowed values:** secret
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#validation](guides/backup-restore.md#validation)
+- **Example:** postgresql://pdvalidate:…@192.0.2.20/pd_validation
+
+### Recovery validation folder (`recovery.validation_dir`)
+
+Empty folder for the restored files during validation (must not be the production data folder).
+
+- **Default:** `''`
+- **Allowed values:** path
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#validation](guides/backup-restore.md#validation)
+- **Example:** /srv/pd-validation
+
 ## Section: activity
 
 ### Audit log retention (days) (`audit.retention_days`)
@@ -1045,6 +1123,43 @@ Audit events older than this are deleted. 0 keeps forever.
 - **Learn more:** [settings#activity](guides/settings.md#activity)
 
 ## Section: security
+
+### Sign-in map (`security.map_enabled`)
+
+Show sign-ins on a map (Trusted Zone pins and approximate GeoIP positions). Uses online map tiles; sign-in addresses are never sent to the tile server or a geolocation service.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-map#map](guides/security-map.md#map)
+
+### Map tile server (`security.map_tile_url`)
+
+Address template of a privacy-conscious tile server (https, with {z}/{x}/{y}). The browser requests ordinary picture tiles from it.
+
+- **Default:** `'https://tile.openstreetmap.org/{z}/{x}/{y}.png'`
+- **Allowed values:** –300
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** security.map_enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-map#tiles](guides/security-map.md#tiles)
+- **Example:** https://tile.openstreetmap.org/{z}/{x}/{y}.png
+
+### Map attribution (`security.map_attribution`)
+
+Credit line required by the tile provider.
+
+- **Default:** `'© OpenStreetMap contributors'`
+- **Allowed values:** –200
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** security.map_enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-map#tiles](guides/security-map.md#tiles)
 
 ### Login audit retention (days) (`security.login_audit_retention_days`)
 
@@ -2077,8 +2192,8 @@ Also send access, import and (for administrators) backup and integrity alerts to
 
 Choose what your Overview shows and in which order. Saved to your account, so every device shows the same. Use Customize Overview for sizes and styles.
 
-- **Default:** `['date', 'weather', 'summary', 'calendar', 'holidays', 'upcoming', 'shared', 'recent', 'activity', 'review_queue', 'backup', 'security']`
-- **Allowed values:** documents, members, expiring, storage, review, family, saved_views, recent, upcoming, review_queue, backup, date, weather, summary, calendar, holidays, shared, activity, security
+- **Default:** `['date', 'weather', 'summary', 'calendar', 'holidays', 'upcoming', 'shared', 'recent', 'activity', 'review_queue', 'backup', 'my_recovery', 'security']`
+- **Allowed values:** documents, members, expiring, storage, review, family, saved_views, recent, upcoming, review_queue, backup, my_recovery, date, weather, summary, calendar, holidays, shared, activity, security
 - **Scope:** user · **Editable by:** each user
 - **Depends on:** nothing
 - **Effect of changing:** Applies on all your devices.
@@ -2110,3 +2225,54 @@ City for your weather widget.
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
 - **Learn more:** [overview#weather](guides/overview.md#weather)
+
+## Section: my_notifications_hidden
+
+### Notification routing (`me.notification_routing`)
+
+Per category: fallback chain (first available channel wins) and delivery (immediately, daily or weekly digest).
+
+- **Default:** `{}`
+- **Allowed values:** json
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [notifications#routing](guides/notifications.md#routing)
+
+### Quiet hours (`me.quiet_hours`)
+
+Hold normal notifications on external channels during these hours. Critical security and backup alerts are never held.
+
+- **Default:** `{'enabled': False, 'start': '22:00', 'end': '07:00'}`
+- **Allowed values:** json
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [notifications#quiet-hours](guides/notifications.md#quiet-hours)
+
+### My timezone (`me.timezone`)
+
+Used for quiet hours and digests. Empty = the installation timezone.
+
+- **Default:** `''`
+- **Allowed values:** –60
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [notifications#quiet-hours](guides/notifications.md#quiet-hours)
+- **Example:** Europe/Berlin
+
+### Digest time (`me.digest_time`)
+
+Local time when daily and weekly digests are sent (weekly: Mondays).
+
+- **Default:** `'08:00'`
+- **Allowed values:** time
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [notifications#digests](guides/notifications.md#digests)

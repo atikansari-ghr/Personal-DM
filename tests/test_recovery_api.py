@@ -369,7 +369,7 @@ def test_at301_secure_encrypted_download(family, clients, lib):
     assert clients["son1"].get(f"/api/backup/points/{inc.id}/download?destination=1").status_code == 403
 
 
-def test_my_recovery_privacy(family, clients, lib):
+def test_at310_my_recovery_privacy(family, clients, lib):
     r = clients["son1"].get("/api/recovery/mine").json()
     assert r["protected"] is True
     text = json.dumps(r)

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 CHANNELS = ("in_app", "email", "telegram", "push", "discord", "whatsapp")
 EXTERNAL = ("email", "telegram", "push", "discord", "whatsapp")
-CHANNEL_LABELS = {"in_app": "In-App", "email": "Email", "telegram": "Telegram", "push": "PWA Push", "discord": "Discord",
+CHANNEL_LABELS = {"in_app": "In-app", "email": "Email", "telegram": "Telegram", "push": "Push", "discord": "Discord",
                   "whatsapp": "WhatsApp Personal"}
 # Routing categories (Change Set T): the per-person routing matrix, fallback chains, quiet hours and digests work on
 # these. Every event belongs to exactly one.

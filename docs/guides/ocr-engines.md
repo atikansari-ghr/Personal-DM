@@ -112,6 +112,8 @@ Confirmed details are never overwritten by a re-run. A different reading is show
 
 ![OCR result labelled with its engine, profile and model, with Remove and Disable actions](../images/screenshots/ocr-engine-label.png)
 
+![Remove OCR data dialog: what is removed and what stays](../images/screenshots/ocr-remove.png)
+
 **Remove OCR data…** deletes everything that was derived from recognition:
 
 - the recognised text, text positions/blocks and confidence values;

@@ -4,6 +4,68 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-11) — Encrypted recovery, notification routing, sign-in map, rich guides (Change Set T)
+- **Encrypted full-system recovery points** (Settings → **Backup & Recovery**, main administrator).
+  - Contents: database, every document version and original, OCR text and derived files, profile photos, branding, settings and the protected secrets.
+  - Encryption: AES-256-GCM in 1 MiB authenticated chunks, a separate key per recovery point, wrapped by the **Backup Recovery Key** (ADR 0020). No separate compression stage.
+  - **Full + incremental chains.** The recommended policy is weekly Full plus incrementals every 4 hours, kept for 4 weeks. Retention never deletes a Full backup that a kept incremental still needs.
+  - Ordinary activity (uploads, edits) never starts a backup by itself.
+- **Several destinations per policy**, each with its own status and free space: local folder or USB, NAS share, S3-compatible storage, Google Drive and Microsoft OneDrive. A destination that is full or unreachable fails alone and is retried for 24 hours; the other copies stay valid.
+- **Deep verification of every copy**: checksums, decryption and authentication of every file, the manifest, the chain and a `pg_restore --list` of the database dump. Optional **test restore** into a scratch database, and **Automated Recovery Validation** into a separately configured, isolated environment.
+- **Pre-change safety backups.** Upgrades and other high-risk operations first make and verify a recovery point. If that fails, the operation is blocked and a critical notification is sent.
+- **Recovery Key.**
+  - Reveal requires step-up authentication (password plus authenticator code or passkey) and the dialog hides itself.
+  - **Rotation** re-encrypts every reachable copy and names any destination it could not reach.
+  - **Emergency Recovery Package** (`.pdrp`, sealed with a passphrase) and **Recovery Readiness** (Ready, Not Ready, Outdated).
+- **Recovery Explorer** (new **Recovery** page). It shows only what each person may recover today.
+  - Restore a version, a document, a folder tree or a person's library, with Keep both / Replace / Skip for conflicts and a **Restore Impact Analysis** before anything changes.
+  - A deleted account can be recreated, transferred to another person, or restored into a staging folder.
+- **Protected deletion** of recovery points (shows the incrementals that depend on a point, needs step-up, is audited) and **encrypted download** as a `.tar`.
+- **Disaster recovery.**
+  - The installer offers **Recover Existing Installation** (`personal-DM.sh -- recover`); installed servers use `sudo personaldocs recover`.
+  - Sources: local folder or USB, a downloaded `.tar`, NAS, S3, Google Drive and OneDrive, with temporary bootstrap credentials that are never stored.
+  - Integrity and compatibility checks run before anything changes, and a wrong key changes nothing. The recovery can be resumed after a failure; while it runs, the web address answers *Recovery in progress* (HTTP 503).
+  - **Normal** and **Compromise** modes. Compromise mode ends every session, untrusts every device, keeps passkeys and authenticator apps, and requires a security review.
+  - Restored integrations stay **on hold** until a safe connection test passes.
+  - A secret-free **Recovery & Security Report** is written at the end.
+- **Overview:** an administrator **Backup Health** widget computed from verified recovery state, and **My Recovery** for everyone. My Recovery never shows destinations or paths.
+- **Notifications.**
+  - New backup and recovery events.
+  - Per-person **Discord** webhooks, stored encrypted and masked.
+  - Experimental **WhatsApp Personal** through an optional, separately installed bridge (`sudo personaldocs whatsapp-bridge install`). It is notification-only, with one isolated session per person, and its version is pinned.
+  - Per-category **routing**, **fallback** chains (used once, never after a successful delivery), **Quiet Hours** (critical messages still go through), daily or weekly **digests**, **My deliveries**, and an administrator **Delivery health** card that shows counts only.
+  - Discord and WhatsApp are never enabled automatically for existing people. Signal is not included.
+- **Sign-in security.**
+  - **Trusted Zones**: several IPv4/IPv6 networks per zone, the most specific network wins, and an optional map pin.
+  - A **sign-in map** (Leaflet with online tiles; sign-in addresses are never sent to the tile server). People see their own sign-ins, delegates their group, the main administrator everyone.
+  - Explainable **risk** levels (Normal, Low, Warning, High). Risk never blocks a sign-in.
+  - **Recognised devices** and **Mark Unrecognized**.
+  - Records are kept for 1 year by default.
+- **Help.**
+  - Categories, search, breadcrumbs, table of contents, previous/next links, callouts and screenshots next to the steps.
+  - New guides: [disaster recovery](docs/guides/disaster-recovery.md), [Discord](docs/guides/discord.md), [WhatsApp Personal](docs/guides/whatsapp-personal.md), [sign-in security and map](docs/guides/security-map.md), [documentation](docs/guides/documentation.md).
+  - Rewritten guides: [backup and restore](docs/guides/backup-restore.md) and [notifications](docs/guides/notifications.md).
+  - `scripts/check_docs.py` checks links, anchors, image alt text, orphan screenshots, *Learn more* links and review dates. It runs in `scripts/verify.sh` and pytest.
+- **Operations:**
+  - `personaldocs backup run|list|health|verify`, `personaldocs recover`, `personaldocs whatsapp-bridge install|update|rollback|status|disable`;
+  - `status` shows Backup Health;
+  - `doctor` checks recovery, destinations, readiness, validation, WhatsApp, Discord, GeoIP and map tiles.
+- **Tests:**
+  - backend `tests/test_backup_engine.py`, `test_recovery_api.py`, `test_disaster_recovery.py` (real `pg_dump`/`pg_restore`), `test_notification_channels.py` and `test_signin_security.py`;
+  - browser `tests/e2e/recovery.mjs`, plus documentation screenshots in `screenshots.mjs`.
+- **Guides and decisions:** ADR 0020 (recovery points and key hierarchy), ADR 0021 (notification routing, Discord and the WhatsApp bridge), ADR 0022 (Trusted Zones, sign-in map privacy and risk).
+- **Migrations:**
+  - `ops.0001_initial`;
+  - `ops.0002_migrate_backup_settings`, which turns the existing backup folder and schedule into the destination *Existing backup share* and the policy *Default*, with incrementals off;
+  - `notify.0004_routing_discord_whatsapp`, `security.0004_…` (Trusted Zones, recognised devices, sign-in location and risk), `accounts.0009_usersession_recognized_device`.
+
+  All are additive. Backups made by earlier releases stay listed and can still be verified and restored.
+
+### Changed (2026-10-11) — Change Set T
+- Settings → **Storage & backup** is split into **Storage & NAS** and **Backup & Recovery**. The previous backup settings are kept under *Legacy backup settings*.
+- `personaldocs upgrade` makes a verified pre-change recovery point (`backup --pre-change`) instead of a plain folder backup when a backup policy is configured.
+- Sign-in notifications show the approximate location and network. A Trusted Zone address is shortened (for example `192.168.x.10`), and the full address is shown only in the app.
+
 ### Added (2026-10-09) — Offline access, PWA identity, premium themes, public screenshots (Change Set S)
 - **Offline access per account and device.**
   - Folder **⋮ → Make available offline…** with *This folder and all subfolders* (recommended) or *This folder only*. The dialog shows counts, size, free storage and large-download / quota warnings.

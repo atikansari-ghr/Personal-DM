@@ -163,3 +163,31 @@ def test_recovery_marker_blocks_web_requests(family, client):
         assert r.status_code == 503 and r.json()["code"] == "recovery_in_progress"
     finally:
         R.marker().unlink()
+
+
+def test_at311_test_restore_and_isolated_validation_restore(system, tmp_path):
+    from django.db import connection
+
+    from apps.ops import bk_validation as V
+
+    run = V.test_restore(system["inc"])  # scratch database, dropped afterwards; never touches the live data
+    assert run.status == "completed", run.result
+    assert run.result["level"] in ("database", "structure")
+    name = "pd_validation_pytest"
+    with connection.cursor() as cur:
+        cur.execute(f'DROP DATABASE IF EXISTS "{name}"')
+        cur.execute(f'CREATE DATABASE "{name}"')
+    try:
+        p = V._db_params()
+        config.set_value("recovery.validation_database",
+                         f"postgresql://{p['PGUSER']}:{p['PGPASSWORD']}@{p['PGHOST'] or 'localhost'}:{p['PGPORT']}/{name}")
+        config.set_value("recovery.validation_dir", str(tmp_path / "validation"))
+        run = V.automated_validation(system["inc"])
+        assert run.status == "completed", run.result
+        assert V.validation_state()["state"] == "passed"
+    finally:
+        from django.db import connections
+
+        connections.close_all()
+        with connection.cursor() as cur:
+            cur.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')

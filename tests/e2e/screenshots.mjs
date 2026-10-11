@@ -158,6 +158,76 @@ await step("AT-274 phone: overview and offline access (installed-app size)", asy
   await M.ctx.close();
 });
 
+await step("AT-333 Backup & Recovery, Recovery Explorer, notifications and sign-in security (documentation screenshots)", async () => {
+  // state from recovery.mjs: a local destination, a verified recovery point, a Trusted Zone "Home"
+  const P = D.page;
+  const dismiss = async () => { await P.keyboard.press("Escape"); await P.waitForTimeout(200); };
+  await api(P, "/api/settings", { method: "PUT", body: { values: { "discord.enabled": true, "whatsapp.enabled": true } } });
+  await P.goto(BASE + "/settings/backup");
+  await P.waitForSelector("[data-health]");
+  await P.waitForLoadState("networkidle");
+  await capture(P, "backup-overview.png", "Backup & Recovery: health, newest verified point, readiness and destinations");
+  await P.goto(BASE + "/settings/backup?view=policies");
+  await P.click("tr:has-text('Default') button:has-text('Edit')");
+  await P.waitForSelector("[role=dialog] #pol-freq");
+  await capture(P, "backup-policy-dialog.png", "Policy: weekly Full backup, incremental every 4 hours, keep 4 weeks");
+  await dismiss();
+  await P.goto(BASE + "/settings/backup?view=destinations");
+  await P.click("button:has-text('Add destination')");
+  await P.fill("#dst-name", "Second disk");
+  await P.fill("#dst-path", "/srv/backups/personaldocs");
+  await capture(P, "backup-destination-dialog.png", "Add destination: a local folder on another disk");
+  await dismiss();
+  await P.goto(BASE + "/settings/backup?view=points");
+  await P.waitForSelector(".points-table");
+  await capture(P, "backup-points.png", "Recovery points with copies per destination and actions");
+  await P.click(".points-table tbody tr >> nth=0 >> button:has-text('Delete')");
+  await P.waitForSelector("[role=dialog] >> text=This is a protected deletion");
+  await capture(P, "backup-delete-dialog.png", "Protected deletion: dependants, coverage and step-up");
+  await dismiss();
+  await P.goto(BASE + "/settings/backup?view=key");
+  await P.waitForSelector("text=Emergency Recovery Package");
+  await capture(P, "backup-key.png", "Recovery Key page: key hidden, readiness, export and rotation");
+  await P.click("button:has-text('Reveal Recovery Key…')");
+  await P.waitForSelector("[role=dialog] #su-pw");
+  await capture(P, "backup-stepup.png", "Step-up confirmation before revealing the Recovery Key");
+  await dismiss();
+  await P.goto(BASE + "/recovery");
+  await P.waitForSelector(".recovery-doc");
+  await capture(P, "recovery-explorer.png", "Recovery Explorer: restore points, folders, documents and versions");
+  await P.locator(".recovery-doc button:has-text('Restore…')").first().click();
+  await P.click("[role=dialog] button:has-text('Analyse impact')");
+  await P.waitForSelector("[role=dialog] >> text=Restore Impact Analysis");
+  await capture(P, "recovery-impact.png", "Restore Impact Analysis before anything changes");
+  await dismiss();
+  await P.goto(BASE + "/settings/account?tab=notifications");
+  await P.waitForSelector("#routing");
+  await P.locator("#routing").scrollIntoViewIfNeeded();
+  await capture(P, "notifications-routing.png", "Routing by category: channels, fallback chain and digests");
+  await P.waitForSelector("#discord");
+  await P.locator("#discord").scrollIntoViewIfNeeded();
+  await capture(P, "notifications-channels.png", "Discord webhook and WhatsApp Personal (experimental) cards");
+  await P.goto(BASE + "/settings/notifications");
+  await P.waitForSelector("text=Notification delivery health");
+  await P.locator("text=Notification delivery health").scrollIntoViewIfNeeded();
+  await capture(P, "admin-delivery-health.png", "Notification delivery health for administrators (counts only)");
+  await P.goto(BASE + "/settings/activity?view=map");
+  await P.waitForSelector("td:has-text('Home')");
+  await capture(P, "security-trusted-zones.png", "Trusted Zones with several networks and a configured map pin");
+  // a second device so the device list has something to distrust
+  const other = await session({ width: 1280, height: 800 });
+  await other.ctx.close();
+  await P.goto(BASE + "/settings/account?tab=signins");
+  await P.waitForSelector(".signin-map");
+  await P.waitForFunction(() => { const t = [...document.querySelectorAll(".leaflet-tile")]; return t.length > 0 && t.every((i) => i.complete); }, null, { timeout: 30000 }).catch(() => undefined);
+  await capture(P, "security-signin-map.png", "Sign-in map: Trusted Zone pin, recent sign-ins with explainable risk");
+  await P.locator("#devices").scrollIntoViewIfNeeded();
+  const mark = P.locator("#devices button:has-text('Mark Unrecognized')").first();
+  if (await mark.count()) { await mark.click(); await P.waitForSelector("[role=dialog] >> text=Mark this device Unrecognized?"); }
+  await capture(P, "security-devices.png", "Mark Unrecognized: sessions end, follow-up actions are offered");
+  await dismiss();
+});
+
 await D.ctx.close();
 await browser.close();
 fs.writeFileSync(`${SHOTS}/../screenshot-manifest.json`, JSON.stringify(manifest, null, 1) + "\n");

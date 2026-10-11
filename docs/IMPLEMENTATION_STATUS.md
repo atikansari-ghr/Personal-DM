@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2026-10-07 · Version 0.1.0 (pre-release)
+Last updated: 2026-10-11 · Version 0.1.0 (pre-release)
 
 ## Summary
 
@@ -80,6 +80,59 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - Tooling: one-line installer `personal-DM.sh` (menu + commands, delegates to the tools below); guided installers `scripts/proxmox-create-lxc.sh` (Proxmox host: creates the container) and `scripts/easy-install.sh` (inside the LXC: asks all parameters and installs, configures, connects the NAS, backs up and checks); `scripts/personaldocs` (install, upgrade, rollback, repair, status, doctor, backup, restore, integrity, recover-admin, setup-token, logs, manage, nas-apply), systemd units, `scripts/verify.sh`, GitHub Actions CI with prebuilt frontend release asset.
 - New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
 - Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
+
+## Change set T: encrypted backup and recovery, notification routing, sign-in security, rich guides {#change-set-t}
+
+**Numbering.** The change prompt numbered its acceptance tests AT-251…AT-310. Here they are **AT-276…AT-335** (prompt
+AT-n → AT-(n+25)); the mapping is in [TRACEABILITY.md](TRACEABILITY.md#change-set-t-2026-10-encrypted-backup-and-recovery-notification-routing-sign-in-security-rich-guides).
+Decisions: [ADR 0020](adr/0020-encrypted-recovery-points.md), [ADR 0021](adr/0021-notification-routing-channels.md),
+[ADR 0022](adr/0022-trusted-zones-signin-map-risk.md).
+
+**Investigation (before implementing).**
+
+| Area | What was there before | What was missing |
+| --- | --- | --- |
+| Backup | One plain folder backup per run on one NAS share (database dump, originals, settings, optional key), daily/weekly/monthly | Encryption, incrementals, several destinations, deep verification, granular restore, fresh-server recovery |
+| Restore | Console `personaldocs restore DIR` onto an installed system | Recovery onto a clean server; impact analysis; per-person restore |
+| Notifications | Per-event channel matrix: in-app, email, Telegram, push; WhatsApp "planned" | Per-category routing, fallback, quiet hours, digests, Discord, WhatsApp |
+| Sign-in records | IP, country (GeoIP), device, method; home network shown as "Unknown country" | Trusted Zones, map, risk with reasons, recognised devices |
+| Help | Flat list of guides, plain Markdown, few screenshots | Categories, navigation, callouts, screenshots next to the steps, link checking |
+
+**Implemented.**
+
+- **Backend:**
+  - `apps/ops`: models (0001), settings migration (0002), and the modules `bk_crypto`, `bk_keys`, `bk_destinations`,
+    `bk_engine`, `bk_validation`, `bk_restore`, `bk_rotate`, `bk_recover`, `bk_integrations` and `bk_views`;
+  - `manage.py recover` and `manage.py backup` (rewritten);
+  - doctor checks.
+- **Notifications:** route categories, Outbox routing fields, `routing.py`, `discord.py`, `whatsapp.py`, sandbox mode
+  and the integration hold.
+- **Security:** `location.py` (Trusted Zones, local GeoIP, risk), the `RecognizedDevice` model with the device cookie,
+  the sign-in map API with scope checks, and Mark Unrecognized.
+- **Frontend:**
+  - Settings → Backup & Recovery, the Recovery page, step-up dialogs;
+  - notification routing, Discord and WhatsApp cards, My deliveries and Delivery health;
+  - My account → Sign-in security, Trusted Zones and the sign-in map (Leaflet);
+  - the Help navigation and callouts.
+- **Operations:**
+  - installer option *Recover Existing Installation*;
+  - `personaldocs recover`, `backup run|list|health|verify` and `whatsapp-bridge …`;
+  - `personaldocs-whatsapp.service`;
+  - upgrade pre-backup with `--pre-change`.
+- **Docs:**
+  - 5 new guides and 2 rewritten (backup and restore, notifications);
+  - `scripts/check_docs.py`, run in `verify.sh` and pytest;
+  - 15 new screenshots;
+  - ADRs 0020–0022.
+
+**Not verified here (needs real accounts or hardware).** These are recorded in TEST_REPORT as Not Run or Requires Real
+Account, never as passed:
+
+- a clean Debian 13 LXC recovery drill;
+- live NAS, S3, Google Drive and OneDrive destinations and bootstrap recovery;
+- linking a real WhatsApp phone and a live bridge update;
+- a real Discord server;
+- Firefox and Safari.
 
 ## Change set S: offline access, PWA identity, premium themes, public screenshots {#change-set-s}
 
@@ -511,6 +564,10 @@ wording gets no suggestion and stays *Not assigned* until someone sets the type.
 | Change set O real channels | SMTP to Gmail/Outlook/Apple Mail (HTML rendering), a Telegram bot on the https address (inline buttons), Web Push on Android/Chrome, an iPhone/iPad Home Screen app, Firefox and Windows; upgrade of a real Debian 13 installation (tested with mocked providers only) |
 | Change set P on a real host | A real Debian 13 / Proxmox LXC upgrade with `personaldocs antivirus repair` (verified only on a simulated Debian host and against a real clamd in the development container); a reboot / LXC restart to confirm the drop-in and tmpfiles persistence; `clamav-daemon` restart and freshclam updates under real systemd |
 | Change set P passkeys and email | Sign in with Passkey on iPhone/iPad Safari, Android Chrome, Windows Hello, macOS, Bitwarden/1Password and hardware security keys (software authenticator only); the reset email through a real SMTP server in real mail clients (mocked SMTP only) |
+| AT-302 clean-server recovery (Change set T) | A clean Debian 13 LXC: installer → *Recover Existing Installation* from a real USB/NAS copy, in Normal and Compromise mode (tested here by restoring the real PostgreSQL test database from encrypted points, and by the stubbed installer test) |
+| AT-303/304 live destinations | A NAS share, an S3-compatible bucket (MinIO or a provider), and Google Drive and OneDrive accounts with OAuth apps (local destinations, a SigV4 known-answer test and mocked HTTP only) |
+| AT-313/315 real WhatsApp | A test phone to link by QR through the bridge, and a live `whatsapp-bridge update` / `rollback` (bridge self-test and a fake bridge only) |
+| AT-317 real Discord | A Discord server with a webhook (mocked HTTP only) |
 | Change set M install/upgrade | A real Proxmox/LXC install and an upgrade from the previous release: ClamAV memory use on 4 GB, `--without-antivirus`, host helper installation, `status`/`doctor` output |
 
 None of these are being reported as passed. Exact steps are in `docs/TEST_REPORT.md`.

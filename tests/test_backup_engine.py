@@ -294,3 +294,56 @@ def test_at276_existing_settings_migrate_and_legacy_backups_listed(family, tmp_p
     assert pol.destinations.get().config["path"] == str(share)
     # verification and restore of the legacy folder still work
     assert legacy.verify_backup(Path(old["path"]))["files"] >= 0
+
+
+# ------------------------------------------------------------------ AT-283 pre-change safety backup
+
+def test_at283_pre_change_backup_is_verified_or_blocks(family, clients, tmp_path):
+    from apps.notify.models import Notification
+
+    assert E.pre_change_backup("Upgrade")["ok"] is False  # nothing configured: the operation is blocked
+    pol, _ = make_policy(tmp_path)
+    seed_library(clients, family, n=1)
+    res = E.pre_change_backup("Upgrade to a new release")
+    assert res["ok"] is True
+    p = RecoveryPoint.objects.get(id=res["point"])
+    assert p.trigger == "pre_change" and p.status == RecoveryPoint.VERIFIED
+    assert Notification.objects.filter(event="backup.pre_change").exists()
+    # a safety backup that cannot be written blocks the operation and notifies critically
+    BackupDestination.objects.update(config={"path": str(tmp_path / "gone")})
+    res = E.pre_change_backup("Schema migration")
+    assert res["ok"] is False
+    assert Notification.objects.filter(event="backup.pre_change_blocked").exists()
+
+
+# ------------------------------------------------------------------ AT-309 Backup Health widget
+
+def test_at309_backup_health_from_verified_state_admin_only(family, clients, tmp_path):
+    assert clients["dad"].get("/api/dashboard").json()["admin"]["backup_health"]["state"] == "critical"
+    pol, _ = make_policy(tmp_path)
+    assert E.health()["state"] == "critical"  # a running scheduler alone is never "healthy"
+    seed_library(clients, family, n=1)
+    E.create_point(pol, kind="full", trigger="manual")
+    h = clients["dad"].get("/api/dashboard").json()["admin"]["backup_health"]
+    assert h["latest_verified"] and h["state"] in ("healthy", "attention")
+    assert any("Recovery Readiness" in w for w in h["warnings"])  # no Emergency Recovery Package yet
+    assert "admin" not in clients["son1"].get("/api/dashboard").json()
+
+
+# ------------------------------------------------------------------ AT-311 automated recovery validation
+
+def test_at311_validation_not_configured_and_never_targets_production(family, clients, tmp_path, settings):
+    from apps.ops import bk_validation as V
+
+    assert V.validation_state()["state"] == "not_configured"
+    assert V.automated_validation() is None
+    pol, _ = make_policy(tmp_path)
+    seed_library(clients, family, n=1)
+    E.create_point(pol, kind="full", trigger="manual")
+    db = settings.DATABASES["default"]
+    config.set_value("recovery.validation_database",
+                     f"postgresql://{db['USER']}:{db['PASSWORD']}@{db['HOST'] or 'localhost'}:{db['PORT'] or 5432}/{db['NAME']}")
+    config.set_value("recovery.validation_dir", str(tmp_path / "validation"))
+    run = V.automated_validation()
+    assert run.status == "failed" and "production database" in run.result["summary"]
+    assert V.validation_state()["state"] == "failed"

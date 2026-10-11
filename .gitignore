@@ -43,5 +43,6 @@ backend/staticfiles/
 *.swp
 .env.dev
 tests/e2e/node_modules/
+bridge/whatsapp/node_modules/
 *.tsbuildinfo
 tests/e2e/out/

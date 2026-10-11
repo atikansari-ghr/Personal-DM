@@ -124,6 +124,13 @@ def _db_params(url: str | None = None) -> dict:
             "PGPASSWORD": db.get("PASSWORD") or "", "PGDATABASE": db.get("NAME")}
 
 
+def _same_db(a: dict, b: dict) -> bool:
+    """True when both point at the same database. Local spellings (socket, localhost, loopback) are one server."""
+    def host(h):
+        return "local" if (not h or h.startswith("/") or h in ("localhost", "127.0.0.1", "::1")) else h.lower()
+    return (host(a["PGHOST"]), a["PGPORT"], a["PGDATABASE"]) == (host(b["PGHOST"]), b["PGPORT"], b["PGDATABASE"])
+
+
 def _pg_restore(dump: Path, params: dict, clean: bool) -> tuple[bool, str]:
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), **params}
     cmd = [settings.PG_RESTORE_CMD, "--no-owner", "--no-privileges", "-d", params["PGDATABASE"], str(dump)]
@@ -255,7 +262,7 @@ def automated_validation(point: RecoveryPoint | None = None) -> RestoreRun | Non
     checks = []
     work = target_dir / "pd-validation-work"
     try:
-        if (params["PGHOST"], params["PGPORT"], params["PGDATABASE"]) == (live["PGHOST"], live["PGPORT"], live["PGDATABASE"]):
+        if _same_db(params, live):
             raise ValueError("The validation database is the production database. Configure a separate, isolated database.")
         if target_dir.resolve() in (Path(settings.DATA_DIR).resolve(), Path(settings.STORAGE_DIR).resolve()):
             raise ValueError("The validation directory must be separate from the production data directory.")

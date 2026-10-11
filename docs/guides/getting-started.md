@@ -108,6 +108,8 @@ not allowed to create there. Nothing is skipped silently. If your browser cannot
 
 PDFs, scans and images open in the built-in viewer (in the preview panel and in **Open full page**):
 
+![The full-page viewer with zoom, fit page and fit width](../images/screenshots/readme-viewer.png)
+
 | Control | Keys (when the viewer has focus) |
 |---|---|
 | Zoom out / in (− / +), 25 % to 400 %, current zoom shown | `−` / `+` (also Ctrl/⌘ + mouse wheel) |

@@ -392,3 +392,84 @@ Browser tests run in Chromium (Playwright) against the throw-away instance of `s
 | AT-275 (250) | No regression of permissions, OCR lifecycle, security, layout, menus, AT-231…245 | all | — | full `pytest`; `scripts/e2e.sh` (flow, a11y in 6 themes, parity, layout incl. geometry baseline, offline, pwa, themes, screenshots) | TEST_REPORT.md | Passed |
 
 Root cause of the iPhone "A" icon and the screenshot audit are recorded in [TEST_REPORT.md](TEST_REPORT.md#change-set-s). Migrations: `library.0011_offline_devices`, `accounts.0008_offline_allowed` (additive; existing offline copies are adopted as document selections at their first sync).
+
+## Change set T (2026-10): encrypted backup and recovery, notification routing, sign-in security, rich guides
+
+**Numbering.** The change prompt numbered its acceptance tests AT-251…AT-310. AT-251…AT-275 are already used by Change
+Set S, so here they are **AT-276…AT-335**: prompt AT-n → AT-(n+25), so 251 → 276, 252 → 277, … 310 → 335. Test
+function names and the step names in `tests/e2e/recovery.mjs` and `screenshots.mjs` use these numbers.
+
+Where things live:
+
+- Backend paths are under `backend/apps/`.
+- The backend tests are in `tests/test_backup_engine.py` (BE), `test_recovery_api.py` (RA), `test_disaster_recovery.py`
+  (DR, real `pg_dump`/`pg_restore`), `test_notification_channels.py` (NC) and `test_signin_security.py` (SS).
+- The browser tests are `tests/e2e/recovery.mjs` (Chromium).
+
+Status meanings: **Passed** means the test was executed and passed. **Requires Real Account / Not Run** means it was
+not executed. The full evidence is in [TEST_REPORT.md](TEST_REPORT.md#change-set-t).
+
+| ID (prompt) | Scenario (abridged) | Req | Code | Tests | Docs | Status |
+|---|---|---|---|---|---|---|
+| AT-276 (251) | Existing backups and settings keep working | BR-3 | `ops/migrations/0002_migrate_backup_settings.py`, `bk_engine.legacy_backups` | BE `test_at276_existing_settings_migrate_and_legacy_backups_listed`; `test_backup_schedule.py`, `test_ops.py` backup tests | guides/backup-restore.md#legacy | Passed |
+| AT-277 (252) | Existing notification channels unchanged; new channels not enabled | NR-6 | `notify/migrations/0004_*`, `expiry.dispatch` | NC `test_at277_…`; `test_notification_policy.py`, `test_rich_notifications.py` | guides/notifications.md | Passed |
+| AT-278 (253) | Full-system backup completeness | BR-1 | `bk_engine._build`, `build_catalog`, `_secret_files` | BE `test_at278_…`; recovery.mjs "AT-278/AT-293" | guides/backup-restore.md | Passed |
+| AT-279 (254) | Full + incremental chain | BR-3 | `bk_engine._chain_inventory`, `_incremental_parent` | BE `test_at279_…`, `test_incremental_without_chain_becomes_full` | guides/backup-restore.md | Passed |
+| AT-280 (255) | Configurable scheduling | BR-3 | `BackupPolicy`, `bk_engine.due_points`, `scheduler.backup_tick` | BE `test_at280_…`; `test_backup_schedule.py::test_at71…` | guides/backup-restore.md | Passed |
+| AT-281 (256) | Four-week default retention, base never deleted early | BR-3 | `bk_engine.retention_plan`, `apply_retention` | BE `test_at281_…` | guides/backup-restore.md | Passed |
+| AT-282 (257) | No activity-triggered normal backup | BR-3 | scheduler only | BE `test_at282_…` | guides/backup-restore.md | Passed |
+| AT-283 (258) | Pre-change safety backup, blocks on failure | BR-6 | `bk_engine.pre_change_backup`, `security/center.py`, `personaldocs upgrade` | BE `test_at283_…` | guides/backup-restore.md | Passed |
+| AT-284 (259) | No extra compression stage | BR-2 | `bk_engine` (`--compress=0`, header `compression: none`) | BE `test_at278_…` (asserts both) | adr/0020 | Passed |
+| AT-285 (260) | Encryption and no secret leakage | BR-2 | `bk_crypto` (STREAM AES-256-GCM), `bk_views` | BE `test_stream_encryption_roundtrip_and_tamper_detection`, `test_at278_…` (synthetic secret absent from every file); RA `test_admin_overview_never_returns_destination_secrets` | adr/0020 | Passed |
+| AT-286 (261) | Recovery Key reveal authorisation | BR-7 | `bk_views.stepup`, `key_reveal` | RA `test_at286_…`; recovery.mjs "AT-286" | guides/backup-restore.md | Passed |
+| AT-287 (262) | Recovery Key rotation | BR-7 | `bk_rotate.rotate`, `migrate` | RA `test_at287_…` | guides/backup-restore.md | Passed |
+| AT-288 (263) | Partial rotation names the failed destination | BR-7 | `bk_rotate.retry` | RA `test_at288_…` | guides/backup-restore.md | Passed |
+| AT-289 (264) | Emergency Recovery Package | BR-8 | `bk_crypto.seal_emergency`, `bk_views` (emergency export) | RA `test_at289_at290_…`; BE `test_recovery_key_format_wrap_and_emergency_package`; recovery.mjs "AT-289" | guides/backup-restore.md | Passed |
+| AT-290 (265) | Recovery Readiness | BR-8 | `bk_keys.readiness` | RA `test_at289_at290_…` | guides/backup-restore.md | Passed |
+| AT-291 (266) | Multi-destination independent status | BR-4 | `bk_engine.replicate`, `RecoveryCopy` | BE `test_at291_…` | guides/backup-restore.md | Passed |
+| AT-292 (267) | Destination with insufficient storage | BR-4 | `bk_destinations.*.check`, `bk_engine.replicate` | BE `test_at292_…` | guides/backup-restore.md | Passed |
+| AT-293 (268) | Deep verification | BR-5 | `bk_engine.verify_copy`, `_check_dump` | BE `test_at293_…`; recovery.mjs "AT-278/AT-293" | guides/backup-restore.md | Passed |
+| AT-294 (269) | Recovery Explorer authorisation | BR-9 | `bk_restore.Scope`, `explorer` | RA `test_at294_…`; recovery.mjs "AT-294" | guides/backup-restore.md | Passed |
+| AT-295 (270) | Granular version restore | BR-9 | `bk_restore.Plan`, `run` | RA `test_at295_…`; recovery.mjs | guides/backup-restore.md | Passed |
+| AT-296 (271) | Conflict choices | BR-9 | `bk_restore.Plan` | RA `test_at296_…` | guides/backup-restore.md | Passed |
+| AT-297 (272) | Folder and person restore | BR-9 | `bk_restore.Plan` | RA `test_at297_at299_…`, `test_at297_user_scope_restore` | guides/backup-restore.md | Passed |
+| AT-298 (273) | Deleted-user recovery | BR-9 | `bk_restore.Plan` (recreate / transfer / staging) | RA `test_at298_…` | guides/backup-restore.md | Passed |
+| AT-299 (274) | Restore Impact Analysis | BR-9 | `bk_restore.Plan` (`execute=False` → `report()`) | RA `test_at297_at299_…`; recovery.mjs | guides/backup-restore.md | Passed |
+| AT-300 (275) | Protected backup deletion | BR-10 | `bk_engine.dependents`, `delete_points`, `bk_views` | RA `test_at300_…`; recovery.mjs "AT-300" | guides/backup-restore.md | Passed |
+| AT-301 (276) | Secure encrypted download | BR-10 | `bk_views.point_download` | RA `test_at301_…` | guides/backup-restore.md | Passed |
+| AT-302 (277) | Fresh-server recovery path | DR-1 | `personal-DM.sh` (option 2, `recover`), `scripts/personaldocs recover`, `bk_recover.run` | DR `test_at302_at305_…` (restores into a wrecked database); `tests/installer/test_personal_dm.sh` | guides/disaster-recovery.md | Passed (automated); a clean Debian 13 LXC run: **Not Run** |
+| AT-303 (278) | Bootstrap recovery from local, NAS, S3 | DR-1 | `bk_recover.source_provider` | DR `test_at303_…`, `test_recover_command_list_and_analyze` (local); BE `test_sigv4_matches_aws_documented_example` | guides/disaster-recovery.md#sources | Local: Passed. Live NAS and S3: **Requires Real Account** |
+| AT-304 (279) | Bootstrap recovery from Google Drive and OneDrive | DR-1 | `bk_destinations.GoogleDriveProvider`, `OneDriveProvider` | — | guides/disaster-recovery.md#bootstrap | **Requires Real Account** |
+| AT-305 (280) | Normal disaster recovery | DR-3 | `bk_recover.run` | DR `test_at302_at305_…` | guides/disaster-recovery.md#normal | Passed |
+| AT-306 (281) | Compromise recovery | DR-3 | `bk_recover.security_actions` | DR `test_at306_…` | guides/disaster-recovery.md#compromise | Passed |
+| AT-307 (282) | Post-restore integration verification | DR-4 | `bk_integrations` | DR `test_at307_…` | guides/disaster-recovery.md#integrations | Passed |
+| AT-308 (283) | Recovery & Security Report, secret-free | DR-4 | `bk_recover.build_report` | DR `test_at302_at305_…`, `test_at306_…` | guides/disaster-recovery.md#report | Passed |
+| AT-309 (284) | Administrator Backup Health widget | BR-11 | `bk_engine.health`, `library/views.dashboard`, `Dashboard.tsx` | BE `test_at309_…`; recovery.mjs "AT-284/AT-309" | guides/backup-restore.md | Passed |
+| AT-310 (285) | My Recovery privacy | BR-11 | `bk_restore.my_recovery` | RA `test_at310_my_recovery_privacy` | guides/backup-restore.md | Passed |
+| AT-311 (286) | Automated Recovery Validation | BR-11 | `bk_validation.test_restore`, `automated_validation` | BE `test_at311_…` (refuses production); DR `test_at311_…` (scratch and isolated database restore) | guides/backup-restore.md | Passed |
+| AT-312 (287) | WhatsApp optional service isolation | NR-3 | `notify/whatsapp.py`, `bridge/whatsapp` | NC `test_at312_…` | guides/whatsapp-personal.md | Passed |
+| AT-313 (288) | WhatsApp per-person session isolation | NR-3 | `bridge/whatsapp/server.mjs`, `WhatsAppLink` | NC `test_at313_…`; `node server.mjs --selftest` | guides/whatsapp-personal.md | Passed (fake bridge); real phone link: **Requires Real Account** |
+| AT-314 (289) | WhatsApp notification-only restriction | NR-3 | `server.mjs` (no send-to-any endpoint), `notify/views.my_whatsapp` | NC `test_at314_…` | guides/whatsapp-personal.md | Passed |
+| AT-315 (290) | WhatsApp bridge controlled update | NR-3 | `bridge/whatsapp/compat.json`, `personaldocs whatsapp-bridge update / rollback` | NC `test_at315_…` | guides/whatsapp-personal.md | Passed (version check); live update: **Not Run** |
+| AT-316 (291) | WhatsApp restore behaviour | DR-3 | `bk_recover.security_actions`, `bk_integrations` | NC `test_at316_…` | guides/whatsapp-personal.md | Passed |
+| AT-317 (292) | Discord per-person webhook | NR-2 | `notify/discord.py`, `DiscordWebhook` | NC `test_at317_…` (fake HTTP) | guides/discord.md | Passed; a real Discord server: **Not Run** |
+| AT-318 (293) | Routing matrix | NR-4 | `notify/routing.plan`, `NotificationRouting.tsx` | NC `test_at318_…`; recovery.mjs "AT-318/AT-320" | guides/notifications.md#routing | Passed |
+| AT-319 (294) | Notification fallback | NR-4 | `expiry.deliver_one`, `_fallback` | NC `test_at319_…`, `test_disconnected_primary_falls_back_immediately` | guides/notifications.md#fallback | Passed |
+| AT-320 (295) | Quiet Hours | NR-5 | `routing.quiet_until` | NC `test_at320_…`; recovery.mjs | guides/notifications.md#quiet-hours | Passed |
+| AT-321 (296) | Notification digests | NR-5 | `routing.run_digests` | NC `test_at321_…` | guides/notifications.md#digests | Passed |
+| AT-322 (297) | Delivery history privacy | NR-6 | `notify/views.my_deliveries`, `delivery_health` | NC `test_at322_…` | guides/notifications.md#delivery-status | Passed |
+| AT-323 (298) | Trusted Zone takes precedence | SZ-1 | `security/location.resolve` | SS `test_at323_…`; recovery.mjs "AT-323" | guides/security-map.md#trusted-zones | Passed |
+| AT-324 (299) | Several networks per Trusted Zone | SZ-1 | `TrustedZone`, `views_signins` | SS `test_at324_…` | guides/security-map.md#trusted-zones | Passed |
+| AT-325 (300) | Trusted Zone manual map pin | SZ-2 | `location.resolve` (`coord_source`) | SS `test_at325_…`; recovery.mjs | guides/security-map.md#pins | Passed |
+| AT-326 (301) | Public GeoIP privacy | SZ-2 | `location.py` (local mmdb only), CSP tile origin | SS `test_at326_…` | guides/security-map.md#resolution | Passed |
+| AT-327 (302) | Sign-in map authorisation | SZ-3 | `views_signins.visible_user_ids` | SS `test_at327_…`; recovery.mjs | guides/security-map.md#map | Passed |
+| AT-328 (303) | Sign-in risk classification | SZ-4 | `location.classify` | SS `test_at328_…` | guides/security-map.md#risk | Passed |
+| AT-329 (304) | Recognised device and session management | SZ-5 | `accounts/sessions.recognize`, `RecognizedDevice` | SS `test_at329_at330_…` | guides/security-map.md#devices | Passed |
+| AT-330 (305) | Mark Unrecognized | SZ-5 | `sessions.revoke_device`, `views_signins.device_unrecognize` | SS `test_at329_at330_…` | guides/security-map.md#unrecognized | Passed |
+| AT-331 (306) | One-year security and map retention | SZ-6 | `security/jobs.py` | SS `test_at331_…` | guides/security-map.md#retention | Passed |
+| AT-332 (307) | Rich documentation completeness | DOC-1, DOC-2 | `docs/guides/*`, `scripts/check_docs.py` | `test_ops.py::test_at332_at334_documentation_checker_passes`; `scripts/verify.sh` | guides/documentation.md | Passed |
+| AT-333 (308) | Screenshot quality and sanitisation | DOC-3 | `tests/e2e/screenshots.mjs` (quality and privacy gates) | screenshots.mjs "AT-333"; human review (TEST_REPORT) | guides/screenshots.md | Passed |
+| AT-334 (309) | Documentation navigation and contextual help | DOC-1 | `Help.tsx`, `ui.tsx renderMarkdown`, `core/views.help_asset` | recovery.mjs "AT-334"; `check_docs.py` (Learn more links) | guides/documentation.md | Passed |
+| AT-335 (310) | Full release regression and evidence | all | — | full `pytest`; `scripts/e2e.sh` (all suites); `scripts/verify.sh` | TEST_REPORT.md#change-set-t | Passed |
+
+Browsers: Chromium (Playwright) only. Firefox, Safari, Edge and real phones: **Not Run**.

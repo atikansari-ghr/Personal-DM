@@ -100,7 +100,7 @@ Without the passphrase this file cannot be opened. Nobody can reset the passphra
 
 To recover onto a clean Debian 13 server:
   1. Run the installer and choose "Recover Existing Installation"
-     (curl -fsSL <your repository>/personal-DM.sh | sudo bash  ->  option 2),
+     (bash -c "$(curl -fsSL <your repository>/personal-DM.sh)" -- recover),
      or on an installed server: sudo personaldocs recover
   2. Choose where the encrypted backup is (USB/local folder, NAS, S3, Google Drive, OneDrive).
   3. When asked for the key, choose "Emergency Recovery Package", give the path of this file and type the passphrase.
