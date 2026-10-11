@@ -48,3 +48,25 @@ class SecurityHeadersMiddleware:
             response["Cache-Control"] = "no-store, private"
             response["Pragma"] = "no-cache"
         return response
+
+
+class RecoveryInProgressMiddleware:
+    """While a full-system recovery runs (marker written by ``personaldocs recover``), the instance never presents
+    itself as healthy or usable: every request gets 503 until recovery, validation and the report are finished."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from pathlib import Path
+
+        from django.conf import settings
+        from django.http import HttpResponse, JsonResponse
+
+        if (Path(settings.DATA_DIR) / "recovery-in-progress").exists():
+            if request.path.startswith("/api/"):
+                return JsonResponse({"error": "Recovery in progress. The application opens when the recovery has finished.",
+                                     "code": "recovery_in_progress"}, status=503, headers={"Retry-After": "60"})
+            return HttpResponse("Personal Documents Management System: recovery in progress. Please try again later.",
+                                status=503, content_type="text/plain", headers={"Retry-After": "60"})
+        return self.get_response(request)

@@ -709,3 +709,34 @@ def recovery_run_detail(request, pk):
 @permission_classes([IsActiveAuthenticated])
 def my_recovery(request):
     return Response(bk_restore.my_recovery(request.user))
+
+
+# ------------------------------------------------------------------ after a full-system recovery
+
+@api_view(["GET", "POST"])
+@permission_classes([IsMainAdmin])
+def post_recovery(request):
+    """Integration verification and the security review after a full-system recovery."""
+    from apps.security.models import HealthState
+
+    from . import bk_integrations as I
+
+    if request.method == "POST":
+        action = request.data.get("action")
+        if action == "verify":
+            I.verify(request.data.get("items") or None)
+        elif action == "accept":
+            I.release(str(request.data.get("item", "")))
+            audit.record("recovery.integration_accepted", request=request, item=str(request.data.get("item", ""))[:60])
+        elif action == "review_done":
+            if not stepup_ok(request):
+                return _needs_stepup()
+            HealthState.put("security_review", required=False, completed_at=timezone.now().isoformat(),
+                            completed_by=request.user.username)
+            audit.record("recovery.security_review_completed", request=request)
+        else:
+            return _err("Unknown action.")
+    review = HealthState.get("security_review")
+    last = RestoreRun.objects.filter(kind="full").first()
+    return Response({"integrations": I.summary(), "security_review": {"required": bool(review.get("required")), **review},
+                     "last_full_recovery": restore_json(last, full=True) if last else None})

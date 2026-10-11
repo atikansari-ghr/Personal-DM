@@ -412,6 +412,23 @@ SETTINGS: list[SettingDef] = [
                help="telegram#setup"),
     SettingDef("telegram.bot_token", "Telegram bot token", "Token from @BotFather. Stored encrypted.", "secret", "",
                "connections", help="telegram#setup"),
+    # Change Set T: Discord (official webhooks, one per person) and WhatsApp Personal (experimental bridge)
+    SettingDef("discord.enabled", "Discord webhooks", "Let people send their own notifications to a Discord channel through an "
+               "official Discord webhook they add in My account → Notifications. Each webhook is stored encrypted.", "bool", False,
+               "connections", effect="When off, Discord delivery stops for everyone; saved webhooks are kept.", help="discord#setup"),
+    SettingDef("whatsapp.enabled", "WhatsApp Personal (experimental, unofficial)",
+               "Optional self-hosted bridge that links each person's own WhatsApp account as a linked device and sends them their "
+               "Personal DM notifications. It is not the WhatsApp Business Platform and is not supported or endorsed by WhatsApp "
+               "or Meta; WhatsApp may disconnect linked devices at any time.", "bool", False, "connections",
+               effect="Install the bridge first (sudo personaldocs whatsapp-bridge install). Off by default; never enabled automatically.",
+               help="whatsapp-personal#enable"),
+    SettingDef("whatsapp.bridge_url", "WhatsApp bridge address", "Local address of the personaldocs-whatsapp service. Only "
+               "loopback addresses are accepted.", "url", "http://127.0.0.1:8095", "connections", depends_on=("whatsapp.enabled",),
+               max=100, help="whatsapp-personal#bridge"),
+    SettingDef("notifications.fallback_after_attempts", "Fall back after failed attempts",
+               "When a person set a fallback chain (for example WhatsApp → Telegram → Email), the next channel is tried after this "
+               "many failed delivery attempts. A disconnected channel falls back at once.", "int", 2, "notifications", min=1, max=5,
+               help="notifications#fallback"),
     SettingDef("telegram.bot_username", "Telegram bot username", "Used to build the link shown to users.", "str", "",
                "connections", max=64, help="telegram#setup", example="MyFamilyDocsBot"),
     SettingDef("whatsapp.status", "WhatsApp", "Personal WhatsApp notifications are a later-phase feature.", "choice",

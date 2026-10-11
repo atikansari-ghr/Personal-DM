@@ -113,6 +113,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "apps.security.traffic.AccessLogMiddleware",  # outermost: logs the final status (incl. policy denials)
+    "apps.core.middleware.RecoveryInProgressMiddleware",  # 503 while a full-system recovery runs
     "apps.core.middleware.LocalAccessCookieMiddleware",  # adjusts the final response
     "apps.security.middleware.AccessPolicyMiddleware",  # country/IP policy, before sessions and authentication
     "django.middleware.security.SecurityMiddleware",

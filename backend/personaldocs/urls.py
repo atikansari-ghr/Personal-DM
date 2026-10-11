@@ -270,6 +270,7 @@ api = [
     path("backup/key/reveal", bk.key_reveal),
     path("backup/key/rotate", bk.key_rotate),
     path("backup/emergency", bk.emergency_export),
+    path("backup/post-recovery", bk.post_recovery),
     path("recovery/points", bk.recovery_points),
     path("recovery/points/<uuid:pk>", bk.recovery_explore),
     path("recovery/points/<uuid:pk>/compare/<uuid:doc>", bk.recovery_compare),

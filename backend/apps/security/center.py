@@ -548,8 +548,14 @@ def _job_security_test(job):
 # ------------------------------------------------------------------ OS security updates and reboot
 
 def pre_update_backup(actor=None) -> dict:
-    """Database dump + settings snapshot before OS updates (an application backup, not a Proxmox/LXC snapshot)."""
-    from apps.ops import backup
+    """Safety backup before OS updates. With Backup & Recovery configured this is a full-system encrypted recovery
+    point with deep verification (Change Set T); otherwise a local database dump + settings snapshot as before.
+    An application backup, not a Proxmox/LXC snapshot."""
+    from apps.ops import backup, bk_engine
+
+    if bk_engine.configured():
+        res = bk_engine.pre_change_backup("Before installing OS security updates", actor=actor)
+        return {"ok": res["ok"], "detail": res["detail"]}
 
     dest = Path(settings.DATA_DIR) / "pre-update-backups" / timezone.now().strftime("%Y%m%d-%H%M%S")
     try:

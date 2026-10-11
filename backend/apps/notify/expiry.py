@@ -268,7 +268,11 @@ def deliver_outbox(limit: int = 100) -> dict:
         return {"sent": 0, "failed": 0, "sandbox": True}  # recovery validation: production notifications never fire
     now = timezone.now()
     done = failed = 0
-    for msg in OutboxMessage.objects.filter(status=OutboxMessage.PENDING, next_attempt_at__lte=now).select_related("user")[:limit]:
+    from apps.ops.bk_integrations import channel_on_hold
+
+    held = {ch for ch in ("email", "telegram", "push", "discord", "whatsapp") if channel_on_hold(ch)}
+    qs = OutboxMessage.objects.filter(status=OutboxMessage.PENDING, next_attempt_at__lte=now).exclude(channel__in=held)
+    for msg in qs.select_related("user")[:limit]:
         outcome = deliver_one(msg)
         done += outcome == "sent"
         failed += outcome == "failed"
