@@ -176,7 +176,7 @@ def classify(event, *, previous=None) -> tuple[str, list[str]]:
         reasons.append("Recognised device")
     else:
         reasons.append("New or unrecognised device")
-        level = max(level, 1 if zone else 2)
+        level = max(level, 2 if event.network not in ("trusted_zone", "private") else 1)  # Warning only on public networks
     flags = set(event.flags or [])
     if "new_country" in flags:
         reasons.append(f"First sign-in from {event.country_name or event.country} (GeoIP, approximate)")

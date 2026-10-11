@@ -136,6 +136,9 @@ def test_at328_explainable_risk_and_no_blocking(family, citydb):
     login("192.168.2.10", cookie=cookie)  # known device at home
     e2 = LoginEvent.objects.filter(result="success").order_by("-at").first()
     assert e2.risk == "normal" and "Recognised device" in e2.risk_reasons
+    login("10.20.0.7")  # a new device on a private network that is not a Trusted Zone: low, not warning
+    e2b = LoginEvent.objects.filter(result="success").order_by("-at").first()
+    assert e2b.risk == "low" and any("private network" in r for r in e2b.risk_reasons)
     login(CITY_A, cookie=cookie)  # known device, public city A (first public sign-in: new country)
     e3 = LoginEvent.objects.filter(result="success").order_by("-at").first()
     assert e3.risk == "warning" and any("GeoIP, approximate" in r for r in e3.risk_reasons)

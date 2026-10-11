@@ -202,7 +202,7 @@ p { margin: 0.3rem 0; }
 .icon-btn { border: 0; background: transparent; padding: 0.4rem; border-radius: 8px; cursor: pointer; color: inherit; display: inline-flex; min-width: 36px; min-height: 36px; align-items: center; justify-content: center; }
 .icon-btn:hover { background: var(--brand-softer); }
 label { font-weight: 550; font-size: 0.92rem; display: block; margin-bottom: 0.3rem; }
-input[type="text"], input[type="password"], input[type="email"], input[type="search"], input[type="number"], input[type="date"], input[type="time"], select, textarea {
+input:not([type]), input[type="text"], input[type="password"], input[type="email"], input[type="search"], input[type="number"], input[type="date"], input[type="time"], select, textarea {
   width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: var(--input-bg); color: var(--ink); min-height: 42px; }
 textarea { min-height: 90px; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--brand); box-shadow: var(--focus); background: var(--input-bg-focus); }
@@ -957,8 +957,8 @@ code.temp-password { font-size: 1.15rem; padding: .4rem .6rem; letter-spacing: .
 .callout.warning, .callout.experimental { border-left-color: var(--warn-ink); background: var(--warn-bg); }
 .callout.critical { border-left-color: var(--danger-ink); background: var(--danger-bg); }
 .callout.privacy { border-left-color: var(--brand); background: var(--brand-softer); }
-.callout.experimental::before { content: "Experimental"; display: inline-block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn-ink); margin-bottom: 0.2rem; }
-.callout.privacy::before { content: "Privacy"; display: inline-block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand); margin-bottom: 0.2rem; }
+.callout.experimental::before { content: "Experimental"; display: block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--warn-ink); margin-bottom: 0.2rem; }
+.callout.privacy::before { content: "Privacy"; display: block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand); margin-bottom: 0.2rem; }
 .key-reveal { display: grid; gap: 0.5rem; padding: 0.8rem; border: 2px dashed var(--danger-ink); border-radius: var(--radius); background: var(--surface); }
 .key-text { font-size: 1.05rem; letter-spacing: 0.04em; overflow-wrap: anywhere; user-select: all; }
 .points-table td { vertical-align: top; }
@@ -967,8 +967,8 @@ code.temp-password { font-size: 1.15rem; padding: .4rem .6rem; letter-spacing: .
 @media (max-width: 900px) { .recovery-grid { grid-template-columns: minmax(0, 1fr); } }
 .timeline { list-style: none; margin: 0.5rem 0; padding: 0 0 0 0.6rem; border-left: 2px solid var(--line); max-height: 18rem; overflow: auto; }
 .timeline button, .tree button { background: none; border: 0; padding: 0.25rem 0.4rem; border-radius: 6px; cursor: pointer; color: var(--ink); text-align: left; width: 100%; font: inherit; }
-.timeline button.active, .tree button.active { background: var(--brand-soft); color: var(--brand-ink, var(--ink)); font-weight: 600; }
-.timeline .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 0.45rem 0 -1.05rem; background: var(--muted); vertical-align: middle; }
+.timeline button.active, .tree button.active { background: var(--brand-soft); color: var(--ink); font-weight: 600; } /* --brand-ink is for text on solid brand fills */
+.timeline .dot { position: static; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 0.45rem 0 -1.05rem; background: var(--muted); vertical-align: middle; }
 .timeline .dot.full { background: var(--brand); }
 .recovery-doc { border-bottom: 1px solid var(--line); padding: 0.6rem 0; }
 .recovery-doc .versions li { padding: 0.25rem 0; border-top: 1px dashed var(--line); }
@@ -978,13 +978,17 @@ tr.changed td { background: var(--warn-bg); }
 /* sign-in map */
 .signin-map { width: 100%; border-radius: var(--radius); border: 1px solid var(--line); overflow: hidden; background: var(--surface-2); z-index: 0; }
 .legend { display: flex; flex-wrap: wrap; gap: 0.9rem; }
-.legend .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 0.3rem; vertical-align: middle; border: 2px solid var(--brand); }
+.legend .dot { position: static; display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 0.3rem; vertical-align: middle; border: 2px solid var(--brand); }
 .legend .dot.zone { background: var(--ok-bg); }
 .legend .dot.city { background: transparent; border-color: var(--info-ink); }
 .legend .dot.country { background: transparent; border-style: dashed; border-color: var(--muted); }
 tr.risk-high td { background: var(--danger-bg); }
 .device-list li { border-bottom: 1px solid var(--line); padding: 0.55rem 0; }
 /* notification routing */
+.matrix.routing td { width: auto; text-align: left; } /* .matrix sizes cells for the per-event checkbox grid */
+.matrix.routing th[scope="row"] { width: 13rem; }
+.matrix.routing select { min-width: 10rem; }
+.badge-group { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; margin-left: auto; }
 .chip-row { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .chip-row .chip { padding: 0.2rem 0.6rem; cursor: pointer; }
 .chip-row .chip.disabled { opacity: 0.55; cursor: not-allowed; }

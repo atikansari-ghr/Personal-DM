@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { Expiry, UserMini } from "../types";
 
 // ---------------------------------------------------------------- icons (inline SVG, no external assets)
@@ -143,7 +144,8 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
       prev?.focus();
     };
   }, [onClose]);
-  return (
+  // rendered at the end of <body>: an ancestor with a transform or filter would otherwise clip the fixed overlay
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} ref={ref} tabIndex={-1}>
         <div className="modal-head">
@@ -154,7 +156,8 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

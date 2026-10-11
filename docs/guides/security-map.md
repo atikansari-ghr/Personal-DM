@@ -86,6 +86,7 @@ Every successful sign-in gets an explainable risk level. Open **Why** to see the
 | --- | --- |
 | Home + recognised device | **Normal** |
 | Home + new device | **Low** |
+| New device on another private network (not a Trusted Zone) | **Low** |
 | Known public place + recognised device | **Normal** |
 | New country, or a new device on a public network | **Warning** |
 | Impossible travel: far away from the previous sign-in, faster than a plane (needs City-level GeoIP) | **High** — you and the administrators get an *Unusual sign-in* notification |

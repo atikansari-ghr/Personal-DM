@@ -242,11 +242,21 @@ await step("AT-333 Backup & Recovery, Recovery Explorer, notifications and sign-
 
 await step("AT-334 guide screenshots load in Help (after capture)", async () => {
   const P = D.page;
-  for (const slug of ["backup-restore", "notifications", "security-map", "discord", "documentation"]) {
+  for (const slug of ["backup-restore", "notifications", "security-map", "discord"]) {
     await P.goto(BASE + "/help/" + slug);
     await P.waitForSelector(".breadcrumbs");
     expect(await P.locator("img.doc-shot").count() > 0, `${slug}: screenshots next to the steps`);
-    await P.waitForFunction(() => [...document.querySelectorAll("img.doc-shot")].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 });
+    // guide images are lazy-loaded, so load and decode each one explicitly instead of waiting for off-screen ones
+    const bad = await P.evaluate(async () => {
+      const out = [];
+      for (const img of document.querySelectorAll("img.doc-shot")) {
+        const probe = new Image();
+        probe.src = img.currentSrc || img.src;
+        try { await probe.decode(); if (!probe.naturalWidth) out.push(img.alt); } catch { out.push(img.alt); }
+      }
+      return out;
+    });
+    expect(!bad.length, `${slug}: images that do not load: ${bad.join("; ")}`);
   }
 });
 

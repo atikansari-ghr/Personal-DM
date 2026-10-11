@@ -111,8 +111,8 @@ export function WhatsAppCard() {
   const s = w.data;
   return (
     <div className="card" id="whatsapp">
-      <h2>WhatsApp Personal <span className="badge warn">Experimental</span> <span className="badge neutral">Unofficial</span> <span className="badge neutral">Self-hosted</span></h2>
-      <div className="callout experimental"><strong>Experimental, unofficial, self-hosted.</strong> Links your own WhatsApp account as a linked device and sends you your Personal DM notifications as messages to yourself. It is not the WhatsApp Business Platform, not supported or endorsed by WhatsApp or Meta, and WhatsApp may disconnect it at any time. It is notification-only: nothing here can read your chats or message anyone else. <a href="/help/whatsapp-personal">Learn more</a></div>
+      <h2>WhatsApp Personal <span className="badge-group"><span className="badge warn">Experimental</span><span className="badge neutral">Unofficial</span><span className="badge neutral">Self-hosted</span></span></h2>
+      <div className="callout experimental">Links your own WhatsApp account as a linked device and sends you your Personal DM notifications as messages to yourself. It is not the WhatsApp Business Platform, not supported or endorsed by WhatsApp or Meta, and WhatsApp may disconnect it at any time. It is notification-only: nothing here can read your chats or message anyone else. <a href="/help/whatsapp-personal">Learn more</a></div>
       <p>Status: <strong>{s.label || s.state}</strong>{s.number_hint && <span className="small muted"> · number ending {s.number_hint}</span>}{s.error && <span className="small muted"> · {s.error}</span>}</p>
       {s.state === "pending" && s.qr_svg && (
         <div className="qr-box"><div className="qr" aria-label="QR code for linking WhatsApp" role="img" dangerouslySetInnerHTML={{ __html: s.qr_svg }} />
