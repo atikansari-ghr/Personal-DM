@@ -1,0 +1,8 @@
+{
+  "protocol": 1,
+  "pinned": "1.0.0",
+  "library": "@whiskeysockets/baileys@6.7.24",
+  "tested_versions": ["1.0.0"],
+  "reviewed": "2026-10",
+  "notes": "Only versions listed here are installed by 'personaldocs whatsapp-bridge update'. Upstream releases are never tracked automatically."
+}

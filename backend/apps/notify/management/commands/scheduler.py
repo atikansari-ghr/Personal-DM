@@ -48,6 +48,12 @@ def tick() -> dict:
         out["expiry"] = expiry.run_expiry_scan(now_local.date())
         _mark("expiry_scan", now_local)
     out["outbox"] = expiry.deliver_outbox()
+    try:
+        from apps.notify import routing
+
+        out["digests"] = routing.run_digests()
+    except Exception:  # noqa: BLE001 - digests must not stop reminders
+        log.exception("digest run failed")
     if config.get("telegram.enabled") and config.is_set("telegram.bot_token"):
         try:
             out["telegram_links"] = telegram.poll_updates()

@@ -241,6 +241,12 @@ api = [
     path("notifications/test", notify.test_channel),
     path("notifications/deliveries", nrich.delivery_history),
     path("notifications/problems", notify.delivery_problems),
+    path("notifications/routing", notify.my_routing),
+    path("notifications/discord", notify.my_discord),
+    path("notifications/whatsapp", notify.my_whatsapp),
+    path("notifications/channel-test", notify.my_channel_test),
+    path("notifications/my-deliveries", notify.my_deliveries),
+    path("notifications/health", notify.delivery_health),
     path("notifications/preview", notify.template_preview),
     path("notifications/run", notify.run_reminders_now),
     # settings, admin, ops

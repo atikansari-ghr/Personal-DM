@@ -1035,4 +1035,16 @@ def dashboard(request):
 
         data["admin"] = {"backup": last_backup_status(), "disk_free_bytes": storage.disk_free_bytes(),
                          "failed_jobs": __import__("apps.core.models", fromlist=["Job"]).Job.objects.filter(status="failed").count()}
+        try:
+            from apps.ops import bk_engine
+
+            data["admin"]["backup_health"] = bk_engine.health()  # from verified recovery state, not process liveness
+        except Exception:  # noqa: BLE001 - the Overview must load even if a health source fails
+            data["admin"]["backup_health"] = None
+    try:
+        from apps.ops.bk_restore import my_recovery
+
+        data["my_recovery"] = my_recovery(request.user)
+    except Exception:  # noqa: BLE001
+        data["my_recovery"] = None
     return Response(data)

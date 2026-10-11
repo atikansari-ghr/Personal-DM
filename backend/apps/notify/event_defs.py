@@ -3,7 +3,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-CHANNELS = ("in_app", "email", "telegram", "push")
+CHANNELS = ("in_app", "email", "telegram", "push", "discord", "whatsapp")
+EXTERNAL = ("email", "telegram", "push", "discord", "whatsapp")
+CHANNEL_LABELS = {"in_app": "In-App", "email": "Email", "telegram": "Telegram", "push": "PWA Push", "discord": "Discord",
+                  "whatsapp": "WhatsApp Personal"}
+# Routing categories (Change Set T): the per-person routing matrix, fallback chains, quiet hours and digests work on
+# these. Every event belongs to exactly one.
+ROUTE_CATEGORIES = {
+    "documents": "Documents & expiry", "sharing": "Sharing & new documents", "security": "Security & sign-in",
+    "backup": "Backup & recovery", "ocr": "OCR & processing", "antivirus": "Antivirus", "system": "System & updates",
+    "storage": "Storage", "admin": "Import & administration",
+}
+DIGEST_CHOICES = ("immediate", "daily", "weekly")
 CATEGORIES = ("documents", "expiry", "ocr", "security", "system", "sharing", "backup")
 SEVERITIES = ("critical", "warning", "success", "info")
 
@@ -104,3 +115,22 @@ EVENTS: dict[str, Event] = {e.key: e for e in [
 
 DEFAULT_CRITICAL = [k for k, e in EVENTS.items() if e.default_critical]
 LABELS = {k: e.label for k, e in EVENTS.items()}
+
+
+_ROUTE_OVERRIDES = {"document.added": "sharing", "document.shared": "sharing", "import.finished": "admin",
+                    "integrity.failed": "storage", "security.operations": "system", "security.health": "system",
+                    "security.policy_change": "admin", "security.auth_policy": "admin"}
+
+
+def route_of(key: str) -> str:
+    """Routing category of an event."""
+    if key in _ROUTE_OVERRIDES:
+        return _ROUTE_OVERRIDES[key]
+    if key.startswith("antivirus."):
+        return "antivirus"
+    if key.startswith(("backup.", "recovery.")):
+        return "backup"
+    ev = EVENTS.get(key)
+    cat = ev.category if ev else "system"
+    return {"expiry": "documents", "documents": "documents", "sharing": "sharing", "ocr": "ocr", "security": "security",
+            "backup": "backup"}.get(cat, "system")

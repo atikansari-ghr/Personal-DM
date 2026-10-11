@@ -158,39 +158,62 @@ def dispatch(user, message, *, kind: str, key: str, document=None, group: str = 
 
     if message.secret_link:  # a token link must never reach the outbox, in-app history or chat channels
         raise ValueError("messages with a secret link are sent directly (send_direct_email), not dispatched")
+    from . import routing
+    from .catalog import locked_channels
+
     event = message.event
     result = {}
-    for channel in channels_for(user, event):
-        if channel == "in_app":
-            card = rich.render_in_app(message)
-            body = templates.render(user=user, title=card["title"], lines=[x for x in (card["summary"],) if x] + card["guidance"],
-                                    facts=[(d["label"], d["value"]) for d in card["details"]], items=message.items,
-                                    items_label=message.items_label, more=message.more, header=False)
-            _in_app(user, kind, key, card, body, message, document, group)
-            result[channel] = "in-app"
-            continue
-        issue = channel_issue(user, channel)
-        html_part, payload = "", {}
-        if channel == "email":
-            subject, body, html_part = rich.render_email(message, user)
-        elif channel == "telegram":
-            subject, body, _h = rich.render_email(message, user)
-            payload = rich.render_telegram(message, user)
-        else:  # push
-            payload = rich.render_push(message, user)
-            subject, body = payload["title"], payload["body"]
+    chans = channels_for(user, event)
+    if "in_app" in chans:
+        card = rich.render_in_app(message)
+        body = templates.render(user=user, title=card["title"], lines=[x for x in (card["summary"],) if x] + card["guidance"],
+                                facts=[(d["label"], d["value"]) for d in card["details"]], items=message.items,
+                                items_label=message.items_label, more=message.more, header=False)
+        _in_app(user, kind, key, card, body, message, document, group)
+        result["in_app"] = "in-app"
+    for item in routing.plan(user, message, chans, locked_channels(event)):
+        channel = item["channel"]
+        issue = item.get("skip") or channel_issue(user, channel)
+        subject, body, html_part, payload = render_for(channel, message, user)
+        status = OutboxMessage.SKIPPED if issue else (OutboxMessage.DIGEST if item["hold"] == "digest" else OutboxMessage.PENDING)
         try:
             with transaction.atomic():  # savepoint: a duplicate key must not poison an enclosing transaction
                 OutboxMessage.objects.create(key=f"{key}:{user.pk}:{channel}"[:250], user=user, channel=channel, kind=kind,
                                              subject=subject[:200], body=body, html=html_part, payload=payload,
                                              event=event, severity=message.severity, document=document,
-                                             is_test=message.test,
-                                             status=OutboxMessage.SKIPPED if issue else OutboxMessage.PENDING,
-                                             last_error=issue or "", next_attempt_at=timezone.now())
+                                             is_test=message.test, status=status, last_error=issue or "",
+                                             route=item["route"], fallback_chain=item["chain"], hold=item["hold"],
+                                             next_attempt_at=item["at"])
         except IntegrityError:
             pass  # already queued by an earlier (possibly interrupted) run
-        result[channel] = f"skipped: {issue}" if issue else "queued"
+        result[channel] = f"skipped: {issue}" if issue else (item["hold"] or "queued")
     return result
+
+
+def render_for(channel: str, message, user) -> tuple[str, str, str, dict]:
+    """(subject, text body, html, payload) for one channel, all from the same structured message."""
+    from . import rich
+
+    html_part, payload = "", {}
+    if channel == "email":
+        subject, body, html_part = rich.render_email(message, user)
+    elif channel == "telegram":
+        subject, body, _h = rich.render_email(message, user)
+        payload = rich.render_telegram(message, user)
+    elif channel == "discord":
+        from . import discord
+
+        subject, body, _h = rich.render_email(message, user)
+        payload = discord.render(message, user)
+    elif channel == "whatsapp":
+        from . import whatsapp
+
+        subject, _b, _h = rich.render_email(message, user)
+        body = whatsapp.render(message)
+    else:  # push
+        payload = rich.render_push(message, user)
+        subject, body = payload["title"], payload["body"]
+    return subject, body, html_part, payload
 
 
 def _in_app(user, kind, key, card, body, message, document, group=""):
@@ -292,6 +315,7 @@ def deliver_one(msg) -> str:
     if issue:
         msg.status, msg.last_error = OutboxMessage.SKIPPED, issue
         msg.save(update_fields=["status", "last_error"])
+        _fallback(msg, f"Channel Disconnected: {issue}")
         return "skipped"
     msg.attempts += 1
     outcome = "sent"
@@ -309,16 +333,72 @@ def deliver_one(msg) -> str:
 
             ref = webpush.deliver(msg.user, msg.payload or {"title": msg.subject, "body": msg.body, "url": "/notifications"},
                                   severity=msg.severity)
+        elif msg.channel == "discord":
+            from . import discord
+
+            ref = discord.post(msg.user.discord_webhook, msg.payload or {"content": msg.subject[:1900]})
+        elif msg.channel == "whatsapp":
+            from . import whatsapp
+
+            ref = whatsapp.send(msg.user, msg.body)
         msg.status, msg.sent_at, msg.last_error = OutboxMessage.SENT, timezone.now(), ""
         msg.provider_ref = str(ref or "")[:120]
     except Exception as exc:  # noqa: BLE001
         from apps.core.logging import redact
 
         msg.last_error = redact(f"{exc.__class__.__name__}: {exc}")[:500]
-        if msg.attempts >= MAX_ATTEMPTS:
+        from .routing import fallback_after
+
+        if msg.fallback_chain and msg.attempts >= fallback_after():
+            msg.status = OutboxMessage.FALLBACK  # stop retrying here: the next channel of the chain takes over
+        elif msg.attempts >= MAX_ATTEMPTS:
             msg.status = OutboxMessage.FAILED
         else:
             msg.next_attempt_at = timezone.now() + timedelta(minutes=5 * (2 ** (msg.attempts - 1)))
         outcome = "failed"
     msg.save(update_fields=["status", "sent_at", "last_error", "attempts", "next_attempt_at", "provider_ref"])
+    if msg.status == OutboxMessage.FALLBACK:
+        _fallback(msg, msg.last_error)
     return outcome
+
+
+def _fallback(msg, reason: str) -> None:
+    """Queue the next channel of the person's fallback chain once (idempotent key)."""
+    if not msg.fallback_chain or msg.route not in ("primary", "fallback"):
+        return
+    nxt, rest = msg.fallback_chain[0], msg.fallback_chain[1:]
+    issue = channel_issue(msg.user, nxt)
+    if issue and rest:
+        # skip a disconnected link of the chain at once, recording it
+        try:
+            with transaction.atomic():
+                skipped = OutboxMessage.objects.create(key=f"{msg.key}:fb:{nxt}"[:250], user=msg.user, channel=nxt, kind=msg.kind,
+                                                       subject=msg.subject, body=msg.body, event=msg.event, severity=msg.severity,
+                                                       document=msg.document, is_test=msg.is_test, status=OutboxMessage.SKIPPED,
+                                                       last_error=f"Channel Disconnected: {issue}", route="fallback",
+                                                       fallback_chain=rest, fallback_of=msg)
+        except IntegrityError:
+            return
+        _fallback(skipped, issue)
+        return
+    # the fallback channel gets the plain-text form of the original message (no names beyond what it already had)
+    subject, body, html_part, payload = msg.subject, msg.body, msg.html if nxt == "email" else "", {}
+    if nxt == "push":
+        payload = {"title": msg.subject[:120], "body": "Open the app to read this notification.", "url": "/notifications",
+                   "severity": msg.severity}
+    elif nxt == "discord":
+        payload = {"content": f"**{msg.subject[:200]}**\n{(msg.body or '')[:1500]}"}
+    elif nxt == "telegram":
+        import html as _html
+
+        payload = {"text": f"<b>{_html.escape(msg.subject)}</b>\n{_html.escape((msg.body or '')[:3500])}", "parse_mode": "HTML",
+                   "disable_web_page_preview": True}
+    try:
+        with transaction.atomic():
+            OutboxMessage.objects.create(key=f"{msg.key}:fb:{nxt}"[:250], user=msg.user, channel=nxt, kind=msg.kind, subject=subject,
+                                         body=body, html=html_part, payload=payload, event=msg.event, severity=msg.severity,
+                                         document=msg.document, is_test=msg.is_test,
+                                         status=OutboxMessage.SKIPPED if issue else OutboxMessage.PENDING, last_error=issue or "",
+                                         route="fallback", fallback_chain=rest, fallback_of=msg, next_attempt_at=timezone.now())
+    except IntegrityError:
+        pass  # already created: the fallback is used once

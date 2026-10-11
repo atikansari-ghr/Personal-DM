@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from apps.accounts.auth import IsActiveAuthenticated, IsMainAdmin
-from apps.core import audit, config
+from apps.core import audit, config, ratelimit
 
 from . import expiry, telegram
 from .models import Notification, OutboxMessage, TelegramLink
@@ -51,10 +51,13 @@ def my_channels(request):
         audit.record("account.channels_update", request=request, channels=wanted)
     active = expiry.channels_for(user)
     out = []
-    for ch, label in (("in_app", "In-app"), ("email", "Email"), ("telegram", "Telegram"), ("whatsapp", "WhatsApp")):
-        if ch == "whatsapp":
-            out.append({"channel": ch, "label": label, "available": False, "enabled": False, "required": False,
-                        "issue": "Planned for a later release; not available."})
+    for ch, label in (("in_app", "In-app"), ("email", "Email"), ("telegram", "Telegram"), ("discord", "Discord"),
+                      ("whatsapp", "WhatsApp Personal (experimental)")):
+        if ch in ("discord", "whatsapp"):
+            from .catalog import channel_configured
+
+            out.append({"channel": ch, "label": label, "available": channel_configured(ch), "enabled": False, "required": False,
+                        "issue": expiry.channel_issue(user, ch), "note": "Choose it per category in Notifications → Routing."})
             continue
         out.append({"channel": ch, "label": label, "available": True, "enabled": ch in active,
                     "required": ch in required or ch == "in_app",
@@ -145,7 +148,8 @@ def run_reminders_now(request):
     return Response(result)
 
 
-CHANNEL_LABELS = {"in_app": "In-app", "email": "Email", "telegram": "Telegram", "push": "Push"}
+from . import routing  # noqa: E402
+from .event_defs import CHANNEL_LABELS, ROUTE_CATEGORIES, route_of  # noqa: E402
 
 
 @api_view(["GET", "PUT"])
@@ -187,8 +191,14 @@ def my_notification_preferences(request):
         events.append({"key": key, "label": ev.label, "description": ev.description, "group": ev.group,
                        "critical": catalog.is_critical(key), "locked": catalog.locked_channels(key),
                        "channels": catalog.channels_for(user, key), "chosen": prefs.get(key, [])})
+    for e in events:
+        e["category"] = route_of(e["key"])
     link = TelegramLink.objects.filter(user=user).first()
     return Response({"events": events, "channels": channels, "problems": catalog.delivery_problems(user),
+                     "categories": [{"key": k, "label": v, **routing.conf(user, k)} for k, v in ROUTE_CATEGORIES.items()
+                                    if any(e["category"] == k for e in events)],
+                     "quiet_hours": config.get_user(user, "me.quiet_hours"), "timezone": config.get_user(user, "me.timezone") or "",
+                     "installation_timezone": config.get("general.timezone"), "digest_time": config.get_user(user, "me.digest_time"),
                      "telegram": {"linked": bool(link), "username": link.username if link else None,
                                   "bot": config.get("telegram.bot_username")}})
 
@@ -213,3 +223,172 @@ def delivery_problems(request):
             out.append({"user": u.display_name, "username": u.username, "problems": problems})
     skipped = OutboxMessage.objects.filter(status=OutboxMessage.SKIPPED).exclude(channel="in_app").count()
     return Response({"unconfigured": unconfigured, "people": out, "skipped_messages": skipped})
+
+
+# ------------------------------------------------------------------ Change Set T: routing, Discord, WhatsApp, delivery status
+
+@api_view(["PUT"])
+@permission_classes([IsActiveAuthenticated])
+def my_routing(request):
+    """Category routing (fallback chain, digest), quiet hours, timezone and digest time; optionally the channels of
+    every optional event of one category at once."""
+    from . import catalog
+
+    user = request.user
+    d = request.data
+    try:
+        if "routing" in d:
+            current = config.get_user(user, "me.notification_routing") or {}
+            config.set_user(user, "me.notification_routing", {**current, **(d["routing"] or {})})
+        if "quiet_hours" in d:
+            config.set_user(user, "me.quiet_hours", d["quiet_hours"])
+        if "timezone" in d:
+            config.set_user(user, "me.timezone", d["timezone"] or "")
+        if "digest_time" in d:
+            config.set_user(user, "me.digest_time", d["digest_time"])
+        if d.get("category_channels"):
+            cat, chans = d["category_channels"].get("category"), list(d["category_channels"].get("channels") or [])
+            if cat not in ROUTE_CATEGORIES or any(c not in catalog.CHANNELS for c in chans):
+                return Response({"error": "Unknown category or channel."}, status=400)
+            prefs = config.get_user(user, "me.notification_prefs") or {}
+            for key in catalog.EVENTS:
+                if route_of(key) == cat and catalog.applies_to(user, key):
+                    prefs[key] = sorted(set(chans) | set(catalog.locked_channels(key)), key=catalog.CHANNELS.index)
+            config.set_user(user, "me.notification_prefs", prefs)
+    except Exception as exc:  # noqa: BLE001 - SettingError
+        return Response({"error": str(exc)}, status=400)
+    audit.record("account.notification_routing", request=request, fields=sorted(k for k in d if k != "routing") + sorted((d.get("routing") or {}).keys()))
+    return Response({"status": "ok"})
+
+
+@api_view(["GET", "PUT", "DELETE"])
+@permission_classes([IsActiveAuthenticated])
+def my_discord(request):
+    from . import discord
+    from .models import DiscordWebhook
+
+    user = request.user
+    if request.method == "PUT":
+        if not config.get("discord.enabled"):
+            return Response({"error": "Discord is turned off by the administrator."}, status=400)
+        if "url" in request.data:
+            try:
+                discord.save(user, request.data.get("url"))
+            except discord.DiscordError as exc:
+                return Response({"error": str(exc)}, status=400)
+            audit.record("account.discord_webhook", request=request, change="saved")  # never the address
+        if "enabled" in request.data:
+            DiscordWebhook.objects.filter(user=user).update(enabled=bool(request.data["enabled"]))
+    if request.method == "DELETE":
+        DiscordWebhook.objects.filter(user=user).delete()
+        audit.record("account.discord_webhook", request=request, change="removed")
+    hook = DiscordWebhook.objects.filter(user=user).first()
+    return Response({"available": bool(config.get("discord.enabled")),
+                     "webhook": {"hint": hook.hint, "enabled": hook.enabled, "status": hook.status, "error": hook.last_error,
+                                 "last_tested_at": hook.last_tested_at} if hook else None})
+
+
+@api_view(["POST"])
+@permission_classes([IsActiveAuthenticated])
+def my_channel_test(request):
+    """Send a TEST message to my own Discord webhook or WhatsApp."""
+    ch = request.data.get("channel")
+    if ratelimit.too_many(f"chtest:{request.user.pk}", 6, 600):
+        return Response({"error": "Too many tests. Wait a few minutes."}, status=429)
+    try:
+        if ch == "discord":
+            from . import discord
+
+            discord.send_test(request.user)
+        elif ch == "whatsapp":
+            from . import whatsapp
+
+            whatsapp.send_test(request.user)
+        else:
+            return Response({"error": "Unknown channel."}, status=400)
+    except Exception as exc:  # noqa: BLE001
+        from apps.core.logging import redact
+
+        return Response({"error": redact(str(exc))[:200]}, status=400)
+    audit.record("account.channel_test", request=request, channel=ch)
+    return Response({"status": "ok", "detail": "Test message sent."})
+
+
+@api_view(["GET", "POST", "DELETE"])
+@permission_classes([IsActiveAuthenticated])
+def my_whatsapp(request):
+    """Link my own WhatsApp (QR), see status, reconnect, unlink. Notification-only: nothing here can compose or read
+    messages, list contacts or message anyone else."""
+    from . import whatsapp
+
+    user = request.user
+    try:
+        if request.method == "POST":
+            action = request.data.get("action", "link")
+            if action == "link":
+                data = whatsapp.start_link(user)
+                audit.record("account.whatsapp", request=request, change="link_started")
+                return Response(data)
+            if action == "reconnect":
+                return Response(whatsapp.reconnect(user))
+            return Response({"error": "Unknown action."}, status=400)
+        if request.method == "DELETE":
+            whatsapp.unlink(user)
+            audit.record("account.whatsapp", request=request, change="unlinked")
+            return Response({"linked": False, "state": "not_linked"})
+        return Response({"available": bool(config.get("whatsapp.enabled")), **whatsapp.status(user),
+                         "experimental": True, "notice": "Experimental, unofficial and self-hosted. Not WhatsApp Business Platform; "
+                                                        "not supported or endorsed by WhatsApp or Meta."})
+    except whatsapp.WhatsAppError as exc:
+        return Response({"error": str(exc)}, status=400)
+
+
+@api_view(["GET"])
+@permission_classes([IsActiveAuthenticated])
+def my_deliveries(request):
+    """My own delivery state per message and channel (Delivered, Failed, Retrying, Fallback Used, Not Selected,
+    Channel Disconnected, Held, Waiting for digest)."""
+    from . import catalog
+
+    user = request.user
+    rows = []
+    for m in OutboxMessage.objects.filter(user=user).exclude(channel="in_app").select_related("fallback_of")[:200]:
+        st = routing.state_of(m)
+        rows.append({"id": m.id, "channel": m.channel, "channel_label": CHANNEL_LABELS.get(m.channel, m.channel), "subject": m.subject,
+                     "event": m.event, "status": st, "status_label": routing.STATUS_LABELS.get(st, st), "route": m.route,
+                     "fallback_from": m.fallback_of.channel if m.fallback_of_id else None, "attempts": m.attempts,
+                     "error": m.last_error, "created_at": m.created_at, "sent_at": m.sent_at,
+                     "next_attempt_at": m.next_attempt_at if m.status == OutboxMessage.PENDING else None})
+    not_selected = {}
+    for key in catalog.EVENTS:
+        if catalog.applies_to(user, key):
+            chosen = set(catalog.channels_for(user, key))
+            not_selected[key] = [c for c in catalog.CHANNELS if c not in chosen]
+    return Response({"deliveries": rows, "not_selected": not_selected, "labels": routing.STATUS_LABELS})
+
+
+@api_view(["GET"])
+@permission_classes([IsMainAdmin])
+def delivery_health(request):
+    """Notification Delivery Health for administrators: counts only - no message bodies, addresses or secrets."""
+    from datetime import timedelta
+
+    from django.db.models import Count
+    from django.utils import timezone
+
+    from . import whatsapp
+
+    since = timezone.now() - timedelta(days=7)
+    counts = {}
+    for row in OutboxMessage.objects.filter(created_at__gte=since).exclude(channel="in_app").values("channel", "status").annotate(n=Count("id")):
+        counts.setdefault(row["channel"], {})[row["status"]] = row["n"]
+    pending_old = OutboxMessage.objects.filter(status=OutboxMessage.PENDING, created_at__lt=timezone.now() - timedelta(hours=6)).exclude(hold="quiet_hours").count()
+    from .models import DiscordWebhook, WhatsAppLink
+
+    return Response({"since": since, "channels": [{"channel": ch, "label": CHANNEL_LABELS[ch], "counts": counts.get(ch, {})}
+                                                  for ch in CHANNEL_LABELS if ch != "in_app"],
+                     "stuck": pending_old, "fallbacks": OutboxMessage.objects.filter(created_at__gte=since, route="fallback").count(),
+                     "discord_webhooks": {"total": DiscordWebhook.objects.count(), "broken": DiscordWebhook.objects.exclude(status__in=["connected", "untested"]).count()},
+                     "whatsapp": {"bridge": whatsapp.bridge_status(), "links": WhatsAppLink.objects.count(),
+                                  "connected": WhatsAppLink.objects.filter(state="connected").count(),
+                                  "reconnect_required": WhatsAppLink.objects.filter(state="reconnect_required").count()}})

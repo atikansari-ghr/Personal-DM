@@ -68,7 +68,7 @@ class SettingDef:
         }
 
 
-CHANNELS = ("in_app", "email", "telegram", "push")
+CHANNELS = ("in_app", "email", "telegram", "push", "discord", "whatsapp")
 THEMES = ("green", "blue", "dark", "glass_light", "glass_dark", "mono")
 THEME_LABELS = {"green": "Default Green", "blue": "Blue", "dark": "Dark", "glass_light": "Glass Light", "glass_dark": "Glass Dark",
                 "mono": "Black & White"}
@@ -96,7 +96,8 @@ WIDGETS = {
     "recent": "Recent documents",
     "upcoming": "Upcoming expiries",
     "review_queue": "Review queue",
-    "backup": "Backup status (administrators)",
+    "backup": "Backup & Recovery Health (main administrator)",
+    "my_recovery": "My Recovery",
     "date": "Today (Gregorian + Hijri date)",
     "weather": "Weather",
     "summary": "Documents summary",
@@ -774,7 +775,55 @@ SETTINGS: list[SettingDef] = [
                {}, "appearance_hidden", scope=USER, editable_by=SELF, help="overview#customize"),
     SettingDef("me.weather_city", "Weather city", "City for your weather widget.", "json", None, "appearance_hidden",
                scope=USER, editable_by=SELF, help="overview#weather"),
+    # Change Set T: routing, fallback, quiet hours and digests (per person)
+    SettingDef("me.notification_routing", "Notification routing", "Per category: fallback chain (first available channel "
+               "wins) and delivery (immediately, daily or weekly digest).", "json", {}, "my_notifications_hidden", scope=USER,
+               editable_by=SELF, validator=lambda v: _validate_routing(v), help="notifications#routing"),
+    SettingDef("me.quiet_hours", "Quiet hours", "Hold normal notifications on external channels during these hours. Critical "
+               "security and backup alerts are never held.", "json", {"enabled": False, "start": "22:00", "end": "07:00"},
+               "my_notifications_hidden", scope=USER, editable_by=SELF, validator=lambda v: _validate_quiet(v), help="notifications#quiet-hours"),
+    SettingDef("me.timezone", "My timezone", "Used for quiet hours and digests. Empty = the installation timezone.", "str", "",
+               "my_notifications_hidden", scope=USER, editable_by=SELF, max=60, validator=lambda v: _validate_tz(v),
+               help="notifications#quiet-hours", example="Europe/Berlin"),
+    SettingDef("me.digest_time", "Digest time", "Local time when daily and weekly digests are sent (weekly: Mondays).", "time",
+               "08:00", "my_notifications_hidden", scope=USER, editable_by=SELF, help="notifications#digests"),
 ]
+
+
+def _validate_tz(v):
+    if v:
+        try:
+            zoneinfo.ZoneInfo(v)
+        except Exception:
+            raise SettingError("Unknown timezone. Use a name like Asia/Riyadh.") from None
+
+
+def _validate_quiet(v):
+    if not isinstance(v, dict):
+        raise SettingError("Quiet hours must be {enabled, start, end}.")
+    for k in ("start", "end"):
+        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", str(v.get(k, ""))):
+            raise SettingError("Use 24-hour HH:MM for the quiet hours.")
+    if set(v) - {"enabled", "start", "end"}:
+        raise SettingError("Unknown quiet-hours field.")
+
+
+def _validate_routing(v):
+    from apps.notify.event_defs import CHANNELS as NCH
+    from apps.notify.event_defs import DIGEST_CHOICES, ROUTE_CATEGORIES
+
+    if not isinstance(v, dict):
+        raise SettingError("Routing must map categories to settings.")
+    for cat, conf in v.items():
+        if cat not in ROUTE_CATEGORIES or not isinstance(conf, dict):
+            raise SettingError(f"Unknown notification category: {cat}.")
+        fb = conf.get("fallback", [])
+        if not isinstance(fb, list) or any(c not in NCH or c == "in_app" for c in fb) or len(set(fb)) != len(fb):
+            raise SettingError("A fallback chain lists external channels once each, in order.")
+        if conf.get("digest", "immediate") not in DIGEST_CHOICES:
+            raise SettingError("Delivery must be immediately, daily digest or weekly digest.")
+        if set(conf) - {"fallback", "digest"}:
+            raise SettingError("Unknown routing field.")
 
 BY_KEY = {s.key: s for s in SETTINGS}
 
