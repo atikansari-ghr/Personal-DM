@@ -19,6 +19,7 @@ import SharedPage from "./pages/Shared";
 import UploadShared from "./pages/UploadShared";
 import { useSession } from "./session";
 import AssistantPage from "./pages/Assistant";
+import RecoveryPage from "./pages/Recovery";
 
 export default function App() {
   const { session, offline } = useSession();
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="/offline" element={<OfflinePage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/archive" element={<ArchivePage />} />
+        <Route path="/recovery" element={<RecoveryPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/:section" element={<SettingsPage />} />
         <Route path="/imports/new" element={<ImportWizard />} />

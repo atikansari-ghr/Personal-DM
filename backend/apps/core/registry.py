@@ -109,7 +109,7 @@ WIDGETS = {
 }
 # What a new account sees first (existing accounts keep the widgets they chose).
 DEFAULT_WIDGETS = ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity",
-                   "review_queue", "backup", "security"]
+                   "review_queue", "backup", "my_recovery", "security"]
 STAT_WIDGETS = ("documents", "members", "expiring", "storage", "review")
 
 

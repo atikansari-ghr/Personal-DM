@@ -9,10 +9,12 @@ import OfflineAdminPanel from "./settings/OfflineAdmin";
 import { LoginAuditPanel, TrafficPanel } from "./settings/Security";
 import SecurityCenter from "./settings/SecurityCenter";
 import SettingsForm from "../components/SettingsForm";
+import BackupPanel from "./settings/Backup";
+import { SigninAdmin } from "./settings/Signins";
 
 const ADMIN_TABS: [string, string][] = [
   ["general", "General"], ["family", "Family & access"], ["documents", "Documents & folders"], ["processing", "OCR & processing"],
-  ["notifications", "Notifications"], ["connections", "Connections"], ["authentication", "Authentication"], ["storage", "Storage & backup"],
+  ["notifications", "Notifications"], ["connections", "Connections"], ["authentication", "Authentication"], ["storage", "Storage & NAS"], ["backup", "Backup & Recovery"],
   ["security", "Security"], ["activity", "Activity & health"], ["ai", "Local AI"], ["offline", "Offline & PWA"], ["overview", "Overview & sign-in"],
 ];
 
@@ -39,6 +41,7 @@ export default function SettingsPage() {
       {active === "connections" && admin && <ConnectionsPanel />}
       {active === "authentication" && admin && <AuthPanel />}
       {active === "storage" && admin && <StoragePanel />}
+      {active === "backup" && admin && <BackupPanel />}
       {active === "security" && (admin || secAdmin) && <SecurityCenter />}
       {active === "activity" && admin && <ActivityTabs />}
       {active === "ai" && admin && <LocalAIPanel />}
@@ -51,7 +54,7 @@ export default function SettingsPage() {
 function ActivityTabs() {
   const [params, setParams] = useSearchParams();
   const view = params.get("view") || "health";
-  const views: [string, string][] = [["health", "Health & audit log"], ["logins", "Login audit"], ["traffic", "Traffic analytics"]];
+  const views: [string, string][] = [["health", "Health & audit log"], ["logins", "Login audit"], ["map", "Sign-in map & Trusted Zones"], ["traffic", "Traffic analytics"]];
   return (
     <div className="stack">
       <nav className="tabs sub" aria-label="Activity views">
@@ -59,6 +62,7 @@ function ActivityTabs() {
       </nav>
       {view === "health" && <ActivityPanel />}
       {view === "logins" && <LoginAuditPanel />}
+      {view === "map" && <SigninAdmin />}
       {view === "traffic" && <TrafficPanel />}
     </div>
   );

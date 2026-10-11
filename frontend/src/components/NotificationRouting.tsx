@@ -14,7 +14,7 @@ export function NotificationRouting({ data, reload }: { data: any; reload: () =>
   const [tz, setTz] = useState(data.timezone || "");
   const [digestTime, setDigestTime] = useState(data.digest_time || "08:00");
   const put = (body: any, msg = "Saved") => api("notifications/routing", { method: "PUT", body }).then(() => { toast(msg); reload(); }).catch((e) => toast(e.message, "error"));
-  const configured = new Set((data.channels || []).filter((c: any) => c.configured).map((c: any) => c.channel));
+  const configured = new Set<string>((data.channels || []).filter((c: any) => c.configured).map((c: any) => c.channel));
   return (
     <>
       <div className="card" id="routing">

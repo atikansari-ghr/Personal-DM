@@ -305,6 +305,7 @@ api = [
     path("admin/security/traffic", sec.traffic_api),
     path("admin/security/traffic/report.html", sec.traffic_html),
     path("help", core.help_index),
+    path("help/asset/<path:path>", core.help_asset),
     path("help/<str:slug>", core.help_guide),
 ]
 
