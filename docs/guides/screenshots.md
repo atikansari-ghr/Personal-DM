@@ -36,7 +36,7 @@ When `pngquant` is installed, the images are recompressed losslessly enough for 
   images.
 - **Privacy gate:** the capture fails if the visible text contains any of these:
   - an e-mail address outside `example.com/.org/.net`, `family.example`, `.test` or `.invalid`;
-  - an IP address outside loopback, `10.x` and the documentation ranges (192.0.2.x, 198.51.100.x, 203.0.113.x);
+  - a public IP address outside the documentation ranges (192.0.2.x, 198.51.100.x, 203.0.113.x). Loopback and private networks (`10.x`, `172.16–31.x`, `192.168.x`, as used by Trusted Zones) are allowed;
   - a token-like string of 40+ characters (names made of words joined by - or _, such as long file names, are not tokens).
 - **Demo data only:** documents are generated (`tests/fixtures.py`, `tests/e2e/make_parity_fixtures.py`) and say they
   are samples. The family names are the demo identities. No real passport, ID, Iqama, bank or medical scan may ever be
@@ -87,7 +87,7 @@ They follow the same rules as the README images, plus:
 - **Recovery Key:** the key dialog is captured masked. The step-up dialog is captured empty.
 - **Destinations:** destination paths are synthetic (for example `/srv/backups/personaldocs`). No real NAS or cloud location appears.
 - **Notifications:** webhook addresses are masked. No WhatsApp QR code or session data is ever captured.
-- **Sign-in map:** sign-in addresses come from the documentation ranges (`203.0.113.0/24`, `198.51.100.0/24`), with
+- **Sign-in map:** public sign-in addresses come only from the documentation ranges (`203.0.113.0/24`, `198.51.100.0/24`), with
   private Trusted Zone networks.
 
 The map shows real OpenStreetMap tiles. Their attribution stays visible. Behind an HTTPS proxy (`HTTPS_PROXY`) the

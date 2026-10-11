@@ -3,7 +3,7 @@
 //   * 1440×900 CSS px at device pixel ratio 2 (phones 390×844 at 2), consistent across all images;
 //   * after fonts load and animations settle (reduced motion), with no loading placeholders or toasts;
 //   * passes a quality gate (no horizontal overflow, no clipped text, all images decoded) and a privacy gate
-//     (no e-mail address outside example domains, no IP outside documentation ranges, no token-like strings).
+//     (no e-mail address outside example domains, no public IP outside documentation ranges, no token-like strings).
 // Output: docs/images/screenshots/ (PUBLIC_SHOTS overrides) and a manifest with the source of each image.
 // Usage: BASE=http://localhost:8000 node tests/e2e/screenshots.mjs
 import { chromium } from "playwright";
@@ -24,7 +24,8 @@ const step = async (name, fn) => {
 const expect = (cond, msg) => { if (!cond) throw new Error(msg); };
 const PRIVATE = [
   [/[A-Z0-9._%+-]+@(?!example\.(com|org|net)\b|family\.example\b|test\b|invalid\b|localhost\b)[A-Z0-9.-]+\.[A-Z]{2,}/i, "e-mail address outside example domains"],
-  [/\b(?!(?:127|10|192\.0\.2|198\.51\.100|203\.0\.113)\.)(?:\d{1,3}\.){3}\d{1,3}\b/, "IP address outside documentation ranges"],
+  // public addresses only from the documentation ranges; private networks (Trusted Zones) cannot identify anyone
+  [/\b(?!(?:127|10|192\.168|172\.(?:1[6-9]|2\d|3[01])|192\.0\.2|198\.51\.100|203\.0\.113)\.)(?:\d{1,3}\.){3}\d{1,3}\b/, "IP address outside documentation and private ranges"],
   [/(?<![A-Za-z0-9_-])(?![A-Za-z0-9_-]*[-_][A-Za-z]{4,}[-_][A-Za-z]{4,})[A-Za-z0-9_-]{40,}(?![A-Za-z0-9_-])/, "token-like string"], // file names made of words are not tokens
 ];
 
