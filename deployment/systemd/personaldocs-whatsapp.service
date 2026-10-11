@@ -1,0 +1,30 @@
+[Unit]
+Description=Personal DM - WhatsApp Personal notification bridge (EXPERIMENTAL, UNOFFICIAL, optional)
+Documentation=file:///opt/personaldocs/current/docs/guides/whatsapp-personal.md
+After=network-online.target
+Wants=network-online.target
+# Bounded restarts: never loop forever when WhatsApp changes its protocol.
+StartLimitIntervalSec=900
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=personaldocs
+Group=personaldocs
+Environment=PD_WA_PORT=8095
+Environment=PD_WA_DATA=/var/lib/personaldocs/whatsapp/sessions
+Environment=PD_WA_TOKEN_FILE=/etc/personaldocs/whatsapp-bridge.token
+WorkingDirectory=/opt/personaldocs/whatsapp-bridge/current
+ExecStart=/usr/bin/node server.mjs
+Restart=on-failure
+RestartSec=30
+# Exit code 3 = the pinned library is incompatible: do not restart; Personal DM shows "Degraded".
+RestartPreventExitStatus=3
+UMask=0077
+NoNewPrivileges=yes
+MemoryHigh=300M
+MemoryMax=400M
+CPUWeight=20
+
+[Install]
+WantedBy=multi-user.target
