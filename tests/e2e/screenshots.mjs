@@ -29,14 +29,16 @@ const PRIVATE = [
 ];
 
 // Map tiles are the only outside requests. In sandboxes that reach the Internet only through an HTTPS proxy
-// (HTTPS_PROXY set), the browser uses it too; the app itself is always reached directly.
+// (HTTPS_PROXY set), the browser uses it for https:// requests.
 // If that proxy re-signs TLS, PD_E2E_PROXY_CA names its CA certificate: Chromium then trusts exactly that key
 // (an SPKI pin); certificate verification stays on.
 const PROXY = process.env.HTTPS_PROXY || process.env.https_proxy || "";
 const pin = (file) => crypto.createHash("sha256").update(new crypto.X509Certificate(fs.readFileSync(file)).publicKey.export({ type: "spki", format: "der" })).digest("base64");
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined,
-  proxy: PROXY ? { server: PROXY, bypass: "localhost,127.0.0.1" } : undefined,
-  args: PROXY && process.env.PD_E2E_PROXY_CA ? [`--ignore-certificate-errors-spki-list=${pin(process.env.PD_E2E_PROXY_CA)}`] : [] });
+// Only https:// goes through the proxy; the app on http://localhost is always reached directly. (Playwright's own
+// proxy option would also route localhost through the proxy.)
+const args = PROXY ? [`--proxy-server=https=${new URL(PROXY).host}`] : [];
+if (PROXY && process.env.PD_E2E_PROXY_CA) args.push(`--ignore-certificate-errors-spki-list=${pin(process.env.PD_E2E_PROXY_CA)}`);
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args });
 const api = (page, url, opts = {}) => page.evaluate(async ([url, opts]) => {
   const csrf = decodeURIComponent((document.cookie.match(/pd_csrftoken=([^;]+)/) || [])[1] || "");
   const r = await fetch(url, { method: opts.method || (opts.body ? "POST" : "GET"), headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, body: opts.body ? JSON.stringify(opts.body) : undefined });
