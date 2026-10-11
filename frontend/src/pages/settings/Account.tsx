@@ -11,8 +11,10 @@ import { FolderSelect } from "../../components/UploadDialog";
 import { useSession } from "../../session";
 import type { FolderNode } from "../../types";
 import { AuthentikLogo, ChangePassword } from "../Auth";
+import { DiscordCard, MyDeliveries, NotificationRouting, WhatsAppCard } from "../../components/NotificationRouting";
+import { SigninSecurity } from "./Signins";
 
-const SUB: [string, string][] = [["profile", "Profile"], ["security", "Password & security"], ["linked", "Linked accounts"], ["appearance", "Appearance"], ["notifications", "Notifications"], ["email", "Email imports"]];
+const SUB: [string, string][] = [["profile", "Profile"], ["security", "Password & security"], ["linked", "Linked accounts"], ["appearance", "Appearance"], ["signins", "Sign-in security"], ["notifications", "Notifications"], ["email", "Email imports"]];
 
 function Profile() {
   const { session, refresh } = useSession();
@@ -175,8 +177,8 @@ function Linked() {
   );
 }
 
-const CH_LABEL: Record<string, string> = { in_app: "In-app", email: "Email", telegram: "Telegram" , push: "Push" };
-const GROUPS: [string, string][] = [["documents", "Documents"], ["security", "Account & security"], ["system", "System (administrators)"]];
+const CH_LABEL: Record<string, string> = { in_app: "In-app", email: "Email", telegram: "Telegram", push: "Push", discord: "Discord", whatsapp: "WhatsApp Personal" };
+const GROUPS: [string, string][] = [["documents", "Documents"], ["security", "Account & security"], ["system", "System & backup (administrators)"]];
 
 function b64ToUint8(b64: string) {
   const raw = atob((b64 + "=".repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
@@ -296,7 +298,10 @@ function Channels() {
         </div>
         <p className="small muted">{channels.filter((c) => c.channel !== "in_app" && c.issue).map((c) => `${c.label}: ${c.issue}`).join(" · ")}</p>
       </div>
+      <NotificationRouting data={data} reload={reload} />
       <PushCard />
+      <DiscordCard />
+      <WhatsAppCard />
       <div className="card">
         <h2>Telegram</h2>
         {data.telegram.linked ? (
@@ -374,7 +379,8 @@ export default function AccountSettings() {
       {tab === "security" && <><Security /><AuthentikLink /></>}
       {tab === "linked" && <Linked />}
       {tab === "appearance" && <div className="stack"><ThemeGallery /><SettingsForm section="appearance" title="Layout and views" exclude={["me.theme"]} /></div>}
-      {tab === "notifications" && <Channels />}
+      {tab === "notifications" && <><Channels /><MyDeliveries /></>}
+      {tab === "signins" && <SigninSecurity />}
       {tab === "email" && <EmailImports />}
     </div>
   );

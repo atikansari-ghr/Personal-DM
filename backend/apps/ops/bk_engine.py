@@ -838,7 +838,10 @@ def due_points(now_local) -> list[tuple[BackupPolicy, str, str]]:
             continue
         spec = {"enabled": True, "time": pol.full_time, "frequency": pol.full_frequency, "weekday": pol.full_weekday,
                 "month_day": pol.full_month_day}
-        occ = schedule.due(now_local, pol.last_full_at, spec)
+        from apps.notify.models import SchedulerRun
+
+        row = SchedulerRun.objects.filter(name=f"backup_policy:{pol.id}:full").first()
+        occ = schedule.due(now_local, row.last_run_at if row else None, spec)  # last time a Full was scheduled
         if occ is not None:  # failed attempts are de-duplicated per slot by the job idempotency key
             out.append((pol, RecoveryPoint.FULL, occ.isoformat()))
             continue

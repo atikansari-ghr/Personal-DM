@@ -100,6 +100,10 @@ def backup_tick(now_local) -> dict:
     for pol, kind, slot in bk_engine.due_points(now_local):
         jobs.enqueue("backup_point", {"policy": pol.id, "kind": kind, "trigger": "scheduled", "slot": slot}, max_attempts=1,
                      idempotency_key=f"bkp:{pol.id}:{kind}:{slot}")
+        if kind == "full":  # stored in the database: a restart never loses or repeats a run; a missed one runs once
+            from apps.notify.models import SchedulerRun
+
+            SchedulerRun.objects.update_or_create(name=f"backup_policy:{pol.id}:full", defaults={"last_run_at": timezone.now()})
         queued.append(kind)
     jobs.enqueue("backup_retry", {}, idempotency_key=f"bkretry:{timezone.now():%Y%m%d%H}{timezone.now().minute // 15}")
     days = [p.validation_days for p in BackupPolicy.objects.filter(enabled=True, validation_days__gt=0)]
