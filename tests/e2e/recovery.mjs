@@ -13,7 +13,10 @@ const BASE = process.env.BASE || "http://localhost:8000";
 const PW = "Sample-Passw0rd!";
 const OUT = "tests/e2e/out/recovery";
 fs.mkdirSync(OUT, { recursive: true });
-const DEST = fs.mkdtempSync(path.join(os.tmpdir(), "pd-e2e-backup-"));
+// scripts/e2e.sh passes a folder it removes at the end: screenshots.mjs still reads this backup after this suite
+const OWN_DEST = !process.env.PD_E2E_BACKUP_DIR;
+const DEST = process.env.PD_E2E_BACKUP_DIR || fs.mkdtempSync(path.join(os.tmpdir(), "pd-e2e-backup-"));
+fs.mkdirSync(DEST, { recursive: true });
 const results = [];
 let failed = 0;
 const step = async (name, fn) => {
@@ -222,6 +225,6 @@ await step("phone layout: Recovery Explorer and Backup overview fit 390 px", asy
 
 await browser.close();
 fs.writeFileSync(`${OUT}/results.json`, JSON.stringify(results, null, 1));
-fs.rmSync(DEST, { recursive: true, force: true });
+if (OWN_DEST) fs.rmSync(DEST, { recursive: true, force: true });
 console.log(`\nrecovery: ${results.length - failed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
