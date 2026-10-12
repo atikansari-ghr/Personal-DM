@@ -222,5 +222,40 @@
   "source": "real application, synthetic demo data",
   "viewport": "1440x900",
   "pixelRatio": 2
+ },
+ {
+  "file": "folders-tree.png",
+  "caption": "Folder tree: expander, icon and name columns line up at every level; long names wrap",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "security-map-provider.png",
+  "caption": "Sign-in map provider: preset, key, Test Map Provider and the last result",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "security-map-unavailable.png",
+  "caption": "Map unavailable (HTTP 403): the reason, the fix, and the sign-in list still works",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "connections-whatsapp.png",
+  "caption": "WhatsApp Personal: bridge service installed, running, version, protocol and compatibility",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "settings-login-design.png",
+  "caption": "Sign-in designs: a design selected, the live preview and Save design",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
  }
 ]
