@@ -93,6 +93,12 @@ Map tiles in the corrective suite were answered by `page.route` (no request reac
 - The *Map unavailable* link for administrators pointed to `/settings/security#map-provider`. The map provider card is
   on the **Access policy** view, so the link is now `/settings/security?view=access#map-provider`, and the guides
   name that path.
+- The first full run's accessibility audit (axe) failed on the sign-in page in Dark and Glass Dark (colour contrast).
+  The sign-in page now always uses the green theme, but `.auth` had no background of its own. The dark page colour
+  of the last user's theme, set on `<html>`, showed through behind green-theme text. `.auth` now paints its own
+  background and text colour.
+- The loading skeleton put `aria-label="Loading"` on a plain `div`, which axe reports as a prohibited attribute when
+  a card is still loading during the audit. It now has `role="status"`.
 - A leftover `whatsapp.status` setting ("Personal WhatsApp notifications are a later-phase feature", value
   `planned`) was removed from the registry and the settings reference. Nothing read it.
 

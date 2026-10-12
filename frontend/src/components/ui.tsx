@@ -331,7 +331,7 @@ export function renderMarkdown(md: string): string {
 
 export function Skeleton({ lines = 3 }: { lines?: number }) {
   return (
-    <div className="stack" aria-busy="true" aria-label="Loading">
+    <div className="stack" role="status" aria-busy="true" aria-label="Loading">
       {Array.from({ length: lines }).map((_, i) => <div key={i} className="skeleton" style={{ height: 18, width: `${90 - i * 12}%` }} />)}
     </div>
   );
