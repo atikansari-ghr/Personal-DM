@@ -70,7 +70,7 @@ Map tiles in the corrective suite were answered by `page.route` (no request reac
 | Command | Result |
 |---|---|
 | `pytest tests/test_corrective_u.py` | **16 passed** |
-| Full `pytest` | RESULT_PYTEST |
+| Full `pytest` | **463 tests: 458 passed, 5 skipped (live-only tests), 0 failed** (exit 0, after the final e2e run) |
 | `scripts/e2e.sh` (fresh database) | **146 PASS, 0 FAIL** (final run, exit 0): flow 14; accessibility in every theme with **no serious or critical violations**; parity and layout (7 viewports); offline 9; PWA 4; themes 6; recovery 10; **corrective 20** (folder tree geometry at 1440/820/390 px × Green, Blue, Dark, Glass Light, Glass Dark, right-to-left, keyboard; thumbnail luminance × 5 themes; preview/Save/Discard and the public sign-in page; map with a working tile and with 403, 429, 401 and network failures; Test Map Provider; WhatsApp enable → link → fake scan → Send test → routing → disable, bridge down, isolation; Discord; 390 px phone layout); **screenshots 8**. The first full run stopped at the accessibility audit (see defects below) |
 | `python3 scripts/check_docs.py` | **OK** (links, anchors, alt text, no orphan screenshots, Learn more links, review dates) |
 | `scripts/privacy_check.sh` | **OK** |
@@ -210,13 +210,13 @@ Discord server. OCRmyPDF ran as `python3.12 -m ocrmypdf` (`PD_OCRMYPDF_CMD`), be
 
 These are on the [release checklist](RELEASE_CHECKLIST.md).
 
-## Acceptance summary (AT-01…AT-335) {#summary}
+## Acceptance summary (AT-01…AT-355) {#summary}
 
-320 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
+340 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
 
 | Result | Count | Scenarios |
 |---|---|---|
-| Passed (automated tests, or for AT-136, AT-245, AT-270, AT-272, AT-274 and AT-333 including a documented review) | 257 | all scenarios not listed below |
+| Passed (automated tests, or for AT-136, AT-245, AT-270, AT-272, AT-274, AT-333 and AT-354 including a documented review) | 277 | all scenarios not listed below |
 | Passed in automated tests; real-environment validation pending | 55 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195, 197, 202, 205, 206, 208, 211, 212, 214, 216, 228, 229, 230, 261 (physical iPhone/iPad), 262 (real Android/desktop installs), 267 (real low-end phones), 302 (clean Debian 13 LXC recovery), 303 (live NAS/S3), 313 and 315 (real WhatsApp phone and live bridge update), 317 (real Discord server) |
 | Blocked (external environment) | 5 | AT-14, AT-26; AT-24, AT-27, AT-30 (partly automated, the rest needs a real Debian 13 LXC) |
 | Not run (manual steps, not automated, or no environment) | 3 | AT-15, AT-241 (installed PWA on a real device), AT-304 (Google Drive / OneDrive recovery needs real accounts) |
@@ -242,6 +242,8 @@ platforms (AT-197), real SMTP delivery of the reset email (AT-202), a real Debia
 Change set Q: see [below](#change-set-q). Pending external validations (none reported as passed): a fresh install
 and an upgrade on a real Debian 13 / Proxmox LXC with 6 GB (AT-211, AT-212, AT-214, AT-229), accuracy on sanitised
 real documents (AT-216, AT-230), and a real Local AI server with PP-OCRv5 output (AT-228).
+
+Change set U: see [above](#change-set-u). All 20 scenarios (AT-336…AT-355) passed in automated tests. Not run (none reported as passed): a real WhatsApp phone, a real Discord server, real map tiles from a production address, Firefox and Safari.
 
 Change set R: see [below](#change-set-r). Not run: an installed PWA on a real device (AT-241), browsers other than
 Chromium.
