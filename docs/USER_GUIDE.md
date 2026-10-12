@@ -96,6 +96,9 @@ Overview**. See [Overview](guides/overview.md).
 
 - **My Documents** at the top of the tree is your own area, opened when you go to **Folders**. Other members'
   areas show their name and photo, only if you have access, and stay closed until you open them.
+- In the folder tree every row has the same columns: the ▸/▾ expander, the folder icon and the name. Long names wrap
+  onto a second line without moving the icon. Keyboard: **→** opens a folder's sub-folders, **←** closes them,
+  **Enter** opens the folder ([folder tree](guides/getting-started.md#folder-tree)).
 - Each document has a labelled icon (PDF, JPG, PNG, WEBP, TXT, DOC, XLS, PPT, ZIP, DCM, FILE) based on the real file
   content.
 - On a computer the browser has three panels: folders, documents, preview. Drag the dividers to resize them. On
@@ -297,7 +300,9 @@ lock screen shows (Minimal, Standard or Detailed). Repeat on each device.
 - **WhatsApp Personal (experimental):** link your phone with a QR code, like WhatsApp Web. It sends notifications only
   to your own number ([WhatsApp Personal](guides/whatsapp-personal.md)).
 
-Neither is turned on until you set it up.
+Neither is turned on until you set it up. If the administrator has not allowed a channel, its card says **Disabled
+by Admin**. If the WhatsApp bridge on the server stops, your card says **Service unavailable** and your fallback
+channels are used. The QR code refreshes by itself while you link, and each card shows your last notification.
 
 See [notifications](guides/notifications.md), [push](guides/notifications.md#push) and
 [critical and optional notifications](guides/expiry-rules.md#critical).
@@ -306,6 +311,9 @@ See [notifications](guides/notifications.md), [push](guides/notifications.md#pus
 
 **My account → Sign-in security** shows your recent sign-ins on a map and in a list. Each sign-in shows its location
 (your home network appears by its Trusted Zone name, for example *Home*), device and risk level, with **Why**.
+
+If the map provider cannot be reached, the map shows **Map unavailable** with the reason; the list of sign-ins below
+still works.
 
 Under **Recognised devices**, use **Mark Unrecognized** for a device you do not know. That device is signed out at
 once and is never trusted again. You are then offered next steps, such as changing your password.

@@ -57,6 +57,7 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] `sudo personaldocs doctor` starts with the ClamAV diagnosis and its three app ClamAV checks pass
 - [ ] Settings → Notifications: **Include document numbers in email/Telegram**, **Push notifications (PWA)** and the repeat cooldown set as intended; Templates reviewed (customised events still read correctly)
 
+- [ ] After an upgrade across Change Set U: Settings → Security → Access policy → **Test Map Provider** says *Working* from the production address (or the chosen provider's key is restricted to it); Settings → Connections shows no "Planned" card and the WhatsApp **Bridge service** table matches `sudo personaldocs whatsapp-bridge status`; one person links a real phone, receives **Send test**, then **Unlink**; one real Discord webhook receives a test and is removed; the folder tree and sign-in design thumbnails look right in Dark and Glass themes
 - [ ] After an upgrade across Change Set T: migrations `ops.0001`/`0002`, `notify.0004`, `security.0004`, `accounts.0009` applied; Settings → Backup & Recovery shows the policy *Default* with the previous schedule and the destination *Existing backup share*; legacy folder backups listed
 - [ ] **Back up now** → a Full point *Verified* on every destination; an incremental after 4 h stores only new objects; `sudo personaldocs backup health` Healthy
 - [ ] Recovery Key shown after step-up and stored in the password manager; Emergency Recovery Package exported and opened once on another machine (`personaldocs recover` → Emergency Recovery Package); Recovery Readiness *Ready*
@@ -103,6 +104,7 @@ Copy into the release PR/issue and tick every item. A skipped mandatory item is 
 - [ ] Change Set P screenshots (`login-passkey.png`, `admin-reset-password.png`, `security-antivirus-diagnose.png`) show only synthetic names; the reset dialog shows no real password
 - [ ] Screenshot and documentation names are demo labels only (A. Ansari, Mom, Son1, Son2, Son3, Daughter), described as added in the optional setup step
 - [ ] `python3 scripts/check_docs.py` passes (links, anchors, alt text, orphan screenshots, Learn more links, review dates)
+- [ ] Change Set U screenshots (`folders-tree.png`, `security-map-provider.png`, `security-map-unavailable.png`, `connections-whatsapp.png`, `settings-login-design.png`) show only synthetic data: no API key, webhook, QR code, session data or public IP
 - [ ] Change Set T screenshots (`backup-*.png`, `recovery-*.png`, `notifications-*.png`, `security-signin-map.png`, `security-trusted-zones.png`, `security-devices.png`, `admin-delivery-health.png`) show only synthetic data: no real Recovery Key, webhook address, WhatsApp QR, public IP or production backup path
 
 ## Public repository (only when the owner decides to publish)

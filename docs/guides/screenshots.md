@@ -82,6 +82,18 @@ Step `AT-333` of `tests/e2e/screenshots.mjs` captures the screenshots used next 
 | `notifications-routing`, `notifications-channels`, `admin-delivery-health` | Notifications, Discord |
 | `security-trusted-zones`, `security-signin-map`, `security-devices` | Sign-in security and map |
 
+Step `AT-354` (Change Set U) captures:
+
+| Images | Guide |
+| --- | --- |
+| `folders-tree` | Getting started (folder tree) |
+| `security-map-provider`, `security-map-unavailable` | Sign-in security and map (provider, Map unavailable) |
+| `connections-whatsapp` | WhatsApp Personal (bridge service) |
+| `settings-login-design` (recaptured with the live preview) | Sign-in page designs |
+
+The two map captures answer tile requests locally (a working tile, then HTTP 403), so they never depend on a real
+provider. The WhatsApp capture shows the fake bridge used by the tests; no QR code is captured.
+
 They follow the same rules as the README images, plus:
 
 - **Recovery Key:** the key dialog is captured masked. The step-up dialog is captured empty.

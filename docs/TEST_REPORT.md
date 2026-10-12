@@ -56,6 +56,55 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
+## Change set U: corrective fixes for the folder tree, sign-in map, sign-in designs, WhatsApp and Discord {#change-set-u}
+
+**Numbering.** The change prompt numbered its tests AT-311…AT-330. Here they are **AT-336…AT-355** (prompt AT-n →
+AT-(n+25)). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md). Root causes:
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-u).
+
+**Environment.** The same development container (Ubuntu 24.04, PostgreSQL 16, Python 3.13, Node 22, Chromium via
+Playwright), 2026-10-12. There was no WhatsApp phone, no Discord server and no production address for real map
+tiles. WhatsApp used `tests/fake_whatsapp_bridge.py` (same HTTP API, obviously fake QR), started by `scripts/e2e.sh`.
+Map tiles in the corrective suite were answered by `page.route` (no request reached a real provider).
+
+| Command | Result |
+|---|---|
+| `pytest tests/test_corrective_u.py` | **16 passed** |
+| Full `pytest` | **463 tests: 458 passed, 5 skipped (live-only tests), 0 failed** (exit 0, after the final e2e run) |
+| `scripts/e2e.sh` (fresh database) | **146 PASS, 0 FAIL** (final run, exit 0): flow 14; accessibility in every theme with **no serious or critical violations**; parity and layout (7 viewports); offline 9; PWA 4; themes 6; recovery 10; **corrective 20** (folder tree geometry at 1440/820/390 px × Green, Blue, Dark, Glass Light, Glass Dark, right-to-left, keyboard; thumbnail luminance × 5 themes; preview/Save/Discard and the public sign-in page; map with a working tile and with 403, 429, 401 and network failures; Test Map Provider; WhatsApp enable → link → fake scan → Send test → routing → disable, bridge down, isolation; Discord; 390 px phone layout); **screenshots 8**. The first full run stopped at the accessibility audit (see defects below) |
+| `python3 scripts/check_docs.py` | **OK** (links, anchors, alt text, no orphan screenshots, Learn more links, review dates) |
+| `scripts/privacy_check.sh` | **OK** |
+| `npm run build` (TypeScript check and production build) | Passed |
+
+**The checks detect the original defects.**
+
+- **Sign-in thumbnails:** with the old CSS restored in the browser (no stacking isolation, wallpaper at
+  `z-index: -2`, admin theme colours), the mean brightness of a thumbnail measured **36** in Dark and **53** in Glass
+  Dark. The test requires more than 150. With the fix: **231** and **233**.
+- **Map:** the test checks that every tile request carries exactly this site's origin as `Referer`. The old
+  `same-origin` policy sent none, which is what OpenStreetMap blocks.
+- **WhatsApp "Planned":** the tests fail if the text *Planned* appears anywhere in Settings → Connections or in the
+  provider API.
+
+**Defects found while writing these tests, all fixed:**
+
+- After the administrator turned WhatsApp off, a person who was still linked saw no **Disabled by Admin** badge. The
+  badge is now shown on the full card too.
+- The *Map unavailable* link for administrators pointed to `/settings/security#map-provider`. The map provider card is
+  on the **Access policy** view, so the link is now `/settings/security?view=access#map-provider`, and the guides
+  name that path.
+- The first full run's accessibility audit (axe) failed on the sign-in page in Dark and Glass Dark (colour contrast).
+  The sign-in page now always uses the green theme, but `.auth` had no background of its own. The dark page colour
+  of the last user's theme, set on `<html>`, showed through behind green-theme text. `.auth` now paints its own
+  background and text colour.
+- The loading skeleton put `aria-label="Loading"` on a plain `div`, which axe reports as a prohibited attribute when
+  a card is still loading during the audit. It now has `role="status"`.
+- A leftover `whatsapp.status` setting ("Personal WhatsApp notifications are a later-phase feature", value
+  `planned`) was removed from the registry and the settings reference. Nothing read it.
+
+**Not run** (never reported as passed): a real phone scanning a real WhatsApp QR code; a real Discord server; real
+OpenStreetMap, MapTiler or Stadia Maps tiles from a production address; Firefox and Safari.
+
 ## Change set T: encrypted backup and recovery, notification routing, sign-in security, rich guides {#change-set-t}
 
 **Numbering.** The change prompt numbered its tests AT-251…AT-310. Here they are **AT-276…AT-335** (prompt AT-n →
@@ -161,13 +210,13 @@ Discord server. OCRmyPDF ran as `python3.12 -m ocrmypdf` (`PD_OCRMYPDF_CMD`), be
 
 These are on the [release checklist](RELEASE_CHECKLIST.md).
 
-## Acceptance summary (AT-01…AT-335) {#summary}
+## Acceptance summary (AT-01…AT-355) {#summary}
 
-320 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
+340 scenarios (AT-51…AT-60 were never assigned). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md).
 
 | Result | Count | Scenarios |
 |---|---|---|
-| Passed (automated tests, or for AT-136, AT-245, AT-270, AT-272, AT-274 and AT-333 including a documented review) | 257 | all scenarios not listed below |
+| Passed (automated tests, or for AT-136, AT-245, AT-270, AT-272, AT-274, AT-333 and AT-354 including a documented review) | 277 | all scenarios not listed below |
 | Passed in automated tests; real-environment validation pending | 55 | AT-17, 19, 21, 31, 39, 40, 69, 71, 76, 83, 90, 91, 98, 99, 111, 122, 125, 130, 134, 140, 142, 146, 147, 148, 149, 153, 154, 155, 174, 175, 177, 178, 181, 194, 195, 197, 202, 205, 206, 208, 211, 212, 214, 216, 228, 229, 230, 261 (physical iPhone/iPad), 262 (real Android/desktop installs), 267 (real low-end phones), 302 (clean Debian 13 LXC recovery), 303 (live NAS/S3), 313 and 315 (real WhatsApp phone and live bridge update), 317 (real Discord server) |
 | Blocked (external environment) | 5 | AT-14, AT-26; AT-24, AT-27, AT-30 (partly automated, the rest needs a real Debian 13 LXC) |
 | Not run (manual steps, not automated, or no environment) | 3 | AT-15, AT-241 (installed PWA on a real device), AT-304 (Google Drive / OneDrive recovery needs real accounts) |
@@ -193,6 +242,8 @@ platforms (AT-197), real SMTP delivery of the reset email (AT-202), a real Debia
 Change set Q: see [below](#change-set-q). Pending external validations (none reported as passed): a fresh install
 and an upgrade on a real Debian 13 / Proxmox LXC with 6 GB (AT-211, AT-212, AT-214, AT-229), accuracy on sanitised
 real documents (AT-216, AT-230), and a real Local AI server with PP-OCRv5 output (AT-228).
+
+Change set U: see [above](#change-set-u). All 20 scenarios (AT-336…AT-355) passed in automated tests. Not run (none reported as passed): a real WhatsApp phone, a real Discord server, real map tiles from a production address, Firefox and Safari.
 
 Change set R: see [below](#change-set-r). Not run: an installed PWA on a real device (AT-241), browsers other than
 Chromium.

@@ -28,6 +28,21 @@ export interface LoginBranding { design: string; title: string; tagline: string;
 
 /** Sign-in layout: light wallpaper on the left, the sign-in panel on the right. On phones the wallpaper becomes a
  *  short banner so the form comes first. Sign-in behaves identically with every design. */
+/** Static picture of the sign-in panel, used by the previews in Settings (same layout as the real page). */
+export function SignInPanelPreview({ b, compact }: { b: LoginBranding; compact?: boolean }) {
+  return (
+    <div className={`fake-form${compact ? " compact" : ""}`} aria-hidden="true">
+      <strong className="ff-title">Sign in</strong>
+      <span className="ff-label">Email or username</span><div className="ff-input" />
+      <span className="ff-label">Password</span><div className="ff-input" />
+      <div className="btnlike">Sign in</div>
+      <span className="ff-or">or</span>
+      <div className="ff-input ff-passkey">Sign in with Passkey</div>
+      <span className="ff-foot">{b.title}</span>
+    </div>
+  );
+}
+
 export function AuthWallpaper({ b, preview }: { b: LoginBranding; preview?: boolean }) {
   return (
     <section className={`auth-art design-${b.design}${preview ? " preview" : ""}`} aria-hidden={preview ? undefined : true} aria-label={preview ? "Sign-in page preview" : undefined}>
@@ -45,11 +60,15 @@ export function AuthWallpaper({ b, preview }: { b: LoginBranding; preview?: bool
 
 export const DEFAULT_BRANDING: LoginBranding = { design: "minimal", title: "Personal Documents Management System", tagline: "Your family documents, safely in one place.", overlay: 0, position: "center", wallpaper: null, logo: null };
 
+/** The sign-in pages always use this theme. A person's app theme (Dark, Glass…) is a signed-in preference and must not
+ *  change the pre-authentication page or its previews in Settings (Change Set U). */
+export const SIGNIN_THEME = "green";
+
 export function AuthFrame({ children }: { children: ReactNode }) {
   const { session } = useSession();
   const b: LoginBranding = session?.login || { ...DEFAULT_BRANDING, title: session?.app_name || DEFAULT_BRANDING.title };
   return (
-    <div className="auth">
+    <div className="auth" data-theme={SIGNIN_THEME}>
       <AuthWallpaper b={b} />
       <section className="auth-form">{children}</section>
     </div>

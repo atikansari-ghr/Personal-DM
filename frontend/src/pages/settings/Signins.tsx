@@ -5,6 +5,7 @@ import { useSession } from "../../session";
 import { HelpTip, Icon, Modal, Skeleton, useAsync, useToast } from "../../components/ui";
 
 const SigninMap = lazy(() => import("../../components/SigninMap"));
+import { MapUnavailable } from "../../components/MapUnavailable";
 
 const RISK: Record<string, [string, string]> = { normal: ["Normal", "ok"], low: ["Low", "neutral"], warning: ["Warning", "warn"], high: ["High", "danger"] };
 
@@ -35,7 +36,8 @@ export function SigninSecurity({ adminView = false }: { adminView?: boolean }) {
         </div>
         {map.loading && !map.data ? <Skeleton lines={6} /> : map.data && (
           <>
-            {map.data.map.enabled ? <Suspense fallback={<Skeleton lines={6} />}><SigninMap events={map.data.events} zones={map.data.zones} tileUrl={map.data.map.tile_url} attribution={map.data.map.attribution} /></Suspense>
+            {map.data.map.enabled ? <Suspense fallback={<Skeleton lines={6} />}><SigninMap events={map.data.events} zones={map.data.zones} config={map.data.map} /></Suspense>
+              : map.data.map.unavailable ? <MapUnavailable reason={map.data.map.unavailable} admin={map.data.map.admin} />
               : <p className="muted">The map is turned off by the administrator; the list below shows every sign-in.</p>}
             <p className="small muted"><Icon name="lock" size={14} /> {map.data.map.privacy} History is kept {map.data.retention_days} days.</p>
             <div className="legend small"><span><i className="dot zone" /> Configured Trusted Zone location</span><span><i className="dot city" /> GeoIP (approximate)</span><span><i className="dot country" /> GeoIP country level</span></div>

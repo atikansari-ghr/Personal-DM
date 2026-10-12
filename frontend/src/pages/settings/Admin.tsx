@@ -103,19 +103,107 @@ export function NotificationsAdmin() {
   );
 }
 
+const STATUS_BADGE: Record<string, string> = { connected: "ok", configured: "ok", disabled: "neutral", available_not_configured: "neutral",
+  degraded: "warn", reconnect_required: "warn", not_installed: "neutral" };
+const PROVIDER_ICON: Record<string, string> = { in_app: "🔔", email: "✉️", telegram: "✈️", push: "📱", discord: "💬", whatsapp: "🟢" };
+const PROVIDER_HELP: Record<string, string> = { in_app: "notifications", email: "smtp#setup", telegram: "telegram#setup", push: "notifications#push",
+  discord: "discord", whatsapp: "whatsapp-personal" };
+
+/** Every notification provider as one card: purpose, scope, status, configure, Learn more (Change Set U). */
+function ProviderOverview() {
+  const d = useAsync<any>(() => api("admin/connections"), []);
+  useEffect(() => { const h = () => d.reload(); window.addEventListener("pd:settings-saved", h); return () => window.removeEventListener("pd:settings-saved", h); }, []);
+  if (!d.data) return <Skeleton lines={3} />;
+  return (
+    <section className="card">
+      <h2>Notification providers</h2>
+      <div className="provider-grid">
+        {d.data.providers.map((p: any) => (
+          <article key={p.key} className="provider-card" data-provider={p.key}>
+            <div className="row" style={{ gap: 8, alignItems: "center" }}><span className="provider-icon" aria-hidden="true">{PROVIDER_ICON[p.key]}</span><strong>{p.name}</strong>
+              <span className={`badge ${STATUS_BADGE[p.status] || "neutral"}`} data-status={p.status}>{p.label}</span></div>
+            <p className="small muted">{p.purpose}</p>
+            <div className="row small" style={{ gap: 6, flexWrap: "wrap" }}>
+              <span className="badge neutral">{p.scope === "system" ? "System · Admin" : "Personal · each person"}</span>
+              {p.experimental && <span className="badge warn">Experimental · Unofficial · Self-hosted</span>}
+              {p.people != null && <span className="muted">{p.connected}/{p.people} connected{p.failing ? ` · ${p.failing} failing` : ""}{p.reconnect ? ` · ${p.reconnect} need relinking` : ""}</span>}
+            </div>
+            <div className="row" style={{ gap: 6, marginTop: ".4rem" }}>
+              {p.key !== "in_app" && <a className="btn small" href={p.key === "push" ? "/settings/notifications" : `#conn-${p.key}`}>Configure</a>}
+              <a className="small" href={`/help/${PROVIDER_HELP[p.key]}`}>Learn more</a>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DiscordAdmin() {
+  return (
+    <div id="conn-discord">
+      <SettingsForm keys={["discord.enabled"]} title="Discord">
+        <p className="small muted">Uses official Discord webhooks. Each person adds their own webhook under My account → Notifications; it is stored encrypted and never shown again in full. Turning Discord off stops delivery for everyone and keeps the saved webhooks. <a href="/help/discord">Learn more</a></p>
+      </SettingsForm>
+    </div>
+  );
+}
+
+function WhatsAppAdmin() {
+  const toast = useToast();
+  const d = useAsync<any>(() => api("admin/connections"), []);
+  useEffect(() => { const h = () => d.reload(); window.addEventListener("pd:settings-saved", h); return () => window.removeEventListener("pd:settings-saved", h); }, []);
+  const svc = d.data?.providers.find((p: any) => p.key === "whatsapp")?.service;
+  const yes = (v: any) => (v === true ? "Yes" : v === false ? "No" : "Unknown");
+  return (
+    <div id="conn-whatsapp">
+      <SettingsForm keys={["whatsapp.enabled", "whatsapp.bridge_url"]} title="WhatsApp Personal">
+        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}><span className="badge warn">Experimental</span><span className="badge neutral">Unofficial</span><span className="badge neutral">Self-hosted</span></div>
+        <div className="callout experimental">Links each person's own WhatsApp account as a linked device (like WhatsApp Web) and sends them their Personal DM notifications. It is not the WhatsApp Business Platform or API, and it is not supported or endorsed by WhatsApp or Meta; WhatsApp may disconnect linked devices at any time. Keep Email or Telegram as a fallback. <a href="/help/whatsapp-personal">Learn more</a></div>
+        {!svc ? <Skeleton lines={3} /> : (
+          <div className="stack" style={{ gap: ".4rem" }}>
+            <div className="row" style={{ gap: 8, alignItems: "center" }}>
+              <strong>Bridge service:</strong> <span className={`badge ${svc.state === "healthy" ? "ok" : svc.state === "ready_disabled" ? "neutral" : svc.state === "not_installed" ? "neutral" : "warn"}`} data-bridge-state={svc.state}>{svc.label}</span>
+              <button type="button" className="btn small" onClick={() => { d.reload(); toast("Checking the bridge…"); }}>Check again</button>
+            </div>
+            <table className="table kv-table small"><tbody>
+              <tr><th scope="row">Installed</th><td>{yes(svc.installed)}</td></tr>
+              <tr><th scope="row">systemd service</th><td>{svc.service}</td></tr>
+              <tr><th scope="row">Reachable from Personal DM</th><td>{svc.reachable ? "Yes (127.0.0.1)" : `No${svc.detail ? ` — ${svc.detail}` : ""}`}</td></tr>
+              <tr><th scope="row">Bridge version</th><td>{svc.version || "—"}{svc.pinned && svc.version && svc.version !== svc.pinned ? ` (tested: ${svc.pinned})` : ""}</td></tr>
+              <tr><th scope="row">Protocol</th><td>{svc.protocol ?? "—"} (expected {svc.expected_protocol})</td></tr>
+              <tr><th scope="row">Compatibility</th><td>{svc.reachable ? (svc.protocol_ok ? (svc.tested ? "Compatible (tested version)" : "Protocol compatible, version not tested") : "Incompatible") : "—"}</td></tr>
+              <tr><th scope="row">Update</th><td>{svc.update_available ? <>Tested version {svc.pinned} available: <code>sudo personaldocs whatsapp-bridge update</code></> : svc.reachable ? "Up to date" : "—"}</td></tr>
+              <tr><th scope="row">Linked people</th><td>{svc.sessions ? Object.entries(svc.sessions).map(([k, v]) => `${v} ${k}`).join(", ") || "none" : "—"}</td></tr>
+              <tr><th scope="row">Last check</th><td>{svc.checked_at ? formatDateTime(svc.checked_at) : "—"}{svc.last_ok && svc.state !== "healthy" && svc.state !== "ready_disabled" ? ` · last healthy ${formatDateTime(svc.last_ok)}` : ""}</td></tr>
+            </tbody></table>
+            {svc.state === "not_installed" && <p className="small">Install the bridge on the server first: <code>sudo personaldocs whatsapp-bridge install</code>, then turn WhatsApp Personal on here.</p>}
+            {svc.state === "ready_disabled" && <p className="small">The bridge is installed and running. Turn on <strong>WhatsApp Personal</strong> above and save: each person can then link their phone under My account → Notifications at once (no restart needed).</p>}
+            {(svc.state === "stopped" || svc.state === "unavailable") && <p className="small">Start or repair it on the server: <code>sudo systemctl start personaldocs-whatsapp</code> or <code>sudo personaldocs whatsapp-bridge install</code>. Other channels are not affected.</p>}
+          </div>
+        )}
+      </SettingsForm>
+    </div>
+  );
+}
+
 export function ConnectionsPanel() {
   const toast = useToast();
   const connectors = useAsync(() => api<{ accounts: any[] }>("admin/email-connectors"), []);
   const test = (channel: string) => api("notifications/test", { body: { channel } }).then((r) => toast(r.detail)).catch((e) => toast(e.message, "error"));
   return (
     <div className="stack">
+      <ProviderOverview />
+      <div id="conn-email" />
       <SettingsForm keys={["smtp.enabled", "smtp.host", "smtp.port", "smtp.security", "smtp.username", "smtp.password", "smtp.from_address"]} title="Email (SMTP)">
         <button className="btn" onClick={() => test("email")}>Send test email to me</button>
       </SettingsForm>
+      <div id="conn-telegram" />
       <SettingsForm keys={["telegram.enabled", "telegram.bot_token", "telegram.bot_username"]} title="Telegram">
         <button className="btn" onClick={() => test("telegram")}>Test connection</button>
       </SettingsForm>
-      <div className="card row between"><div><h2>WhatsApp</h2><p className="small muted">Personal WhatsApp notifications are planned for a later release. Nothing is sent via WhatsApp today.</p></div><span className="badge neutral">Planned</span></div>
+      <DiscordAdmin />
+      <WhatsAppAdmin />
       <div className="card">
         <h2>Personal email-import connectors</h2>
         <p className="small muted">Family members configure their own mailboxes. You can disable a malfunctioning connector; you never see its password.</p>

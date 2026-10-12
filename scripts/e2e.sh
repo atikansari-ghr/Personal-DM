@@ -26,7 +26,15 @@ $PY -c "import sys; sys.path.insert(0, 'tests'); from fixtures import make_image
 WEB=$!
 (cd backend && exec ../$PY manage.py worker >"$LOGDIR/worker.log" 2>&1) &
 WORKER=$!
-trap 'kill $WEB $WORKER $FAKE_CLAMD 2>/dev/null || true; rm -rf "$LOGDIR/backup-destination"' EXIT
+# WhatsApp Personal: the fake bridge from the tests (same HTTP API, no WhatsApp traffic, obviously fake QR)
+WA_TOKEN=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+( umask 077; mkdir -p "$PD_CONFIG_DIR"; printf '%s' "$WA_TOKEN" >"$PD_CONFIG_DIR/whatsapp-bridge.token" )
+$PY tests/fake_whatsapp_bridge.py "$WA_TOKEN" "$LOGDIR/wa.port" 8095 >"$LOGDIR/wa.log" 2>&1 &
+FAKE_WA=$!
+for _ in $(seq 1 20); do [ -s "$LOGDIR/wa.port" ] && break; sleep 0.5; done
+WA_BRIDGE="http://127.0.0.1:$(cat "$LOGDIR/wa.port")"
+(cd backend && ../$PY manage.py shell -c "from apps.core import config; config.set_value('whatsapp.bridge_url', '$WA_BRIDGE')" >/dev/null)
+trap 'kill $WEB $WORKER $FAKE_CLAMD $FAKE_WA 2>/dev/null || true; rm -rf "$LOGDIR/backup-destination"' EXIT
 for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/api/health >/dev/null 2>&1 && break; sleep 1; done
 BASE=http://localhost:8000 SETUP_TOKEN="$TOKEN" FIXTURE="$FIXTURE" node tests/e2e/flow.mjs
 BASE=http://localhost:8000 node tests/e2e/a11y.mjs
@@ -41,6 +49,8 @@ BASE=http://localhost:8000 node tests/e2e/themes.mjs
 # Backup & Recovery, Recovery Explorer, notification routing, sign-in security, rich Help (Change Set T)
 export PD_E2E_BACKUP_DIR="$LOGDIR/backup-destination"   # shared by recovery.mjs and screenshots.mjs
 BASE=http://localhost:8000 node tests/e2e/recovery.mjs
+# folder tree geometry, sign-in designs, map provider states, WhatsApp/Discord connections (Change Set U)
+BASE=http://localhost:8000 WA_BRIDGE="$WA_BRIDGE" WA_TOKEN="$WA_TOKEN" node tests/e2e/corrective.mjs
 # repeatable public screenshots with quality and privacy gates; smaller files when pngquant is installed
 BASE=http://localhost:8000 node tests/e2e/screenshots.mjs
 if command -v pngquant >/dev/null 2>&1; then

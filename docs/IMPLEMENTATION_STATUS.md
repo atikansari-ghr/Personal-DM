@@ -81,6 +81,66 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
 - Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
 
+## Change set U: corrective fixes for the folder tree, sign-in map, sign-in designs, WhatsApp and Discord {#change-set-u}
+
+**Numbering.** The change prompt numbered its acceptance tests AT-311…AT-330. Here they are **AT-336…AT-355** (prompt
+AT-n → AT-(n+25)); the mapping is in [TRACEABILITY.md](TRACEABILITY.md). Requirements FT-, MP-, SD- and CN- are in
+[REQUIREMENTS.md](REQUIREMENTS.md). **No database migrations.** Two settings were added (`security.map_provider`,
+`security.map_api_key`); everything else is code. Users, documents, permissions, settings, backups, Trusted Zones and
+existing notification channels are untouched.
+
+### Defect 1: folder tree rows out of line
+
+| | |
+| --- | --- |
+| Issue | Expanders, icons and names did not line up between levels, and rows without children were shifted (screenshot from the field). |
+| Root cause | Change Set T added `.tree button { width: 100%; text-align: left }` for the Recovery Explorer's folder list. The folder tree also has the class `tree`, so its expander buttons were stretched across the row; rows without an expander had no placeholder. |
+| Fix | The Recovery Explorer rule is scoped to `.rp-folders`. Every tree row is a CSS grid with fixed columns (expander, icon, name, extras) built from shared tokens (`--tree-indent`, `--tree-expander`, `--tree-icon`, `--tree-gap`, `--tree-line`). A row without children keeps an empty expander slot. Names wrap inside their column (`overflow-wrap: anywhere`) and the row aligns to the first line. No pixel nudges and no per-folder offsets. |
+| Files | `frontend/src/styles.css`, `frontend/src/pages/Folders.tsx`, `frontend/src/pages/Recovery.tsx` |
+| Migration / config | None |
+| Tests | corrective.mjs "AT-336/AT-337/AT-338" (3 viewports × 5 themes, geometry measured per row), "AT-336 … right-to-left", "AT-339" (keyboard); layout.mjs; a11y.mjs |
+| Evidence | `docs/images/screenshots/folders-tree.png`; `tests/e2e/out/corrective/tree-*.png` |
+| Limitation | Measured in Chromium only. |
+
+### Defect 2: sign-in map shows "403 Access blocked" tiles
+
+| | |
+| --- | --- |
+| Issue | Every map tile showed OpenStreetMap's "Access blocked" picture. |
+| Root cause | The site sends `Referrer-Policy: same-origin` for every response (Django `SECURE_REFERRER_POLICY`), so the browser sent tile requests to `tile.openstreetmap.org` **without a `Referer`**. The OpenStreetMap tile usage policy blocks requests without a valid Referer and answers HTTP 403 with an image, which Leaflet drew as tiles. There was no way to choose another provider and nothing told the administrator what had happened. |
+| Fix | Tiles and the test request use `strict-origin-when-cross-origin`, so the provider sees only this site's origin (no path, no query). This is the browser's normal, truthful header: no spoofing, no proxying, no scraping. The provider is configurable: OpenStreetMap (low volume), MapTiler or Stadia Maps with the administrator's own key, or a custom/self-hosted server. A one-tile probe runs before the map; if it fails (401, 403, 429, network), the map shows **Map unavailable** with the reason and the fix. Tiles are never retried in a loop: after 4 failures and no successes the layer is removed. **Test Map Provider** (main administrator) records the result, the status and the time (audited, without the key). The Content-Security-Policy allows only the configured tile origin for `img-src` and `connect-src`, and is updated as soon as the setting changes. Sign-in addresses are never sent to the tile server. |
+| Files | `backend/apps/security/mapprov.py` (new), `views_signins.py`, `core/middleware.py`, `core/views.py`, `core/registry.py`, `ops/.../doctor.py`, `personaldocs/urls.py`; `frontend/src/components/MapUnavailable.tsx` (new), `SigninMap.tsx`, `pages/settings/Security.tsx`, `Signins.tsx` |
+| Migration / config | Settings only. A custom tile address set earlier is detected and keeps being used (provider "Custom"). Proxies that set their own CSP must allow the tile origin in `img-src` and `connect-src`. |
+| Tests | CU `test_at340_*`, `test_at341_*`, `test_at342_*`, `test_at343_*`; corrective.mjs "AT-340", "AT-341/AT-342" ×4, "AT-343" (tiles intercepted with `page.route`: no request reaches a real provider) |
+| Evidence | `security-map-provider.png`, `security-map-unavailable.png`; `tests/e2e/out/corrective/map-unavailable-403.png` |
+| Limitation | Not tested against real OpenStreetMap, MapTiler or Stadia from a production address. A tile server without CORS headers cannot report a status to the test (shown as *No status*, not as a failure). |
+
+### Defect 3: sign-in design thumbnails nearly black
+
+| | |
+| --- | --- |
+| Issue | Under the Dark and Glass themes the sign-in design thumbnails in Settings → Overview & sign-in were almost black. |
+| Root cause | (1) The wallpaper layer (`.auth-wallpaper { z-index: -2 }`) inside a thumbnail without its own stacking context was painted *behind* the card background. (2) The drawings use theme variables, so they took the administrator's own (dark) theme colours. (3) The sign-in page itself inherited the last user's theme from the browser's local storage. |
+| Fix | Thumbnails isolate their stacking context. The sign-in page, the thumbnails and both previews always use the sign-in theme (`SIGNIN_THEME`, Default Green). Choosing a design now previews it; **Save design** publishes it and **Discard** drops it. There is a **Live sign-in preview** (Desktop or Phone) and a large **Preview Sign-in Page**. |
+| Files | `frontend/src/pages/Auth.tsx`, `pages/settings/OverviewAdmin.tsx`, `styles.css` |
+| Migration / config | None. The saved design and every person's theme are kept. |
+| Tests | CU `test_at345_*`; corrective.mjs "AT-344" (mean luminance and contrast of every thumbnail in 5 themes, identical across themes), "AT-345/AT-346"; parity.mjs sign-in steps; `test_overview.py` AT-128…AT-130 |
+| Evidence | `settings-login-design.png`; `tests/e2e/out/corrective/designs-dark-theme.png`, `preview-phone.png` |
+| Limitation | Chromium only. |
+
+### Defect 4: WhatsApp Personal shown as "Planned"; WhatsApp and Discord could not be turned on
+
+| | |
+| --- | --- |
+| Issue | With the bridge installed and running (`whatsapp-bridge 1.0.0 (protocol 1) on 127.0.0.1:8095`), Settings → Connections still said *WhatsApp — Planned*, and there was no switch to turn it on. |
+| Root cause | A hard-coded "Planned" card left over from before Change Set T. The Connections panel lists its settings explicitly and `discord.enabled`, `whatsapp.enabled` and `whatsapp.bridge_url` were never added to it, so nobody could enable either channel, although the CLI says "turn it on in Settings → Connections". The bridge status also returned "disabled" without asking the bridge when the switch was off. |
+| Fix | New `GET /api/admin/connections` (main administrator): a card per provider with its real state (Connected, Configured, Disabled, Available but not configured, Degraded, Not installed) and counts only. `whatsapp.service_status()` checks installation, systemd state, reachability, version, protocol, tested versions and update, also while the switch is off (*Installed and running – turned off*). New administrator sections for Discord and WhatsApp Personal with their switches and the bridge service table. People see **Disabled by Admin** or **Service unavailable**, the QR code refreshes by itself, Reconnect and Unlink, and their last notification. The routing matrix explains why a chosen channel cannot deliver. |
+| Files | `backend/apps/notify/whatsapp.py`, `notify/views.py`, `personaldocs/urls.py`; `frontend/src/pages/settings/Admin.tsx`, `components/NotificationRouting.tsx`, `styles.css`; `tests/fake_whatsapp_bridge.py` (standalone mode for the browser tests) |
+| Migration / config | None. Discord and WhatsApp stay off until the administrator turns them on; saved webhooks and links are kept. |
+| Tests | CU `test_at348_*` … `test_at353_*`; corrective.mjs "AT-348/AT-349", "AT-348", "AT-350", "AT-351", "AT-352/AT-353" (fake bridge started by `scripts/e2e.sh`); `test_notification_channels.py` |
+| Evidence | `connections-whatsapp.png`, `notifications-channels.png` |
+| Limitation | A real phone scanning a real QR code and a real Discord server were not available (Not Run). The browser tests use an obviously fake QR. |
+
 ## Change set T: encrypted backup and recovery, notification routing, sign-in security, rich guides {#change-set-t}
 
 **Numbering.** The change prompt numbered its acceptance tests AT-251…AT-310. Here they are **AT-276…AT-335** (prompt

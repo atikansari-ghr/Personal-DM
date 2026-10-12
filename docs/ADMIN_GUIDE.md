@@ -155,10 +155,17 @@ Guides: [notifications](guides/notifications.md) ([templates](guides/notificatio
 
 ### Discord, WhatsApp Personal, routing and delivery health {#channels-t}
 
-- Turn **Discord** on under Settings → Connections. Each person then adds their own webhook ([Discord](guides/discord.md)).
+- **Settings → Connections** starts with a card per provider (In-App, Email, Telegram, Push, Discord, WhatsApp) and
+  its real state: Connected, Configured, Disabled by Admin, Available – not configured, Degraded or Not installed
+  ([provider cards](guides/notifications.md#providers)).
+- Turn **Discord webhooks** on under Settings → Connections. Each person then adds their own webhook ([Discord](guides/discord.md)).
 - **WhatsApp Personal** is experimental and unofficial. It needs the optional bridge
   (`sudo personaldocs whatsapp-bridge install`), and each person links their own phone. It only sends notifications to
   that person ([WhatsApp Personal](guides/whatsapp-personal.md)).
+  - The **Bridge service** table shows whether the bridge is installed, its systemd state, whether Personal DM can
+    reach it, its version and protocol, compatibility, available updates, linked people (counts only) and the last
+    check. It finds a running bridge even before you turn WhatsApp on (*Installed and running – turned off*).
+  - Turning **WhatsApp Personal** on takes effect at once, without a restart.
 - Neither channel is turned on for anyone automatically.
 - People choose channels per category, fallback chains, quiet hours and digests themselves. **Settings →
   Notifications → Notification delivery health** shows counts per channel only, never message content
@@ -329,6 +336,10 @@ Guides: [security & access](guides/security-access.md), [reverse proxy](guides/r
 - Every sign-in gets an explainable risk level. Risk never blocks a sign-in.
 - People see their own sign-ins and devices under My account → Sign-in security, where they can use **Mark
   Unrecognized**.
+- **Map provider:** Settings → Security → Access policy → **Sign-in map provider**. Choose OpenStreetMap (low-volume
+  use), MapTiler or Stadia Maps with your own key, or a custom/self-hosted server, then click **Test Map Provider**.
+  If the provider refuses the tiles, the map shows **Map unavailable** with the reason; sign-in records and Trusted
+  Zones keep working ([map provider](guides/security-map.md#provider)).
 
 Guide: [sign-in security and map](guides/security-map.md).
 

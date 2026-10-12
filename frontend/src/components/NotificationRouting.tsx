@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, formatDateTime } from "../api";
 import { HelpTip, Icon, Skeleton, useAsync, useToast } from "./ui";
 
@@ -15,13 +15,15 @@ export function NotificationRouting({ data, reload }: { data: any; reload: () =>
   const [digestTime, setDigestTime] = useState(data.digest_time || "08:00");
   const put = (body: any, msg = "Saved") => api("notifications/routing", { method: "PUT", body }).then(() => { toast(msg); reload(); }).catch((e) => toast(e.message, "error"));
   const configured = new Set<string>((data.channels || []).filter((c: any) => c.configured).map((c: any) => c.channel));
+  // channels the administrator set up but that cannot reach me (not linked, disconnected, no address…)
+  const issues: Record<string, string> = Object.fromEntries((data.channels || []).filter((c: any) => c.configured && c.issue).map((c: any) => [c.channel, c.issue]));
   return (
     <>
       <div className="card" id="routing">
         <h2>Routing by category <HelpTip text="Set the channels of a whole category at once, a fallback chain (the first channel that works is used; the next one only if it fails), and whether normal messages arrive immediately or in a daily/weekly digest. Critical security and backup alerts always arrive immediately." link="/help/notifications#routing" /></h2>
         <div className="table-scroll"><table className="matrix routing">
           <thead><tr><th scope="col">Category</th><th scope="col">Channels</th><th scope="col">Fallback chain</th><th scope="col">Delivery</th></tr></thead>
-          <tbody>{data.categories.map((c: any) => <RoutingRow key={c.key} cat={c} events={data.events.filter((e: any) => e.category === c.key)} configured={configured} put={put} />)}</tbody>
+          <tbody>{data.categories.map((c: any) => <RoutingRow key={c.key} cat={c} events={data.events.filter((e: any) => e.category === c.key)} configured={configured} issues={issues} put={put} />)}</tbody>
         </table></div>
         <p className="small muted">In-app always shows every notification. A channel the administrator requires is always used on its own, whatever the chain.</p>
       </div>
@@ -41,7 +43,7 @@ export function NotificationRouting({ data, reload }: { data: any; reload: () =>
   );
 }
 
-function RoutingRow({ cat, events, configured, put }: { cat: any; events: any[]; configured: Set<string>; put: (b: any, m?: string) => void }) {
+function RoutingRow({ cat, events, configured, issues, put }: { cat: any; events: any[]; configured: Set<string>; issues: Record<string, string>; put: (b: any, m?: string) => void }) {
   const [chain, setChain] = useState<string[]>(cat.fallback || []);
   const optional = events.filter((e) => !e.critical);
   const on = (ch: string) => optional.length > 0 && optional.every((e) => e.channels.includes(ch));
@@ -57,7 +59,8 @@ function RoutingRow({ cat, events, configured, put }: { cat: any; events: any[];
       <td data-label="Channels"><div className="chip-row">{EXTERNAL.map((ch) => (
         <label key={ch} className={`chip ${configured.has(ch) ? "" : "disabled"}`} title={configured.has(ch) ? "" : `${LABEL[ch]} is not set up by the administrator`}>
           <input type="checkbox" checked={on(ch)} ref={(el) => { if (el) el.indeterminate = !on(ch) && some(ch); }} disabled={!configured.has(ch) || !optional.length}
-            onChange={(e) => setChannel(ch, e.target.checked)} aria-label={`${cat.label} by ${LABEL[ch]}`} /> {LABEL[ch]}</label>))}</div></td>
+            onChange={(e) => setChannel(ch, e.target.checked)} aria-label={`${cat.label} by ${LABEL[ch]}`} /> {LABEL[ch]}</label>))}</div>
+        {EXTERNAL.filter((ch) => some(ch) && issues[ch]).map((ch) => <div key={ch} className="small warn-text route-issue">{LABEL[ch]}: {issues[ch]} — your fallback chain is used meanwhile.</div>)}</td>
       <td data-label="Fallback chain">
         <ol className="chain">{chain.map((ch, i) => <li key={ch}>{LABEL[ch]}
           <button type="button" className="icon-btn" aria-label={`Move ${LABEL[ch]} up`} disabled={i === 0} onClick={() => { const n = [...chain]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; saveChain(n); }}><Icon name="left" size={14} /></button>
@@ -76,16 +79,22 @@ export function DiscordCard() {
   const d = useAsync<any>(() => api("notifications/discord"), []);
   const [url, setUrl] = useState("");
   if (!d.data) return null;
-  if (!d.data.available && !d.data.webhook) return null;
   const w = d.data.webhook;
+  if (!d.data.available && !w) return (
+    <div className="card" id="discord" data-state="disabled">
+      <h2>Discord <span className="badge neutral">Disabled by Admin</span></h2>
+      <p className="small muted">Discord delivery is available once the main administrator turns it on in Settings → Connections. <a href="/help/discord">Learn more</a></p>
+    </div>
+  );
   return (
-    <div className="card" id="discord">
-      <h2>Discord</h2>
+    <div className="card" id="discord" data-state={w ? w.status : "not_configured"}>
+      <h2>Discord {!d.data.available && <span className="badge neutral">Disabled by Admin</span>}</h2>
       <p className="small muted">Uses an official Discord webhook for one channel you control. The address is stored encrypted and never shown again. <a href="/help/discord#setup">How to create a webhook</a></p>
       {w ? (
         <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <span className={`badge ${w.status === "connected" ? "ok" : w.status === "untested" ? "neutral" : "danger"}`}>{({ connected: "Connected", untested: "Not tested yet", failed: "Failed", removed_by_discord: "Deleted in Discord" } as any)[w.status] || w.status}</span>
           <code className="small">{w.hint}</code>{w.error && <span className="small muted">{w.error}</span>}
+          {(w.last_tested_at || w.last_delivery_at) && <span className="small muted">{w.last_tested_at && `Last test ${formatDateTime(w.last_tested_at)}`}{w.last_tested_at && w.last_delivery_at && " · "}{w.last_delivery_at && `last delivery ${formatDateTime(w.last_delivery_at)}`}</span>}
           <label className="check"><input type="checkbox" checked={w.enabled} onChange={(e) => api("notifications/discord", { method: "PUT", body: { enabled: e.target.checked } }).then(d.reload)} /> Enabled</label>
           <button className="btn small" onClick={() => api("notifications/channel-test", { body: { channel: "discord" } }).then(() => { toast("Test sent to Discord"); d.reload(); }).catch((e) => toast(e.message, "error"))}>Send test</button>
           <button className="btn small danger" onClick={() => api("notifications/discord", { method: "DELETE" }).then(d.reload)}>Remove</button>
@@ -105,24 +114,39 @@ export function DiscordCard() {
 export function WhatsAppCard() {
   const toast = useToast();
   const w = useAsync<any>(() => api("notifications/whatsapp"), []);
+  const pendingQr = w.data?.state === "pending";
+  useEffect(() => { // the QR code expires after about a minute; keep it fresh and notice the scan without a button press
+    if (!pendingQr) return;
+    const t = window.setInterval(() => w.reload(), 5000);
+    return () => window.clearInterval(t);
+  }, [pendingQr]);
   if (!w.data) return null;
-  if (!w.data.available && !w.data.linked && w.data.state === "not_linked") return null;
   const act = (body: any, method = "POST") => api("notifications/whatsapp", { method, body }).then(w.reload).catch((e) => toast(e.message, "error"));
   const s = w.data;
+  const svcDown = s.available && s.service && !["healthy", "degraded"].includes(s.service.state);
+  if (!s.available && s.state === "not_linked") return (
+    <div className="card" id="whatsapp" data-state="disabled">
+      <h2>WhatsApp Personal <span className="badge-group"><span className="badge neutral">Disabled by Admin</span></span></h2>
+      <p className="small muted">WhatsApp Personal (experimental, unofficial, self-hosted) is available once the main administrator installs the bridge and turns it on in Settings → Connections. <a href="/help/whatsapp-personal">Learn more</a></p>
+    </div>
+  );
   return (
-    <div className="card" id="whatsapp">
-      <h2>WhatsApp Personal <span className="badge-group"><span className="badge warn">Experimental</span><span className="badge neutral">Unofficial</span><span className="badge neutral">Self-hosted</span></span></h2>
+    <div className="card" id="whatsapp" data-state={svcDown ? "service_unavailable" : s.state}>
+      <h2>WhatsApp Personal <span className="badge-group">{!s.available && <span className="badge neutral">Disabled by Admin</span>}<span className="badge warn">Experimental</span><span className="badge neutral">Unofficial</span><span className="badge neutral">Self-hosted</span></span></h2>
       <div className="callout experimental">Links your own WhatsApp account as a linked device and sends you your Personal DM notifications as messages to yourself. It is not the WhatsApp Business Platform, not supported or endorsed by WhatsApp or Meta, and WhatsApp may disconnect it at any time. It is notification-only: nothing here can read your chats or message anyone else. <a href="/help/whatsapp-personal">Learn more</a></div>
-      <p>Status: <strong>{s.label || s.state}</strong>{s.number_hint && <span className="small muted"> · number ending {s.number_hint}</span>}{s.error && <span className="small muted"> · {s.error}</span>}</p>
+      {svcDown && <div className="alert warn small" role="status"><strong>Service unavailable.</strong> The WhatsApp bridge on the server is not responding ({s.service.label}). Your fallback channels are used meanwhile; the administrator can check it in Settings → Connections.</div>}
+      <p>Status: <strong>{s.label || s.state}</strong>{s.number_hint && <span className="small muted"> · number ending {s.number_hint}</span>}{s.error && <span className="small muted"> · {s.error}</span>}
+        {s.last_delivery_at && <span className="small muted"> · last notification {formatDateTime(s.last_delivery_at)}</span>}</p>
       {s.state === "pending" && s.qr_svg && (
         <div className="qr-box"><div className="qr" aria-label="QR code for linking WhatsApp" role="img" dangerouslySetInnerHTML={{ __html: s.qr_svg }} />
-          <ol className="small"><li>Open WhatsApp on your phone → Settings → Linked devices → Link a device.</li><li>Scan this code within about a minute.</li><li>Press “I scanned it”.</li></ol>
-          <button className="btn" onClick={w.reload}>I scanned it</button></div>
+          <ol className="small"><li>Open WhatsApp on your phone → Settings → Linked devices → Link a device.</li><li>Scan this code. It refreshes by itself about every minute.</li><li>This card shows <strong>Connected</strong> a few seconds after the scan.</li></ol>
+          <div className="row" style={{ gap: 6 }}><button className="btn" onClick={w.reload}>Check now</button><button className="btn" onClick={() => act({ action: "link" })}>New QR code</button></div></div>
       )}
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         {(s.state === "not_linked" || s.state === "reconnect_required" || s.state === "disconnected") && <button className="btn primary" onClick={() => act({ action: "link" })}>{s.state === "not_linked" ? "Link WhatsApp" : "Link again (new QR)"}</button>}
         {s.state === "degraded" && <button className="btn" onClick={() => act({ action: "reconnect" })}>Reconnect</button>}
         {s.state === "connected" && <button className="btn" onClick={() => api("notifications/channel-test", { body: { channel: "whatsapp" } }).then(() => toast("Test sent")).catch((e) => toast(e.message, "error"))}>Send test</button>}
+        {(s.state === "connected" || s.state === "disconnected") && <button className="btn" onClick={() => act({ action: "reconnect" })}>Reconnect</button>}
         {s.state !== "not_linked" && <button className="btn danger" onClick={() => act({}, "DELETE")}>Unlink</button>}
       </div>
     </div>

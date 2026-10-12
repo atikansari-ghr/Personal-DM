@@ -14,6 +14,51 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to Change Set U (folder tree, sign-in map provider, sign-in designs, WhatsApp and Discord) {#change-set-u}
+
+```
+sudo personaldocs upgrade
+# or: bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-DM/main/personal-DM.sh)" -- upgrade
+sudo personaldocs doctor        # the map check now names the provider and warns when the last map test failed
+```
+
+(The change prompt numbered its tests AT-311..AT-330. Here they are **AT-336..AT-355**: prompt AT-n = AT-(n+25).)
+
+### What the upgrade does
+
+- **No database migrations.** Two settings are added: **Map provider** and **Map provider API key**.
+- Users, documents, permissions, settings, backups, Trusted Zones and notification channels are not changed.
+- A custom tile address you set earlier is detected and keeps being used (provider *Custom*).
+- Discord and WhatsApp stay off until you turn them on. Saved webhooks and WhatsApp links are kept.
+- The folder tree and the sign-in design thumbnails are fixed by the new web app. There is nothing to do.
+
+### After the upgrade (main administrator)
+
+1. **Sign-in map.** Open **Settings → Security → Access policy → Sign-in map provider**.
+   - Keep **OpenStreetMap** for an occasional look at a small family map, or choose **MapTiler** or **Stadia Maps**
+     and paste your own API key (restrict the key to your site's address in the provider's dashboard), or **Custom**.
+   - Click **Save settings**, then **Test Map Provider**. **Working** means the tiles load.
+   - If it says **Failed**, the message names the reason (HTTP 401, 403 or 429, or network) and what to change.
+2. **WhatsApp Personal** (only if you installed the bridge). Open **Settings → Connections → WhatsApp Personal**.
+   - The **Bridge service** table should say *Installed and running – turned off*, version 1.0.0, protocol 1,
+     *Compatible (tested version)*.
+   - Turn **WhatsApp Personal** on and click **Save settings**. The status changes to **Running** (no restart).
+   - Each person links their phone under **My account → Notifications → WhatsApp Personal → Link WhatsApp**.
+3. **Discord** (optional). Turn **Discord webhooks** on in **Settings → Connections**. Each person adds their own
+   webhook under **My account → Notifications**.
+4. **Sign-in design.** Open **Settings → Overview & sign-in**. Check the **Live sign-in preview**. Choosing a design
+   now previews it; click **Save design** to publish it.
+
+### Behind a reverse proxy
+
+If your proxy sets its own Content-Security-Policy, allow the tile origin in **both** `img-src` and `connect-src`
+(for example `https://tile.openstreetmap.org`, `https://api.maptiler.com` or `https://tiles.stadiamaps.com`). Do not
+strip the `Referer` header from the browser's tile requests: OpenStreetMap blocks requests without it.
+
+### Rollback
+
+`sudo personaldocs rollback` switches back to the previous release. The two new settings are then ignored.
+
 ## Upgrading to Change Set T (encrypted recovery, notification routing, sign-in map) {#change-set-t}
 
 ```
@@ -68,7 +113,7 @@ for anyone.
 
 The sign-in map loads picture tiles from `https://tile.openstreetmap.org` by default. The app adds that origin to its
 own `img-src` Content-Security-Policy automatically. If your proxy sets its own CSP header, add the tile origin there
-too, or set another tile server in **Settings → Security → Map tile server**. To show only the list, turn **Sign-in
+too, or choose another provider in **Settings → Security → Access policy → Sign-in map provider** (see [Change Set U](#change-set-u)). To show only the list, turn **Sign-in
 map** off.
 
 ### Rollback

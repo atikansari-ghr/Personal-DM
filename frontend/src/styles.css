@@ -164,6 +164,12 @@
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 :root {
+  /* folder tree geometry (shared by every tree row; no per-item offsets) */
+  --tree-indent: 1.15rem;
+  --tree-expander: 1.5rem;
+  --tree-icon: 1.6rem;
+  --tree-gap: 0.4rem;
+  --tree-line: 1.6rem;
   --card: var(--surface);
   --danger: var(--danger-ink);
   --ok: var(--ok-ink);
@@ -301,14 +307,18 @@ tr.clickable:hover td { background: var(--brand-softer); }
 .panel-handle::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background 0.15s; }
 .panel-handle:hover::after, .panel-handle:focus-visible::after { background: var(--brand); }
 .panel-handle:focus-visible { box-shadow: none; outline: none; }
-.tree ul { list-style: none; margin: 0; padding-left: 1rem; }
-.tree > ul { padding-left: 0; }
-.tree-node { display: flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.4rem; border-radius: 8px; cursor: pointer; user-select: none; }
+.tree ul { list-style: none; margin: 0; padding: 0; padding-inline-start: var(--tree-indent); }
+.tree > ul { padding-inline-start: 0; }
+.tree-node { display: grid; grid-template-columns: var(--tree-expander) var(--tree-icon) minmax(0, 1fr) auto; column-gap: var(--tree-gap);
+  align-items: start; padding: 0.35rem 0.4rem; border-radius: 8px; cursor: pointer; user-select: none; }
+.tree-node > .tree-expander, .tree-node > .tree-icon { display: flex; align-items: center; justify-content: center; height: var(--tree-line); }
+.tree-node > .tree-label { min-width: 0; line-height: var(--tree-line); overflow-wrap: anywhere; } /* long names wrap here; expander and icon stay put */
+.tree-node > .tree-extra { display: inline-flex; align-items: center; gap: 0.25rem; min-height: var(--tree-line); }
 .tree-node:hover { background: var(--brand-softer); }
 .tree-node.active { background: var(--brand-soft); font-weight: 650; }
-.tree-node .count { margin-left: auto; font-size: 0.75rem; color: var(--muted); }
+.tree-node .count { font-size: 0.75rem; color: var(--muted); }
 .tree-node.path-only { color: var(--muted); cursor: default; }
-.caret { width: 18px; text-align: center; color: var(--muted); border: 0; background: none; cursor: pointer; padding: 0; }
+.caret { width: var(--tree-expander); height: var(--tree-line); text-align: center; color: var(--muted); border: 0; background: none; cursor: pointer; padding: 0; }
 .doc-card { display: flex; gap: 0.7rem; align-items: center; padding: 0.75rem; border: 1px solid var(--line); border-radius: 10px; margin: 0.5rem; cursor: pointer; background: var(--surface); }
 .doc-card.active { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
 .doc-card:hover { border-color: var(--brand); }
@@ -355,7 +365,7 @@ tr.clickable:hover td { background: var(--brand-softer); }
 @keyframes sk { to { background-position: -200% 0; } }
 
 /* ---------- auth pages */
-.auth { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(380px, 1fr); min-height: 100%; }
+.auth { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(380px, 1fr); min-height: 100%; background: var(--bg); color: var(--ink); } /* own sign-in theme colours: the page behind may still carry the last user's theme */
 .auth-art { position: relative; overflow: hidden; background: var(--side-bg); padding: 3rem 3.5rem; display: flex; flex-direction: column; gap: 1rem; isolation: isolate; }
 .auth-wallpaper { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; background-size: cover; background-repeat: no-repeat; }
 .auth-overlay { position: absolute; inset: 0; background: var(--bg); z-index: -1; }
@@ -676,14 +686,23 @@ i.c0 { background: #1f8a4c; } i.c1 { background: #e07b00; } i.c2 { background: #
 .design-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.8rem; }
 .design-option { border: 2px solid var(--line); border-radius: 12px; padding: 0; background: var(--surface); cursor: pointer; overflow: hidden; text-align: left; font: inherit; }
 .design-option[aria-pressed="true"] { border-color: var(--brand); box-shadow: var(--focus); }
-.design-option .thumb { height: 110px; position: relative; overflow: hidden; }
-.design-option .thumb svg, .design-option .thumb .auth-wallpaper { position: absolute; inset: 0; width: 100%; height: 100%; background-size: cover; }
+.design-option .thumb { height: 110px; position: relative; overflow: hidden; isolation: isolate; } /* own stacking context: the art is never painted behind the card */
+.design-option .thumb svg, .design-option .thumb .auth-wallpaper { position: absolute; inset: 0; width: 100%; height: 100%; background-size: cover; z-index: 0; }
+.design-option .design-saved { font-style: normal; font-weight: 600; font-size: 0.72rem; color: var(--ok-ink); background: var(--ok-bg); border-radius: 999px; padding: 0.05rem 0.45rem; margin-inline-start: 0.4rem; }
 .design-option span { display: block; padding: 0.4rem 0.6rem; font-weight: 600; font-size: 0.9rem; }
 .login-preview { display: grid; grid-template-columns: 1.1fr 1fr; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .login-preview .auth-art.preview { border: 0; border-radius: 0; }
 .login-preview .fake-form { padding: 1.4rem; display: flex; flex-direction: column; gap: 0.6rem; justify-content: center; background: var(--surface); }
-.login-preview .fake-form div { height: 34px; border: 1px solid var(--line); border-radius: 8px; }
-.login-preview .fake-form div.btnlike { background: var(--brand); border-color: var(--brand); }
+.login-preview .fake-form .ff-input { height: 34px; border: 1px solid var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.82rem; color: var(--ink); }
+.login-preview .fake-form .ff-label { font-size: 0.78rem; color: var(--muted); margin-bottom: -0.35rem; }
+.login-preview .fake-form .ff-title { font-size: 1.15rem; color: var(--heading-strong, var(--ink)); }
+.login-preview .fake-form .ff-or { text-align: center; font-size: 0.75rem; color: var(--muted); }
+.login-preview .fake-form .ff-foot { font-size: 0.72rem; color: var(--muted); text-align: center; }
+.login-preview .fake-form .btnlike { height: 34px; border-radius: 8px; background: var(--brand); color: var(--brand-ink); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.85rem; }
+.login-preview { background: var(--bg); color: var(--ink); }
+.login-preview.mobile { grid-template-columns: 1fr; max-width: 380px; margin-inline: auto; }
+.login-preview.mobile .auth-art.preview { min-height: 150px; }
+.login-preview.full.desktop { min-height: 520px; }
 @media (max-width: 760px) { .login-preview { grid-template-columns: 1fr; } }
 
 /* ---------- Security center */
@@ -966,8 +985,8 @@ code.temp-password { font-size: 1.15rem; padding: .4rem .6rem; letter-spacing: .
 .recovery-grid { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 1rem; align-items: start; }
 @media (max-width: 900px) { .recovery-grid { grid-template-columns: minmax(0, 1fr); } }
 .timeline { list-style: none; margin: 0.5rem 0; padding: 0 0 0 0.6rem; border-left: 2px solid var(--line); max-height: 18rem; overflow: auto; }
-.timeline button, .tree button { background: none; border: 0; padding: 0.25rem 0.4rem; border-radius: 6px; cursor: pointer; color: var(--ink); text-align: left; width: 100%; font: inherit; }
-.timeline button.active, .tree button.active { background: var(--brand-soft); color: var(--ink); font-weight: 600; } /* --brand-ink is for text on solid brand fills */
+.timeline button, .rp-folders button { background: none; border: 0; padding: 0.25rem 0.4rem; border-radius: 6px; cursor: pointer; color: var(--ink); text-align: left; width: 100%; font: inherit; }
+.timeline button.active, .rp-folders button.active { background: var(--brand-soft); color: var(--ink); font-weight: 600; } /* --brand-ink is for text on solid brand fills */
 .timeline .dot { position: static; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 0.45rem 0 -1.05rem; background: var(--muted); vertical-align: middle; }
 .timeline .dot.full { background: var(--brand); }
 .recovery-doc { border-bottom: 1px solid var(--line); padding: 0.6rem 0; }
@@ -1017,3 +1036,18 @@ tr.risk-high td { background: var(--danger-bg); }
 .help-start { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 0.6rem; margin-top: 1rem; }
 .help-tile { display: flex; gap: 0.5rem; align-items: center; padding: 0.8rem 1rem; border: 1px solid var(--line); border-radius: var(--radius); text-decoration: none; color: var(--ink); background: var(--surface-2); }
 .help-tile:hover { border-color: var(--brand); }
+
+/* sign-in map availability (Change Set U) */
+.map-unavailable { display: flex; gap: 1rem; align-items: flex-start; padding: 1.2rem 1.4rem; border: 1px dashed var(--line); border-radius: var(--radius); background: var(--surface-2); color: var(--ink); }
+.map-unavailable p { margin: 0.35rem 0 0; color: var(--muted); }
+.map-unavailable-icon { font-size: 2rem; line-height: 1; }
+.map-checking { background: var(--surface-2); border-radius: var(--radius); }
+
+/* Settings -> Connections provider cards (Change Set U) */
+.provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: 0.7rem; }
+.provider-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 0.8rem 0.9rem; background: var(--surface-2); display: flex; flex-direction: column; gap: 0.35rem; }
+.provider-card p { margin: 0; }
+.provider-icon { font-size: 1.2rem; }
+.kv-table th { width: 14rem; text-align: start; font-weight: 600; color: var(--muted); }
+.route-issue { margin-top: 0.3rem; }
+.warn-text { color: var(--warn-ink); }

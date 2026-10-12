@@ -432,9 +432,6 @@ SETTINGS: list[SettingDef] = [
                help="notifications#fallback"),
     SettingDef("telegram.bot_username", "Telegram bot username", "Used to build the link shown to users.", "str", "",
                "connections", max=64, help="telegram#setup", example="MyFamilyDocsBot"),
-    SettingDef("whatsapp.status", "WhatsApp", "Personal WhatsApp notifications are a later-phase feature.", "choice",
-               "planned", "connections", choices=("planned",), effect="Not available in this release.",
-               help="settings#future"),
     # ---- Authentication
     SettingDef("auth.session_days", "Session length (days)", "How long a 'Remember me' sign-in lasts.", "int", 14,
                "authentication", min=1, max=90, effect="Applies to new sign-ins.", help="totp-recovery#sessions"),
@@ -532,11 +529,20 @@ SETTINGS: list[SettingDef] = [
     SettingDef("security.map_enabled", "Sign-in map", "Show sign-ins on a map (Trusted Zone pins and approximate GeoIP "
                "positions). Uses online map tiles; sign-in addresses are never sent to the tile server or a geolocation service.",
                "bool", True, "security", help="security-map#map"),
-    SettingDef("security.map_tile_url", "Map tile server", "Address template of a privacy-conscious tile server (https, with "
-               "{z}/{x}/{y}). The browser requests ordinary picture tiles from it.", "url",
+    SettingDef("security.map_provider", "Map provider", "Where the sign-in map's picture tiles come from. OpenStreetMap is "
+               "for small, low-volume use under its tile usage policy; MapTiler and Stadia Maps need your own API key; "
+               "Custom uses the tile server below.", "choice", "osm", "security", choices=("osm", "maptiler", "stadia", "custom"),
+               choice_labels={"osm": "OpenStreetMap (low-volume use)", "maptiler": "MapTiler (API key)",
+                              "stadia": "Stadia Maps (API key)", "custom": "Custom / self-hosted tile server"},
+               depends_on=("security.map_enabled",), help="security-map#provider"),
+    SettingDef("security.map_api_key", "Map provider API key", "Key for MapTiler or Stadia Maps. Stored encrypted; restrict it to "
+               "this site's address at the provider (the browser loads the tiles, so a map key is visible to signed-in people).",
+               "secret", "", "security", depends_on=("security.map_enabled",), help="security-map#provider"),
+    SettingDef("security.map_tile_url", "Custom tile server", "Used when the map provider is Custom: address template of a tile server you "
+               "may use (https, with {z}/{x}/{y}). The browser requests ordinary picture tiles from it.", "url",
                "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "security", depends_on=("security.map_enabled",), max=300,
                validator=lambda v: _validate_tiles(v), help="security-map#tiles", example="https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
-    SettingDef("security.map_attribution", "Map attribution", "Credit line required by the tile provider.", "str",
+    SettingDef("security.map_attribution", "Custom map attribution", "Credit line required by your custom tile server (the presets show their own).", "str",
                "© OpenStreetMap contributors", "security", depends_on=("security.map_enabled",), max=200, help="security-map#tiles"),
     SettingDef("security.login_audit_retention_days", "Login audit retention (days)",
                "Sign-in records older than this are deleted by the nightly maintenance. 0 keeps them forever.",

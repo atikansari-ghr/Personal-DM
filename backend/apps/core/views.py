@@ -73,6 +73,10 @@ def settings_api(request):
                 errors[key] = str(exc)
         if changed:
             audit.record("settings.update", request=request, keys=changed)
+            if any(k.startswith("security.map_") for k in changed):
+                from .middleware import SecurityHeadersMiddleware
+
+                SecurityHeadersMiddleware._tiles["at"] = 0.0  # a new map provider is allowed at once (CSP)
             policy = [k for k in changed if k.startswith(("auth.", "security.")) or k.startswith("notifications.critical")]
             if policy:
                 from apps.security import alerts

@@ -71,6 +71,10 @@
 | authentik: "cannot be reached" or **Test connection** fails | Check the issuer address (HTTPS, ending with the application slug and `/`) and that the container can reach it. Local sign-in keeps working |
 | authentik: "not linked to a family account" | The person signs in with their password and uses **Link authentik account** in My account → Password & security; accounts are never matched by email. See [linking](authentik.md#linking) |
 | authentik: "response could not be verified" | Redirect URI in authentik must be exactly `https://<your address>/api/auth/authentik/callback`; check the client ID and secret and that the provider has a signing key |
+| Sign-in map tiles say **Access blocked** or the map shows **Map unavailable** | The tile provider refused the tiles (HTTP 401, 403 or 429) or could not be reached. Open Settings → Security → Access policy → **Sign-in map provider** and click **Test Map Provider**: it names the reason. Common fixes: choose MapTiler or Stadia Maps with your own key, allow your site's address for the key, or make sure your proxy does not strip the `Referer` header and allows the tile origin in `img-src` and `connect-src`. Sign-in records and Trusted Zones keep working without the map. See [map provider](security-map.md#map-troubleshooting) |
+| Settings → Connections: WhatsApp Personal says **Not installed**, **Service stopped** or **Service unavailable** | Run `sudo personaldocs whatsapp-bridge status`, then `sudo systemctl start personaldocs-whatsapp` or `sudo personaldocs whatsapp-bridge install`. Click **Check again**. Other channels are not affected. See [WhatsApp Personal](whatsapp-personal.md#troubleshooting) |
+| WhatsApp Personal or Discord shows **Disabled by Admin** | The main administrator has not turned the channel on in Settings → Connections. Your fallback channels are used meanwhile |
+| Folder tree rows look shifted after an upgrade | Reload the page once (or close and reopen the installed app) so the browser loads the new web app |
 
 ## Reporting a bug {#report}
 

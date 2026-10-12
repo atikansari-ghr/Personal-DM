@@ -73,14 +73,17 @@ function TreeNode({ node, active, expanded, toggle, select, level, me, dnd, menu
           if (e.key === "ArrowRight" && !open) toggle(node.id);
           if (e.key === "ArrowLeft" && open) toggle(node.id);
         }}>
-        <button className="caret" tabIndex={-1} aria-label={open ? "Collapse" : "Expand"} onClick={(e) => { e.stopPropagation(); toggle(node.id); }} style={{ visibility: children.length ? "visible" : "hidden" }}>{open ? "▾" : "▸"}</button>
-        <FolderIcon f={node} />
-        <span>{folderLabel(node, me)}</span>
-        <FolderOfflineMark folderId={node.id} />
-        {node.count > 0 && <span className="count">{node.count}</span>}
-        {!node.path_only && <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} style={{ marginLeft: node.count > 0 ? 0 : "auto", display: "inline-flex" }}>
-          <Menu label={`Actions for folder ${folderLabel(node, me)}`} className="icon-btn node-menu" items={menu(node)} />
-        </span>}
+        {/* fixed columns: expander | icon | label | extras (shared tree tokens; rows without children keep the expander slot) */}
+        <span className="tree-expander">{children.length > 0 && <button className="caret" tabIndex={-1} aria-label={open ? "Collapse" : "Expand"} onClick={(e) => { e.stopPropagation(); toggle(node.id); }}>{open ? "▾" : "▸"}</button>}</span>
+        <span className="tree-icon"><FolderIcon f={node} /></span>
+        <span className="tree-label">{folderLabel(node, me)}</span>
+        <span className="tree-extra">
+          <FolderOfflineMark folderId={node.id} />
+          {node.count > 0 && <span className="count">{node.count}</span>}
+          {!node.path_only && <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} style={{ display: "inline-flex" }}>
+            <Menu label={`Actions for folder ${folderLabel(node, me)}`} className="icon-btn node-menu" items={menu(node)} />
+          </span>}
+        </span>
       </div>
       {open && children.length > 0 && <ul role="group">{children.map((c) => <TreeNode key={c.id} node={c} active={active} expanded={expanded} toggle={toggle} select={select} level={level + 1} me={me} dnd={dnd} menu={menu} />)}</ul>}
     </li>

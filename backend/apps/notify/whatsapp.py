@@ -89,6 +89,82 @@ def bridge_status() -> dict:
             "sessions": h.get("sessions", {}), "detail": h.get("detail", "")}
 
 
+SERVICE = "personaldocs-whatsapp"
+HEALTH_KEY = "whatsapp_bridge"
+
+
+def _systemd_state() -> str:
+    """active / inactive / failed / unknown (no systemd here). systemctl is-active needs no privileges."""
+    import shutil
+    import subprocess
+
+    if not shutil.which("systemctl"):
+        return "unknown"
+    try:
+        out = subprocess.run(["systemctl", "is-active", SERVICE], capture_output=True, text=True, timeout=3).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    return out or "unknown"
+
+
+def service_status() -> dict:
+    """Administrator view of the optional bridge, independent of the on/off switch: installed, service, version,
+    protocol, compatibility, connectivity and when it was last checked. State only - never session material."""
+    import os
+
+    from apps.security.models import HealthState
+
+    prefix = Path(os.environ.get("PD_WHATSAPP_PREFIX", "/opt/personaldocs/whatsapp-bridge"))
+    installed = (prefix / "current").exists() if prefix.exists() else None  # None: unknown (not a native install)
+    c = compat()
+    service = _systemd_state()
+    now = timezone.now().isoformat()
+    prev = HealthState.get(HEALTH_KEY) or {}
+    out = {"enabled": bool(config.get("whatsapp.enabled")), "installed": installed, "service": service, "checked_at": now,
+           "pinned": c.get("pinned"), "expected_protocol": c.get("protocol", PROTOCOL), "token_present": bool(token())}
+    try:
+        h = _call("GET", "/health")
+    except WhatsAppError as exc:
+        reachable = False
+        out.update(reachable=False, detail=str(exc))
+    else:
+        reachable = True
+        version = h.get("version", "")
+        out.update(reachable=True, version=version, protocol=h.get("protocol"), library=h.get("library"),
+                   tested=version in c.get("tested_versions", []), protocol_ok=h.get("protocol") == c.get("protocol", PROTOCOL),
+                   update_available=bool(c.get("pinned") and version and version != c.get("pinned")),
+                   sessions=h.get("sessions", {}))
+    if not reachable:
+        if installed is False:
+            state = "not_installed"
+        elif service in ("inactive", "failed"):
+            state = "stopped"
+        else:
+            state = "unavailable"
+    elif not out.get("protocol_ok"):
+        state = "incompatible"
+    elif not out.get("tested"):
+        state = "degraded"
+    else:
+        state = "healthy"
+    if state == "healthy" and not out["enabled"]:
+        state = "ready_disabled"  # installed and running, waiting to be turned on
+    out["state"] = state
+    out["label"] = {"not_installed": "Not installed", "stopped": "Service stopped", "unavailable": "Service unavailable",
+                    "incompatible": "Incompatible bridge version", "degraded": "Degraded (untested version)",
+                    "healthy": "Running", "ready_disabled": "Installed and running - turned off"}[state]
+    out["last_ok"] = now if reachable and state in ("healthy", "ready_disabled", "degraded") else prev.get("last_ok")
+    HealthState.objects.update_or_create(key=HEALTH_KEY, defaults={"data": {k: out.get(k) for k in ("state", "checked_at", "last_ok", "version")}})
+    return out
+
+
+def last_delivery(user, channel: str):
+    from .models import OutboxMessage
+
+    m = OutboxMessage.objects.filter(user=user, channel=channel, status=OutboxMessage.SENT).order_by("-sent_at").first()
+    return m.sent_at if m else None
+
+
 def _link(user):
     from .models import WhatsAppLink
 

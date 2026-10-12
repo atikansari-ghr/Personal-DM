@@ -61,8 +61,9 @@ Passwords and tokens are stored encrypted and never displayed again. Leave a sec
 
 ## Future features {#future}
 
-**WhatsApp** notifications are planned; no provider is integrated yet. Local AI, which used to be listed here, is now available:
-see [Local AI](local-ai.md).
+Nothing is listed here at the moment. Features that used to be listed are now available: **WhatsApp Personal**
+(experimental, see [WhatsApp Personal](whatsapp-personal.md)), **Discord** (see [Discord](discord.md)) and
+**Local AI** (see [Local AI](local-ai.md)).
 
 ## Security center {#security}
 
