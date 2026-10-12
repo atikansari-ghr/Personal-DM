@@ -95,5 +95,6 @@ update is available*. Updates are audited.
 | Symptom | Fix |
 | --- | --- |
 | *The WhatsApp bridge is not running* | `sudo systemctl status personaldocs-whatsapp` and `journalctl -u personaldocs-whatsapp -n 50`, then `sudo personaldocs whatsapp-bridge install`. |
+| Install says *the pinned WhatsApp library is missing* (`Cannot find package '@whiskeysockets/baileys'`) | Fixed in the release after Change Set T: the first install installed the library readable only by root. Upgrade (`sudo personaldocs upgrade`) and run `sudo personaldocs whatsapp-bridge install` again. Nothing was changed by the failed attempt. |
 | *Incompatible bridge version* | `sudo personaldocs whatsapp-bridge update` (tested version) or `rollback`. |
 | Messages stop after a while | WhatsApp ended the session: link again. Keep Email or Telegram in your fallback chain. |

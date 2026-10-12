@@ -845,12 +845,14 @@ cmd_whatsapp_bridge() { # whatsapp-bridge install|update|rollback|status|disable
       rel=$WA_PREFIX/releases/$ver-$(date +%Y%m%d%H%M%S)
       install -d -m 0755 "$WA_PREFIX/releases"
       install -d -m 0700 -o $APP -g $APP "$DATA_DIR/whatsapp" "$DATA_DIR/whatsapp/sessions"
-      [ -f "$CONF_DIR/whatsapp-bridge.token" ] || { umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' >"$CONF_DIR/whatsapp-bridge.token"; chown root:$APP "$CONF_DIR/whatsapp-bridge.token"; chmod 0640 "$CONF_DIR/whatsapp-bridge.token"; }
+      # a subshell: the strict umask must not leak into npm ci below (node_modules would be unreadable for $APP)
+      [ -f "$CONF_DIR/whatsapp-bridge.token" ] || ( umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' >"$CONF_DIR/whatsapp-bridge.token"; chown root:$APP "$CONF_DIR/whatsapp-bridge.token"; chmod 0640 "$CONF_DIR/whatsapp-bridge.token" )
       # protect the encrypted sessions and configuration before touching the bridge
       tar -C "$DATA_DIR/whatsapp" -cf "$DATA_DIR/whatsapp/sessions-before-$(date +%Y%m%d%H%M%S).tar" sessions 2>/dev/null || true
       ls -1t "$DATA_DIR"/whatsapp/sessions-before-*.tar 2>/dev/null | tail -n +4 | xargs -r rm -f
       cp -a "$src" "$rel"
-      (cd "$rel" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund >>"$LOG" 2>&1) || { rm -rf "$rel"; die "npm ci failed (see $LOG); the previous bridge is unchanged"; }
+      (umask 022; cd "$rel" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund >>"$LOG" 2>&1) || { rm -rf "$rel"; die "npm ci failed (see $LOG); the previous bridge is unchanged"; }
+      chmod -R u=rwX,go=rX "$rel"   # code only (no secrets): the service user must be able to read every module
       runuser -u $APP -- env PD_WA_DATA="$DATA_DIR/whatsapp/selftest" node "$rel/server.mjs" --selftest >/dev/null || { rm -rf "$rel"; die "bridge self-test failed; the previous bridge is unchanged"; }
       prev=$(readlink -f "$WA_PREFIX/current" 2>/dev/null || true)
       ln -sfn "$rel" "$WA_PREFIX/current.new" && mv -T "$WA_PREFIX/current.new" "$WA_PREFIX/current"
