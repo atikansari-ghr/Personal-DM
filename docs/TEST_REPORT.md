@@ -69,11 +69,11 @@ Map tiles in the corrective suite were answered by `page.route` (no request reac
 
 | Command | Result |
 |---|---|
-| `pytest tests/test_corrective_u.py` | RESULT_CU |
+| `pytest tests/test_corrective_u.py` | **16 passed** |
 | Full `pytest` | RESULT_PYTEST |
-| `scripts/e2e.sh` (fresh database) | RESULT_E2E |
-| `python3 scripts/check_docs.py` | RESULT_DOCS |
-| `scripts/privacy_check.sh` | RESULT_PRIVACY |
+| `scripts/e2e.sh` (fresh database) | **146 PASS, 0 FAIL** (final run, exit 0): flow 14; accessibility in every theme with **no serious or critical violations**; parity and layout (7 viewports); offline 9; PWA 4; themes 6; recovery 10; **corrective 20** (folder tree geometry at 1440/820/390 px × Green, Blue, Dark, Glass Light, Glass Dark, right-to-left, keyboard; thumbnail luminance × 5 themes; preview/Save/Discard and the public sign-in page; map with a working tile and with 403, 429, 401 and network failures; Test Map Provider; WhatsApp enable → link → fake scan → Send test → routing → disable, bridge down, isolation; Discord; 390 px phone layout); **screenshots 8**. The first full run stopped at the accessibility audit (see defects below) |
+| `python3 scripts/check_docs.py` | **OK** (links, anchors, alt text, no orphan screenshots, Learn more links, review dates) |
+| `scripts/privacy_check.sh` | **OK** |
 | `npm run build` (TypeScript check and production build) | Passed |
 
 **The checks detect the original defects.**
