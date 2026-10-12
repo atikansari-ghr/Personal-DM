@@ -1,4 +1,4 @@
-<!-- reviewed: 2026-10-11 -->
+<!-- reviewed: 2026-10-12 -->
 # Discord notifications
 
 Personal DM can post your own notifications to a Discord channel that you control. It uses an **official Discord
@@ -6,10 +6,14 @@ webhook**. Each person adds their own webhook; the administrator only allows the
 
 ## Allow Discord (administrator) {#setup}
 
-1. Open **Settings → Connections**.
-2. Turn on **Discord webhooks** and click **Save**.
+1. Open **Settings → Connections**. The **Discord** provider card shows **Disabled by Admin**.
+2. In the **Discord** section, turn on **Discord webhooks** and click **Save settings**.
 
-Turning it off stops Discord delivery for everyone. Saved webhooks are kept.
+**Expected result:** the card shows **Enabled** and how many people have connected a webhook (for example
+*1/2 connected*). It never shows anyone's webhook address.
+
+Turning it off stops Discord delivery for everyone. Saved webhooks are kept. While it is off, each person's Discord card
+says **Disabled by Admin** instead of offering a webhook field.
 
 ## Add your webhook {#webhook}
 
@@ -37,6 +41,9 @@ Prerequisites: a Discord server where you may manage webhooks, ideally a private
 ## Manage it {#manage}
 
 - **Enabled:** pause or resume Discord delivery without removing the webhook.
+- **Last test / last delivery:** the card shows when the last test was sent and when a notification was last delivered.
+- **Rotate the webhook:** in Discord, delete the old webhook and create a new one; in Personal DM click **Remove**, then
+  save the new address.
 - **Remove:** deletes the stored webhook.
 - **Deleted in Discord:** if you delete the webhook in Discord, the next delivery shows **Deleted in Discord** and the
   channel counts as disconnected. Your fallback chain, if any, takes over. Add a new webhook to continue.

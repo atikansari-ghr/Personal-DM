@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError, formatBytes, formatDateTime } from "../../api";
 import SettingsForm from "../../components/SettingsForm";
+import { probeTiles } from "../../components/MapUnavailable";
 import { Confirm, HelpTip, Icon, Skeleton, useAsync, useToast } from "../../components/ui";
 
 type Policy = {
@@ -227,8 +228,46 @@ export function SecurityPanel() {
       <TemporaryCard data={state.data} reload={state.reload} />
       <IpRulesCard data={state.data} reload={state.reload} />
       <GeoIpCard data={state.data} reload={state.reload} />
-      <SettingsForm section="security" title="Alerts, login protection, GeoIP and traffic analytics" />
+      <SettingsForm section="security" exclude={MAP_KEYS} title="Alerts, login protection, GeoIP and traffic analytics" />
+      <MapProviderCard />
       <p className="small muted">Authentication options (passkeys, two-step verification policy) are under <Link to="/settings/authentication">Authentication</Link>. Sign-in history is in <Link to="/settings/activity?view=logins">Activity & health → Login audit</Link>.</p>
+    </div>
+  );
+}
+
+const MAP_KEYS = ["security.map_enabled", "security.map_provider", "security.map_api_key", "security.map_tile_url", "security.map_attribution"];
+
+/** Sign-in map provider (Change Set U): settings, Test Map Provider and the last result. */
+export function MapProviderCard() {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const cfg = useAsync<any>(() => api("security/map", { query: { days: 1 } }), []);
+  const map = cfg.data?.map;
+  const health = map?.health;
+  const test = async () => {
+    setBusy(true);
+    try {
+      const fresh = (await api<any>("security/map", { query: { days: 1 } })).map;
+      if (!fresh.enabled) { toast(fresh.unavailable || "The sign-in map is turned off.", "error"); return; }
+      const p = await probeTiles(fresh, true);
+      // a server without CORS cannot report a status to this page; treat it as unknown, not as a failure
+      const r = await api<any>("security/map/test", { body: { status: p.status ?? null, error: p.state === "unknown" ? `unknown: ${p.error || "no status"}` : "" } });
+      toast(r.health.state === "ok" ? "Test tile loaded: the map provider works." : (p.state === "unknown" ? "The provider did not report a status (no CORS); check the map itself." : r.health.detail), r.health.state === "ok" ? "ok" : "error");
+      cfg.reload();
+    } catch (e: any) { toast(e.message, "error"); } finally { setBusy(false); }
+  };
+  return (
+    <div id="map-provider" className="stack">
+      <SettingsForm keys={MAP_KEYS} title="Sign-in map provider">
+        <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button type="button" className="btn" disabled={busy} onClick={test}>{busy ? "Testing…" : "Test Map Provider"}</button>
+          {health && <span className={`badge ${health.state === "ok" ? "ok" : health.state === "failed" ? "danger" : "neutral"}`}>{health.state === "ok" ? "Working" : health.state === "failed" ? "Failed" : health.state === "unknown" && health.checked_at ? "No status" : "Not tested"}</span>}
+          {map && <span className="small muted">Now: {map.provider_label}</span>}
+        </div>
+        {health?.state === "failed" && <div className="alert warn small" role="status">{health.detail}{health.last_ok && <> Last successful test: {formatDateTime(health.last_ok)}.</>}</div>}
+        {health?.checked_at && <p className="small muted">Last test {formatDateTime(health.checked_at)}{health.status ? ` · HTTP ${health.status}` : ""}. The test fetches one tile from this browser; sign-in addresses are never sent. <a href="/help/security-map#provider">Learn more</a></p>}
+        {!health?.checked_at && <p className="small muted">Save the provider, then run Test Map Provider. <a href="/help/security-map#provider">Learn more</a></p>}
+      </SettingsForm>
     </div>
   );
 }

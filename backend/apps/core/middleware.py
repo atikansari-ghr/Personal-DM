@@ -42,19 +42,14 @@ class SecurityHeadersMiddleware:
 
     @classmethod
     def tile_origin(cls) -> str:
-        """Origin of the configured map tile server (images only), cached for a minute."""
+        """Origin of the configured map tile server (images and the availability probe), cached for a minute."""
         import time
-        import urllib.parse
 
         if time.monotonic() - cls._tiles["at"] > 60:
-            origin = ""
             try:
-                from apps.core import config
+                from apps.security import mapprov
 
-                if config.get("security.map_enabled"):
-                    u = urllib.parse.urlsplit(config.get("security.map_tile_url") or "")
-                    if u.scheme == "https" and u.hostname and "{" not in u.hostname.replace("{s}", ""):
-                        origin = f"https://{u.netloc}".replace("{s}", "*")
+                origin = mapprov.tile_origin()
             except Exception:  # noqa: BLE001 - before migrations / without a database
                 origin = ""
             cls._tiles.update(at=time.monotonic(), origin=origin)
@@ -63,7 +58,8 @@ class SecurityHeadersMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
         tiles = self.tile_origin()
-        csp = self.CSP.replace("img-src 'self' data: blob:", f"img-src 'self' data: blob: {tiles}") if tiles else self.CSP
+        # images and the one-tile availability probe (fetch) may reach the configured tile server only
+        csp = (self.CSP.replace("img-src 'self' data: blob:", f"img-src 'self' data: blob: {tiles}") + f"; connect-src 'self' {tiles}") if tiles else self.CSP
         response.setdefault("Content-Security-Policy", csp)
         response.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)")
         path = request.path

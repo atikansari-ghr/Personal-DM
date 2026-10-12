@@ -442,6 +442,32 @@ Decisions: [ADR 0020](adr/0020-encrypted-recovery-points.md), [ADR 0021](adr/002
 | DOC-2 | `scripts/check_docs.py` fails on broken links or anchors, missing images or alt text, orphan screenshots, broken *Learn more* links, outdated UI terms and missing review dates. |
 | DOC-3 | Screenshots use synthetic data only: no real names, documents, keys, tokens, webhook addresses, WhatsApp QR or session data, real public IPs, or production backup locations. |
 
+## Change set U (2026-10): corrective fixes for the folder tree, sign-in map, sign-in designs, WhatsApp and Discord
+
+Acceptance tests AT-336…AT-355. The change prompt numbered them AT-311…AT-330: prompt AT-n = AT-(n+25). See
+[TRACEABILITY.md](TRACEABILITY.md), section *Change set U*, and the root causes in
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-u).
+
+| ID | Requirement |
+|---|---|
+| FT-1 | Every folder tree row has the same columns (indent, expander, icon, name, extras) from shared tree tokens. A row without children keeps an empty expander slot. Each level is indented by the same step. |
+| FT-2 | Long names wrap inside the name column. The expander and icon stay on the first line and do not move. The tree never scrolls sideways or sits under its scrollbar. |
+| FT-3 | Alignment and readability hold in Default Green, Blue, Dark, Glass Light and Glass Dark, at desktop, tablet and phone widths, and in right-to-left layout. There are no per-folder offsets or pixel nudges. |
+| FT-4 | Keyboard: Enter opens, ArrowRight expands, ArrowLeft collapses. Rows have `treeitem` roles with levels and expanded state, and keep visible focus. |
+| MP-1 | The sign-in map provider is configurable: OpenStreetMap (low-volume use), MapTiler or Stadia Maps with the administrator's own key, or a custom/self-hosted server. A custom tile address set earlier keeps working. |
+| MP-2 | Tile requests follow the provider's policy. They send only this site's origin as `Referer`, never a spoofed header, and are never proxied or scraped. The Content-Security-Policy allows only the configured tile origin, for images and for the test request. |
+| MP-3 | A failing provider (401, 403, 429, network) shows a clear *Map unavailable* state with the reason and the fix, never a grid of blocked tiles. Tiles are not retried in a loop. |
+| MP-4 | Sign-in records, Trusted Zones, GeoIP and risk work without map tiles. Sign-in addresses are never sent to a tile provider or a geolocation service. |
+| MP-5 | **Test Map Provider** (main administrator) fetches one tile from the browser, records Working, Failed or No status with the HTTP status and time, keeps the last successful test, never returns the API key in its result, and is audited. |
+| SD-1 | The sign-in page, its design thumbnails and its previews always use the sign-in theme. They are equally clear under every app theme. |
+| SD-2 | Changing an app theme never changes the sign-in design, and saving a sign-in design never changes anyone's theme. |
+| SD-3 | Choosing a design previews it. It is published only with *Save design*, or dropped with *Discard*. A live preview shows the desktop and phone layouts, and a large preview shows the full sign-in page. |
+| CN-1 | Settings → Connections shows a card for each provider (In-App, Email, Telegram, Push, Discord, WhatsApp) with its real state: Connected, Configured, Disabled, Available but not configured, Degraded or Not installed. No feature that exists is shown as "Planned". |
+| CN-2 | The WhatsApp Personal administrator section shows the bridge service: installed, systemd state, reachability, version, protocol, compatibility, update, linked people (counts only) and last check. It detects a running bridge before WhatsApp is turned on. Turning it on needs no restart. |
+| CN-3 | People see their own WhatsApp state: Disabled by Admin, Service unavailable, Not linked, Waiting for scan (the QR refreshes by itself), Connected, Reconnect needed. They can Link, Send test, Reconnect and Unlink, and see their last notification. Nobody can see another person's QR, session or controls. |
+| CN-4 | Discord has its own administrator switch. People see Disabled by Admin when it is off, and the last test and last delivery when they have a webhook. Webhooks stay encrypted and masked. |
+| CN-5 | The routing matrix explains why a chosen Discord or WhatsApp channel cannot deliver (turned off, not linked, service unavailable). The fallback chain is used meanwhile. A failing bridge never affects other channels. |
+
 ## Later phases
 
 Native apps, scanning enhancement, in-browser Office editing, DICOM viewing.

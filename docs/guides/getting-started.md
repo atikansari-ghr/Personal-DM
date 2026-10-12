@@ -33,6 +33,28 @@ At the top of the folder tree, **My Documents** with your photo (or initials) ta
 In the tree it is labelled "My Documents — <your name>". It is always listed first and opened when you go to
 **Folders**. Other people's areas show their name and photo and stay closed until you open them.
 
+## The folder tree {#folder-tree}
+
+The tree on the left shows your folders and every folder shared with you. Each row is laid out in fixed columns:
+
+| Column | What it shows |
+| --- | --- |
+| Indent | One step per level, so sub-folders sit clearly under their parent. |
+| ▸ / ▾ | Expand or collapse. Folders without sub-folders keep the space empty, so names stay aligned. |
+| Icon | The folder's icon, or the person's photo for their own area. |
+| Name | Long names wrap onto more lines inside the name column; the arrow and icon stay in place. |
+| Extras | Offline mark, document count and the **⋮** menu. |
+
+![Folder tree with nested folders, long names and the selected folder](../images/screenshots/folders-tree.png)
+
+- **Mouse:** click the arrow to expand or collapse; click the name to open the folder.
+- **Keyboard:** Tab to a folder, **→** expands, **←** collapses, **Enter** opens it.
+- **Touch:** tap the arrow or the name. On phones, open the tree with **☰** (*Show folders*); it fills the screen and
+  scrolls on its own, without covering the names.
+
+The layout is the same in every theme (Default Green, Blue, Dark, Glass Light and Glass Dark) and on desktop, tablet and
+phone. It also works for right-to-left names, because the indent follows the text direction.
+
 ## Actions menus {#actions}
 
 Every document and folder has a **⋮** menu (on a computer it appears in the tree when you point at a folder). The

@@ -1,26 +1,44 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { MapUnavailable, PROBE_MESSAGES, probeTiles, type MapConfig, type Probe } from "./MapUnavailable";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 // Sign-in map. Leaflet is bundled with the app (no CDN). The browser only downloads picture tiles from the configured
-// tile server; sign-in addresses are never sent to it. Markers are drawn as SVG circles (no marker images needed).
+// provider; sign-in addresses are never sent to it. Markers are drawn as SVG circles (no marker images needed).
+// Before tiles are shown, one tile is fetched to learn the provider's answer: a refused provider (401/403/429) answers
+// with a picture of an error, which would otherwise be drawn as map tiles. Then the map shows "Map unavailable".
 
 export type MapEvent = { id: number; lat: number | null; lon: number | null; coord_source: string; coord_label: string; location: string; at: string;
   user: string; risk: string; result: string; device: string; zone: string };
 
 const RISK_COLOUR: Record<string, string> = { normal: "#1e6b3a", low: "#175cd3", warning: "#b54708", high: "#b42318", "": "#667085" };
 
-export default function SigninMap({ events, zones, tileUrl, attribution, height = 360 }: { events: MapEvent[]; zones: any[]; tileUrl: string; attribution: string; height?: number }) {
+export default function SigninMap({ events, zones, config, height = 360 }: { events: MapEvent[]; zones: any[]; config: MapConfig; height?: number }) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
+  const [probe, setProbe] = useState<Probe>({ state: "checking" });
+  const [failed, setFailed] = useState("");
   useEffect(() => {
-    if (!el.current) return;
+    let live = true;
+    setFailed("");
+    setProbe({ state: "checking" });
+    if (config.tile_url) probeTiles(config).then((p) => live && setProbe(p));
+    return () => { live = false; };
+  }, [config.tile_url]);
+  useEffect(() => {
+    if (!el.current || (probe.state !== "ok" && probe.state !== "unknown")) return;
     const m = L.map(el.current, { worldCopyJump: true, zoomControl: true, attributionControl: true, scrollWheelZoom: false });
     map.current = m;
-    L.tileLayer(tileUrl, { attribution, maxZoom: 18 }).addTo(m);
+    const layer = L.tileLayer(config.tile_url, { attribution: config.attribution, maxZoom: 18,
+      referrerPolicy: (config.referrer_policy || "strict-origin-when-cross-origin") as L.TileLayerOptions["referrerPolicy"] });
+    // no endless retries: after repeated failures without a single tile, stop and say so
+    let loaded = 0, errors = 0;
+    layer.on("tileload", () => { loaded++; });
+    layer.on("tileerror", () => { errors++; if (errors >= 4 && loaded === 0) { layer.remove(); setFailed(PROBE_MESSAGES.network); } });
+    layer.addTo(m);
     m.setView([20, 10], 2);
     return () => { m.remove(); map.current = null; };
-  }, [tileUrl, attribution]);
+  }, [probe.state, config.tile_url, config.attribution, config.referrer_policy]);
   useEffect(() => {
     const m = map.current;
     if (!m) return;
@@ -50,6 +68,11 @@ export default function SigninMap({ events, zones, tileUrl, attribution, height 
     });
     if (pts.length) m.fitBounds(L.latLngBounds(pts as any).pad(0.4), { maxZoom: 9 });
     return () => { layer.remove(); };
-  }, [events, zones]);
+  }, [events, zones, probe.state]);
+  if (probe.state === "failed" || failed) {
+    const reason = failed || PROBE_MESSAGES[String(probe.status)] || `The map provider answered HTTP ${probe.status}.`;
+    return <MapUnavailable reason={reason} admin={config.admin} height={height} />;
+  }
+  if (probe.state === "checking") return <div className="signin-map map-checking" style={{ height }} aria-busy="true" aria-label="Loading the map" />;
   return <div ref={el} className="signin-map" style={{ height }} role="img" aria-label="Map of sign-in locations. The same information is listed in the table below." />;
 }

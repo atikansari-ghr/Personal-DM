@@ -1,3 +1,4 @@
+<!-- reviewed: 2026-10-12 -->
 # Sign-in page designs
 
 The sign-in page shows a light wallpaper on the left and the sign-in panel on the right. On phones the wallpaper becomes a short banner above the form, so signing in always comes first. The administrator changes the design in **Settings → Overview & sign-in**. Signing in works exactly the same with every design: password, authenticator codes (TOTP), passkeys and linked Google sign-in are offered according to the authentication settings, never according to the design.
@@ -12,7 +13,30 @@ The sign-in page shows a light wallpaper on the left and the sign-in panel on th
 | **Family** | A house and simple, non-identifiable figures |
 | **Neutral** | Light grey paper with document cards |
 
-The presets are drawings bundled with the application; no image is loaded from the internet. Select a design to apply it at once; the preview below the gallery shows the result.
+The presets are drawings bundled with the application; no image is loaded from the internet.
+
+![Sign-in designs with a design selected, the live preview and Save design](../images/screenshots/settings-login-design.png)
+
+## Choose, preview and save {#choose}
+
+1. Open **Settings → Overview & sign-in → Sign-in page design**.
+2. Click a design. It is **previewed, not saved**: the **Live sign-in preview** shows the wallpaper, your title and logo,
+   and the sign-in panel with its usual fields. The design in use is marked **In use**.
+3. Switch between **Desktop** and **Phone** to see both layouts. On phones the wallpaper becomes a short banner above
+   the form.
+4. Click **Preview Sign-in Page** for a large preview.
+5. Click **Save design** to publish it, or **Discard** to keep the current design.
+
+**Expected result:** after saving, the sign-in page shows the new design to everyone who is not signed in.
+
+### Your app theme does not change the sign-in page {#theme-independence}
+
+The sign-in page always uses the default (green) theme. Your own app theme (Dark, Glass, Blue…) is a preference you
+have after signing in, and it is not applied to the page people see before they sign in. The thumbnails and previews
+use the sign-in theme too, so they look the same whichever theme you use:
+
+- Changing your app theme never changes the saved sign-in design.
+- Saving a sign-in design never changes anyone's app theme.
 
 ## Custom wallpaper {#custom}
 

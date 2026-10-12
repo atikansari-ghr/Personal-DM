@@ -52,7 +52,7 @@ export default function RecoveryPage() {
               <button className="btn small" onClick={() => setRestore({ kind: "user", target: { user: owner }, label: `everything of ${tree.data.users.find((u: any) => u.id === owner).display_name}` })}>Restore this person's data…</button>
             )}
             <h3 className="small muted" style={{ marginTop: "1rem" }}>Folders</h3>
-            <ul className="tree plain">
+            <ul className="rp-folders plain">
               <li><button type="button" className={!folder ? "active" : ""} onClick={() => setFolder("")}>All folders</button></li>
               {tree.data?.folders?.map((f: any) => <li key={f.id} style={{ paddingLeft: `${Math.min(f.path.length - 1, 5) * 0.8}rem` }}>
                 <button type="button" className={folder === f.id ? "active" : ""} onClick={() => setFolder(f.id)}><Icon name="folder" size={14} /> {f.name}{!f.exists && <span className="badge neutral" style={{ marginLeft: 4 }}>deleted</span>}</button></li>)}

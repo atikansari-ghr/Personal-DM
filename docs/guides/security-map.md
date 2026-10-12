@@ -1,4 +1,4 @@
-<!-- reviewed: 2026-10-11 -->
+<!-- reviewed: 2026-10-12 -->
 # Sign-in security, Trusted Zones and the sign-in map
 
 Personal DM records where each sign-in came from, which device was used, and how unusual it looks. It also lets you
@@ -69,12 +69,62 @@ Who can see what:
 Routine notifications show only the approximate location and network. For a Trusted Zone they show a shortened private
 address (for example `192.168.x.10`). The full public address is under **View Security Details** in the app.
 
-### Map tiles {#tiles}
+<a id="tiles"></a>
 
-The map is drawn with Leaflet, which is bundled with the app, and **online map tiles**. There is no offline tile server.
-The browser downloads ordinary picture tiles from the server in **Settings → Security → Map tile server** (default
-OpenStreetMap, `https://tile.openstreetmap.org/{z}/{x}/{y}.png`, with the credit line from *Map attribution*). The tile
-server sees which map area is shown, like any web map. It never receives your sign-in addresses.
+### Map provider and tiles {#provider}
+
+The map is drawn with Leaflet, which is bundled with the app, using **online map tiles** from a provider you choose.
+The browser downloads ordinary picture tiles. The provider sees which map area is shown and this site's address, like
+any web map, but **never your sign-in addresses**.
+
+**Choose the provider (main administrator):** Settings → Security → **Access policy** → **Sign-in map provider**.
+
+| Provider | When to use it | What you need |
+| --- | --- | --- |
+| **OpenStreetMap** (default) | An occasional look at a small family sign-in map. | Nothing. Follow the [OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/): low volume, attribution visible. |
+| **MapTiler** | Regular use, or if OpenStreetMap blocks you. | Your own free or paid API key, restricted to this site's address. |
+| **Stadia Maps** | The same. | Your own API key, restricted to this site's address. |
+| **Custom / self-hosted** | You run a tile server, or have another provider. | An `https://…/{z}/{x}/{y}.png` address and its attribution. |
+
+1. Choose the **Map provider**.
+2. For MapTiler or Stadia Maps, paste the **API key** (stored encrypted). For Custom, enter the **Custom tile server**
+   and **Custom map attribution**.
+3. Click **Save settings**.
+4. Click **Test Map Provider**.
+
+**Expected result:** the badge shows **Working** with the time of the test. The test loads one tile from your own browser,
+exactly as the map does.
+
+![Map provider settings with Test Map Provider and its result](../images/screenshots/security-map-provider.png)
+
+> [!NOTE]
+> **Privacy** The browser loads the tiles, so a map provider's API key is visible to signed-in people. That is normal
+> for web maps: restrict the key at the provider to this site's address. Sign-in addresses, Trusted Zones and risk data
+> are never sent to the provider.
+
+### When the map is unavailable {#unavailable}
+
+If the provider refuses the tiles, the card shows **Map unavailable** with the reason, instead of a grid of broken
+pictures. It does not retry the tiles in a loop. Sign-in records, Trusted Zones, GeoIP locations and risk levels keep
+working, and the list below the map shows every sign-in. Administrators get a link to the provider settings.
+
+![Map unavailable state with the reason and a link to the provider settings](../images/screenshots/security-map-unavailable.png)
+
+### Map troubleshooting {#map-troubleshooting}
+
+| Test result | Meaning | Fix |
+| --- | --- | --- |
+| **HTTP 401** | The provider refused the API key. | Check or replace the key; make sure it is active. |
+| **HTTP 403** | The provider blocked the tiles. For OpenStreetMap, its usage policy was not met (for example, a proxy strips the `Referer` header, or traffic is too high). For keyed providers, the key does not allow this site's address. | Use your own MapTiler/Stadia key, add this site's address to the key's allowed domains, or check the reverse proxy. |
+| **HTTP 429** | Too many requests. | Wait, or use a provider with a higher quota. |
+| *Could not be reached* | Network, DNS, TLS, or a Content-Security-Policy set by your reverse proxy blocks the tile server. | Allow the provider's address for images and connections in the proxy's CSP. |
+| *No status* | The custom server does not send CORS headers, so the test cannot read its answer. | Open the map: if tiles show, it works. |
+
+> [!IMPORTANT]
+> **Why maps showed "Access blocked" before this release:** for privacy, the app sent no `Referer` at all with any
+> request. OpenStreetMap's tile servers refuse anonymous tile requests. Tile requests now carry only this site's origin,
+> for example `https://docs.example.com/`, never a page path. Nothing tries to get around a provider's policy: no fake
+> browser identity, no proxying of tiles and no endless retries.
 
 Turn **Sign-in map** off to show only the list.
 

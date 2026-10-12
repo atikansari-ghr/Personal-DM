@@ -724,18 +724,6 @@ Used to build the link shown to users.
 - **Learn more:** [telegram#setup](guides/telegram.md#setup)
 - **Example:** MyFamilyDocsBot
 
-### WhatsApp (`whatsapp.status`)
-
-Personal WhatsApp notifications are a later-phase feature.
-
-- **Default:** `'planned'`
-- **Allowed values:** planned
-- **Scope:** global · **Editable by:** main administrator
-- **Depends on:** nothing
-- **Effect of changing:** Not available in this release.
-- **Restart needed:** no
-- **Learn more:** [settings#future](guides/settings.md#future)
-
 ## Section: authentication
 
 ### Session length (days) (`auth.session_days`)
@@ -1136,9 +1124,33 @@ Show sign-ins on a map (Trusted Zone pins and approximate GeoIP positions). Uses
 - **Restart needed:** no
 - **Learn more:** [security-map#map](guides/security-map.md#map)
 
-### Map tile server (`security.map_tile_url`)
+### Map provider (`security.map_provider`)
 
-Address template of a privacy-conscious tile server (https, with {z}/{x}/{y}). The browser requests ordinary picture tiles from it.
+Where the sign-in map's picture tiles come from. OpenStreetMap is for small, low-volume use under its tile usage policy; MapTiler and Stadia Maps need your own API key; Custom uses the tile server below.
+
+- **Default:** `'osm'`
+- **Allowed values:** osm, maptiler, stadia, custom
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** security.map_enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-map#provider](guides/security-map.md#provider)
+
+### Map provider API key (`security.map_api_key`)
+
+Key for MapTiler or Stadia Maps. Stored encrypted; restrict it to this site's address at the provider (the browser loads the tiles, so a map key is visible to signed-in people).
+
+- **Default:** (secret, not shown)
+- **Allowed values:** secret
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** security.map_enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [security-map#provider](guides/security-map.md#provider)
+
+### Custom tile server (`security.map_tile_url`)
+
+Used when the map provider is Custom: address template of a tile server you may use (https, with {z}/{x}/{y}). The browser requests ordinary picture tiles from it.
 
 - **Default:** `'https://tile.openstreetmap.org/{z}/{x}/{y}.png'`
 - **Allowed values:** –300
@@ -1149,9 +1161,9 @@ Address template of a privacy-conscious tile server (https, with {z}/{x}/{y}). T
 - **Learn more:** [security-map#tiles](guides/security-map.md#tiles)
 - **Example:** https://tile.openstreetmap.org/{z}/{x}/{y}.png
 
-### Map attribution (`security.map_attribution`)
+### Custom map attribution (`security.map_attribution`)
 
-Credit line required by the tile provider.
+Credit line required by your custom tile server (the presets show their own).
 
 - **Default:** `'© OpenStreetMap contributors'`
 - **Allowed values:** –200

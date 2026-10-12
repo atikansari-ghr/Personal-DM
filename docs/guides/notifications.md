@@ -71,6 +71,22 @@ label; email and Telegram use the emoji.
 Signal is not supported. New channels are never switched on automatically: existing people keep exactly the channels
 they had until they choose otherwise.
 
+### Provider cards (main administrator) {#providers}
+
+**Settings → Connections** starts with a card per provider. Each card shows its real state, never a placeholder:
+
+| Status | Meaning |
+| --- | --- |
+| **Connected** | Working: always for In-App; for WhatsApp, the bridge is running and compatible |
+| **Configured** | Set up (for example SMTP or a Telegram bot); people can choose it |
+| **Disabled by Admin** | Turned off in Settings → Connections; saved webhooks or links are kept |
+| **Available – not configured** | The feature exists but still needs its settings |
+| **Degraded** | Turned on, but not working right now (for example the WhatsApp bridge stopped). Other channels are not affected |
+| **Not installed** | The optional WhatsApp bridge is not installed on the server |
+
+Personal channels (Discord, WhatsApp) also show how many people connected them, as counts only. **Configure** jumps to
+the provider's settings below the cards, and **Learn more** opens its guide.
+
 **Email.** Each email has two parts. The HTML part has a header with the application name, the severity and
 category as text badges, the headline, a short summary, a table of details with icons, buttons for the actions,
 guidance ("What to do") and a footer. It uses a simple table layout with inline styles, no JavaScript, no images and
@@ -368,6 +384,10 @@ To change a category:
 2. **Fallback chain:** add channels in order (for example WhatsApp Personal → Telegram → Email). See
    [Fallback chains](#fallback).
 3. **Delivery:** *Immediately*, *Daily digest* or *Weekly digest*. See [Digests](#digests).
+
+If a channel you chose cannot deliver right now, the row says why under the channels, for example
+*WhatsApp Personal: WhatsApp is not linked* or *Discord: Discord webhook not added*. Your fallback chain is used
+meanwhile, so nothing is lost.
 
 ![Routing by category with channels, a fallback chain and digests](../images/screenshots/notifications-routing.png)
 

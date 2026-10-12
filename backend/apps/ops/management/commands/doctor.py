@@ -246,10 +246,16 @@ class Command(BaseCommand):
                "not installed; locations show as approximate country only when available (Settings → Security → Access)")
         from apps.core.registry import BY_KEY
 
-        if "security.map_tile_url" in BY_KEY:
-            url = config.get("security.map_tile_url") or ""
-            ok_map = not config.get("security.map_enabled") or (url.startswith("https://") and "{z}" in url and "{x}" in url and "{y}" in url)
-            report("login map tile source", ok_map, url.split("/{")[0] if url else "map off")
+        if "security.map_provider" in BY_KEY:
+            from apps.security import mapprov
+
+            r, h = mapprov.resolved(), mapprov.health()
+            url = r["url"]
+            ok_map = not config.get("security.map_enabled") or (url.startswith("https://") and all(x in url for x in ("{z}", "{x}", "{y}")))
+            where = url.split("/{")[0].split("?")[0] if url else ("map off" if not config.get("security.map_enabled") else "no tile address or key")
+            report("login map provider", ok_map, f"{mapprov.PRESETS[r['provider']]['label']}: {where}")
+            if config.get("security.map_enabled") and h.get("state") == "failed":
+                warn("login map last test failed", h.get("detail", ""))
 
     def _operations_checks(self, report, warn, info):
         """Change Set M: antivirus, signatures, host helper, exposure, storage thresholds, pending reboot."""

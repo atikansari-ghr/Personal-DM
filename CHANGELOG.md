@@ -4,6 +4,39 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Fixed (2026-10-12) — Folder tree, sign-in map tiles, sign-in designs, WhatsApp and Discord settings (Change Set U)
+- **Folder tree alignment.** Every row now uses the same four columns (expander, icon, name, extras) built from shared
+  tree tokens. Rows line up at every depth, in every theme and at desktop, tablet and phone sizes. Long names wrap
+  without moving the expander or icon. Root cause: a Change Set T rule for the Recovery Explorer
+  (`.tree button { width: 100% }`) also stretched the folder tree's expander buttons.
+- **Sign-in map "Access blocked" (HTTP 403) tiles.**
+  - Root cause: the site sent every request with `Referrer-Policy: same-origin`. Tile requests to
+    tile.openstreetmap.org therefore had no `Referer` header, which the OpenStreetMap tile usage policy blocks.
+  - Tiles now send only this site's origin (`strict-origin-when-cross-origin`). This is truthful: the header is not
+    spoofed, requests are not proxied, and the map is not scraped.
+  - New **Map provider** setting: OpenStreetMap (low volume), MapTiler or Stadia Maps with your own key, or a custom
+    or self-hosted server. Settings → Security also has a **Test Map Provider** button that shows the last result.
+  - A failing provider now shows **Map unavailable** with the reason, instead of a grid of blocked tiles. Tiles are
+    not retried in a loop.
+  - Sign-in records, Trusted Zones, GeoIP and risk never depended on the map, and still do not.
+- **Sign-in design thumbnails** were nearly black under the Dark and Glass themes.
+  - Root cause: the wallpaper layer painted behind the thumbnail's background, and the drawings used the
+    administrator's own theme colours.
+  - The sign-in page, its thumbnails and previews now always use the sign-in theme.
+  - Clicking a design now previews it, and **Save design** publishes it. There is a **Live sign-in preview** (Desktop
+    or Phone) and a large **Preview Sign-in Page**.
+- **WhatsApp Personal was shown as "Planned"** even with the bridge installed and running.
+  - Root cause: a hard-coded card in Settings → Connections. The Discord and WhatsApp switches were never rendered, so
+    WhatsApp could not be turned on.
+  - Connections now starts with **provider cards** for In-App, Email, Telegram, Push, Discord and WhatsApp. The
+    **WhatsApp Personal** section shows the bridge service: installed, systemd state, reachability, version,
+    protocol, compatibility, update and last check. Discord has its own switch.
+  - People see **Disabled by Admin** or **Service unavailable** in My account → Notifications. The QR code refreshes
+    by itself. Each channel shows its last notification. Routing explains why a chosen channel cannot deliver.
+- **Upgrade impact.** There are no database migrations. A custom tile address set earlier is kept and keeps being
+  used. Discord and WhatsApp stay off until the administrator turns them on.
+- If your reverse proxy sets its own Content-Security-Policy, add the tile origin to both `img-src` and `connect-src`.
+
 ### Added (2026-10-11) — Encrypted recovery, notification routing, sign-in map, rich guides (Change Set T)
 - **Encrypted full-system recovery points** (Settings → **Backup & Recovery**, main administrator).
   - Contents: database, every document version and original, OCR text and derived files, profile photos, branding, settings and the protected secrets.

@@ -283,9 +283,11 @@ def my_discord(request):
         DiscordWebhook.objects.filter(user=user).delete()
         audit.record("account.discord_webhook", request=request, change="removed")
     hook = DiscordWebhook.objects.filter(user=user).first()
+    from .whatsapp import last_delivery
+
     return Response({"available": bool(config.get("discord.enabled")),
                      "webhook": {"hint": hook.hint, "enabled": hook.enabled, "status": hook.status, "error": hook.last_error,
-                                 "last_tested_at": hook.last_tested_at} if hook else None})
+                                 "last_tested_at": hook.last_tested_at, "last_delivery_at": last_delivery(user, "discord")} if hook else None})
 
 
 @api_view(["POST"])
@@ -336,7 +338,11 @@ def my_whatsapp(request):
             whatsapp.unlink(user)
             audit.record("account.whatsapp", request=request, change="unlinked")
             return Response({"linked": False, "state": "not_linked"})
-        return Response({"available": bool(config.get("whatsapp.enabled")), **whatsapp.status(user),
+        enabled = bool(config.get("whatsapp.enabled"))
+        svc = whatsapp.bridge_status() if enabled else {"state": "disabled", "label": "Turned off by the administrator"}
+        mine = whatsapp.status(user) if enabled or whatsapp._link(user) else {"linked": False, "state": "not_linked", "label": "Not linked"}
+        return Response({"available": enabled, **mine, "last_delivery_at": whatsapp.last_delivery(user, "whatsapp"),
+                         "service": {"state": svc.get("state"), "label": svc.get("label")},
                          "experimental": True, "notice": "Experimental, unofficial and self-hosted. Not WhatsApp Business Platform; "
                                                         "not supported or endorsed by WhatsApp or Meta."})
     except whatsapp.WhatsAppError as exc:
@@ -365,6 +371,50 @@ def my_deliveries(request):
             chosen = set(catalog.channels_for(user, key))
             not_selected[key] = [c for c in catalog.CHANNELS if c not in chosen]
     return Response({"deliveries": rows, "not_selected": not_selected, "labels": routing.STATUS_LABELS})
+
+
+@api_view(["GET"])
+@permission_classes([IsMainAdmin])
+def admin_connections(request):
+    """Provider cards for Settings -> Connections: status of each notification channel, counts only (no addresses,
+    webhooks, tokens or session material)."""
+    from . import catalog, whatsapp
+    from .models import DiscordWebhook, WhatsAppLink
+
+    def card(key, name, purpose, scope, status, label, **extra):
+        return {"key": key, "name": name, "purpose": purpose, "scope": scope, "status": status, "label": label, **extra}
+
+    email_on = catalog.channel_configured("email")
+    email_set = bool(config.get("smtp.host"))
+    tg_on = catalog.channel_configured("telegram")
+    tg_set = config.is_set("telegram.bot_token")
+    hooks = DiscordWebhook.objects.all()
+    links = WhatsAppLink.objects.all()
+    svc = whatsapp.service_status()
+    wa_state = {"not_installed": "not_installed", "stopped": "degraded", "unavailable": "degraded", "incompatible": "degraded",
+                "degraded": "degraded", "healthy": "connected", "ready_disabled": "disabled"}[svc["state"]]
+    if not svc["enabled"] and svc["state"] not in ("not_installed",):
+        wa_state = "disabled"
+    cards = [
+        card("in_app", "In-App", "Notification Center inside Personal DM", "system", "connected", "Always on"),
+        card("email", "Email (SMTP)", "Messages to each person's email address", "system",
+             "configured" if email_on else ("disabled" if email_set else "available_not_configured"),
+             "Configured" if email_on else ("Turned off" if email_set else "Not configured")),
+        card("telegram", "Telegram", "Messages from your Telegram bot to linked people", "system",
+             "configured" if tg_on else ("disabled" if tg_set else "available_not_configured"),
+             "Configured" if tg_on else ("Turned off" if tg_set else "Not configured")),
+        card("push", "PWA Push", "Notifications on phones and computers where people turned push on", "system",
+             "configured" if catalog.channel_configured("push") else "disabled",
+             "Configured" if catalog.channel_configured("push") else "Turned off"),
+        card("discord", "Discord", "Each person's own official Discord webhook", "personal",
+             "configured" if config.get("discord.enabled") else "disabled", "Enabled" if config.get("discord.enabled") else "Disabled by Admin",
+             people=hooks.count(), connected=hooks.filter(status="connected").count(), failing=hooks.exclude(status__in=("connected", "untested")).count()),
+        card("whatsapp", "WhatsApp Personal", "Each person's own WhatsApp, linked as a device (Experimental · Unofficial · Self-hosted)",
+             "personal", wa_state, svc["label"] if svc["enabled"] or svc["state"] == "not_installed" else f"Disabled by Admin · {svc['label']}",
+             experimental=True, people=links.count(), connected=links.filter(state="connected").count(),
+             reconnect=links.filter(state__in=("reconnect_required", "disconnected", "degraded")).count(), service=svc),
+    ]
+    return Response({"providers": cards})
 
 
 @api_view(["GET"])

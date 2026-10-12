@@ -240,9 +240,47 @@ await step("AT-333 Backup & Recovery, Recovery Explorer, notifications and sign-
   await dismiss();
 });
 
+await step("AT-354 Change Set U documentation screenshots (folder tree, map provider, Map unavailable, WhatsApp bridge, sign-in design)", async () => {
+  // state from corrective.mjs: nested synthetic folders, the fake WhatsApp bridge running and WhatsApp turned on
+  const P = D.page;
+  const deep = (await api(P, "/api/folders")).data.folders.find((f) => f.name.startsWith("A very long synthetic folder name"));
+  expect(deep, "run corrective.mjs first (nested folders)");
+  await P.goto(`${BASE}/folders/${deep.id}`);
+  await P.waitForSelector(".tree-node.active .tree-label:has-text('A very long')");
+  await capture(P, "folders-tree.png", "Folder tree: expander, icon and name columns line up at every level; long names wrap");
+  // tile requests are answered locally for these two captures, so the result does not depend on a real provider
+  const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  const ok = await session({ width: 1440, height: 900 });
+  await ok.ctx.route("https://tile.openstreetmap.org/**", (r) => r.fulfill({ status: 200, contentType: "image/png", body: PNG, headers: { "Access-Control-Allow-Origin": "*" } }));
+  await ok.page.goto(BASE + "/settings/security?view=access");
+  await ok.page.locator("#map-provider").scrollIntoViewIfNeeded();
+  await ok.page.click("#map-provider button:has-text('Test Map Provider')");
+  await ok.page.waitForSelector("#map-provider .badge:has-text('Working')");
+  await ok.page.locator("#map-provider").scrollIntoViewIfNeeded();
+  await capture(ok.page, "security-map-provider.png", "Sign-in map provider: preset, key, Test Map Provider and the last result");
+  await ok.ctx.close();
+  const blocked = await session({ width: 1440, height: 900 });
+  await blocked.ctx.route("https://tile.openstreetmap.org/**", (r) => r.fulfill({ status: 403, contentType: "text/plain", body: "blocked", headers: { "Access-Control-Allow-Origin": "*" } }));
+  await blocked.page.goto(BASE + "/settings/account?tab=signins");
+  await blocked.page.waitForSelector(".map-unavailable");
+  await capture(blocked.page, "security-map-unavailable.png", "Map unavailable (HTTP 403): the reason, the fix, and the sign-in list still works");
+  await blocked.ctx.close();
+  await P.goto(BASE + "/settings/connections");
+  await P.waitForSelector("#conn-whatsapp [data-bridge-state]");
+  await P.locator("#conn-whatsapp").scrollIntoViewIfNeeded();
+  await capture(P, "connections-whatsapp.png", "WhatsApp Personal: bridge service installed, running, version, protocol and compatibility");
+  await P.goto(BASE + "/settings/overview");
+  await P.waitForSelector(".design-grid");
+  await P.click(".design-option:has-text('Nature')");
+  await P.waitForSelector("[role=status]:has-text('Previewing Nature')");
+  await P.locator(".design-grid").scrollIntoViewIfNeeded();
+  await capture(P, "settings-login-design.png", "Sign-in designs: a design selected, the live preview and Save design");
+  await P.click("[role=status] button:has-text('Discard')");
+});
+
 await step("AT-334 guide screenshots load in Help (after capture)", async () => {
   const P = D.page;
-  for (const slug of ["backup-restore", "notifications", "security-map", "discord"]) {
+  for (const slug of ["backup-restore", "notifications", "security-map", "discord", "whatsapp-personal", "login-designs", "getting-started"]) {
     await P.goto(BASE + "/help/" + slug);
     await P.waitForSelector(".breadcrumbs");
     expect(await P.locator("img.doc-shot").count() > 0, `${slug}: screenshots next to the steps`);

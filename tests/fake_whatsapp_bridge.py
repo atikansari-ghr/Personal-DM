@@ -16,6 +16,8 @@ class FakeBridge:
         self.sent: list[tuple[str, str]] = []  # (session, text) - always to the session's own account
         self.fail_sends = False
         self.version = "1.0.0"
+        self.protocol = 1
+        self.down = False  # test-only: /health fails as if the service had stopped
         bridge = self
 
         class H(BaseHTTPRequestHandler):
@@ -41,7 +43,9 @@ class FakeBridge:
                 if not self._auth():
                     return self._json(401, {"error": "unauthorised"})
                 if self.path == "/health":
-                    return self._json(200, {"ok": True, "version": bridge.version, "protocol": 1, "library": "fake", "sessions": {}})
+                    if bridge.down:
+                        return self._json(503, {"error": "bridge stopped (test)"})
+                    return self._json(200, {"ok": True, "version": bridge.version, "protocol": bridge.protocol, "library": "fake", "sessions": {}})
                 sid = self.path.split("/")[2]
                 s = bridge.sessions.get(sid)
                 if not s:
@@ -54,6 +58,13 @@ class FakeBridge:
                     return self._json(401, {"error": "unauthorised"})
                 parts = [p for p in self.path.split("/") if p]
                 b = self._body()
+                if len(parts) == 3 and parts[:2] == ["_test", "connect"]:  # test-only: what scanning the QR would do
+                    for sid in ([k for k, v in bridge.sessions.items() if v["state"] == "pending"] if parts[2] == "pending" else [parts[2]]):
+                        bridge.connect(sid)
+                    return self._json(200, {"state": "connected"})
+                if parts == ["_test", "health"]:  # test-only: simulate a stopped / restarted service
+                    bridge.down = not b.get("up", True)
+                    return self._json(200, {"down": bridge.down})
                 if parts == ["sessions"]:
                     bridge.sessions[b["session"]] = {"state": "pending"}
                     return self._json(200, {"state": "pending"})
@@ -92,3 +103,14 @@ class FakeBridge:
 
     def __exit__(self, *exc):
         self.server.shutdown()
+
+
+if __name__ == "__main__":  # standalone for the browser tests: python tests/fake_whatsapp_bridge.py TOKEN PORTFILE
+    import signal
+    import sys
+
+    fb = FakeBridge(sys.argv[1])
+    with open(sys.argv[2], "w") as fh:
+        fh.write(str(fb.port))
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    fb.server.serve_forever()

@@ -164,14 +164,13 @@ def signin_map(request):
         people = [{"id": str(u.pk), "name": u.display_name} for u in pq.order_by("display_name")]
     return Response({"events": events, "people": people, "zones": [zone_json(z) for z in TrustedZone.objects.all()] if user.is_main_admin else
                      [{"name": z.name, "pin": zone_json(z)["pin"], "classification_label": zone_json(z)["classification_label"]} for z in TrustedZone.objects.exclude(pin_lat=None)],
-                     "map": map_config(), "retention_days": int(config.get("security.login_audit_retention_days") or 365)})
+                     "map": map_config(user), "retention_days": int(config.get("security.login_audit_retention_days") or 365)})
 
 
-def map_config() -> dict:
-    return {"enabled": bool(config.get("security.map_enabled")), "tile_url": config.get("security.map_tile_url"),
-            "attribution": config.get("security.map_attribution"),
-            "privacy": "The map loads ordinary picture tiles from the tile server shown here. Your sign-in addresses are never "
-                       "sent to it or to any geolocation service; positions come from Trusted Zone pins and this server's GeoIP database."}
+def map_config(user=None) -> dict:
+    from . import mapprov
+
+    return mapprov.public_config(user)
 
 
 def device_json(d: RecognizedDevice) -> dict:
@@ -226,3 +225,16 @@ def device_unrecognize(request, pk):
                                     {"key": "passkeys", "label": "Review passkeys", "path": "/settings/account?tab=security#passkeys"},
                                     {"key": "linked", "label": "Review linked sign-in methods", "path": "/settings/account?tab=linked"},
                                     {"key": "activity", "label": "Review recent sign-ins", "path": "/settings/account?tab=signins"}]})
+
+
+@api_view(["POST"])
+@permission_classes([IsActiveAuthenticated])
+def map_test(request):
+    """Record the result of the browser's one-tile test of the configured map provider (main administrator only).
+    The browser fetches the tile itself, so the provider sees exactly what the map sends; no secret is returned."""
+    from . import mapprov
+
+    if not request.user.is_main_admin:
+        return Response({"error": "Only the main administrator can test the map provider."}, status=403)
+    data = mapprov.record_test(request.data.get("status"), str(request.data.get("error") or ""), actor=request.user)
+    return Response({"health": data, "map": mapprov.public_config(request.user)})

@@ -56,6 +56,49 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
+## Change set U: corrective fixes for the folder tree, sign-in map, sign-in designs, WhatsApp and Discord {#change-set-u}
+
+**Numbering.** The change prompt numbered its tests AT-311…AT-330. Here they are **AT-336…AT-355** (prompt AT-n →
+AT-(n+25)). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md). Root causes:
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-u).
+
+**Environment.** The same development container (Ubuntu 24.04, PostgreSQL 16, Python 3.13, Node 22, Chromium via
+Playwright), 2026-10-12. There was no WhatsApp phone, no Discord server and no production address for real map
+tiles. WhatsApp used `tests/fake_whatsapp_bridge.py` (same HTTP API, obviously fake QR), started by `scripts/e2e.sh`.
+Map tiles in the corrective suite were answered by `page.route` (no request reached a real provider).
+
+| Command | Result |
+|---|---|
+| `pytest tests/test_corrective_u.py` | RESULT_CU |
+| Full `pytest` | RESULT_PYTEST |
+| `scripts/e2e.sh` (fresh database) | RESULT_E2E |
+| `python3 scripts/check_docs.py` | RESULT_DOCS |
+| `scripts/privacy_check.sh` | RESULT_PRIVACY |
+| `npm run build` (TypeScript check and production build) | Passed |
+
+**The checks detect the original defects.**
+
+- **Sign-in thumbnails:** with the old CSS restored in the browser (no stacking isolation, wallpaper at
+  `z-index: -2`, admin theme colours), the mean brightness of a thumbnail measured **36** in Dark and **53** in Glass
+  Dark. The test requires more than 150. With the fix: **231** and **233**.
+- **Map:** the test checks that every tile request carries exactly this site's origin as `Referer`. The old
+  `same-origin` policy sent none, which is what OpenStreetMap blocks.
+- **WhatsApp "Planned":** the tests fail if the text *Planned* appears anywhere in Settings → Connections or in the
+  provider API.
+
+**Defects found while writing these tests, all fixed:**
+
+- After the administrator turned WhatsApp off, a person who was still linked saw no **Disabled by Admin** badge. The
+  badge is now shown on the full card too.
+- The *Map unavailable* link for administrators pointed to `/settings/security#map-provider`. The map provider card is
+  on the **Access policy** view, so the link is now `/settings/security?view=access#map-provider`, and the guides
+  name that path.
+- A leftover `whatsapp.status` setting ("Personal WhatsApp notifications are a later-phase feature", value
+  `planned`) was removed from the registry and the settings reference. Nothing read it.
+
+**Not run** (never reported as passed): a real phone scanning a real WhatsApp QR code; a real Discord server; real
+OpenStreetMap, MapTiler or Stadia Maps tiles from a production address; Firefox and Safari.
+
 ## Change set T: encrypted backup and recovery, notification routing, sign-in security, rich guides {#change-set-t}
 
 **Numbering.** The change prompt numbered its tests AT-251…AT-310. Here they are **AT-276…AT-335** (prompt AT-n →

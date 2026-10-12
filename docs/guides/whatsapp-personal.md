@@ -1,4 +1,4 @@
-<!-- reviewed: 2026-10-11 -->
+<!-- reviewed: 2026-10-12 -->
 # WhatsApp Personal (experimental)
 
 > [!WARNING]
@@ -27,11 +27,35 @@
 
    This installs Node.js from Debian if needed, and the **tested, pinned** bridge version. It then runs a self-test and
    starts the service `personaldocs-whatsapp` (listening on `127.0.0.1:8095` only).
-2. Open **Settings → Connections**, turn on **WhatsApp Personal (experimental, unofficial)** and click **Save**.
-3. Check **Settings → Notifications → Notification delivery health**. The bridge should show
-   *Running (tested version)*.
+2. Open **Settings → Connections** and scroll to **WhatsApp Personal**. The **Bridge service** panel shows what the
+   server really reports:
 
-It is off by default and is never turned on automatically, also not on upgrade.
+   | Row | Expected value |
+   | --- | --- |
+   | Installed | Yes |
+   | systemd service | active |
+   | Reachable from Personal DM | Yes (127.0.0.1) |
+   | Bridge version / Protocol | 1.0.0 / 1 (expected 1) |
+   | Compatibility | Compatible (tested version) |
+
+   Before you turn it on, the badge reads **Installed and running - turned off**.
+3. Turn on **WhatsApp Personal (experimental, unofficial)** and click **Save settings**. The badge changes to
+   **Running**. No restart is needed: everyone can link their phone at once.
+
+![WhatsApp Personal in Settings → Connections with the bridge service panel](../images/screenshots/connections-whatsapp.png)
+
+It is off by default and is never turned on automatically, also not on upgrade. At the top of **Settings → Connections**,
+the **Notification providers** cards show every channel with its scope, status and a **Configure** link.
+
+| Bridge badge | Meaning | Fix |
+| --- | --- | --- |
+| **Not installed** | The bridge files are missing. | `sudo personaldocs whatsapp-bridge install` |
+| **Service stopped** / **Service unavailable** | systemd reports the service inactive, or it does not answer on 127.0.0.1. | `sudo systemctl start personaldocs-whatsapp`; `journalctl -u personaldocs-whatsapp -n 50` |
+| **Incompatible bridge version** | The bridge speaks another protocol. | `sudo personaldocs whatsapp-bridge update` or `rollback` |
+| **Degraded (untested version)** | Compatible protocol, but not a tested version. | `sudo personaldocs whatsapp-bridge update` |
+
+While the bridge is unavailable, people see **Service unavailable** on their card and their fallback channels are used.
+Other channels are never affected.
 
 ### The bridge {#bridge}
 
@@ -47,8 +71,9 @@ It is off by default and is never turned on automatically, also not on upgrade.
 
 1. Open **My account → Notifications → WhatsApp Personal** and click **Link WhatsApp**.
 2. On your phone, open **WhatsApp → Settings → Linked devices → Link a device**.
-3. Scan the QR code shown in Personal DM within about a minute, then click **I scanned it**.
-4. The status changes to **Connected** and shows the last digits of your number.
+3. Scan the QR code shown in Personal DM. The code refreshes by itself about every minute; **New QR code** makes a fresh
+   one at once.
+4. A few seconds after the scan, the status changes to **Connected** and shows the last digits of your number.
 5. Click **Send test**. A test message arrives in your "Message yourself" chat.
 6. Choose **WhatsApp Personal** per category in [Routing by category](notifications.md#routing), ideally as the first
    item of a fallback chain.
@@ -65,10 +90,12 @@ It is off by default and is never turned on automatically, also not on upgrade.
 | **Connected** | Notifications are delivered. |
 | **Waiting for QR scan** | Scan the code, or click **Link WhatsApp** again for a new one. |
 | **Disconnected** | Temporary; the bridge retries a few times. Then click **Link again (new QR)**. |
-| **Degraded** | The bridge is not running or is not compatible. Ask the administrator (see [Updates](#updates)). |
+| **Degraded** | The bridge is not running or is not compatible. Click **Reconnect**, or ask the administrator (see [Updates](#updates)). |
+| **Disabled by Admin** | WhatsApp Personal is turned off for the installation. The administrator turns it on in Settings → Connections. |
+| **Service unavailable** | The administrator turned it on, but the bridge does not answer. Your fallback chain is used meanwhile. |
 | **Reconnect Required** | WhatsApp ended the linked-device session, or a Compromise recovery reset it. Link again with a new QR code. |
 
-**Unlink** logs the linked device out and deletes the session.
+**Reconnect** asks the bridge to restore the connection without a new QR code. **Unlink** logs the linked device out and deletes the session. The card also shows when your last WhatsApp notification was delivered.
 
 ## Updates and rollback {#updates}
 

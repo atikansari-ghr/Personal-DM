@@ -248,6 +248,7 @@ api = [
     path("notifications/channel-test", notify.my_channel_test),
     path("notifications/my-deliveries", notify.my_deliveries),
     path("notifications/health", notify.delivery_health),
+    path("admin/connections", notify.admin_connections),
     path("notifications/preview", notify.template_preview),
     path("notifications/run", notify.run_reminders_now),
     # settings, admin, ops
@@ -291,6 +292,7 @@ api = [
     path("security/zones/<int:pk>", signin.zone_detail),
     path("security/zones/test", signin.zone_test),
     path("security/map", signin.signin_map),
+    path("security/map/test", signin.map_test),
     path("security/devices", signin.devices),
     path("security/devices/<uuid:pk>/unrecognize", signin.device_unrecognize),
     path("admin/security/policy", sec.access_policy),
