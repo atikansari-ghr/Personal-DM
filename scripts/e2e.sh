@@ -29,7 +29,7 @@ WORKER=$!
 # WhatsApp Personal: the fake bridge from the tests (same HTTP API, no WhatsApp traffic, obviously fake QR)
 WA_TOKEN=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
 ( umask 077; mkdir -p "$PD_CONFIG_DIR"; printf '%s' "$WA_TOKEN" >"$PD_CONFIG_DIR/whatsapp-bridge.token" )
-$PY tests/fake_whatsapp_bridge.py "$WA_TOKEN" "$LOGDIR/wa.port" >"$LOGDIR/wa.log" 2>&1 &
+$PY tests/fake_whatsapp_bridge.py "$WA_TOKEN" "$LOGDIR/wa.port" 8095 >"$LOGDIR/wa.log" 2>&1 &
 FAKE_WA=$!
 for _ in $(seq 1 20); do [ -s "$LOGDIR/wa.port" ] && break; sleep 0.5; done
 WA_BRIDGE="http://127.0.0.1:$(cat "$LOGDIR/wa.port")"

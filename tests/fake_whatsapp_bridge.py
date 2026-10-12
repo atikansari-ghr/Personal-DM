@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 class FakeBridge:
-    def __init__(self, token: str):
+    def __init__(self, token: str, port: int = 0):
         self.token = token
         self.sessions: dict[str, dict] = {}
         self.sent: list[tuple[str, str]] = []  # (session, text) - always to the session's own account
@@ -90,7 +90,10 @@ class FakeBridge:
                 bridge.sessions.pop(self.path.split("/")[2], None)
                 return self._json(200, {"state": "not_linked"})
 
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        try:
+            self.server = ThreadingHTTPServer(("127.0.0.1", port), H)
+        except OSError:  # the requested port is taken: any free one
+            self.server = ThreadingHTTPServer(("127.0.0.1", 0), H)
         self.port = self.server.server_address[1]
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
@@ -105,11 +108,11 @@ class FakeBridge:
         self.server.shutdown()
 
 
-if __name__ == "__main__":  # standalone for the browser tests: python tests/fake_whatsapp_bridge.py TOKEN PORTFILE
+if __name__ == "__main__":  # standalone for the browser tests: python tests/fake_whatsapp_bridge.py TOKEN PORTFILE [PORT]
     import signal
     import sys
 
-    fb = FakeBridge(sys.argv[1])
+    fb = FakeBridge(sys.argv[1], int(sys.argv[3]) if len(sys.argv) > 3 else 0)
     with open(sys.argv[2], "w") as fh:
         fh.write(str(fb.port))
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))

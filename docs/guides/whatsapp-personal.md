@@ -44,6 +44,9 @@
 
 ![WhatsApp Personal in Settings → Connections with the bridge service panel](../images/screenshots/connections-whatsapp.png)
 
+The screenshot comes from the test system, which has no systemd and uses the test bridge, so *Installed* and
+*systemd service* show **Unknown** there. On a server installed with `personal-DM.sh` they show **Yes** and **active**.
+
 It is off by default and is never turned on automatically, also not on upgrade. At the top of **Settings → Connections**,
 the **Notification providers** cards show every channel with its scope, status and a **Configure** link.
 

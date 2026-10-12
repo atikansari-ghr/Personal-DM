@@ -243,11 +243,18 @@ await step("AT-333 Backup & Recovery, Recovery Explorer, notifications and sign-
 await step("AT-354 Change Set U documentation screenshots (folder tree, map provider, Map unavailable, WhatsApp bridge, sign-in design)", async () => {
   // state from corrective.mjs: nested synthetic folders, the fake WhatsApp bridge running and WhatsApp turned on
   const P = D.page;
+  // card headings start below the sticky top bar; toasts from the actions have closed
+  const toTop = (page, sel) => page.locator(sel).evaluate((el) => { el.style.scrollMarginTop = "120px"; el.scrollIntoView({ block: "start" }); });
+  const noToast = (page) => page.waitForSelector(".toast", { state: "detached", timeout: 15000 }).catch(() => undefined);
   const deep = (await api(P, "/api/folders")).data.folders.find((f) => f.name.startsWith("A very long synthetic folder name"));
   expect(deep, "run corrective.mjs first (nested folders)");
+  // a tree pane widened with the divider (stored per account on this device), as the guide suggests for deep trees
+  const uid = (await api(P, "/api/session")).data.user.id;
+  await P.evaluate((k) => localStorage.setItem(k, JSON.stringify({ tree: 400 })), `pd-panels-${uid}`);
   await P.goto(`${BASE}/folders/${deep.id}`);
   await P.waitForSelector(".tree-node.active .tree-label:has-text('A very long')");
   await capture(P, "folders-tree.png", "Folder tree: expander, icon and name columns line up at every level; long names wrap");
+  await P.evaluate((k) => localStorage.removeItem(k), `pd-panels-${uid}`);
   // tile requests are answered locally for these two captures, so the result does not depend on a real provider
   const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
   const ok = await session({ width: 1440, height: 900 });
@@ -256,7 +263,8 @@ await step("AT-354 Change Set U documentation screenshots (folder tree, map prov
   await ok.page.locator("#map-provider").scrollIntoViewIfNeeded();
   await ok.page.click("#map-provider button:has-text('Test Map Provider')");
   await ok.page.waitForSelector("#map-provider .badge:has-text('Working')");
-  await ok.page.locator("#map-provider").scrollIntoViewIfNeeded();
+  await noToast(ok.page);
+  await toTop(ok.page, "#map-provider");
   await capture(ok.page, "security-map-provider.png", "Sign-in map provider: preset, key, Test Map Provider and the last result");
   await ok.ctx.close();
   const blocked = await session({ width: 1440, height: 900 });
@@ -267,7 +275,7 @@ await step("AT-354 Change Set U documentation screenshots (folder tree, map prov
   await blocked.ctx.close();
   await P.goto(BASE + "/settings/connections");
   await P.waitForSelector("#conn-whatsapp [data-bridge-state]");
-  await P.locator("#conn-whatsapp").scrollIntoViewIfNeeded();
+  await toTop(P, "#conn-whatsapp");
   await capture(P, "connections-whatsapp.png", "WhatsApp Personal: bridge service installed, running, version, protocol and compatibility");
   await P.goto(BASE + "/settings/overview");
   await P.waitForSelector(".design-grid");
