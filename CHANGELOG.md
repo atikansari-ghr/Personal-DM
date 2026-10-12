@@ -61,6 +61,11 @@ The first implementation of the full initial-release scope. See `docs/IMPLEMENTA
 
   All are additive. Backups made by earlier releases stay listed and can still be verified and restored.
 
+### Fixed (2026-10-12)
+- **`personaldocs whatsapp-bridge install` failed its self-test on the first install** with *Cannot find package '@whiskeysockets/baileys'*.
+  - Cause: the bridge token was created under `umask 077` in a `{ … }` group, which is not a subshell. The strict umask stayed in force, so `npm ci` installed the library readable only by root, while the self-test and the service run as the `personaldocs` user.
+  - Fix: the token is created in a subshell, `npm ci` runs with umask 022, and the release folder (code only, no secrets) is made readable for the service user.
+
 ### Changed (2026-10-11) — Change Set T
 - Settings → **Storage & backup** is split into **Storage & NAS** and **Backup & Recovery**. The previous backup settings are kept under *Legacy backup settings*.
 - `personaldocs upgrade` makes a verified pre-change recovery point (`backup --pre-change`) instead of a plain folder backup when a backup policy is configured.
