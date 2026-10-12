@@ -356,12 +356,14 @@ if (!WA_BRIDGE || !WA_TOKEN) {
 
   await step("AT-350 bridge stops: admin sees Service unavailable, the person sees it, Email/In-app unaffected", async () => {
     expect((await bridge("/_test/health", { up: false })).ok, "fake bridge down");
+    try {
+    // "Service stopped" where systemd reports the unit inactive (CI runners), "Service unavailable" without systemd
     await page.goto(BASE + "/settings/connections");
-    await page.waitForSelector("#conn-whatsapp [data-bridge-state=unavailable]");
+    await page.waitForSelector("#conn-whatsapp [data-bridge-state=unavailable], #conn-whatsapp [data-bridge-state=stopped]");
     expect(await page.locator(".provider-card[data-provider=in_app] [data-status=connected]").count() === 1, "in-app card affected");
     await page.goto(BASE + "/settings/account?tab=notifications");
     await page.waitForSelector("#whatsapp[data-state=service_unavailable] [role=status]:has-text('Service unavailable')");
-    await bridge("/_test/health", { up: true });
+    } finally { await bridge("/_test/health", { up: true }); } // later steps need the bridge back
     await page.reload();
     await page.waitForSelector("#whatsapp[data-state=connected]");
   });

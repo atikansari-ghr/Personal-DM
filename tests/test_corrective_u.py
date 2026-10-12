@@ -168,7 +168,7 @@ def test_at350_bridge_down_is_degraded_and_other_channels_stay_up(family, client
     assert cards["whatsapp"]["status"] == "degraded" and cards["whatsapp"]["service"]["reachable"] is False
     assert cards["email"]["status"] == "configured" and cards["in_app"]["status"] == "connected"
     st = clients["dad"].get("/api/notifications/whatsapp").json()
-    assert st["service"]["state"] == "unavailable"
+    assert st["service"]["state"] in ("unavailable", "stopped")  # "stopped" where systemd reports the unit inactive
 
 
 def test_at351_admin_view_holds_no_session_material_and_people_are_isolated(family, clients, bridge):
