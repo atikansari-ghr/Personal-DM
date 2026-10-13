@@ -537,6 +537,7 @@ await step("AT-366 sign-in map: vector map with English labels by default, no la
 await step("AT-367/AT-368 markers: hover summary, click details, clusters, list ↔ map selection, filters (Last 7 days default)", async () => {
   const s = await vectorSession();
   await s.page.goto(BASE + "/settings/activity?view=map");
+  // every server worker must allow the new provider at once (the CSP origin was cached per worker for a minute)
   await s.page.waitForSelector(".signin-map[data-map-mode=vector]", { timeout: 20000 });
   expect((await s.page.locator(".map-filters select[aria-label=Period]").inputValue()) === "7", "default period is Last 7 days");
   // the admin signed in many times from the Home zone (recovery.mjs): one cluster with a count

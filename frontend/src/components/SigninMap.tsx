@@ -72,6 +72,7 @@ export default function SigninMap({ events, zones, config, height = 360, selecte
           el.current?.setAttribute("data-labels", "en");
           setMode("vector");
         } catch (e: any) {
+          console.error("sign-in map: vector map failed", e);
           if (!cancelled) setFailed(PROBE_MESSAGES[String(e?.message)] || PROBE_MESSAGES.network);
         }
       })();

@@ -395,6 +395,12 @@ def test_at366_csp_allows_openfreemap_and_raster_fallback(family, clients):
     csp = clients["dad"].get("/api/session")["Content-Security-Policy"]
     assert "connect-src 'self' https://tiles.openfreemap.org https://tile.openstreetmap.org" in csp
     assert "script-src 'self';" in csp  # the CSP build of the map library needs no blob: workers or eval
+    # another worker process that cached the old provider follows a change made elsewhere at once
+    SecurityHeadersMiddleware._tiles.update(at=10**9, origin="https://tile.openstreetmap.org", key=("stale",))
+    assert "tiles.openfreemap.org" in clients["dad"].get("/api/session")["Content-Security-Policy"]
+    config.set_value("security.map_provider", "osm")  # changed without going through this worker's settings view
+    csp = clients["dad"].get("/api/session")["Content-Security-Policy"]
+    assert "tiles.openfreemap.org" not in csp and "connect-src 'self' https://tile.openstreetmap.org" in csp
 
 
 # ------------------------------------------------------------------ AT-367/368 map details, filters, authorization
@@ -598,7 +604,8 @@ def test_at374_obsolete_storage_and_nas_instructions_removed():
         if p.name in ("CHANGELOG.md", "TRACEABILITY.md", "IMPLEMENTATION_STATUS.md", "TEST_REPORT.md"):
             continue
         for i, line in enumerate(p.read_text().splitlines(), 1):
-            if re.search(r"Settings → Storage & NAS|Storage & backup → NAS|in \*\*Storage & NAS\*\*", line) and "no longer exists" not in line \
-                    and "Upgrading from Storage & NAS" not in line and "old **Settings → Storage & NAS**" not in line:
+            # lines that say the page is gone (removed, redirects, old/former, upgrade notes) are allowed
+            if re.search(r"Settings → Storage & NAS|Storage & backup → NAS|in \*\*Storage & NAS\*\*", line) \
+                    and not re.search(r"no longer exists|is removed|redirects|Upgrading from Storage & NAS|\b(old|former)\b", line):
                 hits.append(f"{p.relative_to(ROOT)}:{i}")
     assert not hits, hits
