@@ -482,7 +482,7 @@ All of this is in **Settings → Backup & Recovery** and is for the main adminis
     secrets.
   - Recommended: a weekly **Full** backup, an **incremental** every 4 hours, kept for 4 weeks.
   - Ordinary uploads and edits never start a backup.
-- **Destinations:** local folder or USB, NAS share (connect it in **Storage & NAS** first), S3-compatible storage,
+- **Destinations:** local folder or USB, NAS share (SMB or NFS, configured right in the destination), S3-compatible storage,
   Google Drive and OneDrive. Each copy has its own status. A full or unreachable destination fails alone and is
   retried for 24 hours.
 - **Encryption.** Every recovery point is encrypted with a key wrapped by the **Backup Recovery Key**.

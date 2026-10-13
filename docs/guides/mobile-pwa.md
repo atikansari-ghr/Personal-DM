@@ -21,15 +21,20 @@ letter (for example "A"), do a fresh install:
    shows a letter, stop and check the next point.
 4. Tap **Add**, open the app from the Home Screen and check it opens full screen (no Safari address bar).
 
-If the preview still shows a letter, iOS could not load the icon without your session. On the server, run
-`sudo personaldocs check-access`. Step 5 checks `/apple-touch-icon.png`, `/manifest.webmanifest`, `/icon-192.png`,
+If the preview still shows a letter, iOS could not load the icon without your session. Ask your administrator to check
+that the icon files are reachable without signing in.
+
+<!-- audience-section: main_admin -->
+On the server, run `sudo personaldocs check-access`. Step 5 checks `/apple-touch-icon.png`, `/manifest.webmanifest`, `/icon-192.png`,
 `/icon-maskable-512.png` and `/favicon.ico` from outside, without signing in. A reverse proxy that puts a sign-in page
 in front of everything (Pangolin with authentication, authentik forward auth) must let these files through
 unauthenticated: they contain no personal data.
+<!-- /audience-section -->
 
 Android and desktop Chrome/Edge read the icons from the manifest and update them on their own after a while; reinstall
 to see a new icon at once.
 
+<!-- audience-section: main_admin -->
 ### Icon files {#icons}
 
 All icons are generated from one master drawing, `frontend/public/icon.svg`, by `node scripts/make_icons.mjs`:
@@ -43,6 +48,7 @@ All icons are generated from one master drawing, `frontend/public/icon.svg`, by 
 
 A missing icon path answers 404, never the app page. In the past `/apple-touch-icon.png` was answered with the app's
 HTML, which iOS cannot use.
+<!-- /audience-section -->
 
 ## Upload from your phone {#upload}
 

@@ -1,5 +1,5 @@
 <!-- audience: main_admin -->
-<!-- reviewed: 2026-10-11 -->
+<!-- reviewed: 2026-10-13 -->
 # Backup & Recovery
 
 Personal DM backs up the **whole application**: database, documents and every version, OCR data, settings and the
@@ -145,7 +145,7 @@ administrator can override it, explicitly, and the override is audited.
 | Type | What to enter |
 | --- | --- |
 | **Local folder** | An absolute folder on another disk or USB drive, e.g. `/srv/backups/personaldocs`. **Test** creates the folder. If it later disappears, the destination shows *Destination Unavailable*; it is never quietly re-created on the system disk. |
-| **NAS share (NFS/SMB)** | The mounted folder, e.g. `/mnt/pdnas/personaldocs`. Mount it under Settings → Storage & NAS (see [Connecting the NAS](#nas)). The folder must contain the marker file `.personaldocs-backup-target`. |
+| **NAS share (NFS/SMB)** | Either the NAS itself (SMB or NFS: server, share, folder and, for SMB, the account), which Personal DM mounts, or an already mounted folder such as a Proxmox bind mount. See [NAS destinations](#nas). |
 | **S3-compatible storage** | The https endpoint, region, bucket and folder prefix, plus an access key and secret key that can only read and write that bucket. |
 | **Google Drive** | A folder id and your own OAuth client id, client secret and refresh token (scope `drive.file`). See [Google Drive](#gdrive). |
 | **Microsoft OneDrive** | A folder (default `Apps/PersonalDocs`) and your own OAuth client id, client secret and refresh token (`Files.ReadWrite offline_access`). See [OneDrive](#onedrive). |
@@ -153,7 +153,39 @@ administrator can override it, explicitly, and the override is audited.
 ![Add destination dialog for a local folder](../images/screenshots/backup-destination-dialog.png)
 
 Credentials are stored encrypted. The page only shows that they are stored; it never shows their values. Click
-**Test** after each change.
+**Test Connection** after each change.
+
+Every destination is a card with its health, connection, free space, last and next backup, the last error and the
+retry state, plus **Test Connection**, **Edit** and **Backup Now**.
+
+### Free space {#capacity}
+
+Each card shows the free space measured at the last check, with these levels:
+
+| Free space | Level |
+| --- | --- |
+| more than 20 % | normal |
+| 20 % or less | **Warning** (a notification once a day) |
+| 10 % or less | **Critical** (a notification once a day, and Backup Now warns before it starts) |
+
+Change the two percentages for one destination under **Edit → Space warning below / Space critical below**. Personal DM
+never deletes valid backups to make room; free space on the destination or add another one.
+
+### Backup Now and the backup queue {#backup-now}
+
+**Backup Now** on a destination card makes a Full recovery point of the whole system and stores it on that destination
+only. A confirmation shows the destination, the scope, the type, the free space and any warning before you click
+**Start backup**.
+
+- **A started backup cannot be cancelled.** It runs in the background; closing the page or signing out does not stop
+  it.
+- Backups, verifications and copies run **one at a time, in the order they were requested** (scheduled ones
+  included). A manual backup never jumps the queue; it shows its position (for example *2 job(s) ahead*).
+- Asking for the same backup twice while it is still queued or running is refused (*already queued*).
+- The **Backup queue** on the Destinations page shows each job: *queued*, *preparing*, *backing up*, *verifying*,
+  *completed* or *failed* (with the reason). It survives a restart of the service.
+
+The **Back up now** buttons on the Overview use the same queue.
 
 ### Copy states {#copy-states}
 
@@ -191,25 +223,66 @@ health is **Attention**.
 3. Enter the client id, client secret and refresh token, and optionally a folder (default `Apps/PersonalDocs`).
 4. Click **Test**.
 
-### Connecting the NAS {#nas}
+### NAS destinations {#nas}
 
-Set this up in **Settings → Storage & NAS → NAS connection**:
+The NAS is configured only here, as a backup destination. (Settings → Storage & NAS no longer exists; see
+[Upgrading from Storage & NAS](#nas-migration).)
+
+**Settings → Backup & Recovery → Destinations → Add destination → NAS share**, then choose the **Connection**:
+
+| Connection | When to use it |
+| --- | --- |
+| **SMB / Windows share** | Personal DM mounts the share itself. Needs a privileged container with `mount=nfs;cifs`. |
+| **NFS export** | The same, for an NFS export. |
+| **Already mounted** | The Proxmox host (bind mount) or you mounted the share. Enter the folder, e.g. `/mnt/nas-backup/personaldocs`. |
+
+Fields for SMB and NFS:
 
 | Field | NFS example | SMB example |
 |---|---|---|
-| NAS connection | NFS | SMB |
 | NAS server | `192.0.2.20` | `nas.example.lan` |
 | Share / export | `/volume1/backups` | `backups` |
 | Folder on the share | `personaldocs` | `personaldocs` |
 | SMB username / password / domain | — | `backup-user` / password / optional |
 | Protocol version | optional (`4.1`) | optional (`3.0`) |
 
-1. Click **Save settings**, then **Connect NAS**.
-2. A small system service mounts the share at `/mnt/pdnas`, creates the folder and checks that the app can write to it.
-3. Add `/mnt/pdnas/personaldocs` as a **NAS share** destination.
+1. Click **Save**.
+2. Click **Test Connection**. A small system service mounts the share at `/mnt/pdnas`, creates the folder and the
+   marker file, writes a test file and reads the free space.
+3. The card shows **Healthy** and the free space. **Disconnect** unmounts the share; it is mounted again automatically
+   after a reboot.
 
-**Disconnect** unmounts the share. The share is mounted again automatically after a reboot. The SMB password is stored
-encrypted and is written only to a root-only credentials file.
+The SMB password is stored encrypted and is written only to a root-only credentials file. It is never shown again:
+**Edit** says *stored — leave empty to keep*, and only a new value replaces it.
+
+#### When the NAS is unreachable {#nas-troubleshooting}
+
+**Test Connection** names the exact check that failed:
+
+| Diagnosis | What to check |
+| --- | --- |
+| **DNS: the NAS name cannot be resolved** | The NAS name does not resolve. Use the IP address or fix DNS. |
+| **Network: the NAS cannot be reached** | The NAS is off, or a firewall blocks SMB (445) or NFS (2049). |
+| **Authentication: the NAS refused the account or this container** | Wrong SMB username, password or domain; the account is locked. |
+| **Share/export not found** | The share name or export path does not exist, or the export does not allow this container. |
+| **This container may not mount network shares** | The container is unprivileged or lacks `mount=nfs;cifs`. Use **Already mounted** with a Proxmox bind mount. |
+| **NFS/SMB client tools missing** | Run `sudo personaldocs repair` (installs `cifs-utils` and `nfs-common`). |
+| **Write permission missing on the share** | Mounted, but Personal DM cannot write the folder. Fix the share permissions. |
+| **Insufficient storage** | See [Free space](#capacity). |
+| **Mount failed** | Open **Details & troubleshooting** on the card for the system message. |
+
+While the NAS is unreachable, the copy waits as **Retry Pending** for 24 hours; nothing on the NAS is deleted.
+
+#### Upgrading from Storage & NAS {#nas-migration}
+
+Upgrading moves the old **Settings → Storage & NAS** connection into a NAS destination automatically. It adopts the
+destination that already pointed at `/mnt/pdnas`, or creates **NAS backup share**. The connection type, server, share,
+folder, username, domain and protocol version move. The stored SMB password stays encrypted where it was, so it does
+not need to be typed again. Recovery points, copies, policies and the files on the share are not touched. Running
+the upgrade again does not create a second destination.
+
+If the old configuration does not validate, the destination shows **Needs Attention — Migration incomplete; existing
+backup data preserved**. Click **Edit Configuration**, correct it, then **Test Connection** and **Retry Migration**.
 
 #### Container requirements {#lxc-requirements}
 
@@ -249,8 +322,8 @@ never deleted automatically, and they can still be restored from the console:
 sudo personaldocs restore /mnt/nas-backup/personaldocs/backup-20261003-023000-personaldocs --verify-only
 ```
 
-Delete them yourself once you have verified encrypted recovery points. The old settings are under
-**Settings → Storage & NAS → Legacy folder backups**.
+Delete them yourself once you have verified encrypted recovery points. The old settings are on the Overview, under
+**Legacy folder backups → Legacy settings**.
 
 ### Identity {#identity}
 
@@ -297,8 +370,8 @@ Optional. You prepare an isolated environment yourself; Personal DM does not cre
 
 Then set it up:
 
-1. Enter the database address and the folder in **Settings → Storage & NAS** (*Recovery validation database*,
-   *Recovery validation folder*).
+1. Enter the database address and the folder in **Policies & schedule → Automated recovery validation**
+   (*Recovery validation database*, *Recovery validation folder*).
 2. Set **Automated recovery validation every (days)** in a policy.
 
 Personal DM then periodically restores the newest verified point there and checks the database, users and permissions,
@@ -482,7 +555,7 @@ It never shows destinations, credentials, other people or administrative setting
 
 ## Integrity check {#integrity}
 
-Runs nightly (without checksums) and on demand (with checksums) from Settings → Storage & NAS, or with
+Runs nightly (without checksums) and on demand (with checksums) from **Settings → Security Center → Storage**, or with
 `personaldocs integrity`. It reports missing or changed originals, broken version references and orphaned files.
 
 Repairs never delete anything:
@@ -514,4 +587,7 @@ before large changes if you want a fast full rollback.
 | **Verification Failed** | Open **Details**. *checksum mismatch* or *authentication failed* means the destination returned changed data: check the storage, then run **Verify** again or make a new Full backup. |
 | **High-risk operation blocked** | The safety backup could not be verified. Fix the backup first. Override only if you have another verified backup. |
 | **Rotation Partial** | Bring the listed destinations back and click **Retry rotation**. |
-| **"Another backup or key rotation is running"** | Wait for it to finish. Only one runs at a time to protect interactive use. |
+| **Backup queued, "N job(s) ahead"** | Backups run one at a time in request order. It starts when the earlier jobs finish; see the **Backup queue**. |
+| **"This backup is already queued"** | The same backup is waiting or running. Nothing to do. |
+| **Needs Attention — Migration incomplete** | See [Upgrading from Storage & NAS](#nas-migration). |
+| **NAS test fails** | See [When the NAS is unreachable](#nas-troubleshooting). |

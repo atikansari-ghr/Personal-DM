@@ -180,6 +180,7 @@ its sub-folders, unless they set their own) should start with. Example: *Son1 / 
   accepts it.
 - Changing a folder's suggestion never changes documents already in it.
 
+<!-- audience-section: main_admin -->
 ## Managing document types (main administrator) {#manage}
 
 **Settings → Documents & folders → Document types** lists every type with the number of documents using it.
@@ -228,6 +229,7 @@ unselected. A small report shows typed, untyped, with suggestions and previous v
 
 On the server, `sudo personaldocs manage document_types report` prints the same counts, and
 `sudo personaldocs doctor` shows them in an info line.
+<!-- /audience-section -->
 
 ## Expiry reminders and document types {#reminders}
 

@@ -167,6 +167,8 @@ function PoliciesView({ data, reload, step }: { data: Overview; reload: () => vo
           <td>{p.destinations.map((id: number) => data.destinations.find((d) => d.id === id)?.name).filter(Boolean).join(", ") || "—"}</td>
           <td>{p.next_full ? formatDateTime(p.next_full) : "—"}</td>
           <td><button className="btn small" onClick={() => setEdit(p)}>Edit</button></td></tr>)}</tbody></table></div>
+      <details className="small"><summary>Automated recovery validation (isolated database and folder)</summary>
+        <SettingsForm keys={["recovery.validation_database", "recovery.validation_dir"]} title="Recovery validation" /></details>
       {edit && <PolicyDialog policy={edit} destinations={data.destinations} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); reload(); }} step={step} />}
     </section>
   );
@@ -367,7 +369,7 @@ function DestinationDialog({ dest, kinds, onClose, onSaved, step }: { dest: any;
           {kind.secrets.map((f) => <div key={f} className="field"><label htmlFor={`dst-${f}`}>{FIELD_LABELS[f] || f}{d.secrets_set?.includes(f) && <span className="small muted"> (stored — leave empty to keep)</span>}</label>
             <input id={`dst-${f}`} type="password" autoComplete="off" value={d.secrets[f] || ""} onChange={(e) => setD({ ...d, secrets: { ...d.secrets, [f]: e.target.value } })} /></div>)}
           {(d.kind === "local" || d.kind === "nas") && <>
-            <div className="field"><label htmlFor="dst-warn">Space warning below (%)</label><input id="dst-warn" type="number" min={1} max={90} placeholder="20" value={d.config.warn_pct ?? ""} onChange={(e) => setD({ ...d, config: { ...d.config, warn_pct: e.target.value } })} /></div>
+            <div className="field"><label htmlFor="dst-warn">Space warning below (%) <HelpTip id="backup.capacity" /></label><input id="dst-warn" type="number" min={1} max={90} placeholder="20" value={d.config.warn_pct ?? ""} onChange={(e) => setD({ ...d, config: { ...d.config, warn_pct: e.target.value } })} /></div>
             <div className="field"><label htmlFor="dst-crit">Space critical below (%)</label><input id="dst-crit" type="number" min={1} max={90} placeholder="10" value={d.config.crit_pct ?? ""} onChange={(e) => setD({ ...d, config: { ...d.config, crit_pct: e.target.value } })} /></div>
           </>}
         </div>

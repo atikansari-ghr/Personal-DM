@@ -33,7 +33,12 @@ Status: *Not processed*, *Queued*, *Processing*, *Needs review*, *Confirmed*, *F
 
 *This section is about Tesseract (Legacy). PaddleOCR uses [language profiles](ocr-engines.md#profiles).*
 
-English, Arabic and Hindi (Devanagari) are offered by default; the administrator can offer more in **Settings → OCR & processing → OCR languages**. Choose the languages printed on the document. Combining several is slower. A language whose Tesseract pack is missing on the server is shown as *not installed* and cannot be chosen; `sudo personaldocs repair` installs the packs for every offered language and `sudo personaldocs doctor` reports any that are missing.
+English, Arabic and Hindi (Devanagari) are offered by default; the administrator can offer more in **Settings → OCR & processing → OCR languages**. Choose the languages printed on the document. Combining several is slower. A language whose Tesseract pack is missing on the server is shown as *not installed* and cannot be chosen.
+
+<!-- audience-section: main_admin -->
+`sudo personaldocs repair` installs the packs for every offered language and `sudo personaldocs doctor` reports any that
+are missing.
+<!-- /audience-section -->
 
 ### Review queue {#review}
 

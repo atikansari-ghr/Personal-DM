@@ -94,7 +94,7 @@ def claim(worker: str, heavy_limit: int = 1) -> Job | None:
             qs = qs.exclude(kind__in=SERIAL_KINDS)
         elif SERIAL_KINDS:
             # FIFO among serial jobs: only the oldest queued one may start (a manual Backup Now never jumps ahead)
-            first = Job.objects.filter(status=Job.QUEUED, kind__in=SERIAL_KINDS).order_by("created_at", "id").first()
+            first = Job.objects.filter(status=Job.QUEUED, kind__in=SERIAL_KINDS, run_after__lte=now).order_by("created_at", "id").first()
             if first is not None:
                 qs = qs.filter(~Q(kind__in=SERIAL_KINDS) | Q(pk=first.pk))
         job = qs.order_by("priority", "run_after").first()

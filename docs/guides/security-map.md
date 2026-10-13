@@ -1,4 +1,4 @@
-<!-- reviewed: 2026-10-12 -->
+<!-- reviewed: 2026-10-13 -->
 # Sign-in security, Trusted Zones and the sign-in map
 
 Personal DM records where each sign-in came from, which device was used, and how unusual it looks. It also lets you
@@ -56,7 +56,32 @@ map always labels it **configured Trusted Zone location**, never GeoIP.
 - **Recent sign-ins**, with time, location and network, IP address, device and risk;
 - **Recognised devices**.
 
-Choose **30 days**, **90 days** or **1 year**.
+Place names on the map are always in **English** (with the Latin spelling where no English name exists), whatever the
+browser or device language. There is no language choice to make.
+
+### Filters {#filters}
+
+The map and the list use the same filters, and change together:
+
+| Filter | Choices |
+| --- | --- |
+| Period | **Today**, **Last 7 days** (default), **Last 30 days**, **Last 90 days**, **Last year**, **Custom range…** (from / to) |
+| Person | Shown to the main administrator (everyone) and to membership delegates (their group). |
+| Trust | Trusted Zone, outside Trusted Zones, or one zone (main administrator). |
+| Risk | Normal, low, warning, high. |
+| Device | Recognised, unrecognised, new device. |
+
+Sign-in records are kept for one year (see [Retention](#retention)), so **Last year** is the longest period.
+
+### Markers, groups and details {#markers}
+
+- **Point at a marker** (or focus it with the keyboard) to see the person, the IP address and the place or Trusted Zone.
+- **Click or tap a marker** to open all details next to the map: time, person, IP address, place and how it was
+  worked out, network, Trusted Zone, device, browser and system, risk and result.
+- Sign-ins at the same place, or too close to tell apart at the current zoom, are **grouped** in a circle with a number.
+  Its colour is the highest risk in the group. Click it for the list of those sign-ins; zoom in to separate them.
+- **Click a row in the list** to select it: the map moves to it and highlights its marker.
+- A sign-in without a usable location is listed with **Location unavailable** and has no marker.
 
 ![Sign-in map with a Trusted Zone pin, GeoIP points and the recent sign-ins](../images/screenshots/security-signin-map.png)
 
@@ -76,15 +101,21 @@ address (for example `192.168.x.10`). The full public address is under **View Se
 <!-- audience-section: main_admin -->
 ### Map provider and tiles {#provider}
 
-The map is drawn with Leaflet, which is bundled with the app, using **online map tiles** from a provider you choose.
-The browser downloads ordinary picture tiles. The provider sees which map area is shown and this site's address, like
-any web map, but **never your sign-in addresses**.
+The map is drawn with Leaflet and MapLibre, which are bundled with the app, using **online map data** from a provider you
+choose. The provider sees which map area is shown and this site's address, like any web map, but **never your sign-in
+addresses**.
+
+The default, **OpenFreeMap**, delivers OpenStreetMap *vector* tiles: the browser draws the map itself and can choose
+the English name of every place. Picture-tile providers (OpenStreetMap standard, MapTiler, Stadia, custom) send
+finished images whose labels are in the local language, which is why the map showed, for example, Arabic place names
+before this release. A browser without WebGL falls back to OpenStreetMap standard tiles.
 
 **Choose the provider (main administrator):** Settings → Security → **Access policy** → **Sign-in map provider**.
 
 | Provider | When to use it | What you need |
 | --- | --- | --- |
-| **OpenStreetMap** (default) | An occasional look at a small family sign-in map. | Nothing. Follow the [OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/): low volume, attribution visible. |
+| **OpenFreeMap** (default, English labels) | Everyday use. | Nothing: free, no key, attribution visible ([OpenFreeMap terms](https://openfreemap.org/)). Your reverse proxy CSP must allow `https://tiles.openfreemap.org`. |
+| **OpenStreetMap standard** | An occasional look; labels are in the local language. | Nothing. Follow the [OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/): low volume, attribution visible. |
 | **MapTiler** | Regular use, or if OpenStreetMap blocks you. | Your own free or paid API key, restricted to this site's address. |
 | **Stadia Maps** | The same. | Your own API key, restricted to this site's address. |
 | **Custom / self-hosted** | You run a tile server, or have another provider. | An `https://…/{z}/{x}/{y}.png` address and its attribution. |
@@ -122,7 +153,8 @@ working, and the list below the map shows every sign-in. Administrators get a li
 | **HTTP 401** | The provider refused the API key. | Check or replace the key; make sure it is active. |
 | **HTTP 403** | The provider blocked the tiles. For OpenStreetMap, its usage policy was not met (for example, a proxy strips the `Referer` header, or traffic is too high). For keyed providers, the key does not allow this site's address. | Use your own MapTiler/Stadia key, add this site's address to the key's allowed domains, or check the reverse proxy. |
 | **HTTP 429** | Too many requests. | Wait, or use a provider with a higher quota. |
-| *Could not be reached* | Network, DNS, TLS, or a Content-Security-Policy set by your reverse proxy blocks the tile server. | Allow the provider's address for images and connections in the proxy's CSP. |
+| *Could not be reached* | Network, DNS, TLS, or a Content-Security-Policy set by your reverse proxy blocks the tile server. | Allow the provider's address for images and connections in the proxy's CSP (for OpenFreeMap: `https://tiles.openfreemap.org` in `connect-src`). |
+| Labels are not in English | A picture-tile provider is selected, or the browser has no WebGL (a note under the map says so). | Choose **OpenFreeMap**, or enable hardware acceleration in the browser. |
 | *No status* | The custom server does not send CORS headers, so the test cannot read its answer. | Open the map: if tiles show, it works. |
 
 > [!IMPORTANT]

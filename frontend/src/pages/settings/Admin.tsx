@@ -6,7 +6,7 @@ import { DeliveryHistory, NotificationTemplates } from "./NotificationTemplates"
 import { api, formatBytes, formatDateTime } from "../../api";
 import SettingsForm from "../../components/SettingsForm";
 import AuthentikAdmin from "./Authentik";
-import { CopyButton, Icon, Skeleton, useAsync, useToast } from "../../components/ui";
+import { CopyButton, HelpTip, Icon, Skeleton, useAsync, useToast } from "../../components/ui";
 import type { Meta } from "../../types";
 
 export function DocumentsPanel() {
@@ -202,7 +202,7 @@ function WhatsAppDiagnostics({ svc }: { svc: any }) {
   return (
     <div className="stack" style={{ gap: ".4rem" }} id="wa-diagnostics">
       <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-        <button type="button" className="btn small" disabled={busy || !svc.reachable} onClick={run}>Run Diagnostics</button>
+        <button type="button" className="btn small" disabled={busy || !svc.reachable} onClick={run}>Run Diagnostics</button> <HelpTip id="whatsapp.diagnostics" />
         <button type="button" className="btn small" disabled={busy || !svc.reachable} onClick={restart}>Restart Bridge</button>
         <span className="small muted">Check for Compatible Update: {svc.update_available ? <>tested version {svc.pinned} is available — install it with <code>sudo personaldocs whatsapp-bridge update</code> (sessions and settings are kept; <code>rollback</code> returns to the previous version)</> : svc.reachable ? "the installed bridge is the tested version" : "—"}</span>
       </div>

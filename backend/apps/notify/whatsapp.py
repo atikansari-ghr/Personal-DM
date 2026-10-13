@@ -184,12 +184,13 @@ def start_link(user, *, force: bool = False) -> dict:
     if not config.get("whatsapp.enabled"):
         raise WhatsAppError("WhatsApp Personal is turned off by the administrator.")
     link = _link(user)
-    if link is None:
+    created = link is None
+    if created:
         link = WhatsAppLink.objects.create(user=user, session=secrets.token_hex(16))
     ckey = f"wa-link:{user.pk}"
     now = timezone.now().timestamp()
     recent = [t for t in (cache.get(ckey) or []) if t > now - 3600]
-    new_attempt = force or link.state != WhatsAppLink.PENDING  # pressing Link again keeps the running attempt
+    new_attempt = created or force or link.state != WhatsAppLink.PENDING  # pressing Link again keeps the running attempt
     if new_attempt and len(recent) >= LINKS_PER_HOUR:
         raise WhatsAppError("Too many link attempts in the last hour. Try again later.")
     _call("POST", "/sessions", json={"session": link.session, "force": bool(force)})

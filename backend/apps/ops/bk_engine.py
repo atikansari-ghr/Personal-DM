@@ -455,7 +455,7 @@ def capacity(dest) -> dict:
     if not dest.total_bytes or dest.free_bytes is None:
         return {"state": "unknown", "warn_pct": warn, "crit_pct": crit, "free_pct": None}
     pct = round(dest.free_bytes * 100 / dest.total_bytes, 1)
-    return {"state": "critical" if pct < crit else "warning" if pct < warn else "ok", "warn_pct": warn, "crit_pct": crit, "free_pct": pct}
+    return {"state": "critical" if pct <= crit else "warning" if pct <= warn else "ok", "warn_pct": warn, "crit_pct": crit, "free_pct": pct}
 
 
 def _set_health(dest, health, detail, free=None, total=None):
