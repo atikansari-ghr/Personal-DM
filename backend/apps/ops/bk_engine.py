@@ -649,9 +649,13 @@ def chains(policy: BackupPolicy | None) -> list[list[RecoveryPoint]]:
     qs = RecoveryPoint.objects.filter(deleted_at__isnull=True).exclude(status=RecoveryPoint.RUNNING)
     qs = qs.filter(policy=policy) if policy else qs
     by_base: dict = {}
-    for p in qs.order_by("created_at"):
+    for p in qs.order_by("created_at", "id"):
         base_id = p.base_id or p.id
         by_base.setdefault(base_id, []).append(p)
+    # the base (Full) always leads its chain, even when an incremental has the same timestamp; otherwise the chain
+    # would not count as usable and retention could plan to delete the newest usable chain
+    for c in by_base.values():
+        c.sort(key=lambda p: (p.base_id is not None, p.created_at))
     return sorted(by_base.values(), key=lambda c: c[0].created_at, reverse=True)
 
 

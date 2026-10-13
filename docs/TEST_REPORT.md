@@ -96,6 +96,10 @@ clock and storage OK.
   map failed only on pages served by the second worker) → every worker re-reads the map settings (one small query) and
   follows a change at once; regression test added.
 - The sign-in map filters rendered as five full-width stacked selects → one compact, wrapping row.
+- `test_at281_retention_never_deletes_a_needed_base` failed in 2 of 3 runs: the test gives a Full and its incremental
+  the same timestamp, and chains were ordered by timestamp only, so the incremental could lead the chain; the chain
+  then did not count as usable and retention planned to delete the newest usable chain. Chains now always start with
+  their Full (4 of 4 runs pass). In normal operation a Full is always older than its incrementals.
 
 **Blocked / Not Executed (never reported as passed):**
 
