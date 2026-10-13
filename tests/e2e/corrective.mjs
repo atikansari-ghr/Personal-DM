@@ -325,7 +325,7 @@ if (!WA_BRIDGE || !WA_TOKEN) {
     expect((await wa.innerText()).includes("Disabled by Admin"), "WhatsApp card should say Disabled by Admin");
     await page.waitForSelector("#conn-whatsapp [data-bridge-state=ready_disabled]");
     const kv = await page.locator("#conn-whatsapp .kv-table").innerText();
-    expect(kv.includes("1.0.0") && /Protocol\s+1/.test(kv) && kv.includes("Compatible"), `service table: ${kv}`);
+    expect(kv.includes("1.1.0") && /Protocol\s+1/.test(kv) && kv.includes("Compatible"), `service table: ${kv}`);
     await page.locator("#conn-whatsapp").screenshot({ path: `${OUT}/admin-whatsapp-ready.png` });
   });
 
@@ -341,8 +341,8 @@ if (!WA_BRIDGE || !WA_TOKEN) {
     // what scanning the (fake) QR with a phone would do; the card notices it without a button press
     expect((await bridge("/_test/connect/pending")).ok, "fake bridge connect");
     await page.waitForSelector("#whatsapp[data-state=connected]", { timeout: 15000 });
-    await page.click("#whatsapp button:has-text('Send test')");
-    await page.waitForSelector(".toast:has-text('Test sent')");
+    await page.click("#whatsapp button:has-text('Send Test Notification')");
+    await page.waitForSelector(".toast:has-text('Test notification sent')");
     // WhatsApp can now be chosen in the routing matrix
     const chip = page.locator("#routing input[aria-label$='by WhatsApp Personal'], #routing input[aria-label*='WhatsApp']").first();
     expect(await chip.count() && !(await chip.isDisabled()), "WhatsApp not selectable in routing");
@@ -396,6 +396,228 @@ await step("AT-352/AT-353 Discord: Disabled by Admin → enabled, webhook form, 
   const dc = prefs.channels.find((c) => c.channel === "discord");
   expect(dc && dc.configured && /not set up|webhook/i.test(dc.issue || ""), `discord issue: ${JSON.stringify(dc)}`);
 });
+
+// ================================================================== Change Set V (AT-356..AT-375)
+// NAS inside Backup Destinations, Backup Now + FIFO queue, shared tooltip, permission-aware Help, English sign-in map
+// with details/clusters/filters, WhatsApp pairing lifecycle (fake bridge). Real NAS shares, a real phone and real
+// production tiles are not available here and are reported Blocked in docs/TEST_REPORT.md.
+await step("AT-356/AT-374 Storage & NAS page removed: the old address opens Backup & Recovery → Destinations", async () => {
+  await page.goto(BASE + "/settings/storage");
+  await page.waitForURL(/\/settings\/backup\?view=destinations/);
+  await page.waitForSelector(".dest-grid");
+  expect(!(await page.locator("nav a:has-text('Storage & NAS'), [role=tab]:has-text('Storage & NAS')").count()), "Storage & NAS still in the navigation");
+});
+
+await step("AT-358 Add destination → NAS: SMB and NFS fields inside the destination, password write-only", async () => {
+  await page.goto(BASE + "/settings/backup?view=destinations");
+  await page.click("button:has-text('Add destination')");
+  await page.selectOption("#dst-kind", "nas");
+  await page.waitForSelector("#dst-connection");
+  for (const id of ["server", "share", "subfolder", "username", "domain", "version", "password"]) expect(await page.locator(`#dst-nas-${id}`).count() === 1, `SMB field ${id}`);
+  expect((await page.locator("#dst-nas-password").getAttribute("type")) === "password", "SMB password must be a password field");
+  await page.fill("#dst-name", "Home NAS (example)");
+  await page.fill("#dst-nas-server", "nas.example.lan");
+  await page.fill("#dst-nas-share", "backups");
+  await page.fill("#dst-nas-username", "backup-user");
+  await page.locator("[role=dialog]").screenshot({ path: `${OUT}/nas-destination-smb.png` });
+  await page.selectOption("#dst-connection", "nfs");
+  expect(!(await page.locator("#dst-nas-username, #dst-nas-password").count()), "NFS shows no SMB account fields");
+  await page.selectOption("#dst-connection", "mounted");
+  await page.waitForSelector("#dst-path");
+  await page.keyboard.press("Escape");
+});
+
+await step("AT-360/AT-361 Backup Now: confirmation, no Cancel, FIFO queue states, Completed on this destination", async () => {
+  await page.goto(BASE + "/settings/backup?view=destinations");
+  const card = page.locator(".dest-card[data-dest='Home server disk']");
+  await card.waitFor();
+  await card.locator("button:has-text('Backup Now')").click();
+  const dlg = page.locator("[role=dialog]");
+  await dlg.locator("text=This backup cannot be cancelled once it starts.").waitFor();
+  expect((await dlg.innerText()).includes("Home server disk") && (await dlg.innerText()).includes("Full system"), "confirmation names destination and scope");
+  await dlg.screenshot({ path: `${OUT}/backup-now-confirm.png` });
+  await dlg.locator("button:has-text('Start backup')").click();
+  await page.waitForSelector("#backup-queue tr[data-job-state]");
+  expect(!(await page.locator("#backup-queue button:has-text('Cancel')").count()), "a Cancel action exists");
+  // a second request for the same destination while it waits or runs is refused
+  const again = await api(page, `/api/backup/destinations/${(await api(page, "/api/backup/overview")).data.destinations.find((d) => d.name === "Home server disk").id}/backup-now`, { body: { confirm: true } });
+  expect(again.status === 409 || again.status === 200, `duplicate request answered ${again.status}`);
+  for (let i = 0; i < 90; i++) {
+    const q = (await api(page, "/api/backup/jobs")).data.jobs;
+    if (q.every((j) => ["Completed", "Failed"].includes(j.state))) break;
+    await page.waitForTimeout(2000);
+  }
+  const jobs = (await api(page, "/api/backup/jobs")).data.jobs;
+  const mine = jobs.find((j) => j.destinations.includes("Home server disk"));
+  expect(mine && mine.state === "Completed", `Backup Now job: ${JSON.stringify(mine)}`);
+  await page.reload();
+  await page.waitForSelector("#backup-queue tr[data-job-state=Completed]");
+  await page.locator("#backup-queue").screenshot({ path: `${OUT}/backup-queue.png` });
+});
+
+const tipInViewport = async (p, sel) => {
+  const btn = p.locator(sel).first();
+  await btn.scrollIntoViewIfNeeded();
+  await btn.focus();
+  const pop = p.locator(".tip-pop[role=tooltip]");
+  await pop.waitFor();
+  const r = await pop.evaluate((el) => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, vw: innerWidth, vh: innerHeight,
+    inBody: el.parentElement === document.body || el.closest("body > *") === el.parentElement, text: el.innerText,
+    covered: document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest(".tip-pop") === el }; });
+  expect(r.l >= 0 && r.t >= 0 && r.r <= r.vw + 0.5 && r.b <= r.vh + 0.5, `tooltip clipped by the viewport: ${JSON.stringify(r)}`);
+  expect(r.covered, "tooltip is hidden behind another element");
+  expect((await btn.getAttribute("aria-describedby")) === (await pop.getAttribute("id")), "aria-describedby links the tooltip");
+  return { r, pop };
+};
+
+await step("AT-362/AT-363 tooltips: portal above cards, tables and scroll areas; flip at edges; Escape; Learn more by role", async () => {
+  await page.goto(BASE + "/settings/backup?view=destinations");
+  const { r } = await tipInViewport(page, "#backup-queue .tip-btn");
+  expect(r.text.includes("one at a time"), "registry text for backup.queue");
+  expect(await page.locator(".tip-pop a:has-text('Learn more')").count() === 1, "main administrator sees Learn more for a main-administrator guide");
+  await page.keyboard.press("Escape");
+  await page.waitForSelector(".tip-pop", { state: "detached" });
+  // phone: tap a tooltip near the right edge of a filter row
+  const m = await session("son1", { width: 390, height: 844 }, true);
+  await m.page.goto(BASE + "/settings/account?tab=signins");
+  await m.page.locator(".map-filters .tip-btn").tap();
+  await m.page.waitForSelector(".tip-pop[role=tooltip]");
+  const box = await m.page.locator(".tip-pop").boundingBox();
+  expect(box && box.x >= 0 && box.x + box.width <= 390.5, `phone tooltip clipped: ${JSON.stringify(box)}`);
+  await m.page.screenshot({ path: `${OUT}/tooltip-phone.png` });
+  await m.ctx.close();
+  // dialogs: the tooltip inside the destination dialog shows above the dialog
+  await page.click("button:has-text('Add destination')");
+  await page.selectOption("#dst-kind", "nas");
+  await tipInViewport(page, "[role=dialog] .tip-btn");
+  await page.screenshot({ path: `${OUT}/tooltip-dialog.png` });
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+});
+
+await step("AT-364/AT-365 Help: a family member sees no administrator guides, titles or search hits; direct URLs say Not found", async () => {
+  const s = await session("son1");
+  await s.page.goto(BASE + "/help");
+  await s.page.waitForSelector(".help-cat");
+  const nav = await s.page.locator(".help-nav-desktop").innerText();
+  for (const t of ["Backup & Recovery", "Disaster recovery", "Installation", "Upgrades", "Antivirus"]) expect(!nav.includes(t), `normal user sees "${t}" in Help`);
+  expect(!(await s.page.locator(".help-start a[href='/help/backup-restore']").count()), "Backup tile shown to a normal user");
+  await s.page.fill("input[type=search]", "NAS");
+  await s.page.waitForTimeout(600);
+  expect(!(await s.page.locator(".help-results a[href='/help/backup-restore']").count()), "search reveals the backup guide");
+  await s.page.goto(BASE + "/help/disaster-recovery");
+  await s.page.waitForSelector("h1:has-text('Not found')");
+  await s.page.goto(BASE + "/help/whatsapp-personal");
+  await s.page.waitForSelector("h2:has-text('Link your WhatsApp')");
+  expect(!(await s.page.locator("text=whatsapp-bridge update").count()), "admin update procedure visible to a normal user");
+  await s.page.screenshot({ path: `${OUT}/help-normal-user.png` });
+  await s.ctx.close();
+  await page.goto(BASE + "/help");
+  await page.waitForSelector(".help-start a[href='/help/backup-restore']");
+});
+
+// the OpenFreeMap style is answered locally so the result does not depend on the network (screenshots.mjs uses the real one)
+const STYLE = { version: 8, name: "test", sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#e8efe6" } }] };
+async function vectorSession(user = "admin", viewport, mobile) {
+  const s = await session(user, viewport, mobile);
+  await s.ctx.route("https://tiles.openfreemap.org/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(STYLE), headers: { "Access-Control-Allow-Origin": "*" } }));
+  return s;
+}
+
+await step("AT-366 sign-in map: vector map with English labels by default, no language selector", async () => {
+  await setting(page, { "security.map_enabled": true, "security.map_provider": "openfreemap" });
+  const s = await vectorSession();
+  await s.page.goto(BASE + "/settings/account?tab=signins");
+  await s.page.waitForSelector(".signin-map[data-map-mode=vector][data-labels=en]", { timeout: 20000 });
+  expect(!(await s.page.locator("select[aria-label*=anguage], [aria-label*='Map language']").count()), "a map language selector exists");
+  expect((await s.page.locator(".signins").innerText()).includes("Place names are shown in English"), "English note");
+  await s.ctx.close();
+});
+
+await step("AT-367/AT-368 markers: hover summary, click details, clusters, list ↔ map selection, filters (Last 7 days default)", async () => {
+  const s = await vectorSession();
+  await s.page.goto(BASE + "/settings/activity?view=map");
+  // every server worker must allow the new provider at once (the CSP origin was cached per worker for a minute)
+  await s.page.waitForSelector(".signin-map[data-map-mode=vector]", { timeout: 20000 });
+  expect((await s.page.locator(".map-filters select[aria-label=Period]").inputValue()) === "7", "default period is Last 7 days");
+  // the admin signed in many times from the Home zone (recovery.mjs): one cluster with a count
+  const cluster = s.page.locator(".map-cluster").first();
+  await cluster.waitFor({ timeout: 15000 });
+  await cluster.hover();
+  await s.page.waitForSelector(".leaflet-tooltip:has-text('sign-ins')");
+  await cluster.click();
+  await s.page.waitForSelector(".signin-detail:has-text('sign-ins at this place')");
+  await s.page.locator(".signin-detail .link-btn").first().click();
+  await s.page.waitForSelector(".signin-detail[data-detail] dt:has-text('IP address')");
+  const detail = await s.page.locator(".signin-detail[data-detail]").innerText();
+  expect(/127\.0\.0\.1|::1/.test(detail) && detail.includes("Home"), `details: ${detail}`);
+  await s.page.screenshot({ path: `${OUT}/map-details.png` });
+  // list row → selected on the map and in the details
+  const row = s.page.locator(".signin-list tbody tr").nth(1);
+  const id = await row.getAttribute("data-event");
+  await row.click();
+  await s.page.waitForSelector(`.signin-detail[data-detail='${id}']`);
+  expect((await row.getAttribute("aria-selected")) === "true", "row selection");
+  // filters change map and list together
+  const before = await s.page.locator(".signin-list tbody tr").count();
+  await s.page.selectOption(".map-filters select[aria-label=Risk]", "high");
+  await s.page.waitForFunction((n) => document.querySelectorAll(".signin-list tbody tr").length !== n || document.body.innerText.includes("No sign-ins match"), before);
+  await s.page.selectOption(".map-filters select[aria-label=Risk]", "");
+  await s.page.selectOption(".map-filters select[aria-label=Period]", "custom");
+  await s.page.waitForSelector("text=Choose a start and end date.");
+  await s.page.selectOption(".map-filters select[aria-label=Period]", "365");
+  await s.page.waitForSelector(".signin-list tbody tr");
+  await s.ctx.close();
+  // a family member cannot widen the scope by editing the request
+  const son = await session("son1");
+  expect((await api(son.page, `/api/security/map?user=${meId}`)).status === 403, "family member read another person's sign-ins");
+  await son.ctx.close();
+});
+
+if (WA_BRIDGE && WA_TOKEN) {
+  await step("AT-370/AT-371/AT-372 WhatsApp: 5-minute countdown, live stages, no QR while connecting, new QR only after failure", async () => {
+    await setting(page, { "whatsapp.enabled": true });
+    const s = await session("son1");
+    await s.page.goto(BASE + "/settings/account?tab=notifications");
+    await s.page.waitForSelector("#whatsapp[data-state=not_linked]");
+    await s.page.click("#whatsapp button:has-text('Link WhatsApp')");
+    await s.page.waitForSelector("#whatsapp[data-stage=qr_ready] .qr svg");
+    const left = Number(await s.page.locator("#whatsapp [data-countdown]").getAttribute("data-countdown"));
+    expect(left > 240 && left <= 300, `countdown ${left}`);
+    expect(!(await s.page.locator("#whatsapp button:has-text('Generate new QR code')").count()), "new QR offered inside the window");
+    expect(await s.page.locator("#whatsapp .wa-stages li").count() >= 7, "stage list");
+    await s.page.locator("#whatsapp").screenshot({ path: `${OUT}/whatsapp-qr-ready.png` });
+    await bridge("/_test/stage", { session: "pending", stage: "connecting" });
+    await s.page.waitForSelector("#whatsapp[data-stage=connecting] .wa-stages li.current:has-text('Connecting')", { timeout: 10000 });
+    expect(!(await s.page.locator("#whatsapp .qr").count()), "QR still shown while connecting");
+    await bridge("/_test/stage", { session: "pending", state: "pairing_failed", stage: null, error_code: "timeout", failure_stage: "authenticating" });
+    await s.page.waitForSelector("#whatsapp[data-state=pairing_failed] button:has-text('Generate new QR code')", { timeout: 10000 });
+    expect((await s.page.locator("#whatsapp").innerText()).includes("Authenticating"), "failure stage shown");
+    await s.page.click("#whatsapp button:has-text('Generate new QR code')");
+    await s.page.waitForSelector("#whatsapp[data-stage=qr_ready] .qr svg");
+    expect((await bridge("/_test/connect/pending")).ok, "fake scan");
+    await s.page.waitForSelector("#whatsapp[data-key=verified]:has-text('Linked & Verified')", { timeout: 15000 });
+    await s.page.locator("#whatsapp").screenshot({ path: `${OUT}/whatsapp-verified.png` });
+    await s.page.click("#whatsapp button:has-text('Unlink')");
+    await s.page.waitForSelector("#whatsapp[data-state=not_linked]");
+    await s.ctx.close();
+  });
+
+  await step("AT-373 Run Diagnostics (main admin): DNS, network, clock, storage, per-person state, no secrets", async () => {
+    await page.goto(BASE + "/settings/connections");
+    await page.waitForSelector("#wa-diagnostics button:has-text('Run Diagnostics')");
+    await page.click("#wa-diagnostics button:has-text('Run Diagnostics')");
+    await page.waitForSelector("#wa-diagnostics .diag-table");
+    const text = await page.locator("#wa-diagnostics").innerText();
+    expect(text.includes("Compatible") && !/FAKE-QR|Bearer|token/i.test(text), `diagnostics: ${text.slice(0, 300)}`);
+    await page.locator("#wa-diagnostics").screenshot({ path: `${OUT}/whatsapp-diagnostics.png` });
+    const son = await session("son1");
+    expect((await api(son.page, "/api/admin/whatsapp")).status === 403, "family member reached diagnostics");
+    await son.ctx.close();
+  });
+} else {
+  skip("AT-370..AT-373 WhatsApp lifecycle", "no fake bridge (run through scripts/e2e.sh)");
+}
 
 await step("phone 390 px: Connections and notification cards fit without sideways scrolling", async () => {
   const m = await session("admin", { width: 390, height: 844 }, true);

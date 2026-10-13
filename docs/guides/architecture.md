@@ -1,4 +1,4 @@
-<!-- audience: admin -->
+<!-- audience: main_admin -->
 # Architecture (for maintainers)
 
 See also `docs/ARCHITECTURE.md` and the decision records in `docs/adr/`.

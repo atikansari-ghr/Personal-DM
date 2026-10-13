@@ -1,6 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Expiry, UserMini } from "../types";
+import { useSession } from "../session";
+import { HELP, canSee } from "./helpRegistry";
 
 // ---------------------------------------------------------------- icons (inline SVG, no external assets)
 const paths: Record<string, string> = {
@@ -106,26 +108,81 @@ export function StateBadge({ state }: { state: string }) {
 }
 
 // ---------------------------------------------------------------- tooltip (hover, focus and tap)
-export function HelpTip({ text, link }: { text: string; link?: string }) {
+// One tooltip for the whole application (Change Set V). Rendered in a portal on <body> with a fixed position that is
+// measured on open, so no card, table, sidebar, dialog or scroll container can clip it. It opens above the trigger
+// and flips below when there is no room, shifts sideways to stay 8 px inside the viewport, follows scrolling and
+// resizing, and never changes the layout of the page. Hover and keyboard focus show it; a tap toggles it and a tap
+// elsewhere or Escape closes it. Text comes from the help registry (id) or from the caller (text).
+let readableGuides: Promise<Set<string>> | null = null;
+function useReadableGuides(): Set<string> | null {
+  const [set, setSet] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    readableGuides = readableGuides || fetch("/api/help", { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : { guides: [] }))
+      .then((d) => new Set<string>((d.guides || []).map((g: any) => g.slug))).catch(() => new Set<string>());
+    let live = true;
+    readableGuides.then((x) => { if (live) setSet(x); });
+    return () => { live = false; };
+  }, []);
+  return set;
+}
+
+export function HelpTip({ id, text, link }: { id?: string; text?: string; link?: string }) {
+  const entry = id ? HELP[id] : undefined;
+  if (id && !entry && import.meta.env.DEV) console.error(`HelpTip: unknown help id "${id}"`);
+  const session = useSession()?.session;
+  const readable = useReadableGuides();
+  const body = entry?.text || text || "";
+  const rawLink = entry?.link || link;
+  const slug = rawLink?.startsWith("/help/") ? rawLink.slice(6).split("#")[0] : null;
+  const showLink = !!rawLink && canSee(session, entry?.audience || "all") && (!slug || !!readable?.has(slug));
   const [open, setOpen] = useState(false);
-  const id = useId();
+  const [pinned, setPinned] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; place: "top" | "bottom"; arrow: number } | null>(null);
+  const tipId = useId();
+  const btn = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLSpanElement>(null);
+  const place = useCallback(() => {
+    const b = btn.current?.getBoundingClientRect();
+    const p = pop.current;
+    if (!b || !p) return;
+    const w = p.offsetWidth, h = p.offsetHeight, gap = 8, vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    const above = b.top - gap - h >= 8;
+    const below = b.bottom + gap + h <= vh - 8;
+    const where: "top" | "bottom" = above || !below ? (above ? "top" : (b.top > vh - b.bottom ? "top" : "bottom")) : "bottom";
+    const center = b.left + b.width / 2;
+    const left = Math.min(Math.max(8, center - w / 2), Math.max(8, vw - w - 8));
+    const top = where === "top" ? Math.max(8, b.top - gap - h) : Math.min(vh - h - 8, b.bottom + gap);
+    setPos({ top, left, place: where, arrow: Math.min(Math.max(12, center - left), w - 12) });
+  }, []);
+  useLayoutEffect(() => { if (open) place(); else setPos(null); }, [open, body, showLink, place]);
+  useEffect(() => {
+    if (!open) return;
+    let raf = 0;
+    const follow = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(place); };
+    const outside = (e: PointerEvent) => { if (!btn.current?.contains(e.target as Node) && !pop.current?.contains(e.target as Node)) { setOpen(false); setPinned(false); } };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { setOpen(false); setPinned(false); btn.current?.focus(); } };
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", esc);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("scroll", follow, true); window.removeEventListener("resize", follow);
+      document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", esc); };
+  }, [open, place]);
+  if (!body) return null;
   return (
-    <span className="tip" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <button type="button" className="tip-btn" aria-describedby={open ? id : undefined} aria-label="More information"
-        onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onClick={() => setOpen((o) => !o)}>
+    <span className="tip" onMouseEnter={() => setOpen(true)} onMouseLeave={() => { if (!pinned) setOpen(false); }}>
+      <button ref={btn} type="button" className="tip-btn" aria-describedby={open ? tipId : undefined} aria-expanded={open} aria-label="More information"
+        onFocus={() => setOpen(true)} onBlur={(e) => { if (!pinned && !pop.current?.contains(e.relatedTarget as Node)) setOpen(false); }}
+        onClick={() => { setPinned((p) => !p); setOpen((o) => !(o && pinned)); }}>
         <Icon name="info" size={16} />
       </button>
-      {open && (
-        <span role="tooltip" id={id} className="tip-pop">
-          {text}
-          {link && (
-            <>
-              {" "}
-              <a href={link} style={{ color: "#bfe3cb" }}>Learn more</a>
-            </>
-          )}
-        </span>
-      )}
+      {open && createPortal(
+        <span ref={pop} role="tooltip" id={tipId} className={`tip-pop ${pos?.place || "top"}`} data-tip={id || ""}
+          style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, visibility: pos ? "visible" : "hidden", ["--tip-arrow" as string]: `${pos?.arrow ?? 0}px` }}
+          onMouseEnter={() => setOpen(true)} onMouseLeave={() => { if (!pinned) setOpen(false); }}>
+          {body}
+          {showLink && <>{" "}<a href={rawLink}>Learn more</a></>}
+        </span>, document.body)}
     </span>
   );
 }

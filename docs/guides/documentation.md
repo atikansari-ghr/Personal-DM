@@ -1,4 +1,4 @@
-<!-- audience: maintainer -->
+<!-- audience: main_admin -->
 <!-- reviewed: 2026-10-11 -->
 # Writing and checking the documentation (for contributors)
 
@@ -8,7 +8,10 @@ guide in the same change as the screen or behaviour it describes. A stale guide 
 
 ## Structure of a guide {#structure}
 
-1. `<!-- audience: admin -->` (or `maintainer`) when the guide is not for everyone, and `<!-- reviewed: YYYY-MM-DD -->`.
+1. `<!-- audience: X -->` when the guide is not for everyone, and `<!-- reviewed: YYYY-MM-DD -->`. X is `delegate` (family/user
+   administration), `admin` (Administrators and the main administrator), `main_admin` or `maintainer`. Help hides guides the
+   reader may not use everywhere: navigation, categories, search, related links and direct addresses (the server answers 404).
+   Wrap admin-only parts of an everyday guide in `<!-- audience-section: X -->` … `<!-- /audience-section -->`.
 2. A short introduction: what the feature does and who can use it.
 3. **Prerequisites**, then **numbered steps** that use the exact labels on the screen (buttons in **bold**).
 4. A screenshot right after the step it shows.

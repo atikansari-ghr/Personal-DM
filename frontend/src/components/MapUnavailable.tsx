@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 // Sign-in map availability (Change Set U): kept apart from SigninMap so pages can show the state without loading Leaflet.
 
 export type MapConfig = { enabled: boolean; tile_url: string; attribution: string; referrer_policy?: string; provider_label?: string;
-  unavailable?: string; admin?: boolean };
+  unavailable?: string; admin?: boolean; kind?: "vector" | "raster"; style_url?: string; english_labels?: boolean;
+  fallback_tile_url?: string; fallback_attribution?: string };
 export type Probe = { state: "checking" | "ok" | "unknown" | "failed"; status?: number | null; error?: string };
 
 export const PROBE_MESSAGES: Record<string, string> = {
@@ -13,10 +14,10 @@ export const PROBE_MESSAGES: Record<string, string> = {
   network: "The map provider could not be reached from this browser.",
 };
 
-/** Fetch one tile the way the map will (same referrer policy) and report the provider's answer. */
+/** Fetch one tile (raster) or the style (vector) the way the map will (same referrer policy) and report the answer. */
 export async function probeTiles(cfg: MapConfig, force = false): Promise<Probe> {
-  const url = cfg.tile_url.replace("{s}", "a").replace("{z}", "2").replace("{x}", "2").replace("{y}", "1").replace("{r}", "");
-  const key = `pd-map-probe:${cfg.tile_url}`;
+  const url = cfg.style_url || cfg.tile_url.replace("{s}", "a").replace("{z}", "2").replace("{x}", "2").replace("{y}", "1").replace("{r}", "");
+  const key = `pd-map-probe:${cfg.style_url || cfg.tile_url}`;
   if (!force) {
     try { const c = JSON.parse(sessionStorage.getItem(key) || "null"); if (c && Date.now() - c.at < 600_000) return c.probe; } catch { /* storage unavailable */ }
   }

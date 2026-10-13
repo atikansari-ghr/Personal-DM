@@ -991,7 +991,7 @@ await step("AT-128/130 every sign-in design keeps the same sign-in methods (desk
 // ------------------------------------------------------------------ tablet / mobile parity
 const ROUTES = ["/", "/ocr-review", "/notifications", "/settings/notifications", "/settings/documents", `/documents/${ids.typed}`, "/settings/overview", "/settings/security", "/settings/security?view=antivirus", "/settings/security?view=test", "/settings/security?view=storage", "/settings/processing", "/folders", `/folders/${ids.parity}`, `/documents/${ids["Sample policy (3 pages)"]}`, "/search?q=sample", "/shared",
   "/offline", "/notifications", "/archive", "/settings/account", "/settings/account?tab=security", "/settings/account?tab=appearance",
-  "/settings/account?tab=notifications", "/settings/family", "/settings/notifications", "/settings/storage", "/settings/security",
+  "/settings/account?tab=notifications", "/settings/family", "/settings/notifications", "/settings/backup?view=destinations", "/settings/security",
   "/settings/ai", "/settings/activity?view=logins", "/assistant", "/imports/new", "/help/getting-started"];
 const VIEWPORTS = [["tablet", 820, 1180], ["mobile-portrait", 390, 844], ["mobile-landscape", 844, 390]];
 const state = await desk.storageState();

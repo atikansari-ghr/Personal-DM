@@ -1,4 +1,4 @@
-<!-- audience: maintainer -->
+<!-- audience: main_admin -->
 # UI layout rules (for contributors)
 
 These rules came out of Change Set R (UI alignment and responsive layout). They keep text, icons, badges and actions

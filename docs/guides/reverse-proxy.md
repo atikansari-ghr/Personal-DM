@@ -1,4 +1,4 @@
-<!-- audience: admin -->
+<!-- audience: main_admin -->
 # Reverse proxy (Nginx Proxy Manager or Pangolin)
 
 The app listens on HTTP inside the LXC (default `127.0.0.1:8000`; use `--bind 0.0.0.0:8000` or `PD_BIND` when the proxy runs elsewhere — then restrict port 8000 to the proxy with a firewall). The proxy terminates HTTPS.

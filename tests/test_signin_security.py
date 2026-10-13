@@ -99,7 +99,7 @@ def test_at326_public_location_is_local_and_nothing_is_sent_out(family, clients,
     assert a.coord_source == "geoip_city" and "(approximate)" in a.location and a.lat == pytest.approx(24.7)
     assert b.coord_source == "geoip_country" and b.country == "IN"
     m = clients["dad"].get("/api/security/map").json()["map"]
-    assert m["tile_url"].startswith("https://") and "never" in m["privacy"]
+    assert (m["style_url"] or m["tile_url"]).startswith("https://") and "never" in m["privacy"]
     r = clients["dad"].get("/api/security/map")
     assert "tile.openstreetmap.org" in r["Content-Security-Policy"]
 

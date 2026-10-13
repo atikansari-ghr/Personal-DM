@@ -111,17 +111,35 @@ export function DiscordCard() {
   );
 }
 
+const WA_STAGE_LABEL: Record<string, string> = { qr_ready: "QR Ready", scanned: "Scanned", connecting: "Connecting", authenticating: "Authenticating",
+  saving_session: "Saving Session", sending_verification: "Sending Verification" };
+const WA_BADGE: Record<string, string> = { verified: "ok", verify_pending: "neutral", verify_failed: "warn", disconnected: "warn",
+  reconnect_required: "danger", pairing_failed: "danger", link_expired: "neutral", incompatible: "danger", degraded: "warn", not_linked: "neutral" };
+const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+/** WhatsApp Personal (Change Set V): live pairing progress from the bridge's real state, a 5-minute link window with
+ *  a countdown, truthful Linked & Verified / Verification Pending / Test Failed states, Reconnect and Relink. */
 export function WhatsAppCard() {
   const toast = useToast();
   const w = useAsync<any>(() => api("notifications/whatsapp"), []);
-  const pendingQr = w.data?.state === "pending";
-  useEffect(() => { // the QR code expires after about a minute; keep it fresh and notice the scan without a button press
-    if (!pendingQr) return;
-    const t = window.setInterval(() => w.reload(), 5000);
+  const [busy, setBusy] = useState(false);
+  const [left, setLeft] = useState<number | null>(null);
+  const linking = w.data?.state === "pending";
+  useEffect(() => { // follow the pairing live; slower polling while waiting for the scan
+    if (!linking) return;
+    const t = window.setInterval(() => w.reload(), w.data?.stage === "qr_ready" ? 4000 : 2000);
     return () => window.clearInterval(t);
-  }, [pendingQr]);
+  }, [linking, w.data?.stage]);
+  useEffect(() => { // the countdown runs locally between polls
+    if (w.data?.link_expires_in_s == null) { setLeft(null); return; }
+    setLeft(w.data.link_expires_in_s);
+    const t = window.setInterval(() => setLeft((x) => (x == null ? x : Math.max(0, x - 1))), 1000);
+    return () => window.clearInterval(t);
+  }, [w.data?.link_expires_in_s]);
   if (!w.data) return null;
-  const act = (body: any, method = "POST") => api("notifications/whatsapp", { method, body }).then(w.reload).catch((e) => toast(e.message, "error"));
+  const act = (body: any, method = "POST") => { setBusy(true); return api("notifications/whatsapp", { method, body }).then(w.reload).catch((e) => toast(e.message, "error")).finally(() => setBusy(false)); };
+  const test = () => { setBusy(true); api("notifications/channel-test", { body: { channel: "whatsapp" } }).then(() => { toast("Test notification sent to your own WhatsApp chat"); w.reload(); })
+    .catch((e) => { toast(e.message, "error"); w.reload(); }).finally(() => setBusy(false)); };
   const s = w.data;
   const svcDown = s.available && s.service && !["healthy", "degraded"].includes(s.service.state);
   if (!s.available && s.state === "not_linked") return (
@@ -130,25 +148,41 @@ export function WhatsAppCard() {
       <p className="small muted">WhatsApp Personal (experimental, unofficial, self-hosted) is available once the main administrator installs the bridge and turns it on in Settings → Connections. <a href="/help/whatsapp-personal">Learn more</a></p>
     </div>
   );
+  const key = s.key || s.state;
+  const stageIdx = linking ? Math.max(0, (s.stages || []).indexOf(s.stage)) : -1;
   return (
-    <div className="card" id="whatsapp" data-state={svcDown ? "service_unavailable" : s.state}>
-      <h2>WhatsApp Personal <span className="badge-group">{!s.available && <span className="badge neutral">Disabled by Admin</span>}<span className="badge warn">Experimental</span><span className="badge neutral">Unofficial</span><span className="badge neutral">Self-hosted</span></span></h2>
+    <div className="card" id="whatsapp" data-state={svcDown ? "service_unavailable" : s.state} data-key={key} data-stage={s.stage || ""}>
+      <h2>WhatsApp Personal <span className="badge-group">{!s.available && <span className="badge neutral">Disabled by Admin</span>}<span className="badge warn">Experimental</span><span className="badge neutral">Unofficial</span><span className="badge neutral">Self-hosted</span></span> <HelpTip id="whatsapp.link" /></h2>
       <div className="callout experimental">Links your own WhatsApp account as a linked device and sends you your Personal DM notifications as messages to yourself. It is not the WhatsApp Business Platform, not supported or endorsed by WhatsApp or Meta, and WhatsApp may disconnect it at any time. It is notification-only: nothing here can read your chats or message anyone else. <a href="/help/whatsapp-personal">Learn more</a></div>
       {svcDown && <div className="alert warn small" role="status"><strong>Service unavailable.</strong> The WhatsApp bridge on the server is not responding ({s.service.label}). Your fallback channels are used meanwhile; the administrator can check it in Settings → Connections.</div>}
-      <p>Status: <strong>{s.label || s.state}</strong>{s.number_hint && <span className="small muted"> · number ending {s.number_hint}</span>}{s.error && <span className="small muted"> · {s.error}</span>}
+      <p role="status" aria-live="polite">Status: {linking ? <strong>Linking — {s.label}</strong> : <span className={`badge ${WA_BADGE[key] || "neutral"}`} data-wa-status={key}>{s.label || s.state}</span>}
+        {s.number_hint && !linking && <span className="small muted"> · number ending {s.number_hint}</span>}
+        {s.state === "disconnected" && s.next_retry_in_s != null && <span className="small muted"> · next attempt in {s.next_retry_in_s} s (no new QR code needed)</span>}
         {s.last_delivery_at && <span className="small muted"> · last notification {formatDateTime(s.last_delivery_at)}</span>}</p>
-      {s.state === "pending" && s.qr_svg && (
-        <div className="qr-box"><div className="qr" aria-label="QR code for linking WhatsApp" role="img" dangerouslySetInnerHTML={{ __html: s.qr_svg }} />
-          <ol className="small"><li>Open WhatsApp on your phone → Settings → Linked devices → Link a device.</li><li>Scan this code. It refreshes by itself about every minute.</li><li>This card shows <strong>Connected</strong> a few seconds after the scan.</li></ol>
-          <div className="row" style={{ gap: 6 }}><button className="btn" onClick={w.reload}>Check now</button><button className="btn" onClick={() => act({ action: "link" })}>New QR code</button></div></div>
+      {s.error && !linking && <p className="small warn-text">{s.error}</p>}
+      {linking && (
+        <ol className="wa-stages" aria-label="Pairing progress">
+          {(s.stages || []).map((st: string, i: number) => <li key={st} className={i < stageIdx ? "done" : i === stageIdx ? "current" : ""} aria-current={i === stageIdx ? "step" : undefined}>{WA_STAGE_LABEL[st] || st}</li>)}
+          <li className="">Linked &amp; Verified</li>
+        </ol>
       )}
+      {linking && s.stage === "qr_ready" && s.qr_svg && (
+        <div className="qr-box"><div className="qr" aria-label="QR code for linking WhatsApp" role="img" dangerouslySetInnerHTML={{ __html: s.qr_svg }} />
+          <div>
+            <ol className="small"><li>Open WhatsApp on your phone → Settings → Linked devices → Link a device.</li><li>Scan this code. WhatsApp itself renews the picture every 20–30 seconds; keep this page open.</li><li>The steps above update by themselves after the scan — do not scan again while the phone shows Connecting.</li></ol>
+            {left != null && <p className="small" data-countdown={left}><strong>Expires in {mmss(left)}</strong> (this link attempt stays valid for 5 minutes)</p>}
+            <button className="btn" disabled={busy} onClick={w.reload}>Check now</button>
+          </div></div>
+      )}
+      {linking && s.stage && s.stage !== "qr_ready" && <p className="small muted">Your phone accepted the code. Keep WhatsApp open on the phone until this card shows <strong>Linked &amp; Verified</strong>.</p>}
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-        {(s.state === "not_linked" || s.state === "reconnect_required" || s.state === "disconnected") && <button className="btn primary" onClick={() => act({ action: "link" })}>{s.state === "not_linked" ? "Link WhatsApp" : "Link again (new QR)"}</button>}
-        {s.state === "degraded" && <button className="btn" onClick={() => act({ action: "reconnect" })}>Reconnect</button>}
-        {s.state === "connected" && <button className="btn" onClick={() => api("notifications/channel-test", { body: { channel: "whatsapp" } }).then(() => toast("Test sent")).catch((e) => toast(e.message, "error"))}>Send test</button>}
-        {(s.state === "connected" || s.state === "disconnected") && <button className="btn" onClick={() => act({ action: "reconnect" })}>Reconnect</button>}
-        {s.state !== "not_linked" && <button className="btn danger" onClick={() => act({}, "DELETE")}>Unlink</button>}
+        {(s.state === "not_linked") && <button className="btn primary" disabled={busy || !s.available} onClick={() => act({ action: "link" })}>Link WhatsApp</button>}
+        {["link_expired", "pairing_failed", "reconnect_required", "incompatible"].includes(s.state) && s.can_new_qr && <button className="btn primary" disabled={busy || !s.available} onClick={() => act({ action: "link", new_qr: true })}>{s.state === "reconnect_required" ? "Relink (new QR code)" : "Generate new QR code"}</button>}
+        {s.state === "connected" && <button className="btn" disabled={busy} onClick={test}>Send Test Notification</button>}
+        {(s.state === "connected" || s.state === "disconnected" || s.state === "degraded") && <button className="btn" disabled={busy} onClick={() => act({ action: "reconnect" })}>Reconnect</button>}
+        {s.state !== "not_linked" && <button className="btn danger" disabled={busy} onClick={() => act({}, "DELETE")}>Unlink</button>}
       </div>
+      {s.state === "pairing_failed" && <p className="small muted">Pairing stopped at <strong>{WA_STAGE_LABEL[s.failure_stage] || s.failure_stage || "an early step"}</strong>. You can generate a new QR code at once. If it keeps failing, ask the administrator to run the WhatsApp diagnostics. <a href="/help/whatsapp-personal#troubleshooting">Troubleshooting</a></p>}
     </div>
   );
 }

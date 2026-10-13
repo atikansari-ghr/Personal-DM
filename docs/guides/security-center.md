@@ -1,3 +1,4 @@
+<!-- audience: admin -->
 # Security center
 
 **Settings → Security** is for the main administrator and for accounts with the **Administrator** role (set in Settings → Family & access → Edit). It has these views: Overview, Antivirus, Security test, OS updates, Firewall, Security records, Storage and (main administrator) Access policy. None of these checks proves the system is free of vulnerabilities.

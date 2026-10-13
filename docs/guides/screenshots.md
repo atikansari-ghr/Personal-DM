@@ -1,4 +1,4 @@
-<!-- audience: maintainer -->
+<!-- audience: main_admin -->
 # Public screenshots (for contributors)
 
 The images in `docs/images/screenshots/` are shown in the README, the guides and on GitHub. They must show the real,

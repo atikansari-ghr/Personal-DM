@@ -1,4 +1,4 @@
-<!-- audience: admin -->
+<!-- audience: main_admin -->
 # Upgrades, rollback and repair
 
 ## Upgrade {#upgrade}
@@ -13,6 +13,68 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-
 Steps: take an exclusive lock; check free disk; run a **verified application backup** (aborts if the backup fails — use `--skip-backup` only if you have one); fetch and verify the requested revision; build it in a new release directory; run migration checks; stop the worker and scheduler; apply migrations; switch the `current` symlink; restart; run health checks. The previous and new versions are printed and logged.
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
+
+## Upgrading to Change Set V (NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing) {#change-set-v}
+
+```
+sudo personaldocs upgrade                    # safety backup first, then migrations (NAS → destination, map provider)
+sudo personaldocs whatsapp-bridge update     # only if you use WhatsApp Personal: bridge 1.1.0 (pinned, tested)
+sudo personaldocs doctor
+```
+
+(The change prompt numbered its tests AT-331..AT-350. Here they are **AT-356..AT-375**: prompt AT-n = AT-(n+25).)
+
+### What the upgrade does
+
+- **Storage & NAS → Backup Destinations.** The migration `ops.0003_nas_into_destinations` moves the NAS connection
+  (type, server, share, folder, username, domain, protocol version) into a NAS destination. It adopts the destination
+  that already pointed at `/mnt/pdnas`, or creates **NAS backup share**. The SMB password stays encrypted where it
+  was. Recovery points, copies, policies and the files on the share are not touched. Running it again creates nothing
+  new. A configuration that does not validate becomes **Needs Attention — Migration incomplete; existing backup data
+  preserved** instead of being dropped.
+- **Backup queue.** Backups, verifications, test restores, key rotation and recovery validation now run one at a
+  time, first in, first out. Each destination has **Backup Now**.
+- **Sign-in map.** The default provider becomes **OpenFreeMap** (English labels, no key). An explicit *OpenStreetMap*
+  choice is switched to OpenFreeMap (migration `security.0005_map_english_labels`); MapTiler, Stadia and custom
+  servers are kept.
+- **Help** shows each person only the guides and sections for the features they may use (enforced by the server).
+- **WhatsApp.** New fields record verification (migration `notify.0005_whatsapp_verification`). Existing links are
+  kept, but the Personal DM upgrade does **not** replace the bridge: run `sudo personaldocs whatsapp-bridge update`.
+- Users, documents, permissions, settings, backups, Trusted Zones and notification routing are otherwise unchanged.
+
+### After the upgrade (main administrator)
+
+1. **Backup & Recovery → Destinations.** Find the NAS card (the old Settings → Storage & NAS address redirects
+   here).
+   - Click **Test Connection**. **Healthy** with the free space means the share is mounted and writable.
+   - If it says **Needs Attention**, click **Edit Configuration**, check the fields (enter the SMB password if it was
+     never stored), **Save**, **Test Connection**, then **Retry Migration**.
+   - Optional: set **Space warning below / Space critical below** (defaults 20 % and 10 %).
+2. **Sign-in map.** Open **My account → Sign-in security**: place names are in English. If your reverse proxy sets
+   its own Content-Security-Policy, add `https://tiles.openfreemap.org` to `connect-src` and `img-src` (and keep
+   `https://tile.openstreetmap.org` for browsers without WebGL).
+3. **WhatsApp Personal** (only if you use it):
+   - `sudo personaldocs whatsapp-bridge update` installs bridge **1.1.0** with the maintained protocol library
+     (Baileys 7.0.0-rc14). It archives the encrypted sessions first, self-tests, and rolls back by itself on failure.
+     The command prints the diagnostics at the end.
+   - **Settings → Connections → WhatsApp Personal → Run Diagnostics**: DNS, network, system time and storage should
+     all say OK.
+   - People whose phone stayed on *Connecting* click **Generate new QR code** (or **Link WhatsApp**) and scan again.
+     The card should end on **Linked & Verified**.
+4. **Help.** Sign in as a family member and open Help: administrator guides are not listed.
+
+### Behind a reverse proxy
+
+Allow `https://tiles.openfreemap.org` in `connect-src` and `img-src` if the proxy sets its own CSP. Nothing else
+changes.
+
+### Rollback
+
+`sudo personaldocs rollback` switches back to the previous release (the upgrade's safety backup is verified first).
+The migrations only add data: the old `nas.*` settings are still there, so the previous release's Storage & NAS page
+works again unchanged, and the extra destination fields are ignored. To go back to bridge 1.0.0:
+`sudo personaldocs whatsapp-bridge rollback` (people then link again). To restore the old map labels, choose
+**OpenStreetMap standard** in Settings → Security → Access policy.
 
 ## Upgrading to Change Set U (folder tree, sign-in map provider, sign-in designs, WhatsApp and Discord) {#change-set-u}
 

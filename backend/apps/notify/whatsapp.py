@@ -171,17 +171,36 @@ def _link(user):
     return WhatsAppLink.objects.filter(user=user).first()
 
 
-def start_link(user) -> dict:
+LINKS_PER_HOUR = 6  # rate limit for new QR codes per person (the bridge enforces the same)
+
+
+def start_link(user, *, force: bool = False) -> dict:
+    """Start (or continue) linking. A running 5-minute attempt keeps its QR code; ``force`` asks for a new code,
+    which the bridge allows only after the attempt expired or definitively failed."""
+    from django.core.cache import cache
+
     from .models import WhatsAppLink
 
     if not config.get("whatsapp.enabled"):
         raise WhatsAppError("WhatsApp Personal is turned off by the administrator.")
     link = _link(user)
-    if link is None:
+    created = link is None
+    if created:
         link = WhatsAppLink.objects.create(user=user, session=secrets.token_hex(16))
-    _call("POST", "/sessions", json={"session": link.session})
-    link.state, link.last_error = WhatsAppLink.PENDING, ""
-    link.save(update_fields=["state", "last_error"])
+    ckey = f"wa-link:{user.pk}"
+    now = timezone.now().timestamp()
+    recent = [t for t in (cache.get(ckey) or []) if t > now - 3600]
+    new_attempt = created or force or link.state != WhatsAppLink.PENDING  # pressing Link again keeps the running attempt
+    if new_attempt and len(recent) >= LINKS_PER_HOUR:
+        raise WhatsAppError("Too many link attempts in the last hour. Try again later.")
+    _call("POST", "/sessions", json={"session": link.session, "force": bool(force)})
+    if new_attempt:
+        cache.set(ckey, [*recent, now], 3600)
+    link.state, link.last_error, link.last_pairing_at, link.verification = WhatsAppLink.PENDING, "", timezone.now(), ""
+    link.save(update_fields=["state", "last_error", "last_pairing_at", "verification"])
+    from apps.core import audit
+
+    audit.record("whatsapp.link_started", actor=user, outcome="success")  # no QR, session or number
     return status(user)
 
 
@@ -195,23 +214,37 @@ def qr_svg(data: str) -> str:
     return buf.getvalue().decode()
 
 
+# Pairing stages in order (shown live), then the linked states. Labels are the words people see.
+STAGES = ["qr_ready", "scanned", "connecting", "authenticating", "saving_session", "sending_verification"]
+STAGE_LABELS = {"qr_ready": "QR Ready", "scanned": "Scanned", "connecting": "Connecting", "authenticating": "Authenticating",
+                "saving_session": "Saving Session", "sending_verification": "Sending Verification"}
+LABELS = {"verified": "Linked & Verified", "verify_pending": "Linked — Verification Pending", "verify_failed": "Linked — Test Failed",
+          "disconnected": "Disconnected — reconnecting", "reconnect_required": "Relink Required", "link_expired": "QR code expired",
+          "pairing_failed": "Pairing failed", "incompatible": "Compatibility error", "degraded": "Service unavailable",
+          "not_linked": "Not linked", "pending": "Linking…"}
+FAILURE_HINTS = {401: "WhatsApp rejected the link (logged out on the phone, or the code was used by another device).",
+                 403: "WhatsApp refused this account for linked devices.", 408: "The connection timed out.",
+                 411: "Multi-device protocol mismatch: the bridge needs a compatible update.", 428: "The connection closed.",
+                 500: "The session data was rejected.", 515: "WhatsApp asked for a restart.", "timeout": "The phone did not finish linking in time."}
+
+
 def status(user) -> dict:
     from .models import WhatsAppLink
 
     link = _link(user)
     if link is None:
-        return {"linked": False, "state": "not_linked", "label": "Not linked"}
-    out = {"linked": link.state == WhatsAppLink.CONNECTED, "state": link.state, "number_hint": link.number_hint,
-           "linked_at": link.linked_at.isoformat() if link.linked_at else None, "enabled": link.enabled, "error": link.last_error}
+        return {"linked": False, "state": "not_linked", "key": "not_linked", "label": "Not linked", "can_new_qr": True}
+    out = {"state": link.state, "number_hint": link.number_hint, "enabled": link.enabled, "error": link.last_error,
+           "linked_at": link.linked_at.isoformat() if link.linked_at else None,
+           "verified_at": link.verified_at.isoformat() if link.verified_at else None}
     try:
         s = _call("GET", f"/sessions/{link.session}")
     except WhatsAppError as exc:
-        out.update(state=link.state if link.state == WhatsAppLink.RELINK else WhatsAppLink.DEGRADED, bridge_error=str(exc))
-        out["label"] = LABELS.get(out["state"], out["state"])
+        st = link.state if link.state == WhatsAppLink.RELINK else WhatsAppLink.DEGRADED
+        out.update(state=st, key=st, bridge_error=str(exc), linked=False, label=LABELS.get(st, st), can_new_qr=False)
         return out
     state = s.get("state", "disconnected")
-    if link.state == WhatsAppLink.RELINK and state != WhatsAppLink.CONNECTED:
-        state = WhatsAppLink.RELINK
+    prev = link.state
     changed = []
     if state != link.state:
         link.state = state
@@ -224,19 +257,67 @@ def status(user) -> dict:
         if hint_ and hint_ != link.number_hint:
             link.number_hint = hint_
             changed.append("number_hint")
+        ver = s.get("verification") or "pending"
+        if ver != link.verification:
+            link.verification = ver
+            changed.append("verification")
+            if ver == "verified":
+                link.verified_at = timezone.now()
+                changed.append("verified_at")
         link.last_seen_at = timezone.now()
         changed.append("last_seen_at")
+    elif state in ("reconnect_required", "pairing_failed", "link_expired", "not_linked") and link.verification:
+        link.verification = ""
+        changed.append("verification")
+    if state in ("pairing_failed", "reconnect_required", "incompatible"):
+        code = s.get("error_code")
+        err = FAILURE_HINTS.get(code, f"WhatsApp answered {code}." if code else "")
+        if err != link.last_error:
+            link.last_error = err[:200]
+            changed.append("last_error")
     if changed:
-        link.save(update_fields=changed)
-    out.update(linked=state == WhatsAppLink.CONNECTED, state=state, number_hint=link.number_hint)
-    if state == WhatsAppLink.PENDING and s.get("qr"):
+        link.save(update_fields=list(dict.fromkeys(changed)))
+    if state == "reconnect_required" and prev != "reconnect_required":
+        _tell_relink(link)
+    if state == "incompatible":
+        alert_incompatible()
+    verification = s.get("verification") if state == WhatsAppLink.CONNECTED else None
+    key = ({"verified": "verified", "failed": "verify_failed"}.get(verification or "", "verify_pending")
+           if state == WhatsAppLink.CONNECTED else state)
+    out.update(linked=state == WhatsAppLink.CONNECTED, state=state, key=key, number_hint=link.number_hint,
+               stage=s.get("stage"), stages=STAGES, verification=verification, failure_stage=s.get("failure_stage"),
+               error=link.last_error, next_retry_in_s=s.get("next_retry_in_s"), link_expires_in_s=s.get("link_expires_in_s"),
+               verified_at=link.verified_at.isoformat() if link.verified_at else None)
+    if state == WhatsAppLink.PENDING and s.get("stage") == "qr_ready" and s.get("qr"):
         out["qr_svg"] = qr_svg(s["qr"])  # shown only to the person linking, never stored or logged
-    out["label"] = LABELS.get(state, state)
+    out["label"] = STAGE_LABELS.get(s.get("stage") or "", "Linking…") if state == WhatsAppLink.PENDING else LABELS.get(key, state)
+    out["can_new_qr"] = state in ("link_expired", "pairing_failed", "reconnect_required", "not_linked", "incompatible")
     return out
 
 
-LABELS = {"connected": "Connected", "disconnected": "Disconnected", "degraded": "Degraded", "reconnect_required": "Reconnect Required",
-          "pending": "Waiting for QR scan", "not_linked": "Not linked"}
+def _tell_relink(link) -> None:
+    """Tell the person through their other channels (WhatsApp itself cannot deliver now)."""
+    from . import events
+
+    events.notify(link.user, "whatsapp.relink_required", key=f"wa-relink:{link.user_id}:{timezone.now():%Y%m%d}",
+                  title="Link WhatsApp Personal again", icon="warning", severity="warning",
+                  lines=["WhatsApp ended the linked device of Personal DM, so notifications cannot be delivered there.",
+                         "Open My account → Notifications → WhatsApp Personal and choose Link again."],
+                  link="/settings/account?tab=notifications#whatsapp")
+
+
+def alert_incompatible() -> None:
+    """Tell the main administrators once per day through non-WhatsApp channels (no alert spam)."""
+    from apps.accounts.models import User
+
+    from . import events
+
+    for admin in User.objects.filter(is_active=True, is_main_admin=True):
+        events.notify(admin, "whatsapp.incompatible", key=f"wa-incompat:{timezone.now():%Y%m%d}", cooldown_group="wa-incompatible",
+                      title="WhatsApp Personal bridge needs a compatible update", icon="warning", severity="warning",
+                      lines=["WhatsApp delivery is paused; people's fallback channels are used.",
+                             "Settings → Connections → WhatsApp Personal → Run Diagnostics, then: sudo personaldocs whatsapp-bridge update"],
+                      link="/settings/connections#conn-whatsapp")
 
 
 def send(user, text: str) -> str:
@@ -248,7 +329,45 @@ def send(user, text: str) -> str:
 
 
 def send_test(user) -> str:
-    return send(user, "🧪 Test notification from Personal DM. WhatsApp Personal delivery works (experimental, unofficial).")
+    """Send Test Notification: a real message to the person's own chat. Success marks the link Verified; a failure
+    is recorded but never destroys an otherwise valid session."""
+    link = _link(user)
+    try:
+        ref = send(user, "🧪 Test notification from Personal DM. WhatsApp Personal delivery works (experimental, unofficial).")
+    except WhatsAppError:
+        if link and link.state == "connected":
+            link.verification = "failed"
+            link.save(update_fields=["verification"])
+        raise
+    link.verification, link.verified_at = "verified", timezone.now()
+    link.save(update_fields=["verification", "verified_at"])
+    return ref
+
+
+def diagnostics() -> dict:
+    """Main-administrator diagnostics from the bridge, with session ids replaced by the person's name. No QR payload,
+    credentials, numbers or keys exist in the bridge's answer; this only adds who each session belongs to."""
+    from .models import WhatsAppLink
+
+    d = _call("GET", "/diagnostics")
+    names = {link.session: link.user.display_name for link in WhatsAppLink.objects.select_related("user")}
+    sessions = []
+    for s in d.get("sessions", []):
+        sid = s.pop("session", "")
+        s["person"] = names.get(sid, "Unlinked session")
+        sessions.append(s)
+    known = {sid[:6]: names[sid] for sid in names}
+    events = [{**{k: v for k, v in e.items() if k != "session"}, "person": known.get(e.get("session", ""), "—")} for e in d.get("events", [])]
+    d.update(sessions=sessions, events=events)
+    c = compat()
+    d["tested"] = {"pinned": c.get("pinned"), "library": c.get("library"), "tested_versions": c.get("tested_versions", [])}
+    d["compatible"] = d.get("version") in c.get("tested_versions", []) and d.get("protocol") == c.get("protocol", PROTOCOL)
+    return d
+
+
+def restart_bridge() -> None:
+    """Ask the bridge to exit cleanly; systemd starts it again (encrypted sessions are kept and resumed)."""
+    _call("POST", "/admin/restart")
 
 
 def unlink(user) -> None:

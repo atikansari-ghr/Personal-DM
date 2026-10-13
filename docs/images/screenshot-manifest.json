@@ -140,6 +140,27 @@
   "pixelRatio": 2
  },
  {
+  "file": "backup-nas-destination.png",
+  "caption": "Add destination → NAS share: SMB connection, server, share, folder and account (password write-only)",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "backup-destinations.png",
+  "caption": "Destination cards: health, free space, last and next backup, Test Connection and Backup Now; the backup queue",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "backup-now-dialog.png",
+  "caption": "Backup Now: destination, full-system scope, space, and the no-cancel notice",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
   "file": "backup-points.png",
   "caption": "Recovery points with copies per destination and actions",
   "source": "real application, synthetic demo data",
@@ -211,7 +232,14 @@
  },
  {
   "file": "security-signin-map.png",
-  "caption": "Sign-in map: Trusted Zone pin, recent sign-ins with explainable risk",
+  "caption": "Sign-in map: English place names, grouped sign-ins with a count, hover summary and the filters",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "security-signin-details.png",
+  "caption": "Sign-in details next to the map after selecting a sign-in (the list and map stay in sync)",
   "source": "real application, synthetic demo data",
   "viewport": "1440x900",
   "pixelRatio": 2
@@ -247,6 +275,27 @@
  {
   "file": "connections-whatsapp.png",
   "caption": "WhatsApp Personal: bridge service installed, running, version, protocol and compatibility",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "whatsapp-diagnostics.png",
+  "caption": "WhatsApp diagnostics (main administrator): versions, DNS, network, system time, storage, per-person state; no secrets",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "whatsapp-linking.png",
+  "caption": "Linking WhatsApp: live stages after the phone scanned the code",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "whatsapp-verified.png",
+  "caption": "Linked & Verified, with Send Test Notification, Reconnect and Unlink",
   "source": "real application, synthetic demo data",
   "viewport": "1440x900",
   "pixelRatio": 2

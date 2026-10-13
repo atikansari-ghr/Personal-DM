@@ -38,11 +38,18 @@ class PermanentFailure(Exception):
     pass
 
 
-def handler(kind: str, heavy: bool = False):
+# Serial kinds run one at a time across all workers, strictly in enqueue order (Change Set V: on a 6 GB LXC only one
+# backup/verification job runs; further jobs wait in the queue instead of failing on the backup lock).
+SERIAL_KINDS: set[str] = set()
+
+
+def handler(kind: str, heavy: bool = False, serial: bool = False):
     def deco(fn):
         HANDLERS[kind] = fn
         if heavy:
             HEAVY_KINDS.add(kind)
+        if serial:
+            SERIAL_KINDS.add(kind)
         return fn
 
     return deco
@@ -83,6 +90,13 @@ def claim(worker: str, heavy_limit: int = 1) -> Job | None:
         )
         if running_heavy >= heavy_limit:
             qs = qs.filter(heavy=False)
+        if SERIAL_KINDS and Job.objects.filter(status=Job.RUNNING, kind__in=SERIAL_KINDS, locked_until__gt=now).exists():
+            qs = qs.exclude(kind__in=SERIAL_KINDS)
+        elif SERIAL_KINDS:
+            # FIFO among serial jobs: only the oldest queued one may start (a manual Backup Now never jumps ahead)
+            first = Job.objects.filter(status=Job.QUEUED, kind__in=SERIAL_KINDS, run_after__lte=now).order_by("created_at", "id").first()
+            if first is not None:
+                qs = qs.filter(~Q(kind__in=SERIAL_KINDS) | Q(pk=first.pk))
         job = qs.order_by("priority", "run_after").first()
         if job is None:
             return None

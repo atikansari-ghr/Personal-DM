@@ -1,3 +1,4 @@
+<!-- audience: main_admin -->
 # OCR engines: PaddleOCR (PP-OCRv5) and Tesseract (Legacy)
 
 Since Change Set Q, text recognition uses **PaddleOCR with the PP-OCRv5 models** by default. **Tesseract** stays

@@ -208,24 +208,37 @@ HELP_CATEGORIES = [
 
 
 def _guide_meta(path: Path) -> dict:
+    from . import help_access
+
     text = path.read_text(encoding="utf-8")
     title = next((ln[2:].strip() for ln in text.splitlines() if ln.startswith("# ")), path.stem)
-    audience = "admin" if "<!-- audience: admin -->" in text else ("maintainer" if "<!-- audience: maintainer -->" in text else "all")
+    audience = help_access.audience_of(text)
     m = re.search(r"<!-- reviewed: ([0-9-]+) -->", text)
     cat = next((c for c, slugs in HELP_CATEGORIES if path.stem in slugs), "More guides")
     order = next((slugs.index(path.stem) for c, slugs in HELP_CATEGORIES if path.stem in slugs), 99)
     return {"slug": path.stem, "title": title, "audience": audience, "category": cat, "order": order, "reviewed": m.group(1) if m else None}
 
 
+def _readable(user) -> dict[str, Path]:
+    """Guides this person may open (computed per request: permission changes apply at once)."""
+    from . import help_access
+
+    return {p.stem: p for p in sorted(_guides_dir().glob("*.md")) if help_access.allowed(user, _guide_meta(p)["audience"])}
+
+
 @api_view(["GET"])
 @permission_classes([IsActiveAuthenticated])
 def help_index(request):
+    """Index, categories and search - only over what this person may read (titles of other guides never appear)."""
+    from . import help_access
+
     q = (request.query_params.get("q") or "").strip().lower()
     out = []
-    for p in sorted(_guides_dir().glob("*.md")):
+    readable = _readable(request.user)
+    for p in readable.values():
         meta = _guide_meta(p)
         if q:
-            text = p.read_text(encoding="utf-8").lower()
+            text = help_access.visible_markdown(p.read_text(encoding="utf-8"), request.user).lower()
             if q not in text:
                 continue
             i = text.find(q)
@@ -257,7 +270,11 @@ def help_asset(request, path):
 def help_guide(request, slug):
     if not re.fullmatch(r"[a-z0-9\-]{1,80}", slug):
         raise Http404
-    path = _guides_dir() / f"{slug}.md"
-    if not path.exists():
-        raise Http404
-    return Response({**_guide_meta(path), "markdown": path.read_text(encoding="utf-8")})
+    from . import help_access
+
+    readable = _readable(request.user)
+    path = readable.get(slug)
+    if path is None:
+        raise Http404  # missing and not permitted look the same: the title is not revealed
+    md = help_access.visible_markdown(path.read_text(encoding="utf-8"), request.user, readable_slugs=set(readable))
+    return Response({**_guide_meta(path), "markdown": md})

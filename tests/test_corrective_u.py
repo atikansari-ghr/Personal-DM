@@ -9,6 +9,7 @@ from unittest import mock
 import pytest
 
 from apps.core import config
+from apps.core.models import AppSetting
 from apps.notify.models import DiscordWebhook, WhatsAppLink
 from apps.security import mapprov
 
@@ -32,12 +33,15 @@ def bridge(settings):
 # ------------------------------------------------------------------ AT-340 map provider root cause and presets
 
 def test_at340_provider_presets_referrer_policy_and_legacy_custom_url():
+    assert mapprov.resolved()["provider"] == "openfreemap"  # Change Set V default (English labels)
+    config.set_value("security.map_provider", "osm")
     r = mapprov.resolved()
     assert r["provider"] == "osm" and r["url"] == mapprov.OSM_URL
     cfg = mapprov.public_config()
     # tiles carry only this site's origin as Referer (the observed 403 came from same-origin = no Referer at all)
     assert cfg["referrer_policy"] == "strict-origin-when-cross-origin"
     # a custom tile address set before providers existed is honoured
+    AppSetting.objects.filter(key="security.map_provider").delete()
     config.set_value("security.map_tile_url", "https://tiles.example.org/{z}/{x}/{y}.png")
     assert mapprov.resolved()["provider"] == "custom"
     # keyed providers: the key is inserted into the template, and without a key the map reports why
@@ -52,6 +56,7 @@ def test_at340_provider_presets_referrer_policy_and_legacy_custom_url():
 def test_at340_csp_allows_only_the_configured_tile_origin(family, clients):
     from apps.core.middleware import SecurityHeadersMiddleware
 
+    config.set_value("security.map_provider", "osm")
     SecurityHeadersMiddleware._tiles["at"] = 0.0
     csp = clients["dad"].get("/api/session")["Content-Security-Policy"]
     assert "img-src 'self' data: blob: https://tile.openstreetmap.org" in csp and "connect-src 'self' https://tile.openstreetmap.org" in csp
@@ -127,7 +132,7 @@ def test_at345_theme_and_signin_design_are_independent(family, clients):
 def test_at349_running_bridge_is_detected_before_and_after_enabling(family, clients, bridge):
     svc = clients["dad"].get("/api/admin/connections").json()["providers"]
     wa = next(p for p in svc if p["key"] == "whatsapp")
-    assert wa["service"]["state"] == "ready_disabled" and wa["service"]["version"] == "1.0.0" and wa["service"]["protocol"] == 1
+    assert wa["service"]["state"] == "ready_disabled" and wa["service"]["version"] == "1.1.0" and wa["service"]["protocol"] == 1
     assert wa["status"] == "disabled" and "Planned" not in json.dumps(svc)
     config.set_value("whatsapp.enabled", True)
     wa = next(p for p in clients["dad"].get("/api/admin/connections").json()["providers"] if p["key"] == "whatsapp")

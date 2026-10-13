@@ -103,15 +103,49 @@ def stepup(request):
 
 # ------------------------------------------------------------------ overview, policies, destinations
 
+NAS_FIELDS = ("server", "share", "subfolder", "username", "domain", "version")
+NAS_CATEGORY = {"dns": "DNS: the NAS name cannot be resolved", "reachability": "Network: the NAS cannot be reached",
+                "authentication": "Authentication: the NAS refused the account or this container", "share": "Share/export not found",
+                "write_permission": "Write permission missing on the share", "mount_not_allowed": "This container may not mount network shares",
+                "client_tools": "NFS/SMB client tools missing", "mount": "Mount failed", "capacity": "Insufficient storage"}
+
+
+def nas_json(d: BackupDestination) -> dict | None:
+    """NAS connection fields (the password is never returned, only whether one is stored) and the mount state."""
+    if d.kind != "nas":
+        return None
+    from apps.core import config
+
+    from . import nas
+
+    managed = bool((d.config or {}).get("managed"))
+    out = {"connection": (d.config or {}).get("connection", "mounted") if managed else "mounted", "managed": managed}
+    if managed:
+        out.update({f: config.get(f"nas.{f}") for f in NAS_FIELDS})
+        out["password_set"] = bool(config.is_set("nas.password"))
+        st = nas.read_status()
+        out["mount"] = {"state": st.get("state"), "message": st.get("message"), "at": st.get("at"),
+                        "category": st.get("category"), "category_label": NAS_CATEGORY.get(st.get("category") or "", "")}
+    return out
+
+
 def dest_json(d: BackupDestination) -> dict:
     secret_keys = []
     try:
         secret_keys = sorted(D.secrets_of(d).keys())
     except D.DestError:
         pass
+    last = d.copies.select_related("point").order_by("-point__created_at").first()
+    retry = d.copies.filter(state=RecoveryCopy.RETRY_PENDING, point__deleted_at__isnull=True).order_by("next_retry_at").first()
+    nxt = [policy_json(p)["next_full"] for p in d.policies.filter(enabled=True)]
     return {"id": d.id, "name": d.name, "kind": d.kind, "kind_label": D.LABELS.get(d.kind, d.kind), "config": d.config,
             "secrets_set": secret_keys, "enabled": d.enabled, "health": d.health, "health_detail": d.health_detail,
-            "free_bytes": d.free_bytes, "total_bytes": d.total_bytes, "checked_at": d.checked_at.isoformat() if d.checked_at else None}
+            "free_bytes": d.free_bytes, "total_bytes": d.total_bytes, "checked_at": d.checked_at.isoformat() if d.checked_at else None,
+            "capacity": E.capacity(d), "nas": nas_json(d),
+            "last_backup": {"at": last.point.created_at.isoformat(), "state": last.state, "label": RecoveryCopy.LABELS.get(last.state, last.state)} if last else None,
+            "next_backup": min([n for n in nxt if n], default=None),
+            "retry": {"next_at": retry.next_retry_at.isoformat() if retry.next_retry_at else None, "attempts": retry.attempts} if retry else None,
+            "needs_attention": d.health == "needs_attention"}
 
 
 def policy_json(p: BackupPolicy) -> dict:
@@ -258,6 +292,56 @@ def _config_changed(request, what: str):
     events.backup_event("backup.config_changed", detail=what, actor=request.user, tag=str(time.time()))
 
 
+def _clean_nas(data, d: BackupDestination | None, cfg: dict) -> dict | None:
+    """NAS fields live in the destination editor. A managed (NFS/SMB) share is mounted by Personal DM at
+    /mnt/pdnas/<folder>; there is one such share. Returns the values to store in the managed-NAS settings."""
+    from apps.core import config
+    from apps.core.registry import BY_KEY, SettingError, coerce
+
+    from . import nas_helper
+
+    conn = str(((data.get("config") or {}).get("connection")) or cfg.get("connection") or "mounted")
+    if conn not in ("mounted", "nfs", "smb"):
+        raise ValueError("Choose SMB, NFS or Already mounted.")
+    cfg["connection"] = conn
+    if conn == "mounted":
+        cfg["managed"] = False
+        return None
+    other = [x for x in BackupDestination.objects.filter(kind="nas") if (x.config or {}).get("managed") and (d is None or x.pk != d.pk)]
+    if other:
+        raise ValueError(f"Only one NAS share can be connected by Personal DM (“{other[0].name}”). Mount further shares on the "
+                         "Proxmox host and add them as “Already mounted”.")
+    nas_in = data.get("nas") or {}
+    vals = {}
+    for f in NAS_FIELDS:
+        raw = nas_in.get(f, config.get(f"nas.{f}"))
+        try:
+            vals[f] = coerce(BY_KEY[f"nas.{f}"], raw if raw is not None else "")
+        except SettingError as exc:
+            raise ValueError(f"{BY_KEY[f'nas.{f}'].label}: {exc}")
+    try:
+        snap = nas_helper.validate({"type": conn, **vals})
+    except nas_helper.NasError as exc:
+        raise ValueError(str(exc))
+    password = (data.get("secrets") or {}).get("password") or ""
+    if conn == "smb" and not password and not config.is_set("nas.password"):
+        raise ValueError("Enter the SMB password.")
+    cfg.update(managed=True, path=f"{nas_helper.MOUNT_POINT}/{snap['subfolder']}", require_mount=True)
+    return {"type": conn, **{f: snap[f] for f in NAS_FIELDS}, "password": password}
+
+
+def _store_nas(values: dict, actor=None) -> None:
+    """Write the managed-NAS values. An empty password keeps the stored (encrypted) one; a new one replaces it."""
+    from apps.core import config
+
+    for f, v in values.items():
+        if f == "password":
+            if v:
+                config.set_value("nas.password", v, actor=actor)
+            continue
+        config.set_value(f"nas.{f}", v, actor=actor)
+
+
 def _clean_dest(data, d: BackupDestination | None = None) -> tuple[dict, dict | None]:
     kind = data.get("kind", d.kind if d else "")
     if kind not in D.PROVIDERS:
@@ -271,7 +355,25 @@ def _clean_dest(data, d: BackupDestination | None = None) -> tuple[dict, dict | 
     for f in D.CONFIG_FIELDS[kind]:
         if f in (data.get("config") or {}):
             v = data["config"][f]
-            cfg[f] = bool(v) if f == "require_mount" else str(v).strip()[:500]
+            if f == "require_mount":
+                cfg[f] = bool(v)
+            elif f in ("warn_pct", "crit_pct"):
+                if v in (None, ""):
+                    cfg.pop(f, None)
+                    continue
+                try:
+                    n = int(v)
+                except (TypeError, ValueError):
+                    raise ValueError("Space thresholds are whole percentages.")
+                if not 1 <= n <= 90:
+                    raise ValueError("Space thresholds must be between 1 and 90 %.")
+                cfg[f] = n
+            else:
+                cfg[f] = str(v).strip()[:500]
+    if cfg.get("warn_pct") and cfg.get("crit_pct") and cfg["crit_pct"] >= cfg["warn_pct"]:
+        raise ValueError("The critical threshold must be lower than the warning threshold.")
+    if kind == "nas":
+        values["_nas"] = _clean_nas(data, d, cfg)
     if kind in ("local", "nas"):
         path = cfg.get("path", "")
         if not path.startswith("/") or ".." in path.split("/"):
@@ -300,10 +402,13 @@ def destinations(request):
         return _err(str(exc))
     if "name" not in values or BackupDestination.objects.filter(name=values["name"]).exists():
         return _err("Give the destination a unique name.")
+    nas_values = values.pop("_nas", None)
     d = BackupDestination(**values)
     if secrets:
         D.set_secrets(d, secrets)
     d.save()
+    if nas_values:
+        _store_nas(nas_values, request.user)
     if not BackupPolicy.objects.exists():  # first destination: the recommended policy (weekly Full + incremental every 4 h)
         p = BackupPolicy.objects.create(name="Default")
         p.destinations.add(d)
@@ -331,8 +436,13 @@ def destination_detail(request, pk):
         values, secrets = _clean_dest(request.data, d)
     except ValueError as exc:
         return _err(str(exc))
+    nas_values = values.pop("_nas", None)
     for k, v in values.items():
         setattr(d, k, v)
+    if nas_values:
+        _store_nas(nas_values, request.user)
+        if d.health == "needs_attention":
+            d.health, d.health_detail = "unknown", "Configuration saved. Run Test Connection."
     if secrets:
         merged = {**D.secrets_of(d), **secrets}
         D.set_secrets(d, merged)
@@ -341,16 +451,76 @@ def destination_detail(request, pk):
     return Response(dest_json(d))
 
 
+def _managed_nas_test(request, d: BackupDestination):
+    """Test Connection for a share mounted by Personal DM: (re)mount through the root helper, then test the folder.
+    The first call starts the mount and answers "pending"; the page asks again until the helper has answered."""
+    from datetime import datetime, timezone as tz
+
+    from . import nas
+
+    action = request.data.get("action", "test")
+    if action == "disconnect":
+        nas.request_apply(request.user, "unmount")
+        audit.record("nas.apply_requested", request=request, nas_action="unmount", destination=d.name)
+        return Response({"ok": None, "pending": True, "detail": "Disconnecting…"})
+    st = nas.sync()
+    if st.get("state") == "pending":
+        try:
+            age = (datetime.now(tz.utc) - datetime.fromisoformat(st["at"])).total_seconds()
+        except (KeyError, ValueError):
+            age = 0
+        if age <= 60:
+            return Response({"ok": None, "pending": True, "detail": "Connecting to the NAS…"})
+        E._set_health(d, "unavailable", "The system service did not pick up the request. Run 'sudo personaldocs repair'.")
+        return Response({"ok": False, "code": "mount", "category": "mount", "detail": "The system service did not pick up the request. "
+                         "Run 'sudo personaldocs repair' (installs it) or 'sudo personaldocs nas-apply'."})
+    if st.get("state") != "mounted" or st.get("target") != (d.config or {}).get("path") or request.data.get("remount"):
+        if request.data.get("poll") and st.get("state") == "error":
+            cat = st.get("category") or "mount"
+            E._set_health(d, "auth_required" if cat == "authentication" else "unavailable", f"{NAS_CATEGORY.get(cat, '')}: {st.get('message', '')}"[:300])
+            return Response({"ok": False, "code": cat, "category": cat, "category_label": NAS_CATEGORY.get(cat, ""),
+                             "detail": st.get("message", ""), "technical": (st.get("detail") or "")[-600:]})
+        try:
+            nas.request_apply(request.user, "mount")
+        except nas.NasError as exc:
+            E._set_health(d, "needs_attention" if d.health == "needs_attention" else "unavailable", str(exc))
+            return Response({"ok": False, "code": "config", "detail": str(exc)})
+        audit.record("nas.apply_requested", request=request, nas_action="mount", destination=d.name)
+        return Response({"ok": None, "pending": True, "detail": "Connecting to the NAS…"})
+    return None
+
+
+@api_view(["POST"])
+@permission_classes([IsMainAdmin])
+def destination_retry_migration(request, pk):
+    """Retry the automatic Storage & NAS → destination migration (idempotent, keeps all backup data)."""
+    from apps.core.models import AppSetting, AuditEvent
+
+    from . import nas_migration
+
+    d = BackupDestination.objects.filter(pk=pk, kind="nas").first()
+    if d is None:
+        return _err("Not found.", 404)
+    res = nas_migration.run(BackupDestination, AppSetting, BackupPolicy, AuditEvent)
+    d.refresh_from_db()
+    return Response({**res, "destination": dest_json(d)})
+
+
 @api_view(["POST"])
 @permission_classes([IsMainAdmin])
 def destination_test(request, pk):
     d = BackupDestination.objects.filter(pk=pk).first()
     if d is None:
         return _err("Not found.", 404)
+    if d.kind == "nas" and (d.config or {}).get("managed"):
+        early = _managed_nas_test(request, d)
+        if early is not None:
+            return early
     try:
         res = D.provider(d).test()
         E._set_health(d, "healthy", res.get("detail", ""), res.get("free"), res.get("total"))
-        return Response({"ok": True, **res})
+        d.refresh_from_db()
+        return Response({"ok": True, **res, "capacity": E.capacity(d)})
     except D.DestError as exc:
         E._set_health(d, {"auth_required": "auth_required", "insufficient_storage": "insufficient_storage"}.get(exc.code, "unavailable"), str(exc))
         return Response({"ok": False, "code": exc.code, "detail": str(exc)})
@@ -358,27 +528,37 @@ def destination_test(request, pk):
 
 # ------------------------------------------------------------------ jobs
 
-@jobs.handler("backup_point", heavy=True)
+@jobs.handler("backup_point", heavy=True, serial=True)
 def backup_point_job(job):
     from apps.accounts.models import User
 
+    from apps.core.models import Job
+
     pol = BackupPolicy.objects.filter(pk=job.payload.get("policy")).first()
     actor = User.objects.filter(pk=job.payload.get("actor")).first()
+    only = list(BackupDestination.objects.filter(pk__in=job.payload["destinations"], enabled=True)) if job.payload.get("destinations") else None
+    if job.payload.get("destinations") and not only:
+        raise jobs.PermanentFailure("The destination was removed or disabled before the backup started.")
+
+    def progress(stage):
+        Job.objects.filter(pk=job.pk).update(result={"stage": stage})
+
     try:
-        p = E.create_point(pol, kind=job.payload.get("kind", "full"), trigger=job.payload.get("trigger", "scheduled"), actor=actor)
-        return {"point": str(p.id), "status": p.status}
+        p = E.create_point(pol, kind=job.payload.get("kind", "full"), trigger=job.payload.get("trigger", "scheduled"), actor=actor,
+                           destinations=only, standalone=bool(only), progress=progress)
+        return {"point": str(p.id), "status": p.status, "stage": "completed" if p.status != "failed" else "failed"}
     except E.BackupError as exc:
         raise jobs.PermanentFailure(str(exc))
 
 
-@jobs.handler("backup_verify", heavy=True)
+@jobs.handler("backup_verify", heavy=True, serial=True)
 def backup_verify_job(job):
     p = RecoveryPoint.objects.get(pk=job.payload["point"])
     E.verify_point(p)
     return {"status": p.status}
 
 
-@jobs.handler("backup_test_restore", heavy=True)
+@jobs.handler("backup_test_restore", heavy=True, serial=True)
 def backup_test_restore_job(job):
     from apps.accounts.models import User
 
@@ -394,7 +574,7 @@ def backup_retry_job(job):
     return {"retried": E.retry_pending(), "retired": bk_keys.retire_unused()}
 
 
-@jobs.handler("recovery_validation", heavy=True)
+@jobs.handler("recovery_validation", heavy=True, serial=True)
 def recovery_validation_job(job):
     from .bk_validation import automated_validation
 
@@ -402,7 +582,7 @@ def recovery_validation_job(job):
     return {"status": run.status if run else "not_configured"}
 
 
-@jobs.handler("key_rotation", heavy=True)
+@jobs.handler("key_rotation", heavy=True, serial=True)
 def key_rotation_job(job):
     from apps.accounts.models import User
 
@@ -422,11 +602,75 @@ def run_now(request):
     kind = request.data.get("kind", "full")
     if kind not in ("full", "incremental"):
         return _err("Choose Full or Incremental.")
-    if jobs_running():
-        return _err("A backup task is already running.", 409)
-    jobs.enqueue("backup_point", {"policy": pol.id, "kind": kind, "trigger": "manual", "actor": str(request.user.pk)}, max_attempts=1)
+    from apps.core.models import Job
+
+    if Job.objects.filter(kind="backup_point", status__in=[Job.QUEUED, Job.RUNNING], payload__policy=pol.id,
+                          payload__kind=kind, payload__destinations__isnull=True).exists():
+        return _err("The same backup is already queued or running.", 409)
+    job = jobs.enqueue("backup_point", {"policy": pol.id, "kind": kind, "trigger": "manual", "actor": str(request.user.pk)}, max_attempts=1)
     audit.record("backup.requested", request=request, backup_kind=kind, policy=pol.name)
-    return Response({"status": "queued"})
+    return Response({"status": "queued", "job": str(job.id), "position": queue_position(job)})
+
+
+SERIAL_BACKUP = ["backup_point", "backup_verify", "backup_test_restore", "key_rotation", "recovery_validation"]
+JOB_STAGE = {"preparing": "Preparing", "backing_up": "Backing Up", "verifying": "Verifying", "completed": "Completed", "failed": "Failed"}
+
+
+def queue_position(job) -> int:
+    from apps.core.models import Job
+
+    return Job.objects.filter(kind__in=SERIAL_BACKUP, status__in=[Job.QUEUED, Job.RUNNING], created_at__lt=job.created_at).count()
+
+
+def job_json(j) -> dict:
+    from apps.core.models import Job
+
+    stage = (j.result or {}).get("stage")
+    if j.status == Job.QUEUED:
+        state = "Queued"
+    elif j.status == Job.RUNNING:
+        state = JOB_STAGE.get(stage, "Preparing")
+    elif j.status == Job.DONE:
+        state = "Failed" if (j.result or {}).get("status") == "failed" else "Completed"
+    else:
+        state = "Failed"
+    dest_ids = j.payload.get("destinations") or []
+    names = list(BackupDestination.objects.filter(pk__in=dest_ids).values_list("name", flat=True)) if dest_ids else []
+    return {"id": str(j.id), "kind": j.kind, "state": state, "trigger": j.payload.get("trigger", ""), "backup_kind": j.payload.get("kind", ""),
+            "destinations": names, "scope": "Full system", "created_at": j.created_at.isoformat(),
+            "finished_at": j.finished_at.isoformat() if j.finished_at else None, "point": (j.result or {}).get("point"),
+            "error": (j.last_error or "").split("\n")[0][:300] if j.status == Job.FAILED else "", "cancellable": False}
+
+
+@api_view(["GET"])
+@permission_classes([IsMainAdmin])
+def backup_jobs(request):
+    """Durable backup queue: one job at a time, strictly first in, first out; running jobs cannot be cancelled."""
+    from apps.core.models import Job
+
+    qs = Job.objects.filter(kind__in=SERIAL_BACKUP).order_by("-created_at")[:30]
+    return Response({"jobs": [job_json(j) for j in qs], "fifo": True, "cancellable": False})
+
+
+@api_view(["POST"])
+@permission_classes([IsMainAdmin])
+def destination_backup_now(request, pk):
+    """Backup Now for one destination: a Full, full-system recovery point stored on this destination only."""
+    from apps.core.models import Job
+
+    d = BackupDestination.objects.filter(pk=pk).first()
+    if d is None:
+        return _err("Not found.", 404)
+    if not d.enabled:
+        return _err("Turn the destination on first.")
+    if not request.data.get("confirm"):
+        return _err("Confirm the backup first.", 400, code="confirm")
+    if Job.objects.filter(kind="backup_point", status__in=[Job.QUEUED, Job.RUNNING], payload__destinations=[d.pk]).exists():
+        return _err("A backup to this destination is already queued or running.", 409)
+    job = jobs.enqueue("backup_point", {"policy": None, "kind": "full", "trigger": "manual", "destinations": [d.pk],
+                                        "actor": str(request.user.pk)}, max_attempts=1)
+    audit.record("backup.requested", request=request, backup_kind="full", destination=d.name)
+    return Response({"status": "queued", "job": str(job.id), "position": queue_position(job)})
 
 
 @api_view(["POST"])

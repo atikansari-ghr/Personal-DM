@@ -106,6 +106,7 @@ discoverable passkey, so those people see **Sign in with Passkey** work straight
 as before. Before this change passkeys were only offered after the password because passwordless was off by default
 and also needed a per-person opt-in.
 
+<!-- audience-section: main_admin -->
 ## Authentication policy (administrator) {#policy}
 
 **Settings → Authentication**:
@@ -123,6 +124,7 @@ Existing accounts keep their current sign-in requirements after an upgrade until
 
 **Main administrator recovery works in both modes:** the main administrator's password, recovery codes and the console
 command `sudo personaldocs recover-admin USERNAME` keep working whichever mode is chosen.
+<!-- /audience-section -->
 
 ## Re-confirming for sensitive changes {#recent-auth}
 
@@ -135,6 +137,7 @@ These changes need a confirmation within the re-confirmation window, using your 
 Changing your password requires the current password. All of these changes are recorded in the audit log and can trigger an
 [account security alert](security-access.md#alerts).
 
+<!-- audience-section: main_admin -->
 ## Relying party, domain and reverse proxy {#rp-id}
 
 - **Relying party ID** = the host name of `PD_PUBLIC_ORIGIN` (for example `docs.example.com`).
@@ -144,6 +147,7 @@ Changing your password requires the current password. All of these changes are r
 - Development/testing: `http://localhost:8000` is accepted when `PD_DEBUG=1`.
 - **Changing the domain later makes existing passkeys unusable** (they are bound to the old domain). People then sign in with
   password + authenticator code or a recovery code and register new passkeys; the administrator can also reset them (below).
+<!-- /audience-section -->
 
 ## Troubleshooting {#troubleshooting}
 
@@ -151,7 +155,7 @@ Changing your password requires the current password. All of these changes are r
 |---|---|
 | **Sign in with Passkey** is greyed out ("Passkeys need the secure HTTPS address of this app") | You opened `http://<ip>:8000` or another plain-http address. Open the `https://` address in `PD_PUBLIC_ORIGIN` |
 | The browser says no passkey is available | The passkey was created for another address (relying party ID), or it is not discoverable. Sign in with your password, add a new passkey on this address |
-| "The passkey could not be verified" | The address in the browser differs from `PD_PUBLIC_ORIGIN` (origin check), or the proxy changes the Host header. Run `sudo personaldocs doctor` |
+| "The passkey could not be verified" | The address in the browser differs from `PD_PUBLIC_ORIGIN` (origin check), or the proxy changes the Host header. Ask the administrator to check the server address settings |
 | Passkey works only after the password | The mode is **Password + Passkey**, or you turned off *Use Sign in with Passkey without a password*, or your passkey is not discoverable (add a new one) |
 | Passkeys not offered in the username autofill list | Not every browser supports passkey autofill; use the **Sign in with Passkey** button |
 
@@ -161,11 +165,13 @@ Changing your password requires the current password. All of these changes are r
 - Lost everything: the main administrator uses **Family & access → Reset 2FA** for that person. This removes the authenticator app, all
   passkeys and recovery codes and signs them out everywhere. The action is audited and the person is notified. Their documents
   are untouched.
+<!-- audience-section: main_admin -->
 - Main administrator locked out (server shell required):
 
 ```
 sudo personaldocs recover-admin <username> --generate --reset-2fa
 ```
+<!-- /audience-section -->
 
 No secret is ever shown: neither TOTP seeds nor passkey material can be read back. There is no web-based bypass of two-step
 verification.

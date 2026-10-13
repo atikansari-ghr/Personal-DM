@@ -38,21 +38,31 @@ class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
-    _tiles = {"at": 0.0, "origin": ""}
+    _tiles = {"at": 0.0, "origin": "", "key": None}
 
     @classmethod
     def tile_origin(cls) -> str:
-        """Origin of the configured map tile server (images and the availability probe), cached for a minute."""
+        """Origin of the configured map tile server (map data and the availability probe).
+
+        Every worker process re-reads the map settings (one small query) and recomputes the origin when they changed,
+        so a new provider is allowed by every worker at once (Change Set V: a per-process one-minute cache let other
+        workers keep sending the old Content-Security-Policy, which blocked the new provider)."""
         import time
 
-        if time.monotonic() - cls._tiles["at"] > 60:
+        try:
+            from .models import AppSetting
+
+            key = tuple(AppSetting.objects.filter(key__startswith="security.map_").order_by("key").values_list("key", "value"))
+        except Exception:  # noqa: BLE001 - before migrations / without a database
+            return ""
+        if key != cls._tiles["key"] or time.monotonic() - cls._tiles["at"] > 300:
             try:
                 from apps.security import mapprov
 
                 origin = mapprov.tile_origin()
-            except Exception:  # noqa: BLE001 - before migrations / without a database
+            except Exception:  # noqa: BLE001
                 origin = ""
-            cls._tiles.update(at=time.monotonic(), origin=origin)
+            cls._tiles.update(at=time.monotonic(), origin=origin, key=key)
         return cls._tiles["origin"]
 
     def __call__(self, request):

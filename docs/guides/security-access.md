@@ -1,4 +1,4 @@
-<!-- audience: admin -->
+<!-- audience: main_admin -->
 # Security & access: login audit, GeoIP, country/IP rules and traffic analytics
 
 ## How the layers fit together {#overview}

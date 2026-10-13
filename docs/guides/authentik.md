@@ -1,3 +1,4 @@
+<!-- audience: main_admin -->
 # Sign in with authentik
 
 [authentik](https://goauthentik.io) is an open-source identity provider. Personal DM can use it as an **additional** way to sign in through standard OpenID Connect. Personal DM stays the authority for documents and folders: authentik only proves who someone is.

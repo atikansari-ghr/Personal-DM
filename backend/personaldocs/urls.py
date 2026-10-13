@@ -249,6 +249,7 @@ api = [
     path("notifications/my-deliveries", notify.my_deliveries),
     path("notifications/health", notify.delivery_health),
     path("admin/connections", notify.admin_connections),
+    path("admin/whatsapp", notify.admin_whatsapp),
     path("notifications/preview", notify.template_preview),
     path("notifications/run", notify.run_reminders_now),
     # settings, admin, ops
@@ -271,6 +272,9 @@ api = [
     path("backup/destinations", bk.destinations),
     path("backup/destinations/<int:pk>", bk.destination_detail),
     path("backup/destinations/<int:pk>/test", bk.destination_test),
+    path("backup/destinations/<int:pk>/backup-now", bk.destination_backup_now),
+    path("backup/destinations/<int:pk>/retry-migration", bk.destination_retry_migration),
+    path("backup/jobs", bk.backup_jobs),
     path("backup/now", bk.run_now),
     path("backup/points/<uuid:pk>/delete", bk.point_delete),
     path("backup/points/<uuid:pk>/download", bk.point_download),

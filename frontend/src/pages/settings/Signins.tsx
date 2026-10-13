@@ -11,52 +11,72 @@ const RISK: Record<string, [string, string]> = { normal: ["Normal", "ok"], low: 
 
 /** My account → Sign-in security: map, recent sign-ins with explainable risk, recognised devices. Administrators
  * (main administrator: everyone; membership delegates: their group) can switch the person. */
+const PERIODS: [string, string][] = [["today", "Today"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 90 days"], ["365", "Last year"], ["custom", "Custom range…"]];
+
+/** My account → Sign-in security: map and list share one filtered dataset (default: last 7 days), markers and list rows
+ * select each other, details open on click/tap. Administrators (main administrator: everyone; membership delegates:
+ * their group) can switch the person; the server enforces the scope. */
 export function SigninSecurity({ adminView = false }: { adminView?: boolean }) {
   const { session } = useSession();
   const toast = useToast();
   const [who, setWho] = useState(adminView ? "all" : "");
-  const [days, setDays] = useState(90);
+  const [f, setF] = useState({ period: "7", from: "", to: "", trust: "", risk: "", device: "" });
+  const [selected, setSelected] = useState<number[]>([]);
   const [unrec, setUnrec] = useState<any | null>(null);
   const [next, setNext] = useState<any[] | null>(null);
-  const map = useAsync<any>(() => api("security/map", { query: { user: who || undefined, days } }), [who, days]);
+  const q = { user: who || undefined, period: f.period, from: f.period === "custom" ? f.from : undefined, to: f.period === "custom" ? f.to : undefined,
+    trust: f.trust || undefined, risk: f.risk || undefined, device: f.device || undefined };
+  const ready = f.period !== "custom" || (f.from && f.to);
+  const map = useAsync<any>(() => (ready ? api("security/map", { query: q }) : Promise.resolve(null)), [JSON.stringify(q), ready]);
   const devices = useAsync<any>(() => api("security/devices", { query: { user: who && who !== "all" ? who : undefined } }), [who]);
   const mark = (d: any) => api(`security/devices/${d.id}/unrecognize`, { method: "POST" }).then((r) => { setUnrec(null); setNext(r.next_steps); devices.reload(); toast(`${r.sessions_ended} session(s) ended`); }).catch((e) => toast(e.message, "error"));
   const own = !who || who === String(session?.user?.id);
+  const events: any[] = map.data?.events || [];
+  const chosen = events.filter((e) => selected.includes(e.id));
+  const set = (k: string, v: string) => { setSelected([]); setF({ ...f, [k]: v }); };
   return (
     <div className="stack signins">
       <section className="card">
         <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-          <h2 style={{ margin: 0 }}>Sign-in map <HelpTip text="Trusted Zone pins are positions your administrator configured. Other points come from this server's GeoIP database and are approximate. Your sign-in addresses are never sent to the map provider." link="/help/security-map#map" /></h2>
-          <div className="row" style={{ gap: 8 }}>
-            {map.data?.people?.length > 0 && <select aria-label="Person" value={who} onChange={(e) => setWho(e.target.value)}>
-              {adminView && <option value="all">Everyone I may see</option>}<option value="">Me</option>
-              {map.data.people.filter((p: any) => p.id !== String(session?.user?.id)).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
-            <select aria-label="Period" value={days} onChange={(e) => setDays(Number(e.target.value))}><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>1 year</option></select>
-          </div>
+          <h2 style={{ margin: 0 }}>Sign-in map <HelpTip id="map.markers" /></h2>
         </div>
-        {map.loading && !map.data ? <Skeleton lines={6} /> : map.data && (
+        <div className="row map-filters" style={{ gap: 8, flexWrap: "wrap", marginTop: 6 }} role="group" aria-label="Filters for the map and the list">
+          {map.data?.people?.length > 0 && <select aria-label="Person" value={who} onChange={(e) => { setSelected([]); setWho(e.target.value); }}>
+            {adminView && <option value="all">Everyone I may see</option>}<option value="">Me</option>
+            {map.data.people.filter((p: any) => p.id !== String(session?.user?.id)).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+          <select aria-label="Period" value={f.period} onChange={(e) => set("period", e.target.value)}>{PERIODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+          {f.period === "custom" && <><input type="date" aria-label="From" value={f.from} onChange={(e) => set("from", e.target.value)} /><input type="date" aria-label="To" value={f.to} onChange={(e) => set("to", e.target.value)} /></>}
+          <select aria-label="Trusted Zone" value={f.trust} onChange={(e) => set("trust", e.target.value)}><option value="">All networks</option><option value="trusted">In a Trusted Zone</option><option value="untrusted">Not in a Trusted Zone</option>
+            {(map.data?.zones_for_filter || []).map((z: any) => <option key={z.id} value={`zone:${z.id}`}>Zone: {z.name}</option>)}</select>
+          <select aria-label="Risk" value={f.risk} onChange={(e) => set("risk", e.target.value)}><option value="">Any risk</option>{Object.entries(RISK).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select>
+          <select aria-label="Device" value={f.device} onChange={(e) => set("device", e.target.value)}><option value="">Any device</option><option value="recognized">Recognised device</option><option value="unrecognized">Unrecognized device</option><option value="new">New device</option></select>
+          <HelpTip id="map.filters" />
+        </div>
+        {!ready ? <p className="small muted">Choose a start and end date.</p> : map.loading && !map.data ? <Skeleton lines={6} /> : map.data && (
           <>
-            {map.data.map.enabled ? <Suspense fallback={<Skeleton lines={6} />}><SigninMap events={map.data.events} zones={map.data.zones} config={map.data.map} /></Suspense>
+            {map.data.map.enabled ? <Suspense fallback={<Skeleton lines={6} />}><SigninMap events={events} zones={map.data.zones} config={map.data.map} selected={selected} onSelect={setSelected} /></Suspense>
               : map.data.map.unavailable ? <MapUnavailable reason={map.data.map.unavailable} admin={map.data.map.admin} />
               : <p className="muted">The map is turned off by the administrator; the list below shows every sign-in.</p>}
-            <p className="small muted"><Icon name="lock" size={14} /> {map.data.map.privacy} History is kept {map.data.retention_days} days.</p>
-            <div className="legend small"><span><i className="dot zone" /> Configured Trusted Zone location</span><span><i className="dot city" /> GeoIP (approximate)</span><span><i className="dot country" /> GeoIP country level</span></div>
+            <p className="small muted"><Icon name="lock" size={14} /> {map.data.map.privacy} History is kept {map.data.retention_days} days.{map.data.map.english_labels ? " Place names are shown in English." : ""}</p>
+            <div className="legend small"><span><i className="dot zone" /> Configured Trusted Zone location</span><span><i className="dot city" /> GeoIP (approximate)</span><span><i className="dot country" /> GeoIP country level</span><span><i className="dot cluster" /> Several sign-ins (number)</span></div>
           </>
         )}
+        {chosen.length > 0 && <SigninDetails events={chosen} showPerson={!own || adminView} onPick={(id) => setSelected([id])} onClose={() => setSelected([])} />}
       </section>
       <section className="card">
-        <h2>Recent sign-ins</h2>
-        {map.data && (map.data.events.length ? <div className="table-wrap"><table className="table">
+        <h2>Recent sign-ins <span className="small muted">({events.length}, same filters as the map)</span></h2>
+        {map.data && (events.length ? <div className="table-wrap"><table className="table signin-list">
           <thead><tr><th>When</th>{(!own || adminView) && <th>Person</th>}<th>Location / network</th><th>IP address</th><th>Device</th><th>Risk</th></tr></thead>
-          <tbody>{map.data.events.slice(0, 100).map((e: any) => <tr key={e.id} className={e.risk === "high" ? "risk-high" : ""}>
+          <tbody>{events.slice(0, 200).map((e: any) => <tr key={e.id} data-event={e.id} className={`${e.risk === "high" ? "risk-high" : ""} ${selected.includes(e.id) ? "selected" : ""}`} aria-selected={selected.includes(e.id)}
+            tabIndex={0} onClick={() => setSelected([e.id])} onKeyDown={(k) => { if (k.key === "Enter") setSelected([e.id]); }}>
             <td>{formatDateTime(e.at)}<div className="small muted">{e.result === "success" ? e.method : `${e.result} (${e.method || "—"})`}</div></td>
             {(!own || adminView) && <td>{e.user}</td>}
-            <td>{e.location || "—"}<div className="small muted">{e.network === "trusted_zone" ? `${e.zone} — Trusted Zone` : e.network === "private" ? "Private network" : e.network === "public" ? "Public network" : ""}{e.coord_label ? ` · ${e.coord_label}` : ""}</div></td>
+            <td>{e.location || "—"}{e.lat == null && <span className="badge neutral" style={{ marginLeft: 6 }}>Location unavailable</span>}<div className="small muted">{e.network === "trusted_zone" ? `${e.zone} — Trusted Zone` : e.network === "private" ? "Private network" : e.network === "public" ? "Public network" : ""}{e.coord_label ? ` · ${e.coord_label}` : ""}</div></td>
             <td><code className="small">{e.ip || "—"}</code></td>
-            <td className="small">{e.device || "—"}{e.new_device && <div><span className="badge neutral">new device</span></div>}</td>
-            <td>{e.risk && RISK[e.risk] ? <><span className={`badge ${RISK[e.risk][1]}`}>{RISK[e.risk][0]}</span>{e.risk_reasons?.length > 0 && <details className="small"><summary>Why</summary><ul>{e.risk_reasons.map((r: string) => <li key={r}>{r}</li>)}</ul></details>}</> : "—"}</td>
-          </tr>)}</tbody></table></div> : <p className="muted">No sign-ins in this period.</p>)}
-        <p className="small muted">Risk is a hint, never a block: GeoIP can be wrong (mobile networks, VPNs). A sign-in from a Trusted Zone is not automatically safe.</p>
+            <td className="small">{e.device || "—"}{e.new_device && <div><span className="badge neutral">new device</span></div>}{e.device_state === "unrecognized" && <div><span className="badge danger">Unrecognized</span></div>}</td>
+            <td>{e.risk && RISK[e.risk] ? <><span className={`badge ${RISK[e.risk][1]}`}>{RISK[e.risk][0]}</span>{e.risk_reasons?.length > 0 && <details className="small" onClick={(x) => x.stopPropagation()}><summary>Why</summary><ul>{e.risk_reasons.map((r: string) => <li key={r}>{r}</li>)}</ul></details>}</> : "—"}</td>
+          </tr>)}</tbody></table></div> : <p className="muted">No sign-ins match these filters.</p>)}
+        <p className="small muted">Risk is a hint, never a block: GeoIP can be wrong (mobile networks, VPNs). A sign-in from a Trusted Zone is not automatically safe. Select a row to show it on the map.</p>
       </section>
       <section className="card" id="devices">
         <h2>Recognised devices</h2>
@@ -74,6 +94,32 @@ export function SigninSecurity({ adminView = false }: { adminView?: boolean }) {
       {next && <Modal title="Device marked Unrecognized" onClose={() => setNext(null)}><div className="stack">
         <p>Recommended next steps (nothing was changed automatically):</p>
         <ul className="plain">{next.map((s) => <li key={s.key}><Link to={s.path} onClick={() => setNext(null)}><Icon name="arrow" size={14} /> {s.label}</Link></li>)}</ul></div></Modal>}
+    </div>
+  );
+}
+
+/** Details of the sign-in(s) behind a marker or cluster (click/tap), or of a row selected in the list. */
+function SigninDetails({ events, showPerson, onPick, onClose }: { events: any[]; showPerson: boolean; onPick: (id: number) => void; onClose: () => void }) {
+  if (events.length > 1) return (
+    <div className="card signin-detail" role="region" aria-label="Sign-ins at this place">
+      <div className="row" style={{ justifyContent: "space-between" }}><strong>{events.length} sign-ins at this place</strong><button className="btn small ghost" onClick={onClose} aria-label="Close details">✕</button></div>
+      <ul className="plain">{events.map((e) => <li key={e.id}><button className="link-btn" onClick={() => onPick(e.id)}>{formatDateTime(e.at)} · {e.user} · {e.ip || "—"}</button></li>)}</ul>
+    </div>
+  );
+  const e = events[0];
+  return (
+    <div className="card signin-detail" role="region" aria-label="Sign-in details" data-detail={e.id}>
+      <div className="row" style={{ justifyContent: "space-between" }}><strong>Sign-in details</strong><button className="btn small ghost" onClick={onClose} aria-label="Close details">✕</button></div>
+      <dl className="dest-facts small">
+        {showPerson && <><dt>Person</dt><dd>{e.user}</dd></>}
+        <dt>When</dt><dd>{formatDateTime(e.at)} · {e.result === "success" ? e.method : `${e.result} (${e.method || "—"})`}</dd>
+        <dt>IP address</dt><dd><code>{e.ip || "—"}</code></dd>
+        <dt>Location</dt><dd>{e.location || "—"}{e.lat == null ? " · Location unavailable on the map" : e.coord_label ? ` · ${e.coord_label}` : ""}</dd>
+        <dt>Network</dt><dd>{e.network === "trusted_zone" ? `${e.zone} (Trusted Zone)` : e.network === "private" ? "Private network" : e.network === "public" ? "Public network" : "Unknown"}</dd>
+        <dt>Device</dt><dd>{[e.browser, e.os, e.device_type].filter(Boolean).join(" · ") || "—"}{e.new_device ? " · new device" : ""}</dd>
+        <dt>Device state</dt><dd>{e.device_state === "unrecognized" ? <span className="badge danger">Unrecognized</span> : e.device_state === "recognized" ? "Recognised" : "Unknown"}</dd>
+        <dt>Risk</dt><dd>{e.risk && RISK[e.risk] ? <span className={`badge ${RISK[e.risk][1]}`}>{RISK[e.risk][0]}</span> : "—"}{e.risk_reasons?.length ? ` · ${e.risk_reasons.join("; ")}` : ""}</dd>
+      </dl>
     </div>
   );
 }

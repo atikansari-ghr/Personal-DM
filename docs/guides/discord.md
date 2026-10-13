@@ -4,6 +4,7 @@
 Personal DM can post your own notifications to a Discord channel that you control. It uses an **official Discord
 webhook**. Each person adds their own webhook; the administrator only allows the feature.
 
+<!-- audience-section: main_admin -->
 ## Allow Discord (administrator) {#setup}
 
 1. Open **Settings → Connections**. The **Discord** provider card shows **Disabled by Admin**.
@@ -14,6 +15,7 @@ webhook**. Each person adds their own webhook; the administrator only allows the
 
 Turning it off stops Discord delivery for everyone. Saved webhooks are kept. While it is off, each person's Discord card
 says **Disabled by Admin** instead of offering a webhook field.
+<!-- /audience-section -->
 
 ## Add your webhook {#webhook}
 

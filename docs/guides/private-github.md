@@ -1,4 +1,4 @@
-<!-- audience: admin -->
+<!-- audience: main_admin -->
 # Private GitHub access
 
 The repository is private. The server needs **read-only** access to install and update.

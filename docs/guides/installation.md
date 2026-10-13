@@ -1,4 +1,4 @@
-<!-- audience: admin -->
+<!-- audience: main_admin -->
 # Installation on a Proxmox LXC (Debian 13)
 
 ## Target {#target}

@@ -81,6 +81,76 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
 - Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
 
+## Change set V: NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing {#change-set-v}
+
+**Numbering.** The change prompt numbered its acceptance tests AT-331…AT-350. Here they are **AT-356…AT-375** (prompt
+AT-n → AT-(n+25)); see [TRACEABILITY.md](TRACEABILITY.md#change-set-v). Requirements NAS-, BQ-, TT-, HLP-, MAP- and
+WA- are in [REQUIREMENTS.md](REQUIREMENTS.md#change-set-v). **Migrations:** `ops.0003_nas_into_destinations`,
+`security.0005_map_english_labels`, `notify.0005_whatsapp_verification` (all additive; the old `nas.*` settings stay).
+The existing layout was kept; the only structural change is the requested NAS consolidation.
+
+### Defect 1: WhatsApp phone stays on "Connecting" and never links
+
+| | |
+| --- | --- |
+| Issue | After scanning the QR code, the phone showed *Connecting…* indefinitely and Personal DM never became Connected. |
+| Root cause | (1) After a successful pair, WhatsApp closes the socket with **515 restartRequired** and expects the client to reconnect using the newly issued credentials. The bridge 1.0.0 close handler returned early for every close while a link was pending without a JID (`if (s.state === "pending" && !s.jid) return;`), so it never reconnected and the phone waited forever. (2) Credentials were written with a 500 ms debounce but a restart re-read them from disk, so a quick restart could start from stale keys. (3) The pinned library (`@whiskeysockets/baileys` 6.7.x) is now tagged *legacy*; the maintained line is 7.x. |
+| Fix | New session manager `bridge/whatsapp/session.mjs`: on 515 the bridge flushes the credentials and reopens the socket with the same in-memory auth state; a generation counter ignores events from replaced sockets. One link attempt is valid 5 minutes (`LINK_WINDOW_MS`); WhatsApp rotates the QR every 20–30 s inside it, and a 408 QR timeout reopens the connection within the same window instead of failing. A forced new QR inside the window is refused (409 "still valid for m:ss"); after expiry or a definitive failure it is allowed at once. Stages are reported live; after open the bridge sends a verification message to the person's own chat. Disconnects reconnect with exponential back-off (2 s … 5 min) without a new QR; 401/403/500 → **Relink Required** (credentials wiped, person notified through another channel); 405/411 → **incompatible** (main administrators alerted once a day by email/Telegram). Library: Baileys **7.0.0-rc14**, pinned exactly; no `fetchLatestWaWebVersion` (it spoofs a browser user agent). Admin `/diagnostics`: DNS, HTTPS to web.whatsapp.com with clock skew, storage write probe, sessions (by person), last 50 sanitized events. systemd restarts the bridge after exit 75 (**Restart Bridge**). |
+| Files | `bridge/whatsapp/session.mjs` (new), `server.mjs`, `package.json`, `package-lock.json`, `compat.json`, `test/session.test.mjs` (new); `backend/apps/notify/whatsapp.py`, `views.py`, `models.py` + `0005_whatsapp_verification`, `expiry.py`, `event_defs.py`, `catalog.py`, `routing.py`; `deployment/systemd/personaldocs-whatsapp.service`; `scripts/personaldocs`; `frontend/src/components/NotificationRouting.tsx`, `pages/settings/Admin.tsx` |
+| Migration / config | `sudo personaldocs whatsapp-bridge update` (sessions archived first; automatic rollback on a failed self-test). Existing links are kept; people who never got past *Connecting* link again. |
+| Tests | `bridge/whatsapp/test/session.test.mjs` (10, fake socket: 515 restart, stale-socket events, 5-minute window, 408 renewal, 409 rule, back-off, 401 relink, 411 incompatible, verification, rate limit); CV `test_at370_*` … `test_at373_*`; corrective.mjs "AT-370/AT-371/AT-372", "AT-373" |
+| Evidence | Live in this container against real WhatsApp servers (no phone): bridge 1.1.0 obtained QR codes, kept one attempt open for 300 s (11 codes, one 408 renewal at 162 s), ended with *link expired*; diagnostics DNS/network/clock/storage OK. Screenshots `whatsapp-linking.png`, `whatsapp-verified.png`, `whatsapp-diagnostics.png` (fake bridge, no QR). |
+| Limitation | **A real phone pairing (prompt AT-344 = AT-369) was not executed: no phone or WhatsApp account is available here. Blocked / Not Executed.** A single QR picture cannot stay valid for 5 minutes: WhatsApp's protocol rotates it; the 5-minute window applies to the link attempt. |
+
+### Defect 2: Storage & NAS separate from Backup Destinations
+
+| | |
+| --- | --- |
+| Issue | The NAS was set up under Settings → Storage & NAS and then added again as a destination (two places, two states). |
+| Root cause | Historical: the NAS mount helper (Change Set E) predates encrypted destinations (Change Set T); T only linked to it. |
+| Fix | NAS fields live in the destination editor (SMB / NFS / Already mounted); the SMB password is write-only (empty keeps the stored one). One Personal-DM-managed share; further shares are *Already mounted*. **Test Connection** drives the root mount helper and reports a category (DNS, reachability, authentication, share, mount not allowed, client tools, write permission, capacity). The Storage tab is removed, `/settings/storage` redirects to Destinations, the integrity check moved to Security Center → Storage, legacy settings to the Overview, recovery validation to Policies. Migration `ops.0003` (`nas_migration.run`) is idempotent and non-destructive; failures become **Needs Attention** with Edit Configuration / Test Connection / **Retry Migration**. Capacity thresholds 20 % / 10 % (per destination override) with one alert per destination, level and day. |
+| Files | `backend/apps/ops/nas_migration.py` (new), `migrations/0003_nas_into_destinations.py` (new), `bk_views.py`, `bk_engine.py`, `bk_destinations.py`, `nas_helper.py`, `core/registry.py`, `personaldocs/urls.py`; `frontend/src/pages/settings/Backup.tsx`, `Admin.tsx`, `SecurityCenter.tsx`, `pages/Settings.tsx` |
+| Tests | CV `test_at356_*` … `test_at359_*`; `tests/test_nas.py`; corrective.mjs "AT-356/AT-374", "AT-358" |
+| Limitation | **No real SMB/NFS server here**: mounting is exercised with the faked helper (`tests/test_nas.py`). Blocked / Not Executed against a real NAS. |
+
+### Defect 3: no per-destination Backup Now, concurrent backup jobs
+
+| | |
+| --- | --- |
+| Root cause | Backup jobs were ordinary jobs; two could be claimed at once and the second failed on the backup lock, and a manual job could start before an older scheduled one. |
+| Fix | `jobs.handler(..., serial=True)`: while a serial job runs no other serial job is claimed; otherwise only the oldest due serial job may start (FIFO by creation time; priority cannot jump it). Jobs are database rows, so the queue survives navigation, sign-out and restarts. **Backup Now** (confirmation required, duplicate → 409) makes a Full, full-system point stored on that destination only and reports Preparing → Backing Up → Verifying → Completed / Failed. No Cancel action. |
+| Files | `backend/apps/core/jobs.py`, `ops/bk_views.py`, `ops/bk_engine.py`; `frontend/src/pages/settings/Backup.tsx` |
+| Tests | CV `test_at360_*`, `test_at361_*`; corrective.mjs "AT-360/AT-361" |
+
+### Defect 4: tooltips clipped
+
+| | |
+| --- | --- |
+| Root cause | `.tip-pop` was `position: absolute` inside its trigger, always above it; cards, tables and dialogs with `overflow: hidden/auto` clipped it, and near the top or sides it left the viewport. |
+| Fix | One shared `HelpTip`: rendered into `document.body` (portal), `position: fixed`, measured placement that flips below/above and shifts horizontally to stay 8 px inside the viewport, follows scroll and resize, closes on Escape and outside tap, stays open on tap (touch), `role=tooltip` + `aria-describedby`. Text comes from `helpRegistry.ts` by id; **Learn more** appears only when the person may open that guide. A test fails if an id used in the code is missing from the registry or a registry link points to a missing heading. |
+| Files | `frontend/src/components/ui.tsx`, `helpRegistry.ts` (new), `styles.css` |
+| Tests | CV `test_at362_*`, `test_at363_*`; corrective.mjs "AT-362/AT-363" (desktop table, dialog, phone tap; viewport bounds, topmost element, ARIA) |
+
+### Defect 5: Help not permission-aware
+
+| | |
+| --- | --- |
+| Root cause | `/api/help` listed and searched every guide and `/api/help/<slug>` returned any guide; only the index labelled an audience. |
+| Fix | `core/help_access.py`: guide audiences (all, delegate, admin, main_admin, maintainer) and `<!-- audience-section -->` blocks. The server filters the index, categories, search and excerpts, guide text and direct URLs (404 = same as missing), and unlinks links to unreadable guides; checked per request. Admin procedures inside everyday guides (console commands, provider settings, bridge updates) are in main-administrator sections. |
+| Files | `backend/apps/core/help_access.py` (new), `core/views.py`; `docs/guides/*.md` (audience markers); `frontend/src/pages/Help.tsx` |
+| Tests | CV `test_at364_*`, `test_at365_*` (incl. "no `sudo` line visible to a family member"); corrective.mjs "AT-364/AT-365" |
+| Limitation | Screenshot files under `/api/help/asset/` are served to any signed-in person (they contain only synthetic data). |
+
+### Defect 6: sign-in map labels in Arabic; no details, clustering or filters
+
+| | |
+| --- | --- |
+| Root cause | OpenStreetMap standard tiles are pre-rendered images labelled in the local language; a raster tile cannot be relabelled. CARTO's English raster tiles now require an API key. |
+| Fix | Default provider **OpenFreeMap** (`tiles.openfreemap.org/styles/liberty`, OpenStreetMap vector tiles, no key, attribution shown): MapLibre GL 5.6.2 (CSP build, worker from `'self'`, no `blob:`/`eval`) inside Leaflet via `@maplibre/maplibre-gl-leaflet`; every text layer uses `coalesce(name:en, name_en, name:latin, name)`. Without WebGL → OSM raster fallback with a note. Markers: hover = person, IP, zone/place; click/tap = details panel (time, method, IP, place and source, network, zone, device, browser, OS, device state, risk and reasons). Pixel clustering (34 px, recomputed on zoom) with counts and the worst risk colour. One filtered dataset for map and list (Today / 7 / 30 / 90 / 365 days / custom; person, trust/zone, risk, device; default 7 days); list rows select markers and vice versa; *Location unavailable* badge. Scope enforced by the server (unchanged). |
+| Files | `backend/apps/security/mapprov.py`, `views_signins.py`, `migrations/0005_map_english_labels.py` (new); `frontend/src/components/SigninMap.tsx`, `MapUnavailable.tsx`, `pages/settings/Signins.tsx`, `vite.config.ts`, `package.json` |
+| Tests | CV `test_at366_*` … `test_at368_*`; corrective.mjs "AT-366", "AT-367/AT-368" (style answered locally); screenshots.mjs uses the real OpenFreeMap service |
+| Limitation | Not tested from the production address. OpenFreeMap is a free community service without an SLA; MapTiler/Stadia/custom remain available. |
+
 ## Change set U: corrective fixes for the folder tree, sign-in map, sign-in designs, WhatsApp and Discord {#change-set-u}
 
 **Numbering.** The change prompt numbered its acceptance tests AT-311…AT-330. Here they are **AT-336…AT-355** (prompt

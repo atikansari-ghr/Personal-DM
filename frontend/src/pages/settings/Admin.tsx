@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import OcrTypes from "./OcrTypes";
 import { OcrEngineStatus, OcrExistingData, OcrTest } from "./OcrEngines";
@@ -7,7 +6,7 @@ import { DeliveryHistory, NotificationTemplates } from "./NotificationTemplates"
 import { api, formatBytes, formatDateTime } from "../../api";
 import SettingsForm from "../../components/SettingsForm";
 import AuthentikAdmin from "./Authentik";
-import { CopyButton, Icon, Skeleton, useAsync, useToast } from "../../components/ui";
+import { CopyButton, HelpTip, Icon, Skeleton, useAsync, useToast } from "../../components/ui";
 import type { Meta } from "../../types";
 
 export function DocumentsPanel() {
@@ -177,12 +176,52 @@ function WhatsAppAdmin() {
               <tr><th scope="row">Linked people</th><td>{svc.sessions ? Object.entries(svc.sessions).map(([k, v]) => `${v} ${k}`).join(", ") || "none" : "—"}</td></tr>
               <tr><th scope="row">Last check</th><td>{svc.checked_at ? formatDateTime(svc.checked_at) : "—"}{svc.last_ok && svc.state !== "healthy" && svc.state !== "ready_disabled" ? ` · last healthy ${formatDateTime(svc.last_ok)}` : ""}</td></tr>
             </tbody></table>
+            <WhatsAppDiagnostics svc={svc} />
             {svc.state === "not_installed" && <p className="small">Install the bridge on the server first: <code>sudo personaldocs whatsapp-bridge install</code>, then turn WhatsApp Personal on here.</p>}
             {svc.state === "ready_disabled" && <p className="small">The bridge is installed and running. Turn on <strong>WhatsApp Personal</strong> above and save: each person can then link their phone under My account → Notifications at once (no restart needed).</p>}
             {(svc.state === "stopped" || svc.state === "unavailable") && <p className="small">Start or repair it on the server: <code>sudo systemctl start personaldocs-whatsapp</code> or <code>sudo personaldocs whatsapp-bridge install</code>. Other channels are not affected.</p>}
           </div>
         )}
       </SettingsForm>
+    </div>
+  );
+}
+
+const DIAG_LABEL: Record<string, string> = { dns: "DNS (web.whatsapp.com)", network: "Outbound HTTPS / WebSocket", clock: "System time (NTP)", storage: "Session storage writable" };
+const okText = (c: any) => (c?.ok === true ? "OK" : c?.ok === false ? "Problem" : "Unknown");
+
+/** Main administrator: safe diagnostics (no QR payloads, credentials, numbers or messages), Restart Bridge and the
+ *  compatibility/update state. Updates are never installed automatically. */
+function WhatsAppDiagnostics({ svc }: { svc: any }) {
+  const toast = useToast();
+  const [d, setD] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const run = () => { setBusy(true); api<any>("admin/whatsapp").then((r) => setD(r.diagnostics)).catch((e) => toast(e.message, "error")).finally(() => setBusy(false)); };
+  const restart = () => { if (!window.confirm("Restart the WhatsApp bridge? Linked sessions are kept and resume by themselves.")) return;
+    setBusy(true); api<any>("admin/whatsapp", { body: { action: "restart" } }).then((r) => toast(r.detail)).catch((e) => toast(e.message, "error")).finally(() => setBusy(false)); };
+  return (
+    <div className="stack" style={{ gap: ".4rem" }} id="wa-diagnostics">
+      <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+        <button type="button" className="btn small" disabled={busy || !svc.reachable} onClick={run}>Run Diagnostics</button> <HelpTip id="whatsapp.diagnostics" />
+        <button type="button" className="btn small" disabled={busy || !svc.reachable} onClick={restart}>Restart Bridge</button>
+        <span className="small muted">Check for Compatible Update: {svc.update_available ? <>tested version {svc.pinned} is available — install it with <code>sudo personaldocs whatsapp-bridge update</code> (sessions and settings are kept; <code>rollback</code> returns to the previous version)</> : svc.reachable ? "the installed bridge is the tested version" : "—"}</span>
+      </div>
+      {d && (
+        <div className="stack" style={{ gap: ".4rem" }}>
+          <table className="table kv-table small diag-table"><tbody>
+            <tr><th scope="row">Bridge / library</th><td>{d.version} · {d.library} · Node.js {d.node}</td></tr>
+            <tr><th scope="row">Tested / supported</th><td>{d.tested?.pinned} ({d.tested?.library}) — {d.compatible ? <span className="badge ok">Compatible</span> : <span className="badge danger">Compatibility Warning</span>}</td></tr>
+            {Object.entries(DIAG_LABEL).map(([k, label]) => <tr key={k}><th scope="row">{label}</th><td data-diag={k}>{okText(d[k])}{d[k]?.error ? ` — ${d[k].error}` : ""}{k === "clock" && d.clock?.skew_s != null ? ` (difference ${d.clock.skew_s} s)` : ""}{k === "network" && d.network?.ms ? ` (${d.network.ms} ms)` : ""}</td></tr>)}
+          </tbody></table>
+          <div className="table-wrap"><table className="table small"><thead><tr><th>Person</th><th>State</th><th>QR age</th><th>Last pairing attempt</th><th>Failure stage / code</th></tr></thead>
+            <tbody>{(d.sessions || []).length ? d.sessions.map((s: any, i: number) => <tr key={i}><td>{s.person}</td><td>{s.state}{s.stage ? ` · ${s.stage}` : ""}{s.verification ? ` · ${s.verification}` : ""}</td>
+              <td>{s.qr_age_s != null ? `${s.qr_age_s} s` : "—"}</td><td>{s.last_pairing_at ? formatDateTime(s.last_pairing_at) : "—"}</td><td>{s.failure_stage || "—"}{s.error_code ? ` · ${s.error_code}` : ""}</td></tr>)
+              : <tr><td colSpan={5} className="muted">No sessions in the bridge.</td></tr>}</tbody></table></div>
+          <details><summary className="small">View sanitized bridge events ({(d.events || []).length})</summary>
+            <ul className="small mono" style={{ maxHeight: 200, overflow: "auto" }}>{(d.events || []).slice().reverse().map((e: any, i: number) => <li key={i}>{formatDateTime(e.at)} · {e.person} · {e.what}{e.code ? ` (${e.code})` : ""}{e.stage ? ` at ${e.stage}` : ""}</li>)}</ul>
+            <p className="small muted">State changes and status codes only: never QR codes, keys, phone numbers or message text.</p></details>
+        </div>
+      )}
     </div>
   );
 }
@@ -239,77 +278,32 @@ export function AuthPanel() {
   );
 }
 
-function NasCard({ onChange }: { onChange: () => void }) {
+/** Integrity check (moved from the former Storage & NAS page to Security → Storage in Change Set V). */
+export function IntegrityCard() {
   const toast = useToast();
-  const { data, reload } = useAsync(() => api<{ status: any; mount_point: string }>("backup/nas"), []);
-  const state = data?.status?.state;
-  useEffect(() => {
-    if (state !== "pending") return;
-    const t = setTimeout(() => { reload(); onChange(); }, 2500);
-    return () => clearTimeout(t);
-  }, [data]);
-  const act = (action: string) => api("backup/nas", { body: { action } }).then(() => { reload(); }).catch((e) => toast(e.message, "error"));
-  const badge: Record<string, [string, string]> = {
-    mounted: ["ok", "Connected"], pending: ["neutral", "Connecting…"], error: ["danger", "Problem"],
-    unmounted: ["neutral", "Disconnected"], not_configured: ["neutral", "Not connected"],
-  };
-  const [cls, label] = badge[state] || ["neutral", state || "…"];
-  return (
-    <SettingsForm keys={["nas.type", "nas.server", "nas.share", "nas.subfolder", "nas.username", "nas.password", "nas.domain", "nas.version"]} title="NAS connection">
-      <div className="card" style={{ marginTop: ".8rem", background: "var(--brand-softer)" }} role="status" aria-live="polite">
-        <div className="row between">
-          <div className="row"><strong>Status:</strong> <span className={`badge ${cls}`}>{label}</span></div>
-          <div className="row">
-            <button className="btn primary" disabled={state === "pending"} onClick={() => act("mount")}>Connect NAS</button>
-            {state === "mounted" && <button className="btn" onClick={() => act("unmount")}>Disconnect</button>}
-          </div>
-        </div>
-        {data?.status?.message && <p className="small" style={{ marginTop: ".4rem" }}>{data.status.message}</p>}
-        {data?.status?.free_bytes !== undefined && state === "mounted" && <p className="small muted">{formatBytes(data.status.free_bytes)} free of {formatBytes(data.status.total_bytes)}</p>}
-        {data?.status?.detail && <details><summary className="small">Technical details</summary><pre className="preview-text small">{data.status.detail}</pre></details>}
-        <p className="small muted">Save the fields above first, then press Connect NAS. The share is mounted at {data?.mount_point || "/mnt/pdnas"} and used as the backup destination. NFS/SMB mounting needs a privileged container with the Proxmox feature mount=nfs;cifs — otherwise choose “Already mounted” and enter the folder in Backup settings. <a href="/help/backup-restore#nas">Help</a></p>
-      </div>
-    </SettingsForm>
-  );
-}
-
-export function StoragePanel() {
-  const toast = useToast();
-  const st = useAsync(() => api<any>("backup"), []);
   const integ = useAsync(() => api<any>("integrity"), []);
   const [plan, setPlan] = useState<string[] | null>(null);
   return (
-    <div className="stack">
-      <div className="card row between">
-        <div><h2>Backups moved to Backup & Recovery</h2>
-          <p className="small muted">Encrypted full-system recovery points, policies, destinations, the Recovery Key and restores are in their own section. Connect a NAS share here, then add it there as a destination.</p></div>
-        <Link className="btn primary" to="/settings/backup">Open Backup & Recovery</Link>
-      </div>
-      <NasCard onChange={st.reload} />
-      <details className="card"><summary>Legacy folder backups (before encrypted recovery points)</summary>
-        <SettingsForm keys={["backup.target", "backup.require_mount", "backup.keep_daily"]} title="Legacy settings" />
-      </details>
-      <div className="card">
-        <h2>Integrity check</h2>
-        <p className="small muted">Looks for missing or altered originals, broken version references and orphaned files. Repairs never delete originals or regenerate keys.</p>
-        {integ.data?.report ? (
-          <div>
-            <p>Last check {formatDateTime(integ.data.report.checked_at)}: {integ.data.report.ok ? <span className="badge ok">No problems</span> : <span className="badge danger">{integ.data.report.problem_count} problems</span>} ({integ.data.report.versions} files)</p>
-            {!integ.data.report.ok && <ul className="small">{integ.data.report.problems.slice(0, 20).map((p: any, i: number) => <li key={i}>{p.type.replace(/_/g, " ")} {p.path || p.document}</li>)}</ul>}
-          </div>
-        ) : <p className="muted">No check has run yet.</p>}
-        <div className="row">
-          <button className="btn" onClick={() => api("integrity", { body: { checksums: true } }).then(() => toast("Check queued — refresh in a moment"))}>Run full check</button>
-          <button className="btn" onClick={() => api("integrity", { body: { repair: true } }).then((r) => setPlan(r.actions))}>Plan repairs</button>
-          <button className="btn small" onClick={integ.reload}>Refresh</button>
+    <div className="card" id="integrity">
+      <h2>Integrity check</h2>
+      <p className="small muted">Looks for missing or altered originals, broken version references and orphaned files. Repairs never delete originals or regenerate keys.</p>
+      {integ.data?.report ? (
+        <div>
+          <p>Last check {formatDateTime(integ.data.report.checked_at)}: {integ.data.report.ok ? <span className="badge ok">No problems</span> : <span className="badge danger">{integ.data.report.problem_count} problems</span>} ({integ.data.report.versions} files)</p>
+          {!integ.data.report.ok && <ul className="small">{integ.data.report.problems.slice(0, 20).map((p: any, i: number) => <li key={i}>{p.type.replace(/_/g, " ")} {p.path || p.document}</li>)}</ul>}
         </div>
-        {plan && (
-          <div className="stack" style={{ marginTop: ".8rem" }}>
-            {plan.length === 0 ? <p>Nothing to repair.</p> : <ul className="small">{plan.map((a, i) => <li key={i}>{a}</li>)}</ul>}
-            {plan.some((a) => !a.startsWith("MANUAL")) && <button className="btn primary" onClick={() => api("integrity", { body: { repair: true, confirm: true } }).then(() => { toast("Safe repairs applied"); setPlan(null); integ.reload(); })}>Apply safe repairs</button>}
-          </div>
-        )}
+      ) : <p className="muted">No check has run yet.</p>}
+      <div className="row">
+        <button className="btn" onClick={() => api("integrity", { body: { checksums: true } }).then(() => toast("Check queued — refresh in a moment"))}>Run full check</button>
+        <button className="btn" onClick={() => api("integrity", { body: { repair: true } }).then((r) => setPlan(r.actions))}>Plan repairs</button>
+        <button className="btn small" onClick={integ.reload}>Refresh</button>
       </div>
+      {plan && (
+        <div className="stack" style={{ marginTop: ".8rem" }}>
+          {plan.length === 0 ? <p>Nothing to repair.</p> : <ul className="small">{plan.map((a, i) => <li key={i}>{a}</li>)}</ul>}
+          {plan.some((a) => !a.startsWith("MANUAL")) && <button className="btn primary" onClick={() => api("integrity", { body: { repair: true, confirm: true } }).then(() => { toast("Safe repairs applied"); setPlan(null); integ.reload(); })}>Apply safe repairs</button>}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+<!-- audience: delegate -->
 # Extended family, permissions and delegation
 
 ## Family groups {#groups}

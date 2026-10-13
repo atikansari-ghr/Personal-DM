@@ -1,3 +1,4 @@
+<!-- audience: main_admin -->
 # Settings overview
 
 Every setting shows a description, default, allowed values, who can change it, and what changing it does. The full generated list is in `docs/SETTINGS_REFERENCE.md`.

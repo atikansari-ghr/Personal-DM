@@ -35,6 +35,7 @@ class OutboxMessage(models.Model):
 
     PENDING, SENT, FAILED, SKIPPED = "pending", "sent", "failed", "skipped"
     DIGEST, DIGESTED, FALLBACK = "digest", "digested", "fallback"  # waiting for a digest / sent in one / failed over
+    EXPIRED, SUPERSEDED = "expired", "superseded"  # Change Set V: never delivered late after an outage
 
     key = models.CharField(max_length=250, unique=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="+")
@@ -175,3 +176,7 @@ class WhatsAppLink(models.Model):
     linked_at = models.DateTimeField(null=True, blank=True)
     last_seen_at = models.DateTimeField(null=True, blank=True)
     last_error = models.CharField(max_length=200, blank=True)
+    # Change Set V: pairing is only "Linked & Verified" after a real message reached the person's own chat
+    verification = models.CharField(max_length=12, blank=True, help_text="verified | pending | failed (empty: not linked)")
+    verified_at = models.DateTimeField(null=True, blank=True)
+    last_pairing_at = models.DateTimeField(null=True, blank=True)

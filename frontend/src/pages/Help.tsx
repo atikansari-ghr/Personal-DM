@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api } from "../api";
-import { Icon, renderMarkdown, Skeleton, useAsync } from "../components/ui";
+import { HelpTip, Icon, renderMarkdown, Skeleton, useAsync } from "../components/ui";
 
 type Guide = { slug: string; title: string; category: string; audience: string; reviewed?: string | null; excerpt?: string };
 
@@ -19,7 +19,7 @@ export default function HelpPage() {
   const [guide, setGuide] = useState<(Guide & { markdown: string }) | null>(null);
   useEffect(() => {
     setGuide(null);
-    if (slug) api(`help/${slug}`).then(setGuide).catch(() => setGuide({ slug: slug || "", title: "Not found", category: "", audience: "all", markdown: "# Not found\nThis guide does not exist." }));
+    if (slug) api(`help/${slug}`).then(setGuide).catch(() => setGuide({ slug: slug || "", title: "Not found", category: "", audience: "all", markdown: "# Not found\nThis guide does not exist, or it is not available to your account." }));
   }, [slug]);
   const html = useMemo(() => (guide ? renderMarkdown(guide.markdown) : ""), [guide]);
   const toc = useMemo(() => {
@@ -61,10 +61,11 @@ export default function HelpPage() {
         {!slug ? (
           <>
             <h1>Help & documentation</h1>
-            <p>Step-by-step guides with screenshots for everyday use, administration, backup and disaster recovery, security and notifications.</p>
+            <p>Step-by-step guides with screenshots for the features you can use. <HelpTip id="help.permissions" /></p>
             <div className="help-start">
               {[["getting-started", "Getting started", "home"], ["backup-restore", "Backup & Recovery", "db"], ["disaster-recovery", "Disaster recovery runbook", "refresh"],
-                ["notifications", "Notifications", "bell"], ["security-map", "Sign-in security & Trusted Zones", "shield"], ["troubleshooting", "Troubleshooting", "help"]].map(([s, t, i]) =>
+                ["notifications", "Notifications", "bell"], ["security-map", "Sign-in security & Trusted Zones", "shield"], ["troubleshooting", "Troubleshooting", "help"]]
+                .filter(([s]) => all.data?.guides.some((g) => g.slug === s)).map(([s, t, i]) =>
                 <Link key={s} to={`/help/${s}`} className="help-tile"><Icon name={i} /> {t}</Link>)}
             </div>
           </>

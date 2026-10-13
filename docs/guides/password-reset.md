@@ -53,6 +53,7 @@ Each one has a protected security note, for example *"If you did not ask for a p
 password stays the same — and tell the family administrator."* These notes are always shown and cannot be removed by
 a template. See [security templates](notifications.md#security-templates).
 
+<!-- audience-section: admin -->
 ## For administrators {#admins}
 
 ### Who can reset whom {#who}
@@ -121,6 +122,7 @@ rules.
 recent confirmation required). For `temporary` the response contains `temporary_password` once and is sent with
 `Cache-Control: no-store`. Resetting a main administrator as an Administrator returns 403 with a hint to use
 `sudo personaldocs recover-admin USERNAME`.
+<!-- /audience-section -->
 
 ## Troubleshooting {#troubleshooting}
 

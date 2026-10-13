@@ -133,8 +133,68 @@ def event_json(e: LoginEvent, full_ip: bool) -> dict:
             "network": e.network, "zone": e.zone_name, "location": e.location or e.country_name, "country": e.country,
             "lat": e.lat, "lon": e.lon, "coord_source": e.coord_source, "coord_label": SOURCE_LABELS.get(e.coord_source, ""),
             "device": " · ".join(x for x in (e.browser, e.os) if x), "recognized_device": str(e.recognized_device_id) if e.recognized_device_id else None,
+            "browser": e.browser, "os": e.os, "device_type": e.device,
+            "device_state": ("unrecognized" if e.recognized_device and e.recognized_device.status == "unrecognized" else
+                             "recognized" if e.recognized_device_id else "unknown"),
             "new_device": e.new_device, "risk": e.risk or ("normal" if e.result == "success" else ""), "risk_reasons": e.risk_reasons,
             "flags": e.flags}
+
+
+PERIODS = {"today": 0, "7": 7, "30": 30, "90": 90, "365": 365}
+
+
+def _filters(qs, params):
+    """Map and list share one filtered dataset (Change Set V). Default period: last 7 days; records are kept 1 year."""
+    from datetime import datetime, time
+
+    from apps.notify.expiry import local_today
+
+    applied = {}
+    period = str(params.get("period") or params.get("days") or "7")
+    if period == "custom":
+        try:
+            d_from = datetime.strptime(params.get("from", ""), "%Y-%m-%d").date()
+            d_to = datetime.strptime(params.get("to", ""), "%Y-%m-%d").date()
+        except ValueError:
+            return _err("Choose a start and end date (YYYY-MM-DD)."), applied
+        if d_to < d_from:
+            return _err("The end date is before the start date."), applied
+        tz = timezone.get_current_timezone()
+        start = timezone.make_aware(datetime.combine(d_from, time.min), tz)
+        end = timezone.make_aware(datetime.combine(d_to, time.max), tz)
+        start = max(start, timezone.now() - timedelta(days=366))
+        qs = qs.filter(at__gte=start, at__lte=end)
+        applied["period"] = f"{d_from}..{d_to}"
+    elif period == "today":
+        start = timezone.make_aware(datetime.combine(local_today(), time.min), timezone.get_current_timezone())
+        qs = qs.filter(at__gte=start)
+        applied["period"] = "today"
+    else:
+        try:
+            days = min(max(int(period), 1), 365)
+        except ValueError:
+            days = 7
+        qs = qs.filter(at__gte=timezone.now() - timedelta(days=days))
+        applied["period"] = str(days)
+    trust = params.get("trust") or ""
+    if trust == "trusted":
+        qs = qs.filter(network="trusted_zone")
+    elif trust == "untrusted":
+        qs = qs.exclude(network="trusted_zone")
+    elif trust.startswith("zone:"):
+        qs = qs.filter(zone_id=trust[5:] if trust[5:].isdigit() else -1)
+    risk = params.get("risk") or ""
+    if risk in ("normal", "low", "warning", "high"):
+        qs = qs.filter(risk=risk)
+    dev = params.get("device") or ""
+    if dev == "recognized":
+        qs = qs.filter(recognized_device__isnull=False).exclude(recognized_device__status="unrecognized")
+    elif dev == "unrecognized":
+        qs = qs.filter(recognized_device__status="unrecognized")
+    elif dev == "new":
+        qs = qs.filter(new_device=True)
+    applied.update({k: v for k, v in (("trust", trust), ("risk", risk), ("device", dev)) if v})
+    return qs, applied
 
 
 @api_view(["GET"])
@@ -150,11 +210,10 @@ def signin_map(request):
         qs = LoginEvent.objects.filter(user_id=who)
     else:
         qs = LoginEvent.objects.all() if ids is None else LoginEvent.objects.filter(user_id__in=ids)
-    try:
-        days = min(max(int(request.query_params.get("days", 90)), 1), 365)
-    except ValueError:
-        days = 90
-    qs = qs.filter(at__gte=timezone.now() - timedelta(days=days)).select_related("user")[:1000]
+    qs, applied = _filters(qs, request.query_params)
+    if isinstance(qs, Response):
+        return qs
+    qs = qs.select_related("user", "recognized_device")[:1000]
     events = [event_json(e, full_ip=True) for e in qs]  # own data or authorised administrator: full addresses
     people = []
     if ids is None or len(ids) > 1:
@@ -162,7 +221,8 @@ def signin_map(request):
 
         pq = User.objects.filter(is_active=True) if ids is None else User.objects.filter(pk__in=ids)
         people = [{"id": str(u.pk), "name": u.display_name} for u in pq.order_by("display_name")]
-    return Response({"events": events, "people": people, "zones": [zone_json(z) for z in TrustedZone.objects.all()] if user.is_main_admin else
+    return Response({"events": events, "people": people, "filters": applied,
+                     "zones_for_filter": [{"id": z.id, "name": z.name} for z in TrustedZone.objects.all()] if user.is_main_admin else [], "zones": [zone_json(z) for z in TrustedZone.objects.all()] if user.is_main_admin else
                      [{"name": z.name, "pin": zone_json(z)["pin"], "classification_label": zone_json(z)["classification_label"]} for z in TrustedZone.objects.exclude(pin_lat=None)],
                      "map": map_config(user), "retention_days": int(config.get("security.login_audit_retention_days") or 365)})
 

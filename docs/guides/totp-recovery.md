@@ -31,6 +31,7 @@ Compatibility with specific third-party password managers is tested manually (se
 
 Full details for members and administrators: [password reset](password-reset.md).
 
+<!-- audience-section: main_admin -->
 ## Main administrator lockout {#console-recovery}
 
 On the server console (requires root on the LXC):
@@ -42,3 +43,4 @@ sudo personaldocs recover-admin <username> --generate --reset-2fa   # also remov
 ```
 
 It works only for main administrator accounts, signs out all their sessions and is recorded in the audit log. There is no web-based backdoor.
+<!-- /audience-section -->

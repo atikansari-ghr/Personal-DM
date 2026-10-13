@@ -52,7 +52,7 @@ BASE=http://localhost:8000 node tests/e2e/recovery.mjs
 # folder tree geometry, sign-in designs, map provider states, WhatsApp/Discord connections (Change Set U)
 BASE=http://localhost:8000 WA_BRIDGE="$WA_BRIDGE" WA_TOKEN="$WA_TOKEN" node tests/e2e/corrective.mjs
 # repeatable public screenshots with quality and privacy gates; smaller files when pngquant is installed
-BASE=http://localhost:8000 node tests/e2e/screenshots.mjs
+BASE=http://localhost:8000 WA_BRIDGE="$WA_BRIDGE" WA_TOKEN="$WA_TOKEN" node tests/e2e/screenshots.mjs
 if command -v pngquant >/dev/null 2>&1; then
   pngquant --force --skip-if-larger --quality 85-98 --ext .png docs/images/screenshots/*.png || true
 fi

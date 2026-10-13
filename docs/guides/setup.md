@@ -1,3 +1,4 @@
+<!-- audience: main_admin -->
 # Family accounts and first-run setup
 
 ## One-time setup code {#setup-code}

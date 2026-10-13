@@ -507,3 +507,38 @@ numbers. Root causes per defect: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 
 Not run (needs real accounts or environments, never reported as passed): a real WhatsApp phone scanning a real QR,
 a real Discord server, real OpenStreetMap / MapTiler / Stadia tiles from a production address, Firefox and Safari.
+
+## Change set V (2026-10): NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing {#change-set-v}
+
+The change prompt numbered these AT-331…AT-350. AT-331…AT-355 already exist, so here they are **AT-356…AT-375**:
+prompt AT-n → AT-(n+25). Test functions in `tests/test_corrective_v.py` (CV), bridge unit tests
+`bridge/whatsapp/test/session.test.mjs` (BR) and the Change Set V steps in `tests/e2e/corrective.mjs` use these
+numbers. Root causes: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-v). Evidence:
+[TEST_REPORT.md](TEST_REPORT.md#change-set-v).
+
+| ID (prompt) | Scenario (abridged) | Req | Code | Tests | Docs | Status |
+|---|---|---|---|---|---|---|
+| AT-356 (331) | Existing NAS migrates to one equivalent destination; idempotent; data untouched; Storage & NAS UI removed | NAS-1, NAS-2 | `ops/nas_migration.py`, `ops/migrations/0003_nas_into_destinations.py`, `Settings.tsx` redirect | CV `test_at356_*` (3); corrective.mjs "AT-356/AT-374" | backup-restore#nas-migration | Passed |
+| AT-357 (332) | Failed migration → Needs Attention, data kept, Edit / Test / Retry Migration | NAS-2 | `nas_migration.run`, `bk_views.destination_retry_migration`, `Backup.tsx` card | CV `test_at357_*` | backup-restore#nas-migration | Passed |
+| AT-358 (333) | SMB/NFS fields in the destination; password write-only, kept or replaced; no secret in API/audit | NAS-1, NAS-3 | `bk_views._clean_nas/_store_nas/nas_json`, `DestinationDialog` | CV `test_at358_*` (2); `test_nas.py`; corrective.mjs "AT-358" | backup-restore#nas | Passed (real SMB/NFS mount: **Blocked / Not Executed**, no NAS here) |
+| AT-359 (334) | Health, capacity thresholds and alerts, categorised failures, no low-space deletion | NAS-4 | `bk_engine.capacity/_set_health`, `nas_helper.classify` | CV `test_at359_*` (5), `test_at358_test_connection_*`; `test_backup_engine.py` AT-292 | backup-restore#capacity, #nas-troubleshooting | Passed |
+| AT-360 (335) | Backup Now: confirmation, one destination, truthful states, no Cancel, verified result | BQ-1 | `bk_views.destination_backup_now/job_json`, `BackupNowDialog`, `BackupQueue` | CV `test_at360_*`; corrective.mjs "AT-360/AT-361" | backup-restore#backup-now | Passed |
+| AT-361 (336) | One job at a time, FIFO, no queue jumping, durable, duplicates refused | BQ-2 | `core/jobs.claim` (`SERIAL_KINDS`) | CV `test_at361_*` (2); corrective.mjs "AT-360/AT-361" | backup-restore#backup-now | Passed |
+| AT-362 (337) | Tooltips never clipped (cards, tables, dialogs, edges, phone) | TT-1 | `ui.tsx HelpTip` (portal, flip/shift), `styles.css .tip-pop` | CV `test_at362_*`; corrective.mjs "AT-362/AT-363"; a11y.mjs (5 themes) | — | Passed (Chromium only) |
+| AT-363 (338) | Hover, focus, tap, ARIA, Escape; registry ids validated; Learn more by permission | TT-2 | `helpRegistry.ts`, `HelpTip` | CV `test_at363_*`; corrective.mjs "AT-362/AT-363" | documentation | Passed |
+| AT-364 (339) | Normal user: no admin guides, titles, search hits, links or direct URLs | HLP-1 | `core/help_access.py`, `core/views.help_*`, `Help.tsx` | CV `test_at364_*`; corrective.mjs "AT-364/AT-365" | documentation | Passed |
+| AT-365 (340) | Administrator / delegate / main administrator scopes; permission changes apply at once | HLP-1 | `help_access.allowed` | CV `test_at365_*` (2) | documentation | Passed |
+| AT-366 (341) | English map labels by default, no language selector, fallback without WebGL, CSP unchanged in spirit | MAP-1 | `security/mapprov.py`, `SigninMap.tsx englishStyle`, `0005_map_english_labels` | CV `test_at366_*` (3); corrective.mjs "AT-366"; screenshots.mjs (real OpenFreeMap) | security-map#map, #provider | Passed (production address: not tested) |
+| AT-367 (342) | Hover summary, click details, API scope tampering refused | MAP-2 | `SigninMap.tsx` markers, `SigninDetails`, `views_signins.signin_map` | CV `test_at367_*`; corrective.mjs "AT-367/AT-368" | security-map#markers | Passed |
+| AT-368 (343) | Clusters, filters (default Last 7 days), list ↔ map selection, Location unavailable, 1-year retention | MAP-2 | `views_signins._filters`, `Signins.tsx` | CV `test_at368_*`; corrective.mjs "AT-367/AT-368" | security-map#filters | Passed |
+| AT-369 (344) | Real phone pairing, restart restoration | WA-1, WA-2 | `bridge/whatsapp/session.mjs` | Live QR issuance and 5-minute window against WhatsApp servers (no phone) | whatsapp-personal#link | **Blocked / Not Executed** (no phone or WhatsApp account available) |
+| AT-370 (345) | QR lifecycle: 5-minute window, countdown, no churn while connecting, replacement rules, no QR leakage | WA-1 | `session.mjs link()`, `whatsapp.start_link/status`, `WhatsAppCard` | BR (10); CV `test_at370_*` (2); corrective.mjs "AT-370/AT-371/AT-372" | whatsapp-personal#link | Passed (with the fake bridge and the bridge unit tests) |
+| AT-371 (346) | One bridge, isolated sessions, unlink isolation, admin view without secrets | WA-1 | per-person session ids, `server.mjs` store | CV `test_at371_*`; `test_corrective_u.py` AT-351 | whatsapp-personal#scope | Passed (real multi-phone part: Blocked) |
+| AT-372 (347) | Verification, reconnect with back-off, Relink Required, stale-queue expiry/supersession, fallback | WA-2, WA-3 | `session.mjs`, `notify/expiry.staleness`, `whatsapp._tell_relink` | BR; CV `test_at372_*` (2) | whatsapp-personal#states, #queue | Passed (real post-link message: Blocked) |
+| AT-373 (348) | Diagnostics without secrets, Restart Bridge, pinned version, update/rollback, incompatibility alert | WA-4 | `server.mjs /diagnostics`, `whatsapp.diagnostics/alert_incompatible`, `views.admin_whatsapp`, `scripts/personaldocs` | CV `test_at373_*` (3); corrective.mjs "AT-373"; installer tests | whatsapp-personal#diagnostics, #updates | Passed |
+| AT-374 (349) | Docs match the UI; obsolete Storage & NAS instructions removed; admin procedures hidden from normal users; layout kept | DOC-1…DOC-3 | guides, `screenshots.mjs` | CV `test_at374_*`, `test_at364_*`; `scripts/check_docs.py`; `scripts/privacy_check.sh`; layout.mjs | all | Passed |
+| AT-375 (350) | Full release gate | all | — | full `pytest` (491 passed, 3 skipped); bridge tests (10); `npm run build`; `scripts/e2e.sh` (155 PASS) | TEST_REPORT.md#change-set-v | Passed (real-device parts Blocked, listed above) |
+
+Not run (needs real accounts or devices, never reported as passed): a real phone scanning the QR code, a real SMB or
+NFS server, OpenFreeMap tiles from the production address, Firefox and Safari.
+

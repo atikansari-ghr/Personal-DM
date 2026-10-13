@@ -23,6 +23,10 @@ function pdfjsAssets(): Plugin {
 
 export default defineConfig({
   plugins: [react(), pdfjsAssets()],
+  // MapLibre (sign-in map, Change Set V): always the CSP build, whose worker is a same-origin file - the strict
+  // Content-Security-Policy (script-src 'self', no blob: workers) stays unchanged. The Leaflet bridge imports
+  // "maplibre-gl" too, so the alias covers it.
+  resolve: { alias: [{ find: /^maplibre-gl$/, replacement: resolve(__dirname, "node_modules/maplibre-gl/dist/maplibre-gl-csp.js") }] },
   define: { __PDFJS_ASSETS__: JSON.stringify(`/static/app/pdfjs-${PDFJS_VERSION}/`) },
   build: {
     outDir: "dist",

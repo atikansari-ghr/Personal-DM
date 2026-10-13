@@ -1,4 +1,4 @@
-<!-- audience: admin -->
+<!-- audience: main_admin -->
 # Email (SMTP)
 
 ## Setup {#setup}
