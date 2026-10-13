@@ -56,6 +56,61 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
+## Change set V: NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing {#change-set-v}
+
+**Numbering.** The change prompt numbered its tests AT-331…AT-350. Here they are **AT-356…AT-375** (prompt AT-n →
+AT-(n+25)). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md#change-set-v). Root causes:
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-v).
+
+**Environment.** Development container (Ubuntu 24.04, PostgreSQL 16, Python 3.13, Node 22, Chromium via Playwright
+with software WebGL), 2026-10-13. No WhatsApp phone, no SMB/NFS server and no production address. WhatsApp in the
+browser suites used `tests/fake_whatsapp_bridge.py`; the bridge's pairing logic is covered by its own unit tests with a
+fake socket. In `corrective.mjs` the OpenFreeMap style was answered locally; `screenshots.mjs` used the **real**
+OpenFreeMap service through the proxy (the English-labelled map in `security-signin-map.png`).
+
+| Command | Result |
+|---|---|
+| `npm test` in `bridge/whatsapp` (session manager, fake socket) | **10 passed** |
+| `pytest tests/test_corrective_v.py` | **34 passed** |
+| Full `pytest` | PYTEST_RESULT |
+| `scripts/e2e.sh` (fresh database, final run) | **155 PASS, 0 FAIL** (exit 0): flow; accessibility in every theme; parity and layout (7 viewports, incl. the new Destinations and sign-in screens); offline 9; PWA 4; themes 6; recovery 10; **corrective 29** (incl. Change Set V: Storage & NAS redirect, NAS fields in the destination, Backup Now + FIFO queue, tooltips in table/dialog/phone, Help for a family member, English vector map, markers/clusters/details/filters, WhatsApp countdown/stages/failure/new QR/verified, diagnostics); **screenshots 8** |
+| `npm run build` (TypeScript check and production build) | Passed |
+| `python3 scripts/check_docs.py` | **OK** |
+| `scripts/privacy_check.sh` | **OK** |
+| `shellcheck -S error scripts/personaldocs scripts/e2e.sh` (as in `scripts/verify.sh`) | **OK** |
+
+**Live WhatsApp evidence (no phone).** Bridge 1.1.0 against the real WhatsApp servers from this container: QR codes
+were issued, one link attempt stayed open for 300 s (11 codes; WhatsApp closed the QR connection with 408 after
+162 s and the bridge reopened it inside the same attempt), then ended as *link expired*. Diagnostics: DNS, network,
+clock and storage OK.
+
+**Defects found while testing, all fixed:**
+
+- Administrator console commands (`sudo …`) were visible to family members in seven everyday guides → moved into
+  main-administrator sections; a test now fails on any `sudo` line a family member can read.
+- A destination at exactly 20 % free space was not *Warning* → thresholds are inclusive.
+- A person's first WhatsApp link attempt did not count towards the hourly limit → counted.
+- A backup job waiting for a later retry blocked the whole FIFO queue → only due jobs hold the queue.
+- **The Content-Security-Policy origin for the map was cached per server worker for a minute**, so after the
+  provider changed, other workers still blocked the new provider (*Map unavailable*). Found by the browser suite (the
+  map failed only on pages served by the second worker) → every worker re-reads the map settings (one small query) and
+  follows a change at once; regression test added.
+- The sign-in map filters rendered as five full-width stacked selects → one compact, wrapping row.
+
+**Blocked / Not Executed (never reported as passed):**
+
+| Scenario | Why |
+|---|---|
+| AT-369 (prompt AT-344) real phone pairing, scan, verification message, restart restoration | No phone or WhatsApp account available |
+| Real multi-phone isolation and real post-link test message (parts of AT-371, AT-372) | Same |
+| Mounting a real SMB or NFS share (part of AT-358) | No NAS; mounting is tested with the faked root helper |
+| OpenFreeMap from the production address | No production address; tested from this container through the proxy |
+| Firefox and Safari | Chromium only |
+
+**Note.** The muted privacy line under the map was reworded after the final screenshots were taken
+(*ordinary map data (tiles)* instead of *ordinary picture tiles*); `security-signin-map.png` still shows the old
+wording.
+
 ## Change set U: corrective fixes for the folder tree, sign-in map, sign-in designs, WhatsApp and Discord {#change-set-u}
 
 **Numbering.** The change prompt numbered its tests AT-311…AT-330. Here they are **AT-336…AT-355** (prompt AT-n →

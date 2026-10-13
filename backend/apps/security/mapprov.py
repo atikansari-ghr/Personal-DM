@@ -103,7 +103,7 @@ def public_config(user=None) -> dict:
            "kind": r["kind"], "style_url": r["url"] if vector else "", "english_labels": r["english"],
            "fallback_tile_url": OSM_URL if vector else "", "fallback_attribution": PRESETS["osm"]["attribution"] if vector else "",
            "tile_url": "" if vector else r["url"], "attribution": r["attribution"], "referrer_policy": REFERRER_POLICY,
-           "privacy": "The map loads ordinary picture tiles from the provider shown here. Your sign-in addresses are never "
+           "privacy": "The map loads ordinary map data (tiles) from the provider shown here. Your sign-in addresses are never "
                       "sent to it or to any geolocation service; positions come from Trusted Zone pins and this server's GeoIP database."}
     if enabled and not r["url"]:
         out["unavailable"] = "No map provider key is configured." if r["needs_key"] else "No tile address is configured."
