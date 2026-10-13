@@ -1081,3 +1081,7 @@ tr.risk-high td { background: var(--danger-bg); }
 .signin-list tbody tr.selected { background: var(--brand-softer); outline: 2px solid var(--brand); outline-offset: -2px; }
 .signin-detail { margin-top: 0.8rem; }
 .link-btn { background: none; border: 0; padding: 0.15rem 0; color: var(--brand); text-decoration: underline; cursor: pointer; font: inherit; text-align: left; }
+/* Change Set V: sign-in map filters stay one compact, wrapping row (map and list share them) */
+.map-filters { align-items: center; }
+.map-filters select, .map-filters input[type=date] { width: auto; min-width: 9rem; max-width: 16rem; flex: 0 1 auto; }
+@media (max-width: 520px) { .map-filters select, .map-filters input[type=date] { flex: 1 1 calc(50% - 8px); min-width: 0; max-width: none; } }
