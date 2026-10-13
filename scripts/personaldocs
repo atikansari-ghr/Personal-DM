@@ -864,6 +864,10 @@ cmd_whatsapp_bridge() { # whatsapp-bridge install|update|rollback|status|disable
         if [ -n "$prev" ] && [ -d "$prev" ]; then ln -sfn "$prev" "$WA_PREFIX/current"; systemctl restart personaldocs-whatsapp; die "rolled back to $(basename "$prev")"; fi
         die "bridge unhealthy; see journalctl -u personaldocs-whatsapp"
       fi
+      # post-update diagnostics: connectivity, clock, storage and how many linked sessions were restored (no secrets)
+      sleep 6
+      curl -fsS -H "Authorization: Bearer $(cat "$CONF_DIR/whatsapp-bridge.token")" http://127.0.0.1:8095/diagnostics 2>/dev/null \
+        | jq -r '"Diagnostics: DNS \(.dns.ok) · network \(.network.ok) · clock \(.clock.ok) · storage \(.storage.ok) · sessions: \([.sessions[].state] | group_by(.) | map("\(length) \(.[0])") | join(", "))"' 2>/dev/null || true
       [ -n "$prev" ] && echo "$prev" >"$STATE/whatsapp-previous"
       ls -1dt "$WA_PREFIX"/releases/* 2>/dev/null | tail -n +4 | xargs -r rm -rf
       manage shell -c "from apps.core import audit; audit.record('whatsapp.bridge_$action', actor=None, actor_label='console', version='$ver')" >/dev/null 2>&1 || true

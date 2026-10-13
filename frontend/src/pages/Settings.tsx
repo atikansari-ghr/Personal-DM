@@ -1,7 +1,7 @@
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useSession } from "../session";
 import AccountSettings from "./settings/Account";
-import { ActivityPanel, AuthPanel, ConnectionsPanel, DocumentsPanel, NotificationsAdmin, ProcessingPanel, StoragePanel } from "./settings/Admin";
+import { ActivityPanel, AuthPanel, ConnectionsPanel, DocumentsPanel, NotificationsAdmin, ProcessingPanel } from "./settings/Admin";
 import FamilyPanel from "./settings/Family";
 import LocalAIPanel from "./settings/LocalAI";
 import OverviewAdminPanel from "./settings/OverviewAdmin";
@@ -14,7 +14,7 @@ import { SigninAdmin } from "./settings/Signins";
 
 const ADMIN_TABS: [string, string][] = [
   ["general", "General"], ["family", "Family & access"], ["documents", "Documents & folders"], ["processing", "OCR & processing"],
-  ["notifications", "Notifications"], ["connections", "Connections"], ["authentication", "Authentication"], ["storage", "Storage & NAS"], ["backup", "Backup & Recovery"],
+  ["notifications", "Notifications"], ["connections", "Connections"], ["authentication", "Authentication"], ["backup", "Backup & Recovery"],
   ["security", "Security"], ["activity", "Activity & health"], ["ai", "Local AI"], ["offline", "Offline & PWA"], ["overview", "Overview & sign-in"],
 ];
 
@@ -26,6 +26,8 @@ export default function SettingsPage() {
   const secAdmin = !admin && !!session?.user?.is_admin;  // Administrator role: security and operations only
   const tabs: [string, string][] = [["account", "My account"], ...(admin ? ADMIN_TABS : [...(delegate || secAdmin ? [["family", secAdmin && !delegate ? "Users" : "Family & access"] as [string, string]] : []), ...(secAdmin ? [["security", "Security"] as [string, string]] : [])]), ["help", "Help & documentation"]];
   const active = section || (admin ? "general" : "account");
+  // Change Set V: the former Storage & NAS page is now Backup & Recovery → Destinations (old links still arrive)
+  if (section === "storage") return <Navigate to="/settings/backup?view=destinations" replace />;
   return (
     <div>
       <div className="page-head"><div><h1>Settings</h1><p className="muted">{admin ? "Manage your family workspace" : "Manage your account"}</p></div></div>
@@ -40,7 +42,6 @@ export default function SettingsPage() {
       {active === "notifications" && admin && <NotificationsAdmin />}
       {active === "connections" && admin && <ConnectionsPanel />}
       {active === "authentication" && admin && <AuthPanel />}
-      {active === "storage" && admin && <StoragePanel />}
       {active === "backup" && admin && <BackupPanel />}
       {active === "security" && (admin || secAdmin) && <SecurityCenter />}
       {active === "activity" && admin && <ActivityTabs />}

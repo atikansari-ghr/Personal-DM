@@ -127,7 +127,7 @@ def test_at345_theme_and_signin_design_are_independent(family, clients):
 def test_at349_running_bridge_is_detected_before_and_after_enabling(family, clients, bridge):
     svc = clients["dad"].get("/api/admin/connections").json()["providers"]
     wa = next(p for p in svc if p["key"] == "whatsapp")
-    assert wa["service"]["state"] == "ready_disabled" and wa["service"]["version"] == "1.0.0" and wa["service"]["protocol"] == 1
+    assert wa["service"]["state"] == "ready_disabled" and wa["service"]["version"] == "1.1.0" and wa["service"]["protocol"] == 1
     assert wa["status"] == "disabled" and "Planned" not in json.dumps(svc)
     config.set_value("whatsapp.enabled", True)
     wa = next(p for p in clients["dad"].get("/api/admin/connections").json()["providers"] if p["key"] == "whatsapp")

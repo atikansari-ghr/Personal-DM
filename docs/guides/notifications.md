@@ -71,6 +71,7 @@ label; email and Telegram use the emoji.
 Signal is not supported. New channels are never switched on automatically: existing people keep exactly the channels
 they had until they choose otherwise.
 
+<!-- audience-section: main_admin -->
 ### Provider cards (main administrator) {#providers}
 
 **Settings → Connections** starts with a card per provider. Each card shows its real state, never a placeholder:
@@ -116,6 +117,7 @@ formatted message, it is sent again as plain text, so nothing is lost.
 
 **Push.** A push notification shows only a title and a short summary, chosen by your
 [lock-screen detail](#lock-screen) setting. Tapping it opens the matching page of the app.
+<!-- /audience-section -->
 
 ## Notification Center and banners {#center}
 
@@ -245,6 +247,7 @@ removed automatically. Turn it on again on each new device or browser.
 Document numbers and document text are never sent by push, whatever you choose. Tapping a notification opens the
 page inside the app; it never opens another site.
 
+<!-- audience-section: main_admin -->
 ## Template Manager (main administrator) {#templates}
 
 **Settings → Notifications → Templates** changes the presentation of a notification, per event and per channel (or
@@ -342,6 +345,7 @@ frame), **Telegram**, **In-app**, **Push** and **Plain text**, with sample data.
 **Send a TEST message to yourself** sends the draft to you on the channels you tick (in-app, email, Telegram, push).
 TEST messages use sample data, are marked **TEST** in the subject, heading and card, and never create a real event:
 the only record is the audit entry `notifications.test_sent`.
+<!-- /audience-section -->
 
 ## Delivery history {#delivery}
 
@@ -446,6 +450,7 @@ delivery status.
 
 You only ever see your own messages.
 
+<!-- audience-section: main_admin -->
 ## Delivery health (administrators) {#delivery-health}
 
 **Settings → Notifications → Notification delivery health** shows, for the last 7 days:
@@ -459,6 +464,7 @@ You only ever see your own messages.
 It shows counts only: no message text, addresses or secrets.
 
 ![Notification delivery health for administrators](../images/screenshots/admin-delivery-health.png)
+<!-- /audience-section -->
 
 ## Test notifications {#test}
 

@@ -92,6 +92,24 @@ def render_credentials(snap: dict, password: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def classify(detail: str) -> str:
+    """Failure category for Backup & Recovery diagnostics (Change Set V)."""
+    low = detail.lower()
+    if "could not resolve" in low or "name or service not known" in low or "unknown host" in low:
+        return "dns"
+    if "operation not permitted" in low or "error(1)" in low or "only root can" in low:
+        return "mount_not_allowed"
+    if "access denied" in low or "logon failure" in low or "permission denied" in low or "error(13)" in low:
+        return "authentication"
+    if "no route" in low or "timed out" in low or "unreachable" in low or "host is down" in low or "error(113)" in low or "connection refused" in low:
+        return "reachability"
+    if "no such file" in low or "bad share" in low or "does not exist" in low or "error(2)" in low:
+        return "share"
+    if "wrong fs type" in low or "unknown filesystem" in low or "helper program" in low:
+        return "client_tools"
+    return "mount"
+
+
 def hint(detail: str, server: str) -> str:
     low = detail.lower()
     if "operation not permitted" in low or "error(1)" in low or "only root can" in low:
@@ -177,7 +195,8 @@ class Helper:
             if res.returncode != 0 or not mounted:
                 journal = self.run(["journalctl", "-u", UNIT_NAME, "-n", "15", "--no-pager", "-o", "cat"]).stdout or ""
                 detail = ((res.stderr or "") + "\n" + journal).strip()
-                return self.status("error", hint(detail, snap["server"]), detail=detail[-1200:], request_at=request_at)
+                return self.status("error", hint(detail, snap["server"]), detail=detail[-1200:], request_at=request_at,
+                                   category=classify(detail))
             target = self.mount_point / snap["subfolder"]
             target.mkdir(exist_ok=True)
             if uid:
@@ -189,7 +208,7 @@ class Helper:
             if uid:
                 probe = self.run(["runuser", "-u", self.user, "--", "touch", str(target / ".write-test")])
                 if probe.returncode != 0:
-                    return self.status("error", f"The share is mounted but the app cannot write to it. Give write access on the NAS "
+                    return self.status("error", category="write_permission", message=f"The share is mounted but the app cannot write to it. Give write access on the NAS "
                                        f"(NFS: allow UID {uid} or map users; SMB: the account needs write permission).",
                                        detail=(probe.stderr or "")[-500:], request_at=request_at)
                 (target / ".write-test").unlink(missing_ok=True)

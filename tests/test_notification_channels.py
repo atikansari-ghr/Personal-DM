@@ -159,7 +159,7 @@ def test_at315_bridge_version_compatibility(family, clients, bridge):
     from apps.notify import whatsapp
 
     st = whatsapp.bridge_status()
-    assert st["state"] == "healthy" and st["tested"] and st["pinned"] == "1.0.0"
+    assert st["state"] == "healthy" and st["tested"] and st["pinned"] == "1.1.0"
     bridge.version = "9.9.9"
     st = whatsapp.bridge_status()
     assert st["state"] == "degraded" and not st["tested"] and st["update_available"]

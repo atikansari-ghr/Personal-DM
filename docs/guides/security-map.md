@@ -4,6 +4,7 @@
 Personal DM records where each sign-in came from, which device was used, and how unusual it looks. It also lets you
 end sessions or distrust a device.
 
+<!-- audience-section: main_admin -->
 ## Trusted Zones {#trusted-zones}
 
 A **Trusted Zone** gives a friendly name to your own networks. With a zone such as *Home*, sign-ins from your home
@@ -33,6 +34,7 @@ Rules:
 
 A pin places the zone on the map. Enter latitude and longitude in decimal degrees; an approximate point is enough. The
 map always labels it **configured Trusted Zone location**, never GeoIP.
+<!-- /audience-section -->
 
 ## How a location is worked out {#resolution}
 
@@ -71,6 +73,7 @@ address (for example `192.168.x.10`). The full public address is under **View Se
 
 <a id="tiles"></a>
 
+<!-- audience-section: main_admin -->
 ### Map provider and tiles {#provider}
 
 The map is drawn with Leaflet, which is bundled with the app, using **online map tiles** from a provider you choose.
@@ -101,6 +104,7 @@ exactly as the map does.
 > **Privacy** The browser loads the tiles, so a map provider's API key is visible to signed-in people. That is normal
 > for web maps: restrict the key at the provider to this site's address. Sign-in addresses, Trusted Zones and risk data
 > are never sent to the provider.
+<!-- /audience-section -->
 
 ### When the map is unavailable {#unavailable}
 
@@ -110,6 +114,7 @@ working, and the list below the map shows every sign-in. Administrators get a li
 
 ![Map unavailable state with the reason and a link to the provider settings](../images/screenshots/security-map-unavailable.png)
 
+<!-- audience-section: main_admin -->
 ### Map troubleshooting {#map-troubleshooting}
 
 | Test result | Meaning | Fix |
@@ -127,6 +132,7 @@ working, and the list below the map shows every sign-in. Administrators get a li
 > browser identity, no proxying of tiles and no endless retries.
 
 Turn **Sign-in map** off to show only the list.
+<!-- /audience-section -->
 
 ## Risk {#risk}
 

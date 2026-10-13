@@ -1,15 +1,21 @@
 {
   "name": "personaldocs-whatsapp-bridge",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "EXPERIMENTAL, UNOFFICIAL, self-hosted notification-only WhatsApp linked-device bridge for Personal Documents Management System. Not the WhatsApp Business Platform; not supported or endorsed by WhatsApp or Meta.",
   "author": "Atik Ansari",
   "license": "MIT",
   "type": "module",
   "main": "server.mjs",
-  "engines": { "node": ">=20" },
-  "scripts": { "start": "node server.mjs", "selftest": "node server.mjs --selftest" },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "selftest": "node server.mjs --selftest",
+    "test": "node --test test/session.test.mjs"
+  },
   "dependencies": {
-    "@whiskeysockets/baileys": "6.7.24"
+    "@whiskeysockets/baileys": "7.0.0-rc14"
   }
 }

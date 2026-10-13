@@ -1,4 +1,4 @@
-<!-- audience: admin -->
+<!-- audience: main_admin -->
 # Upgrades, rollback and repair
 
 ## Upgrade {#upgrade}

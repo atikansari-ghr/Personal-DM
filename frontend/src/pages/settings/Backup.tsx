@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, formatBytes, formatDateTime } from "../../api";
 import { useStepUp } from "../../components/StepUp";
+import SettingsForm from "../../components/SettingsForm";
 import { HelpTip, Icon, Modal, Skeleton, useAsync, useToast } from "../../components/ui";
 
 // Settings → Backup & Recovery (main administrator). Every label here matches docs/guides/backup-restore.md.
@@ -59,7 +60,7 @@ function OverviewView({ data, reload }: { data: Overview; reload: () => void }) 
   const toast = useToast();
   const h = data.health;
   const post = useAsync<any>(() => api("backup/post-recovery"), []);
-  const run = (kind: string) => api("backup/now", { body: { kind } }).then(() => { toast(`${kind === "full" ? "Full" : "Incremental"} backup started`); reload(); }).catch((e) => toast(e.message, "error"));
+  const run = (kind: string) => api<any>("backup/now", { body: { kind } }).then((r) => { toast(`${kind === "full" ? "Full" : "Incremental"} backup ${r.position ? `queued (${r.position} job(s) ahead)` : "started"} — it cannot be cancelled once it runs`); reload(); }).catch((e) => toast(e.message, "error"));
   return (
     <>
       {post.data?.integrations?.active && <PostRecovery data={post.data} reload={post.reload} />}
@@ -68,9 +69,9 @@ function OverviewView({ data, reload }: { data: Overview; reload: () => void }) 
         <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
           <h2 id="bk-health" style={{ margin: 0 }}>Backup & Recovery Health <HealthBadge state={h.state} label={h.label} /></h2>
           <div className="row" style={{ gap: "0.5rem" }}>
-            <button className="btn primary" disabled={!data.destinations.length || data.running.length > 0} onClick={() => run("full")}>
-              {data.running.includes("backup_point") ? "Backup running…" : "Back up now (Full)"}</button>
-            <button className="btn" disabled={!data.destinations.length || data.running.length > 0} onClick={() => run("incremental")}>Incremental now</button>
+            <button className="btn primary" disabled={!data.destinations.length} onClick={() => run("full")}>
+              {data.running.includes("backup_point") ? "Back up now (Full) — queues after the running job" : "Back up now (Full)"}</button>
+            <button className="btn" disabled={!data.destinations.length} onClick={() => run("incremental")}>Incremental now</button>
           </div>
         </div>
         <p className="small muted">Calculated from verified recovery points and destination checks, not from whether the scheduler is running. <a href="/help/backup-restore#health">Learn more</a></p>
@@ -104,6 +105,7 @@ function OverviewView({ data, reload }: { data: Overview; reload: () => void }) 
         <section className="card">
           <h2>Legacy folder backups <HelpTip text="Unencrypted backups made before encrypted recovery points. They are kept and listed, never deleted automatically, and can be restored from the console with personaldocs restore." link="/help/backup-restore#legacy" /></h2>
           <ul>{data.legacy.slice(0, 5).map((l) => <li key={l.path}><code>{l.name}</code> · {formatDateTime(l.created_at)} · {l.files} files</li>)}</ul>
+          <details><summary className="small">Legacy settings</summary><SettingsForm keys={["backup.target", "backup.require_mount", "backup.keep_daily"]} title="Legacy folder backups" /></details>
         </section>
       )}
     </>
@@ -207,46 +209,170 @@ function PolicyDialog({ policy, destinations, onClose, onSaved, step }: { policy
 
 // ---------------------------------------------------------------- destinations
 
+const DEST_HEALTH: Record<string, [string, string]> = { healthy: ["healthy", "Connected"], unknown: ["running", "Not tested"], unavailable: ["critical", "Unavailable"],
+  needs_attention: ["attention", "Needs Attention"], auth_required: ["critical", "Authentication required"], insufficient_storage: ["critical", "Insufficient Backup Storage"] };
+const CAP_CLASS: Record<string, string> = { ok: "ok", warning: "warn", critical: "danger", unknown: "neutral" };
+const destWhere = (d: any) => d.nas?.managed ? `${(d.nas.connection || "").toUpperCase()} · ${d.nas.server || "?"}${d.nas.connection === "nfs" ? ":" : "/"}${d.nas.share || ""} → ${d.config.path}` : (d.config.path || d.config.bucket || d.config.folder_id || d.config.folder || "—");
+
 function DestinationsView({ data, reload, step }: { data: Overview; reload: () => void; step: ReturnType<typeof useStepUp> }) {
   const [edit, setEdit] = useState<any | null>(null);
+  const [confirm, setConfirm] = useState<any | null>(null);
+  const [testing, setTesting] = useState<Record<number, string>>({});
   const toast = useToast();
-  const test = (d: any) => api(`backup/destinations/${d.id}/test`, { method: "POST" }).then((r) => { toast(r.ok ? `“${d.name}” reachable${r.free != null ? ` · ${formatBytes(r.free)} free` : ""}` : `${d.name}: ${r.detail}`, r.ok ? "ok" : "error"); reload(); });
+  const queue = useAsync<any>(() => api("backup/jobs"), []);
+  const active = (queue.data?.jobs || []).some((j: any) => !["Completed", "Failed"].includes(j.state));
+  useEffect(() => { if (!active) return; const t = setInterval(() => { queue.reload(); reload(); }, 4000); return () => clearInterval(t); }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+  const test = async (d: any, body: any = {}) => {
+    setTesting((t) => ({ ...t, [d.id]: body.action === "disconnect" ? "Disconnecting…" : "Testing…" }));
+    try {
+      let r = await api<any>(`backup/destinations/${d.id}/test`, { body });
+      for (let i = 0; r.pending && i < 40; i++) { // the NAS mount runs in a system service; ask again until it answered
+        setTesting((t) => ({ ...t, [d.id]: r.detail || "Connecting…" }));
+        await new Promise((res) => setTimeout(res, 2500));
+        r = await api<any>(`backup/destinations/${d.id}/test`, { body: { poll: true } });
+      }
+      toast(r.ok ? `“${d.name}” connected${r.free != null ? ` · ${formatBytes(r.free)} free` : ""}` : `${d.name}: ${r.category_label ? `${r.category_label} — ` : ""}${r.detail}`, r.ok ? "ok" : "error");
+    } catch (e: any) { toast(e.message, "error"); }
+    setTesting((t) => { const n = { ...t }; delete n[d.id]; return n; });
+    reload();
+  };
+  const retryMigration = (d: any) => api<any>(`backup/destinations/${d.id}/retry-migration`, { body: {} }).then((r) => { toast(r.result === "migrated" ? "Migration completed — run Test Connection" : `Still needs attention: ${r.problem || "check the configuration"}`, r.result === "migrated" ? "ok" : "error"); reload(); }).catch((e) => toast(e.message, "error"));
   return (
     <section className="card">
       <div className="row" style={{ justifyContent: "space-between" }}><h2 style={{ margin: 0 }}>Destinations</h2><button className="btn primary" onClick={() => setEdit({ kind: "local", name: "", config: {}, secrets: {} })}>Add destination</button></div>
       <p className="small muted">Only encrypted files ever reach a destination. Credentials are stored encrypted and are never shown again. Personal DM never deletes valid backups to make room: a full destination fails and alerts. <a href="/help/backup-restore#destinations">Learn more</a></p>
-      <div className="table-wrap"><table className="table"><thead><tr><th>Name</th><th>Type</th><th>Where</th><th>Health</th><th /></tr></thead>
-        <tbody>{data.destinations.map((d) => <tr key={d.id}><td>{d.name}{!d.enabled && <span className="badge neutral" style={{ marginLeft: 6 }}>Off</span>}</td><td>{d.kind_label}</td>
-          <td className="small">{d.config.path || d.config.bucket || d.config.folder_id || d.config.folder || "—"}{d.secrets_set.length > 0 && <div className="muted">Credentials stored</div>}</td>
-          <td><HealthBadge state={d.health === "healthy" ? "healthy" : d.health === "unknown" ? "running" : "critical"} label={d.health.replace(/_/g, " ")} />{d.health_detail && <div className="small muted">{d.health_detail}</div>}</td>
-          <td className="row" style={{ gap: 4 }}><button className="btn small" onClick={() => test(d)}>Test</button><button className="btn small" onClick={() => setEdit({ ...d, secrets: {} })}>Edit</button></td></tr>)}</tbody></table></div>
+      <div className="dest-grid">
+        {data.destinations.map((d) => {
+          const [hs, hl] = DEST_HEALTH[d.health] || ["critical", d.health.replace(/_/g, " ")];
+          const cap = d.capacity || {};
+          return (
+            <article key={d.id} className="dest-card" data-dest={d.name} data-health={d.health}>
+              <div className="row" style={{ justifyContent: "space-between", gap: 6, flexWrap: "wrap" }}>
+                <strong>{d.name}{!d.enabled && <span className="badge neutral" style={{ marginLeft: 6 }}>Off</span>}</strong>
+                <HealthBadge state={hs} label={hl} />
+              </div>
+              <div className="small muted">{d.kind_label}{d.nas ? ` · ${d.nas.managed ? (d.nas.connection === "smb" ? "SMB / Windows share" : "NFS export") : "Already mounted"}` : ""}</div>
+              <div className="small mono dest-where">{destWhere(d)}</div>
+              {d.needs_attention && <div className="alert warn small" role="status"><strong>Needs Attention — Migration incomplete; existing backup data preserved.</strong> {d.health_detail.replace(/^Migration incomplete; existing backup data preserved:?\s*/, "")}</div>}
+              {!d.needs_attention && d.health_detail && d.health !== "healthy" && <p className="small warn-text">{d.health_detail}</p>}
+              {d.nas?.mount?.category_label && d.health !== "healthy" && <p className="small">Diagnosis: <strong>{d.nas.mount.category_label}</strong></p>}
+              <dl className="dest-facts small">
+                <dt>Space</dt><dd>{d.total_bytes ? <><span className={`badge ${CAP_CLASS[cap.state] || "neutral"}`} data-capacity={cap.state}>{cap.free_pct} % free</span> {formatBytes(d.free_bytes)} of {formatBytes(d.total_bytes)}</> : "Unknown until the first test"}</dd>
+                <dt>Last test</dt><dd>{d.checked_at ? formatDateTime(d.checked_at) : "Never"}</dd>
+                <dt>Last backup</dt><dd>{d.last_backup ? `${formatDateTime(d.last_backup.at)} · ${d.last_backup.label}` : "None yet"}</dd>
+                <dt>Next backup</dt><dd>{d.next_backup ? formatDateTime(d.next_backup) : "Not in an enabled policy"}</dd>
+                {d.retry && <><dt>Retry</dt><dd>Retry pending{d.retry.next_at ? ` · next attempt ${formatDateTime(d.retry.next_at)}` : ""} (attempt {d.retry.attempts})</dd></>}
+              </dl>
+              <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+                <button className="btn small" disabled={!!testing[d.id]} onClick={() => test(d)}>{testing[d.id] || "Test Connection"}</button>
+                <button className="btn small" onClick={() => setEdit({ ...d, secrets: {}, nasIn: { ...(d.nas || {}) } })}>{d.needs_attention ? "Edit Configuration" : "Edit"}</button>
+                {d.needs_attention && <button className="btn small" onClick={() => retryMigration(d)}>Retry Migration</button>}
+                <button className="btn small primary" disabled={!d.enabled} onClick={() => setConfirm(d)}>Backup Now</button>
+                {d.nas?.managed && d.nas?.mount?.state === "mounted" && <button className="btn small ghost" disabled={!!testing[d.id]} onClick={() => test(d, { action: "disconnect" })}>Disconnect</button>}
+              </div>
+              <details className="small"><summary>Details & troubleshooting</summary>
+                <p>{d.nas?.mount?.message || d.health_detail || "No problems reported."}</p>
+                {d.nas?.managed && <p className="muted">Mounted by Personal DM at <code>{d.config.path}</code>{d.nas.password_set ? " · password stored (encrypted)" : ""}.</p>}
+                <p><a href="/help/backup-restore#nas-troubleshooting">Troubleshooting guide</a></p>
+              </details>
+            </article>
+          );
+        })}
+      </div>
+      {!data.destinations.length && <p className="muted">No destination yet.</p>}
+      <BackupQueue jobs={queue.data?.jobs || []} />
       {edit && <DestinationDialog dest={edit} kinds={data.kinds} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); reload(); }} step={step} />}
+      {confirm && <BackupNowDialog dest={confirm} warnings={data.health.warnings} onClose={() => setConfirm(null)} onQueued={() => { setConfirm(null); queue.reload(); reload(); }} />}
     </section>
   );
 }
 
+/** Durable FIFO queue: one backup or verification at a time; later ones wait their turn. Running jobs cannot be cancelled. */
+function BackupQueue({ jobs }: { jobs: any[] }) {
+  if (!jobs.length) return null;
+  const cls: Record<string, string> = { Queued: "neutral", Preparing: "neutral", "Backing Up": "neutral", Verifying: "neutral", Completed: "ok", Failed: "danger" };
+  return (
+    <div className="stack" style={{ marginTop: "1rem" }} id="backup-queue">
+      <h3 style={{ margin: 0 }}>Backup jobs <HelpTip id="backup.queue" /></h3>
+      <div className="table-wrap"><table className="table small"><thead><tr><th>Requested</th><th>What</th><th>State</th><th>Finished</th></tr></thead>
+        <tbody>{jobs.slice(0, 10).map((j) => <tr key={j.id} data-job-state={j.state}><td>{formatDateTime(j.created_at)}</td>
+          <td>{j.kind === "backup_point" ? `${j.backup_kind === "incremental" ? "Incremental" : "Full"} backup${j.destinations.length ? ` → ${j.destinations.join(", ")}` : " (policy)"}` : j.kind.replace(/_/g, " ")} · {j.trigger || "scheduled"}</td>
+          <td><span className={`badge ${cls[j.state] || "neutral"}`}>{j.state}</span>{j.error && <div className="small muted">{j.error}</div>}</td><td>{j.finished_at ? formatDateTime(j.finished_at) : "—"}</td></tr>)}</tbody></table></div>
+      <p className="small muted">Jobs run one at a time in the order they were requested (a manual backup never jumps ahead of a scheduled one). A running backup cannot be cancelled; closing the page or signing out does not stop it.</p>
+    </div>
+  );
+}
+
+function BackupNowDialog({ dest, warnings, onClose, onQueued }: { dest: any; warnings: string[]; onClose: () => void; onQueued: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const cap = dest.capacity || {};
+  const mine = warnings.filter((w) => w.startsWith(`${dest.name}:`));
+  const go = () => { setBusy(true); api<any>(`backup/destinations/${dest.id}/backup-now`, { body: { confirm: true } })
+    .then((r) => { toast(r.position ? `Backup queued — ${r.position} job(s) ahead` : "Backup started"); onQueued(); }).catch((e) => toast(e.message, "error")).finally(() => setBusy(false)); };
+  return (
+    <Modal title={`Backup Now → ${dest.name}`} onClose={onClose}>
+      <div className="stack">
+        <dl className="dest-facts small">
+          <dt>Destination</dt><dd>{dest.name} ({dest.kind_label})</dd>
+          <dt>Scope</dt><dd>Full system: database, every document version and original, OCR text, photos, branding, settings and protected secrets (encrypted)</dd>
+          <dt>Type</dt><dd>Full recovery point, stored on this destination only and kept until you delete it</dd>
+          <dt>Space</dt><dd>{dest.total_bytes ? `${formatBytes(dest.free_bytes)} free of ${formatBytes(dest.total_bytes)} (${cap.free_pct} %)` : "Unknown — run Test Connection first"}</dd>
+        </dl>
+        {(mine.length > 0 || dest.health !== "healthy") && <div className="alert warn small" role="status">{dest.health !== "healthy" && <div>Health: {dest.health.replace(/_/g, " ")}{dest.health_detail ? ` — ${dest.health_detail}` : ""}</div>}{mine.map((w) => <div key={w}>{w}</div>)}</div>}
+        <div className="callout warn"><strong>This backup cannot be cancelled once it starts.</strong> It runs in the background (closing the page or signing out does not stop it). If another backup is running or queued, this one waits its turn.</div>
+        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" disabled={busy} onClick={go}>Start backup</button></div>
+      </div>
+    </Modal>
+  );
+}
+
+const NAS_LABELS: Record<string, string> = { server: "NAS server", share: "Share / export", subfolder: "Folder on the share", username: "SMB username", domain: "SMB domain/workgroup", version: "Protocol version" };
+const NAS_HELP: Record<string, string> = { server: "Hostname or IP address of the NAS", share: "SMB share name (e.g. backups) or NFS export path (e.g. /volume1/backups)",
+  subfolder: "Created if missing; backups are written to /mnt/pdnas/<folder>", version: "Optional: SMB 3.0 / 2.1, NFS 3 / 4 / 4.1" };
+
 function DestinationDialog({ dest, kinds, onClose, onSaved, step }: { dest: any; kinds: Overview["kinds"]; onClose: () => void; onSaved: () => void; step: ReturnType<typeof useStepUp> }) {
-  const [d, setD] = useState({ ...dest, config: { ...dest.config }, secrets: {} as Record<string, string> });
+  const [d, setD] = useState({ ...dest, config: { connection: dest.nas?.connection || "smb", ...dest.config, ...(dest.nas?.connection ? { connection: dest.nas.connection } : {}) }, secrets: {} as Record<string, string>, nasIn: { subfolder: "personaldocs", ...(dest.nasIn || {}) } });
   const [err, setErr] = useState("");
   const kind = kinds.find((k) => k.kind === d.kind)!;
-  const save = () => (d.id ? api(`backup/destinations/${d.id}`, { method: "PUT", body: d }) : api("backup/destinations", { body: d })).then(onSaved).catch((e) => setErr(e.message));
+  const conn = d.config.connection || "smb";
+  const managed = d.kind === "nas" && conn !== "mounted";
+  const body = () => { const { nasIn, nas, ...rest } = d; return { ...rest, ...(d.kind === "nas" ? { nas: managed ? nasIn : undefined } : {}) }; };
+  const save = () => (d.id ? api(`backup/destinations/${d.id}`, { method: "PUT", body: body() }) : api("backup/destinations", { body: body() })).then(onSaved).catch((e) => setErr(e.message));
+  const cfgFields = kind.config.filter((f) => !["connection", "warn_pct", "crit_pct"].includes(f) && !(managed && (f === "path" || f === "require_mount")));
+  const setNas = (f: string, v: string) => setD({ ...d, nasIn: { ...d.nasIn, [f]: v } });
   return (
     <Modal title={d.id ? `Edit “${dest.name}”` : "Add destination"} onClose={onClose} wide>
       <div className="stack">
         {err && <div className="alert error" role="alert">{err}</div>}
         <div className="form-grid">
           <div className="field"><label htmlFor="dst-name">Name</label><input id="dst-name" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} /></div>
-          <div className="field"><label htmlFor="dst-kind">Type</label><select id="dst-kind" value={d.kind} disabled={!!d.id} onChange={(e) => setD({ ...d, kind: e.target.value, config: {} })}>{kinds.map((k) => <option key={k.kind} value={k.kind}>{k.label}</option>)}</select></div>
-          {kind.config.map((f) => f === "require_mount" ? (
+          <div className="field"><label htmlFor="dst-kind">Type</label><select id="dst-kind" value={d.kind} disabled={!!d.id} onChange={(e) => setD({ ...d, kind: e.target.value, config: e.target.value === "nas" ? { connection: "smb" } : {} })}>{kinds.map((k) => <option key={k.kind} value={k.kind}>{k.label}</option>)}</select></div>
+          {d.kind === "nas" && <div className="field"><label htmlFor="dst-connection">Connection <HelpTip id="nas.connection" /></label>
+            <select id="dst-connection" value={conn} onChange={(e) => setD({ ...d, config: { ...d.config, connection: e.target.value } })}>
+              <option value="smb">SMB / Windows share (mounted by Personal DM)</option><option value="nfs">NFS export (mounted by Personal DM)</option><option value="mounted">Already mounted (Proxmox bind mount or your own mount)</option></select></div>}
+          {managed && ["server", "share", "subfolder", ...(conn === "smb" ? ["username", "domain"] : []), "version"].map((f) => (
+            <div key={f} className="field"><label htmlFor={`dst-nas-${f}`}>{NAS_LABELS[f]}</label><input id={`dst-nas-${f}`} value={d.nasIn[f] || ""} onChange={(e) => setNas(f, e.target.value)}
+              placeholder={{ server: "nas.local", share: conn === "nfs" ? "/volume1/backups" : "backups", subfolder: "personaldocs", version: conn === "nfs" ? "4.1" : "3.0", username: "backup-user" }[f] || ""} />
+              {NAS_HELP[f] && <span className="small muted">{NAS_HELP[f]}</span>}</div>
+          ))}
+          {managed && conn === "smb" && <div className="field"><label htmlFor="dst-nas-password">SMB password{d.nas?.password_set && <span className="small muted"> (stored — leave empty to keep)</span>}</label>
+            <input id="dst-nas-password" type="password" autoComplete="new-password" value={d.secrets.password || ""} onChange={(e) => setD({ ...d, secrets: { ...d.secrets, password: e.target.value } })} /></div>}
+          {cfgFields.map((f) => f === "require_mount" ? (
             <label key={f} className="check"><input type="checkbox" checked={d.config[f] !== false} onChange={(e) => setD({ ...d, config: { ...d.config, [f]: e.target.checked } })} /> {FIELD_LABELS[f]}</label>
           ) : (
             <div key={f} className="field"><label htmlFor={`dst-${f}`}>{FIELD_LABELS[f] || f}</label><input id={`dst-${f}`} value={d.config[f] || ""} onChange={(e) => setD({ ...d, config: { ...d.config, [f]: e.target.value } })}
-              placeholder={{ path: d.kind === "nas" ? "/mnt/pdnas/personaldocs" : "/srv/backups/personaldocs", endpoint: "https://s3.example.com", bucket: "family-backups", folder: "Apps/PersonalDocs" }[f] || ""} /></div>
+              placeholder={{ path: d.kind === "nas" ? "/mnt/nas-backup/personaldocs" : "/srv/backups/personaldocs", endpoint: "https://s3.example.com", bucket: "family-backups", folder: "Apps/PersonalDocs" }[f] || ""} /></div>
           ))}
           {kind.secrets.map((f) => <div key={f} className="field"><label htmlFor={`dst-${f}`}>{FIELD_LABELS[f] || f}{d.secrets_set?.includes(f) && <span className="small muted"> (stored — leave empty to keep)</span>}</label>
             <input id={`dst-${f}`} type="password" autoComplete="off" value={d.secrets[f] || ""} onChange={(e) => setD({ ...d, secrets: { ...d.secrets, [f]: e.target.value } })} /></div>)}
+          {(d.kind === "local" || d.kind === "nas") && <>
+            <div className="field"><label htmlFor="dst-warn">Space warning below (%)</label><input id="dst-warn" type="number" min={1} max={90} placeholder="20" value={d.config.warn_pct ?? ""} onChange={(e) => setD({ ...d, config: { ...d.config, warn_pct: e.target.value } })} /></div>
+            <div className="field"><label htmlFor="dst-crit">Space critical below (%)</label><input id="dst-crit" type="number" min={1} max={90} placeholder="10" value={d.config.crit_pct ?? ""} onChange={(e) => setD({ ...d, config: { ...d.config, crit_pct: e.target.value } })} /></div>
+          </>}
         </div>
-        {d.kind === "nas" && <p className="small muted">The share must be mounted (Settings → Storage & backup → NAS, or by the administrator) and contain the marker file <code>.personaldocs-backup-target</code>.</p>}
+        {managed && <p className="small muted">Personal DM mounts the share at <code>/mnt/pdnas/{d.nasIn.subfolder || "personaldocs"}</code> through its system service when you press <strong>Test Connection</strong>. Mounting NFS/SMB inside an LXC needs a privileged container with the Proxmox feature <code>mount=nfs;cifs</code>; otherwise mount the share on the Proxmox host and choose <em>Already mounted</em>. <a href="/help/backup-restore#nas">Learn more</a></p>}
+        {d.kind === "nas" && !managed && <p className="small muted">The folder must be on a mounted share and contain the marker file <code>.personaldocs-backup-target</code>.</p>}
         {(d.kind === "gdrive" || d.kind === "onedrive") && <div className="callout info">Uses your own OAuth app (client id/secret) and a refresh token with access to one folder. See <a href={`/help/backup-restore#${d.kind}`}>the guide</a> for the exact steps.</div>}
         <label className="check"><input type="checkbox" checked={d.enabled !== false} onChange={(e) => setD({ ...d, enabled: e.target.checked })} /> Enabled</label>
         <div className="row" style={{ justifyContent: "space-between" }}>

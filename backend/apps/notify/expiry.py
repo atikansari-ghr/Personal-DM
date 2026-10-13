@@ -302,9 +302,44 @@ def deliver_outbox(limit: int = 100) -> dict:
     return {"sent": done, "failed": failed}
 
 
+STALE_AFTER = timedelta(minutes=30)
+ROUTINE_TTL = timedelta(hours=24)
+SUPERSEDABLE = ("backup.", "processing.", "expiry.", "recovery.validation", "integrity.", "security.health")
+
+
+def staleness(msg) -> str | None:
+    """Expiry-aware queue (Change Set V): after a long outage a channel must not be flooded with stale messages.
+    * security events and anything critical follow the security policy: always delivered, never expired;
+    * a newer message of the same kind (same event, and the same document when there is one) supersedes an older
+      one still waiting: newer backup status, final OCR state, newer expiry reminder;
+    * routine information expires after 24 hours."""
+    age = timezone.now() - msg.created_at
+    if age < STALE_AFTER or msg.is_test:
+        return None
+    if msg.severity == "critical" or (msg.event or "").startswith(("security.", "account.")):
+        return None
+    if (msg.event or "").startswith(SUPERSEDABLE):
+        newer = OutboxMessage.objects.filter(user=msg.user, channel=msg.channel, event=msg.event, created_at__gt=msg.created_at)
+        if msg.document_id:
+            newer = newer.filter(document_id=msg.document_id)
+        if newer.exists():
+            return OutboxMessage.SUPERSEDED
+    if msg.severity in ("info", "success", "") and age > ROUTINE_TTL:
+        return OutboxMessage.EXPIRED
+    return None
+
+
 def deliver_one(msg) -> str:
     """Send one queued message now. Returns "sent", "skipped" or "failed" (failures retry with back-off)."""
     from . import mailer, telegram
+
+    stale = staleness(msg)
+    if stale:
+        msg.status = stale
+        msg.last_error = ("A newer message of the same kind replaced this one." if stale == OutboxMessage.SUPERSEDED
+                          else "Not delivered: routine information older than 24 hours.")
+        msg.save(update_fields=["status", "last_error"])
+        return "skipped"
 
     # Re-check state at execution time.
     if not msg.user.is_active or (msg.document_id and msg.document and msg.document.archived_at):

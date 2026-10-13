@@ -1,8 +1,13 @@
 {
   "protocol": 1,
-  "pinned": "1.0.0",
-  "library": "@whiskeysockets/baileys@6.7.24",
-  "tested_versions": ["1.0.0"],
+  "pinned": "1.1.0",
+  "library": "@whiskeysockets/baileys@7.0.0-rc14",
+  "tested_versions": [
+    "1.1.0"
+  ],
   "reviewed": "2026-10",
+  "replaced": {
+    "1.0.0": "@whiskeysockets/baileys@6.7.24 (npm tag 'legacy'): pairing never completed - see docs/IMPLEMENTATION_STATUS.md#change-set-v"
+  },
   "notes": "Only versions listed here are installed by 'personaldocs whatsapp-bridge update'. Upstream releases are never tracked automatically."
 }

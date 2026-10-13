@@ -24,9 +24,20 @@ from apps.core import config
 HEALTH_KEY = "map_tiles"
 REFERRER_POLICY = "strict-origin-when-cross-origin"
 OSM_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty"
+DEFAULT_PROVIDER = "openfreemap"
 
+# Change Set V: place, road and country labels in ENGLISH regardless of the browser's language. Raster tiles have
+# their label language baked in (OpenStreetMap's standard tiles show local names, e.g. Arabic in Saudi Arabia), so the
+# default is now a vector map: the browser draws OpenFreeMap's OpenStreetMap vector tiles with MapLibre and every label
+# reads name:en (falling back to the Latin transliteration, then the local name). OpenFreeMap needs no key or
+# registration and permits this use with attribution.
 PRESETS = {
-    "osm": {"label": "OpenStreetMap (standard tiles, low-volume use)", "url": OSM_URL,
+    "openfreemap": {"label": "OpenFreeMap — English labels (vector, no key)", "url": OPENFREEMAP_STYLE, "kind": "vector",
+                    "attribution": "OpenFreeMap © OpenMapTiles · Data © OpenStreetMap contributors", "key": False, "english": True,
+                    "note": "Free, no key or registration. Labels are drawn in English by the browser (needs WebGL; without it the "
+                            "map falls back to standard OpenStreetMap tiles with local-language labels)."},
+    "osm": {"label": "OpenStreetMap standard tiles (local-language labels, low-volume use)", "url": OSM_URL, "kind": "raster",
             "attribution": "© OpenStreetMap contributors", "key": False,
             "note": "Free volunteer-run servers: fine for an occasional look at a family sign-in map, not for heavy use. "
                     "Follow the OpenStreetMap tile usage policy; choose another provider if you are blocked."},
@@ -52,13 +63,13 @@ MESSAGES = {
 
 
 def provider() -> str:
-    p = config.get("security.map_provider") or "osm"
+    p = config.get("security.map_provider") or DEFAULT_PROVIDER
     # installations that set a custom tile address before providers existed keep using it
-    if p == "osm" and not config.is_set("security.map_provider"):
+    if not config.is_set("security.map_provider"):
         url = config.get("security.map_tile_url") or ""
         if url and url != OSM_URL:
             return "custom"
-    return p if p in PRESETS else "osm"
+    return p if p in PRESETS else DEFAULT_PROVIDER
 
 
 def resolved() -> dict:
@@ -74,7 +85,8 @@ def resolved() -> dict:
     key = (config.get("security.map_api_key") or "") if preset["key"] else ""
     if preset["key"]:
         url = url.replace("{key}", key) if key else ""
-    return {"provider": p, "url": url, "attribution": attribution, "needs_key": preset["key"], "key_set": bool(key)}
+    return {"provider": p, "url": url, "attribution": attribution, "needs_key": preset["key"], "key_set": bool(key),
+            "kind": preset.get("kind", "raster"), "english": bool(preset.get("english"))}
 
 
 def health() -> dict:
@@ -86,8 +98,11 @@ def health() -> dict:
 def public_config(user=None) -> dict:
     r = resolved()
     enabled = bool(config.get("security.map_enabled"))
+    vector = r["kind"] == "vector"
     out = {"enabled": enabled and bool(r["url"]), "provider": r["provider"], "provider_label": PRESETS[r["provider"]]["label"],
-           "tile_url": r["url"], "attribution": r["attribution"], "referrer_policy": REFERRER_POLICY,
+           "kind": r["kind"], "style_url": r["url"] if vector else "", "english_labels": r["english"],
+           "fallback_tile_url": OSM_URL if vector else "", "fallback_attribution": PRESETS["osm"]["attribution"] if vector else "",
+           "tile_url": "" if vector else r["url"], "attribution": r["attribution"], "referrer_policy": REFERRER_POLICY,
            "privacy": "The map loads ordinary picture tiles from the provider shown here. Your sign-in addresses are never "
                       "sent to it or to any geolocation service; positions come from Trusted Zone pins and this server's GeoIP database."}
     if enabled and not r["url"]:
@@ -99,14 +114,19 @@ def public_config(user=None) -> dict:
 
 
 def tile_origin() -> str:
+    """Origin(s) the browser may load map data from (Content-Security-Policy img-src and connect-src)."""
     import urllib.parse
 
     if not config.get("security.map_enabled"):
         return ""
-    u = urllib.parse.urlsplit(resolved()["url"] or "")
+    r = resolved()
+    u = urllib.parse.urlsplit(r["url"] or "")
+    origin = ""
     if u.scheme == "https" and u.hostname and "{" not in u.hostname.replace("{s}", ""):
-        return f"https://{u.netloc}".replace("{s}", "*")
-    return ""
+        origin = f"https://{u.netloc}".replace("{s}", "*")
+    if origin and r["kind"] == "vector":
+        origin += " https://tile.openstreetmap.org"  # raster fallback for browsers without WebGL
+    return origin
 
 
 def record_test(status, error: str = "", actor=None) -> dict:

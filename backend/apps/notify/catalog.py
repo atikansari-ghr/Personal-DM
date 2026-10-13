@@ -96,7 +96,10 @@ def channel_issue(user, channel: str) -> str | None:
         if link is None or not link.enabled:
             return "WhatsApp is not linked."
         if link.state != "connected":
-            return "WhatsApp needs to be reconnected." if link.state == "reconnect_required" else "WhatsApp is disconnected."
+            return {"reconnect_required": "WhatsApp needs to be linked again (Relink Required).",
+                    "disconnected": "WhatsApp is temporarily disconnected and reconnecting.",
+                    "pending": "WhatsApp linking is not finished.", "incompatible": "The WhatsApp bridge needs a compatible update.",
+                    "degraded": "The WhatsApp bridge is not responding."}.get(link.state, "WhatsApp is not linked.")
     return None
 
 

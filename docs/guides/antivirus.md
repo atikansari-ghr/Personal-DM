@@ -1,3 +1,4 @@
+<!-- audience: admin -->
 # Antivirus (ClamAV)
 
 ## How scanning works {#overview}

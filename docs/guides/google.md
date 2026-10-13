@@ -1,4 +1,4 @@
-<!-- audience: admin -->
+<!-- audience: main_admin -->
 # Google sign-in
 
 Google sign-in is an optional extra way for **existing** accounts to sign in. It never creates accounts, never links by email address, and does not give the app access to Gmail or Drive. Documents stay on your server; Google sees only the sign-in.

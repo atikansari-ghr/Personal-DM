@@ -172,7 +172,8 @@ def run_digests(now=None) -> int:
 
 STATUS_LABELS = {"sent": "Delivered", "failed": "Failed", "retrying": "Retrying", "fallback": "Fallback Used", "skipped": "Not delivered",
                  "disconnected": "Channel Disconnected", "queued": "Queued", "held": "Held (quiet hours)", "digest": "Waiting for digest",
-                 "digested": "Sent in digest", "not_selected": "Not Selected"}
+                 "digested": "Sent in digest", "not_selected": "Not Selected", "expired": "Expired",
+                 "superseded": "Superseded"}
 
 
 def state_of(m) -> str:

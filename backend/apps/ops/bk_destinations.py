@@ -162,7 +162,8 @@ class LocalProvider(Provider):
 
 
 class NasProvider(LocalProvider):
-    """A mounted NFS/SMB share (Settings → Storage & backup → NAS, or mounted by the administrator)."""
+    """A NFS/SMB share: mounted by Personal DM from the destination's own settings (Backup & Recovery →
+    Destinations → NAS), or mounted by the administrator/Proxmox ("Already mounted")."""
 
     kind = "nas"
 
@@ -541,7 +542,7 @@ def _chunked_upload(provider, url: str, local: Path, size: int, token: str, *, a
 PROVIDERS = {"local": LocalProvider, "nas": NasProvider, "s3": S3Provider, "gdrive": GoogleDriveProvider, "onedrive": OneDriveProvider}
 LABELS = {"local": "Local folder", "nas": "NAS share (NFS/SMB)", "s3": "S3-compatible storage", "gdrive": "Google Drive",
           "onedrive": "Microsoft OneDrive"}
-CONFIG_FIELDS = {"local": ("path",), "nas": ("path", "require_mount"), "s3": ("endpoint", "region", "bucket", "prefix"),
+CONFIG_FIELDS = {"local": ("path", "warn_pct", "crit_pct"), "nas": ("path", "require_mount", "connection", "warn_pct", "crit_pct"), "s3": ("endpoint", "region", "bucket", "prefix"),
                  "gdrive": ("folder_id",), "onedrive": ("folder",)}
 SECRET_FIELDS = {"local": (), "nas": (), "s3": ("access_key", "secret_key", "session_token"),
                  "gdrive": ("client_id", "client_secret", "refresh_token"), "onedrive": ("client_id", "client_secret", "refresh_token")}

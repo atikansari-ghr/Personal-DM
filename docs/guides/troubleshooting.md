@@ -1,5 +1,18 @@
 # Troubleshooting
 
+## For everyone {#everyone}
+
+| Problem | What to do |
+| --- | --- |
+| I cannot sign in | Check the address and your password; after several failed attempts sign-in pauses for a while. Ask the administrator to reset your password or authenticator. See [password reset](password-reset.md) |
+| A page looks shifted or old after an update | Reload the page once (or close and reopen the installed app) |
+| WhatsApp shows **Linking** for a long time | Keep WhatsApp open on the phone; the card follows the steps by itself. If it says **Pairing failed** or **QR code expired**, generate a new code. See [WhatsApp Personal](whatsapp-personal.md#troubleshooting) |
+| WhatsApp or Discord shows **Disabled by Admin** or **Service unavailable** | The administrator has not turned the channel on, or the server part is not running. Your other channels are used meanwhile |
+| A notification did not arrive | My account → Notifications → **My delivery status** shows what happened on each channel (Delivered, Failed, Expired, Superseded, Fallback Used). See [notifications](notifications.md#delivery-status) |
+| The sign-in map says **Map unavailable** | The list of sign-ins below the map still shows everything. The administrator can choose another map provider |
+| A tooltip or Learn more link is missing | Help shows only the guides for features you can use; ask the administrator for anything else |
+
+<!-- audience-section: main_admin -->
 ## First checks {#first}
 
 - `sudo personaldocs status` and `sudo personaldocs doctor` (safe, read-only, redacted).
@@ -75,6 +88,7 @@
 | Settings → Connections: WhatsApp Personal says **Not installed**, **Service stopped** or **Service unavailable** | Run `sudo personaldocs whatsapp-bridge status`, then `sudo systemctl start personaldocs-whatsapp` or `sudo personaldocs whatsapp-bridge install`. Click **Check again**. Other channels are not affected. See [WhatsApp Personal](whatsapp-personal.md#troubleshooting) |
 | WhatsApp Personal or Discord shows **Disabled by Admin** | The main administrator has not turned the channel on in Settings → Connections. Your fallback channels are used meanwhile |
 | Folder tree rows look shifted after an upgrade | Reload the page once (or close and reopen the installed app) so the browser loads the new web app |
+<!-- /audience-section -->
 
 ## Reporting a bug {#report}
 

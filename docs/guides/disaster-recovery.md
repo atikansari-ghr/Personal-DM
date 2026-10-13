@@ -1,4 +1,4 @@
-<!-- audience: admin -->
+<!-- audience: main_admin -->
 <!-- reviewed: 2026-10-11 -->
 # Disaster recovery runbook
 

@@ -1,4 +1,4 @@
-<!-- audience: admin -->
+<!-- audience: main_admin -->
 # Testing and release maintenance
 
 ## Local verification {#verify}

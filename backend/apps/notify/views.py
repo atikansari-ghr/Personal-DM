@@ -328,7 +328,7 @@ def my_whatsapp(request):
         if request.method == "POST":
             action = request.data.get("action", "link")
             if action == "link":
-                data = whatsapp.start_link(user)
+                data = whatsapp.start_link(user, force=bool(request.data.get("new_qr")))
                 audit.record("account.whatsapp", request=request, change="link_started")
                 return Response(data)
             if action == "reconnect":
@@ -347,6 +347,28 @@ def my_whatsapp(request):
                                                         "not supported or endorsed by WhatsApp or Meta."})
     except whatsapp.WhatsAppError as exc:
         return Response({"error": str(exc)}, status=400)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsMainAdmin])
+def admin_whatsapp(request):
+    """Main administrator: safe WhatsApp bridge diagnostics (GET) and Restart Bridge (POST action=restart).
+    No credentials, tokens, QR payloads, phone numbers or messages are ever returned."""
+    from . import whatsapp
+
+    try:
+        if request.method == "POST":
+            if request.data.get("action") != "restart":
+                return Response({"error": "Unknown action."}, status=400)
+            whatsapp.restart_bridge()
+            audit.record("whatsapp.bridge_restart", request=request)
+            return Response({"restarting": True, "detail": "The bridge restarts in about 10 seconds; linked sessions resume by themselves."})
+        data = whatsapp.diagnostics()
+        if not data.get("compatible"):
+            whatsapp.alert_incompatible()
+        return Response({"diagnostics": data, "service": whatsapp.service_status()})
+    except whatsapp.WhatsAppError as exc:
+        return Response({"error": str(exc), "service": whatsapp.service_status()}, status=503)
 
 
 @api_view(["GET"])

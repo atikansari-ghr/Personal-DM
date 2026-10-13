@@ -325,7 +325,7 @@ if (!WA_BRIDGE || !WA_TOKEN) {
     expect((await wa.innerText()).includes("Disabled by Admin"), "WhatsApp card should say Disabled by Admin");
     await page.waitForSelector("#conn-whatsapp [data-bridge-state=ready_disabled]");
     const kv = await page.locator("#conn-whatsapp .kv-table").innerText();
-    expect(kv.includes("1.0.0") && /Protocol\s+1/.test(kv) && kv.includes("Compatible"), `service table: ${kv}`);
+    expect(kv.includes("1.1.0") && /Protocol\s+1/.test(kv) && kv.includes("Compatible"), `service table: ${kv}`);
     await page.locator("#conn-whatsapp").screenshot({ path: `${OUT}/admin-whatsapp-ready.png` });
   });
 

@@ -5,6 +5,7 @@ import SettingsForm from "../../components/SettingsForm";
 import { Confirm, HelpTip, Icon, Modal, Skeleton, useAsync, useToast } from "../../components/ui";
 import { useSession } from "../../session";
 import { SecurityPanel } from "./Security";
+import { IntegrityCard } from "./Admin";
 
 /** Settings → Security: overview and score, antivirus, Internet security test, OS updates, firewall, records, storage. */
 
@@ -501,7 +502,7 @@ export default function SecurityCenter() {
       {view === "updates" && <UpdatesView />}
       {view === "firewall" && <FirewallView />}
       {view === "records" && <RecordsView />}
-      {view === "storage" && <StorageView />}
+      {view === "storage" && <><StorageView /><IntegrityCard /></>}
       {view === "access" && main && <SecurityPanel />}
     </div>
   );

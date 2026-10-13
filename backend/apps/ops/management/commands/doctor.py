@@ -229,10 +229,12 @@ class Command(BaseCommand):
             info("legacy folder backups (format 1)", f"{len(bk_engine.legacy_backups())} kept; restorable with personaldocs restore")
         from apps.notify import whatsapp
 
-        if config.get("whatsapp.enabled"):
-            st = whatsapp.bridge_status()
-            report("WhatsApp Personal bridge (experimental)", st["state"] == "healthy",
-                   f"{st['label']} {st.get('version', '')} (tested: {st.get('pinned')})")
+        svc = whatsapp.service_status()
+        if config.get("whatsapp.enabled") or svc.get("reachable"):
+            st = whatsapp.bridge_status() if config.get("whatsapp.enabled") else svc
+            hint = " - update with: sudo personaldocs whatsapp-bridge update" if svc.get("update_available") else ""
+            report("WhatsApp Personal bridge (experimental)", st.get("state") in ("healthy", "ready_disabled") and not svc.get("update_available"),
+                   f"{st.get('label')} {svc.get('version', '')} (tested: {svc.get('pinned')}){hint}")
         else:
             info("WhatsApp Personal bridge", "disabled (optional)")
         from apps.notify.models import DiscordWebhook

@@ -17,6 +17,7 @@
 - Each person links their own account. One person's session can never send as someone else.
 - If the bridge stops or WhatsApp breaks compatibility, Personal DM and every other channel keep working.
 
+<!-- audience-section: main_admin -->
 ## Install and enable (administrator) {#enable}
 
 1. On the server, run:
@@ -69,6 +70,7 @@ Other channels are never affected.
 | Access | A random token in `/etc/personaldocs/whatsapp-bridge.token`. |
 | Sessions | One encrypted file per linked person in `/var/lib/personaldocs/whatsapp/sessions/`. They are part of the encrypted backup's secrets package. |
 | Version | Pinned in `bridge/whatsapp/compat.json`, together with the compatibility, licence and security review in `bridge/whatsapp/README.md`. |
+<!-- /audience-section -->
 
 ## Link your WhatsApp {#link}
 
@@ -100,6 +102,7 @@ Other channels are never affected.
 
 **Reconnect** asks the bridge to restore the connection without a new QR code. **Unlink** logs the linked device out and deletes the session. The card also shows when your last WhatsApp notification was delivered.
 
+<!-- audience-section: main_admin -->
 ## Updates and rollback {#updates}
 
 ```
@@ -113,6 +116,7 @@ An update first archives the encrypted sessions. It then installs the new versio
 and a health check, and switches over only when both pass; otherwise it rolls back automatically. Upstream releases are
 never followed automatically. When Personal DM ships a newly tested version, the delivery-health card says *a tested
 update is available*. Updates are audited.
+<!-- /audience-section -->
 
 ## After a recovery {#recovery}
 

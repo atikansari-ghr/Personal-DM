@@ -104,6 +104,9 @@ EVENTS: dict[str, Event] = {e.key: e for e in [
     Event("recovery.compromise", "Compromise recovery performed", "The system was recovered in Compromise/Cyberattack mode: sessions and device trust were reset.", "security", admins_only=True, default_critical=True, always_critical=True, category="backup", severity="critical", icon="alarm",
           mandatory=("A security review is required: open the Recovery & Security Report and complete the follow-up actions.",)),
     Event("recovery.validation", "Recovery validation result", "Automated recovery validation restored a backup into the isolated environment (or failed).", "system", admins_only=True, default_channels=("in_app", "email"), category="backup", severity="info", icon="backup"),
+    # WhatsApp Personal (Change Set V): told through other channels, never through WhatsApp itself
+    Event("whatsapp.relink_required", "WhatsApp Personal needs to be linked again", "WhatsApp ended your linked device (for example after logging out on the phone); link it again to receive notifications there.", "system", default_critical=True, default_channels=("in_app", "email"), category="system", severity="warning", icon="warning"),
+    Event("whatsapp.incompatible", "WhatsApp bridge incompatible", "The WhatsApp Personal bridge reports a protocol or version incompatibility; WhatsApp delivery is paused and fallback channels are used.", "system", admins_only=True, default_critical=True, default_channels=("in_app", "email"), category="system", severity="warning", icon="warning"),
     Event("integrity.failed", "Integrity problems", "The storage integrity check found missing or changed files.", "system", admins_only=True, default_critical=True, category="system", severity="critical", icon="storage"),
     # documents
     Event("expiry.reminder", "Expiry reminders", "Reminders before a confirmed expiry date (90/60/30/7/0 days by default).", "documents", category="expiry", severity="warning", icon="calendar"),

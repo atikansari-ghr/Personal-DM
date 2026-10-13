@@ -17,8 +17,9 @@ Environment=PD_WA_TOKEN_FILE=/etc/personaldocs/whatsapp-bridge.token
 WorkingDirectory=/opt/personaldocs/whatsapp-bridge/current
 ExecStart=/usr/bin/node server.mjs
 Restart=on-failure
-RestartSec=30
+RestartSec=10
 # Exit code 3 = the pinned library is incompatible: do not restart; Personal DM shows "Degraded".
+# Exit code 75 = Restart Bridge from Settings → Connections (clean exit; systemd starts it again after RestartSec).
 RestartPreventExitStatus=3
 UMask=0077
 NoNewPrivileges=yes

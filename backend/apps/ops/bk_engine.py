@@ -248,14 +248,23 @@ def _incremental_parent(policy: BackupPolicy | None) -> RecoveryPoint | None:
 
 
 def create_point(policy: BackupPolicy | None = None, *, kind: str = RecoveryPoint.FULL, trigger: str = "scheduled",
-                 actor=None, reason: str = "", request=None, destinations=None) -> RecoveryPoint:
+                 actor=None, reason: str = "", request=None, destinations=None, standalone: bool = False,
+                 progress=None) -> RecoveryPoint:
     """Build, replicate and deep-verify one recovery point. Never raises for destination failures (they are copy
-    states); raises BackupError when the point cannot be built at all."""
-    policy = policy or default_policy()
+    states); raises BackupError when the point cannot be built at all.
+
+    ``standalone`` (destination Backup Now): a Full point outside every policy, so it never becomes the base of
+    another destination's incremental chain and retention never removes it automatically.
+    ``progress(stage)`` reports preparing / backing_up / verifying for the job list."""
+    report = progress or (lambda stage: None)
+    policy = None if standalone else (policy or default_policy())
+    if standalone:
+        kind = RecoveryPoint.FULL
     dests = list(destinations if destinations is not None else (policy.destinations.filter(enabled=True) if policy else []))
     if not dests:
-        raise BackupError("No backup destination is configured (Settings → Storage & backup → Backup & Recovery).")
+        raise BackupError("No backup destination is configured (Settings → Backup & Recovery → Destinations).")
     with _Lock():
+        report("preparing")
         key = bk_keys.ensure_active()
         parent = _incremental_parent(policy) if kind == RecoveryPoint.INCREMENTAL else None
         if kind == RecoveryPoint.INCREMENTAL and parent is None:
@@ -265,6 +274,7 @@ def create_point(policy: BackupPolicy | None = None, *, kind: str = RecoveryPoin
                                              key_generation=key.generation, app_version=settings.APP_VERSION,
                                              schema=schema_state(), created_by=actor)
         try:
+            report("backing_up")
             _build(point, key, parent)
         except Exception as exc:
             point.status, point.error, point.finished_at = RecoveryPoint.FAILED, str(exc)[:500], timezone.now()
@@ -275,7 +285,7 @@ def create_point(policy: BackupPolicy | None = None, *, kind: str = RecoveryPoin
             _notify("backup.failed", point, detail=str(exc)[:300])
             raise BackupError(str(exc)) from exc
         for dest in dests:
-            replicate(point, dest)
+            replicate(point, dest, progress=report)
         rollup(point)
         cleanup_staging(point)
         if policy:
@@ -392,7 +402,7 @@ def _classify(code: str) -> str:
             "insufficient_storage": RecoveryCopy.INSUFFICIENT}.get(code, RecoveryCopy.FAILED)
 
 
-def replicate(point: RecoveryPoint, dest: BackupDestination) -> RecoveryCopy:
+def replicate(point: RecoveryPoint, dest: BackupDestination, progress=None) -> RecoveryCopy:
     copy, _ = RecoveryCopy.objects.get_or_create(point=point, destination=dest, defaults={"generation": point.key_generation})
     if copy.state in (RecoveryCopy.STORED_VERIFIED,):
         return copy
@@ -429,13 +439,35 @@ def replicate(point: RecoveryPoint, dest: BackupDestination) -> RecoveryCopy:
         _notify("backup.destination", point, detail=f"{dest.name}: {RecoveryCopy.LABELS.get(copy.state, copy.state)} - {exc}",
                 severity="critical" if exc.code == "insufficient_storage" else "warning", tag=f"{dest.pk}:{exc.code}")
         return copy
+    if progress:
+        progress("verifying")
     verify_copy(copy)
     return copy
+
+
+def capacity(dest) -> dict:
+    """Free space against the warning/critical thresholds (defaults 20 % / 10 %, overridable per destination)."""
+    from apps.core import config
+
+    cfg = dest.config or {}
+    warn = int(cfg.get("warn_pct") or config.get("backup.space_warning_pct") or 20)
+    crit = int(cfg.get("crit_pct") or config.get("backup.space_critical_pct") or 10)
+    if not dest.total_bytes or dest.free_bytes is None:
+        return {"state": "unknown", "warn_pct": warn, "crit_pct": crit, "free_pct": None}
+    pct = round(dest.free_bytes * 100 / dest.total_bytes, 1)
+    return {"state": "critical" if pct < crit else "warning" if pct < warn else "ok", "warn_pct": warn, "crit_pct": crit, "free_pct": pct}
 
 
 def _set_health(dest, health, detail, free=None, total=None):
     BackupDestination.objects.filter(pk=dest.pk).update(health=health, health_detail=detail[:300], checked_at=timezone.now(),
                                                          **({"free_bytes": free, "total_bytes": total} if free is not None else {}))
+    if free is not None and total:
+        dest.free_bytes, dest.total_bytes = free, total
+        cap = capacity(dest)
+        if cap["state"] in ("warning", "critical"):  # one alert per destination, level and day
+            _notify("backup.destination", None, detail=f"{dest.name}: only {cap['free_pct']} % free (threshold {cap['warn_pct'] if cap['state'] == 'warning' else cap['crit_pct']} %). "
+                                                       "Valid backups are never deleted to make room; retention controls normal cleanup.",
+                    severity="critical" if cap["state"] == "critical" else "warning", tag=f"{dest.pk}:space:{cap['state']}:{timezone.now():%Y%m%d}")
 
 
 def retry_pending() -> int:
@@ -756,7 +788,15 @@ def health() -> dict:
     if bad_dests and state == "healthy":
         state = "attention"
     for d in bad_dests:
-        warnings.append(f"{d.name}: {d.health.replace('_', ' ')}")
+        warnings.append(f"{d.name}: {d.health.replace('_', ' ')}" + (" (migration incomplete; existing backup data preserved)" if d.health == "needs_attention" else ""))
+    for d in dests:
+        cap = capacity(d)
+        if cap["state"] == "critical":
+            state = "critical"
+            warnings.append(f"{d.name}: only {cap['free_pct']} % free space (critical below {cap['crit_pct']} %).")
+        elif cap["state"] == "warning":
+            state = "attention" if state == "healthy" else state
+            warnings.append(f"{d.name}: {cap['free_pct']} % free space (warning below {cap['warn_pct']} %).")
     if readiness["state"] in ("not_exported", "outdated"):
         if state == "healthy":
             state = "attention"
