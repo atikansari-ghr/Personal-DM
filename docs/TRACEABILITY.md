@@ -537,7 +537,7 @@ numbers. Root causes: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change
 | AT-372 (347) | Verification, reconnect with back-off, Relink Required, stale-queue expiry/supersession, fallback | WA-2, WA-3 | `session.mjs`, `notify/expiry.staleness`, `whatsapp._tell_relink` | BR; CV `test_at372_*` (2) | whatsapp-personal#states, #queue | Passed (real post-link message: Blocked) |
 | AT-373 (348) | Diagnostics without secrets, Restart Bridge, pinned version, update/rollback, incompatibility alert | WA-4 | `server.mjs /diagnostics`, `whatsapp.diagnostics/alert_incompatible`, `views.admin_whatsapp`, `scripts/personaldocs` | CV `test_at373_*` (3); corrective.mjs "AT-373"; installer tests | whatsapp-personal#diagnostics, #updates | Passed |
 | AT-374 (349) | Docs match the UI; obsolete Storage & NAS instructions removed; admin procedures hidden from normal users; layout kept | DOC-1…DOC-3 | guides, `screenshots.mjs` | CV `test_at374_*`, `test_at364_*`; `scripts/check_docs.py`; `scripts/privacy_check.sh`; layout.mjs | all | Passed |
-| AT-375 (350) | Full release gate | all | — | full `pytest`; bridge tests; `npm run build`; `scripts/e2e.sh` | TEST_REPORT.md#change-set-v | see TEST_REPORT |
+| AT-375 (350) | Full release gate | all | — | full `pytest` (491 passed, 3 skipped); bridge tests (10); `npm run build`; `scripts/e2e.sh` (155 PASS) | TEST_REPORT.md#change-set-v | Passed (real-device parts Blocked, listed above) |
 
 Not run (needs real accounts or devices, never reported as passed): a real phone scanning the QR code, a real SMB or
 NFS server, OpenFreeMap tiles from the production address, Firefox and Safari.

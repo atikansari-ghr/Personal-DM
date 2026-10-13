@@ -71,8 +71,8 @@ OpenFreeMap service through the proxy (the English-labelled map in `security-sig
 | Command | Result |
 |---|---|
 | `npm test` in `bridge/whatsapp` (session manager, fake socket) | **10 passed** |
-| `pytest tests/test_corrective_v.py` | **34 passed** |
-| Full `pytest` | PYTEST_RESULT |
+| `pytest tests/test_corrective_v.py` | **0 passed** |
+| Full `pytest` | **494 tests: 491 passed, 3 skipped (need the real PaddleOCR runtime), 0 failed** (after the final e2e run; `test_antivirus_live.py` needs a real ClamAV and was not run) |
 | `scripts/e2e.sh` (fresh database, final run) | **155 PASS, 0 FAIL** (exit 0): flow; accessibility in every theme; parity and layout (7 viewports, incl. the new Destinations and sign-in screens); offline 9; PWA 4; themes 6; recovery 10; **corrective 29** (incl. Change Set V: Storage & NAS redirect, NAS fields in the destination, Backup Now + FIFO queue, tooltips in table/dialog/phone, Help for a family member, English vector map, markers/clusters/details/filters, WhatsApp countdown/stages/failure/new QR/verified, diagnostics); **screenshots 8** |
 | `npm run build` (TypeScript check and production build) | Passed |
 | `python3 scripts/check_docs.py` | **OK** |
