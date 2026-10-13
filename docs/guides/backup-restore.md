@@ -158,6 +158,8 @@ Credentials are stored encrypted. The page only shows that they are stored; it n
 Every destination is a card with its health, connection, free space, last and next backup, the last error and the
 retry state, plus **Test Connection**, **Edit** and **Backup Now**.
 
+![Destination cards with health, free space, last and next backup, and the backup queue](../images/screenshots/backup-destinations.png)
+
 ### Free space {#capacity}
 
 Each card shows the free space measured at the last check, with these levels:
@@ -176,6 +178,8 @@ never deletes valid backups to make room; free space on the destination or add a
 **Backup Now** on a destination card makes a Full recovery point of the whole system and stores it on that destination
 only. A confirmation shows the destination, the scope, the type, the free space and any warning before you click
 **Start backup**.
+
+![Backup Now confirmation with the destination, the full-system scope, the space and the no-cancel notice](../images/screenshots/backup-now-dialog.png)
 
 - **A started backup cannot be cancelled.** It runs in the background; closing the page or signing out does not stop
   it.
@@ -245,6 +249,8 @@ Fields for SMB and NFS:
 | Folder on the share | `personaldocs` | `personaldocs` |
 | SMB username / password / domain | — | `backup-user` / password / optional |
 | Protocol version | optional (`4.1`) | optional (`3.0`) |
+
+![Add destination → NAS share with the SMB connection fields](../images/screenshots/backup-nas-destination.png)
 
 1. Click **Save**.
 2. Click **Test Connection**. A small system service mounts the share at `/mnt/pdnas`, creates the folder and the

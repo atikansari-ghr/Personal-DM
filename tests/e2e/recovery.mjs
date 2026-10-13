@@ -59,9 +59,9 @@ await step("AT-284/AT-309 Backup & Recovery: add a local destination, the recomm
   await page.fill("#dst-name", "Home server disk");
   await page.fill("#dst-path", DEST);
   await page.click("[role=dialog] button:has-text('Save')");
-  await page.waitForSelector("td:has-text('Home server disk')");
-  await page.click("tr:has-text('Home server disk') button:has-text('Test')");
-  await page.waitForSelector("tr:has-text('Home server disk') [data-health=healthy]", { timeout: 15000 });
+  await page.waitForSelector(".dest-card[data-dest='Home server disk']");
+  await page.click(".dest-card[data-dest='Home server disk'] button:has-text('Test Connection')");
+  await page.waitForSelector(".dest-card[data-dest='Home server disk'][data-health=healthy]", { timeout: 15000 });
   await page.goto(BASE + "/settings/backup?view=policies");
   await page.waitForSelector("text=Every Sunday at 02:30 · incremental every 4 h");
   await page.screenshot({ path: `${OUT}/policies.png` });

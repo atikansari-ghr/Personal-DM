@@ -13,7 +13,7 @@ container (`pct enter <id>` from the Proxmox host).
    You can also clone the repository and run `bash personal-DM.sh` or `bash scripts/easy-install.sh`. It asks for:
    - the domain
    - the proxy address
-   - the NAS details
+   - the NAS details (they become a NAS backup destination)
    - the backup time
 
    Then it installs and checks everything, including the ClamAV antivirus (about 1.2 GB of memory; skip it with
@@ -166,6 +166,10 @@ Guides: [notifications](guides/notifications.md) ([templates](guides/notificatio
     reach it, its version and protocol, compatibility, available updates, linked people (counts only) and the last
     check. It finds a running bridge even before you turn WhatsApp on (*Installed and running – turned off*).
   - Turning **WhatsApp Personal** on takes effect at once, without a restart.
+  - **Run Diagnostics** checks DNS, network access to WhatsApp, the system time, session storage and each person's
+    pairing state, without showing any secret. **Restart Bridge** restarts the service; sessions resume by themselves.
+  - Bridge 1.1.0 fixes phones that stayed on *Connecting*: run `sudo personaldocs whatsapp-bridge update` once
+    ([updates](guides/whatsapp-personal.md#updates)).
 - Neither channel is turned on for anyone automatically.
 - People choose channels per category, fallback chains, quiet hours and digests themselves. **Settings →
   Notifications → Notification delivery health** shows counts per channel only, never message content
@@ -336,8 +340,9 @@ Guides: [security & access](guides/security-access.md), [reverse proxy](guides/r
 - Every sign-in gets an explainable risk level. Risk never blocks a sign-in.
 - People see their own sign-ins and devices under My account → Sign-in security, where they can use **Mark
   Unrecognized**.
-- **Map provider:** Settings → Security → Access policy → **Sign-in map provider**. Choose OpenStreetMap (low-volume
-  use), MapTiler or Stadia Maps with your own key, or a custom/self-hosted server, then click **Test Map Provider**.
+- **Map provider:** Settings → Security → Access policy → **Sign-in map provider**. The default, **OpenFreeMap**, shows
+  English place names (vector map, no key). OpenStreetMap standard tiles (local-language labels, low-volume use),
+  MapTiler or Stadia Maps with your own key, or a custom/self-hosted server are also offered. Click **Test Map Provider**.
   If the provider refuses the tiles, the map shows **Map unavailable** with the reason; sign-in records and Trusted
   Zones keep working ([map provider](guides/security-map.md#provider)).
 

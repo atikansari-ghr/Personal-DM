@@ -471,3 +471,28 @@ Acceptance tests AT-336…AT-355. The change prompt numbered them AT-311…AT-33
 ## Later phases
 
 Native apps, scanning enhancement, in-browser Office editing, DICOM viewing.
+
+## Change set V (2026-10): NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing {#change-set-v}
+
+Acceptance tests AT-356…AT-375. The change prompt numbered them AT-331…AT-350: prompt AT-n = AT-(n+25). See
+[TRACEABILITY.md](TRACEABILITY.md#change-set-v) and the root causes in
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-v).
+
+| ID | Requirement |
+|---|---|
+| NAS-1 | NAS (SMB, NFS, Already mounted) is configured only in Backup & Recovery → Destinations; Settings → Storage & NAS is removed and its address redirects. |
+| NAS-2 | The upgrade migrates the old NAS connection automatically, idempotently and without deleting configuration, credentials or backup data; a failure shows Needs Attention with Edit Configuration, Test Connection and Retry Migration. |
+| NAS-3 | Secrets are write-only: never returned, logged or audited; an empty field keeps the stored value. |
+| NAS-4 | Destination cards show health, free space with Warning (20 %) and Critical (10 %) thresholds (overridable), last/next backup and retries; failures name the failed check. Valid backups are never deleted to make room. |
+| BQ-1 | Backup Now per destination: confirmation, full-system Full point on that destination only, truthful states, no Cancel. |
+| BQ-2 | Backup-class jobs run one at a time, first in first out, without queue jumping or duplicates, and survive navigation, sign-out and restarts. |
+| TT-1 | One shared tooltip: never clipped by containers or the viewport, flips/shifts, keyboard/touch/screen-reader accessible, consistent in every theme. |
+| TT-2 | Tooltip texts come from a central registry by id; missing ids fail the tests; Learn more is shown only for guides the person may open. |
+| HLP-1 | Help navigation, categories, search, excerpts, related and contextual links, direct URLs and the API show only content the person is authorised for, enforced by the server per request. |
+| MAP-1 | Map labels are in English where the data has English or Latin names, independent of the browser language, from a policy-compliant provider; no language selector. |
+| MAP-2 | Hover shows person, IP and place; click/tap shows authorised details; nearby sign-ins cluster; map and list share filters (default Last 7 days) and selection; records without coordinates show Location unavailable; one-year retention unchanged. |
+| WA-1 | Linking uses one bridge with isolated encrypted sessions per person; a link attempt stays valid 5 minutes with a countdown; no new QR while connecting; a new QR only after expiry or definitive failure. |
+| WA-2 | Live stages up to Linked & Verified (verification message); automatic reconnect with back-off; Relink Required with notification through another channel. |
+| WA-3 | Stale queued messages expire or are superseded after an outage, except security and critical messages; delivery history is accurate. |
+| WA-4 | Main-administrator diagnostics without secrets, Restart Bridge, pinned tested library, explicit update with rollback and post-update diagnostics, incompatibility alert through non-WhatsApp channels. |
+

@@ -479,8 +479,8 @@ Channels people cannot turn off for expiry reminders. In-app is always on.
 
 Events people cannot turn off. They always arrive in-app and on the critical channels below.
 
-- **Default:** `['security.password_reset_requested', 'security.password_admin_reset', 'security.temporary_password', 'security.password_changed', 'security.account_locked', 'security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.risky_signin', 'security.device_unrecognized', 'security.failed_logins', 'security.authentik', 'security.google', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'antivirus.threat', 'antivirus.released', 'antivirus.unavailable', 'antivirus.definitions', 'security.operations', 'backup.failed', 'backup.partial', 'backup.verification', 'backup.destination', 'backup.pre_change_blocked', 'backup.config_changed', 'backup.deleted', 'backup.downloaded', 'recovery.key_revealed', 'recovery.key_rotated', 'recovery.emergency', 'recovery.full', 'recovery.compromise', 'integrity.failed']`
-- **Allowed values:** security.password_reset_requested, security.password_admin_reset, security.temporary_password, security.password_changed, security.account_locked, security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, security.risky_signin, security.device_unrecognized, account.login, security.failed_logins, security.authentik, security.google, security.policy_exception, security.policy_change, security.auth_policy, security.health, antivirus.threat, antivirus.released, antivirus.unavailable, antivirus.definitions, security.operations, backup.failed, backup.succeeded, backup.partial, backup.verification, backup.destination, backup.retention, backup.pre_change, backup.pre_change_blocked, backup.config_changed, backup.deleted, backup.downloaded, recovery.key_revealed, recovery.key_rotated, recovery.emergency, recovery.restore, recovery.full, recovery.compromise, recovery.validation, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, document.changed, import.finished, processing.completed, processing.failed
+- **Default:** `['security.password_reset_requested', 'security.password_admin_reset', 'security.temporary_password', 'security.password_changed', 'security.account_locked', 'security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.risky_signin', 'security.device_unrecognized', 'security.failed_logins', 'security.authentik', 'security.google', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'antivirus.threat', 'antivirus.released', 'antivirus.unavailable', 'antivirus.definitions', 'security.operations', 'backup.failed', 'backup.partial', 'backup.verification', 'backup.destination', 'backup.pre_change_blocked', 'backup.config_changed', 'backup.deleted', 'backup.downloaded', 'recovery.key_revealed', 'recovery.key_rotated', 'recovery.emergency', 'recovery.full', 'recovery.compromise', 'whatsapp.relink_required', 'whatsapp.incompatible', 'integrity.failed']`
+- **Allowed values:** security.password_reset_requested, security.password_admin_reset, security.temporary_password, security.password_changed, security.account_locked, security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, security.risky_signin, security.device_unrecognized, account.login, security.failed_logins, security.authentik, security.google, security.policy_exception, security.policy_change, security.auth_policy, security.health, antivirus.threat, antivirus.released, antivirus.unavailable, antivirus.definitions, security.operations, backup.failed, backup.succeeded, backup.partial, backup.verification, backup.destination, backup.retention, backup.pre_change, backup.pre_change_blocked, backup.config_changed, backup.deleted, backup.downloaded, recovery.key_revealed, recovery.key_rotated, recovery.emergency, recovery.restore, recovery.full, recovery.compromise, recovery.validation, whatsapp.relink_required, whatsapp.incompatible, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, document.changed, import.finished, processing.completed, processing.failed
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
 - **Effect of changing:** Applies to the next notification; people see these locked on.
@@ -858,17 +858,17 @@ Stored encrypted and never shown again.
 - **Restart needed:** no
 - **Learn more:** [google#credentials](guides/google.md#credentials)
 
-## Section: storage
+## Section: nas_hidden
 
 ### NAS connection (`nas.type`)
 
-How the backup share is reached. 'Already mounted' means Proxmox (or you) mounted it into the container; NFS/SMB lets the app mount it.
+Connection of the NAS backup destination (edited in Backup & Recovery → Destinations). 'Already mounted' means Proxmox (or you) mounted it into the container; NFS/SMB lets the app mount it.
 
 - **Default:** `'none'`
 - **Allowed values:** none, nfs, smb
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
-- **Effect of changing:** Click 'Connect NAS' after changing. The share is mounted at /mnt/pdnas and used as the backup destination.
+- **Effect of changing:** Edited in Backup & Recovery → Destinations; Test Connection mounts the share at /mnt/pdnas.
 - **Restart needed:** no
 - **Learn more:** [backup-restore#nas](guides/backup-restore.md#nas)
 
@@ -958,6 +958,36 @@ NFS version (3, 4, 4.1) or SMB dialect (3.0, 2.1).
 - **Restart needed:** no
 - **Learn more:** [backup-restore#nas](guides/backup-restore.md#nas)
 - **Example:** 4.1
+
+## Section: backup_hidden
+
+### Destination space warning (`backup.space_warning_pct`)
+
+Warn the main administrator when a backup destination has less free space than this (percent of its size). A destination may override it.
+
+- **Default:** `20`
+- **Allowed values:** 1–90
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#capacity](guides/backup-restore.md#capacity)
+- **Example:** 20
+
+### Destination space critical (`backup.space_critical_pct`)
+
+Critical alert below this much free space (percent). Valid backups are never deleted to make room.
+
+- **Default:** `10`
+- **Allowed values:** 1–90
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [backup-restore#capacity](guides/backup-restore.md#capacity)
+- **Example:** 10
+
+## Section: storage
 
 ### Legacy backup folder (`backup.target`)
 
@@ -1126,10 +1156,10 @@ Show sign-ins on a map (Trusted Zone pins and approximate GeoIP positions). Uses
 
 ### Map provider (`security.map_provider`)
 
-Where the sign-in map's picture tiles come from. OpenStreetMap is for small, low-volume use under its tile usage policy; MapTiler and Stadia Maps need your own API key; Custom uses the tile server below.
+Where the sign-in map comes from. OpenFreeMap (default) draws the map in the browser with ENGLISH place names and needs no key. OpenStreetMap standard tiles show local-language names and are for low-volume use only; MapTiler and Stadia Maps need your own API key; Custom uses the tile server below.
 
-- **Default:** `'osm'`
-- **Allowed values:** osm, maptiler, stadia, custom
+- **Default:** `'openfreemap'`
+- **Allowed values:** openfreemap, osm, maptiler, stadia, custom
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** security.map_enabled
 - **Effect of changing:** Takes effect immediately.

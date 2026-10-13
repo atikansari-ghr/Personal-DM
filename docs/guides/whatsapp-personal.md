@@ -80,6 +80,8 @@ Other channels are never affected.
    **5 minutes**.
 4. Keep the page open. The card walks through **QR Ready → Scanned → Connecting → Authenticating → Saving Session →
    Sending Verification**, then shows **Linked & Verified** and the last digits of your number.
+
+   ![Linking WhatsApp: the live stages after the phone scanned the code](../images/screenshots/whatsapp-linking.png)
 5. A verification message (*✅ Personal DM: WhatsApp Personal is linked. …*) arrives in your "Message
    yourself" chat. **Send Test Notification** sends another one at any time.
 6. Choose **WhatsApp Personal** per category in [Routing by category](notifications.md#routing), ideally as the first
@@ -113,6 +115,8 @@ Other channels are never affected.
 | **Service unavailable** | The administrator turned it on, but the bridge does not answer. Your fallback chain is used meanwhile. |
 | **Disabled by Admin** | WhatsApp Personal is turned off for the installation. |
 
+![WhatsApp Personal linked and verified, with Send Test Notification, Reconnect and Unlink](../images/screenshots/whatsapp-verified.png)
+
 **Reconnect** asks the bridge to restore the connection without a new QR code. **Unlink** logs the linked device out
 and deletes the session.
 
@@ -134,6 +138,8 @@ thing replaced it). Security and critical messages never expire.
 - that the encrypted session folder is writable;
 - per person: state, current linking step, last error code;
 - recent bridge events (time and step only).
+
+![WhatsApp diagnostics: versions, DNS, network, system time, storage and per-person state](../images/screenshots/whatsapp-diagnostics.png)
 
 QR codes, keys, phone numbers and message text are never part of diagnostics. **Restart Bridge** restarts the bridge
 service; linked sessions reconnect by themselves.

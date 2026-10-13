@@ -25,7 +25,7 @@ const PAGES = [
   ["settings-security", "/settings/account?tab=security", true],
   ["settings-notifications", "/settings/notifications", true],
   ["settings-family", "/settings/family", true],
-  ["settings-storage", "/settings/storage", true],
+  ["settings-backup-destinations", "/settings/backup?view=destinations", true],
   ["settings-documents", "/settings/documents", true],
   ["help", "/help/getting-started", true],
   ["my-notifications", "/settings/account?tab=notifications", true],

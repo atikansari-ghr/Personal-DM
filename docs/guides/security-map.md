@@ -83,7 +83,9 @@ Sign-in records are kept for one year (see [Retention](#retention)), so **Last y
 - **Click a row in the list** to select it: the map moves to it and highlights its marker.
 - A sign-in without a usable location is listed with **Location unavailable** and has no marker.
 
-![Sign-in map with a Trusted Zone pin, GeoIP points and the recent sign-ins](../images/screenshots/security-signin-map.png)
+![Sign-in details next to the map after selecting a sign-in in the list](../images/screenshots/security-signin-details.png)
+
+![Sign-in map with English place names, grouped sign-ins, the hover summary and the filters](../images/screenshots/security-signin-map.png)
 
 Who can see what:
 

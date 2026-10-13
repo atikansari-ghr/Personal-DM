@@ -302,7 +302,9 @@ lock screen shows (Minimal, Standard or Detailed). Repeat on each device.
 
 Neither is turned on until you set it up. If the administrator has not allowed a channel, its card says **Disabled
 by Admin**. If the WhatsApp bridge on the server stops, your card says **Service unavailable** and your fallback
-channels are used. The QR code refreshes by itself while you link, and each card shows your last notification.
+channels are used. A link attempt stays valid for 5 minutes (the card counts down; WhatsApp renews the picture by
+itself). After the scan the card shows each step, then **Linked & Verified** when the verification message has
+arrived in your own chat. Each card shows your last notification.
 
 See [notifications](guides/notifications.md), [push](guides/notifications.md#push) and
 [critical and optional notifications](guides/expiry-rules.md#critical).
@@ -311,6 +313,12 @@ See [notifications](guides/notifications.md), [push](guides/notifications.md#pus
 
 **My account → Sign-in security** shows your recent sign-ins on a map and in a list. Each sign-in shows its location
 (your home network appears by its Trusted Zone name, for example *Home*), device and risk level, with **Why**.
+
+- Place names on the map are in English.
+- Point at a marker for the name, IP address and place; click or tap it for all details. Sign-ins at the same place
+  are grouped with a number.
+- Filters (period, trust, risk, device) apply to the map and the list together. The default is **Last 7 days**.
+- Click a row in the list to show it on the map. A sign-in without a location says **Location unavailable**.
 
 If the map provider cannot be reached, the map shows **Map unavailable** with the reason; the list of sign-ins below
 still works.

@@ -4,6 +4,44 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Fixed (2026-10-13) — NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing (Change Set V)
+- **WhatsApp phones stayed on "Connecting" and never linked.**
+  - Root cause: right after a successful scan, WhatsApp closes the connection with code 515 (*restart required*) and
+    expects the client to reconnect with the new credentials. Bridge 1.0.0 ignored every close during linking, so the
+    link never completed. Credentials were also saved with a delay and reloaded from disk, so a fast restart could
+    start from stale keys. The pinned library line (Baileys 6.7) is no longer maintained.
+  - Bridge **1.1.0**: reconnects on 515 with the in-memory credentials, flushes them first, ignores events from
+    replaced connections, and uses the maintained Baileys **7.0.0-rc14** (pinned exactly).
+  - One link attempt stays valid for **5 minutes** with a countdown. WhatsApp itself renews the picture every
+    20–30 seconds; Personal DM keeps the same attempt and does not create new ones while you scan or connect.
+    **Generate new QR code** appears only after the window ends or linking fails.
+  - Live stages: QR Ready → Scanned → Connecting → Authenticating → Saving Session → Sending Verification → **Linked &
+    Verified** (a verification message to your own chat). Reconnects back off up to 5 minutes; a revoked device shows
+    **Relink Required** and tells you through another channel.
+  - Queued messages after an outage: routine ones expire after 24 hours, newer status messages supersede older ones,
+    security and critical messages are always delivered (**Expired** / **Superseded** in delivery history).
+  - Main administrator: **Run Diagnostics** (versions, DNS, network, system time, storage, per-person state; no
+    secrets) and **Restart Bridge**. An incompatible bridge alerts the main administrator by email/Telegram.
+- **NAS moved into Backup & Recovery → Destinations.** Settings → Storage & NAS is gone; its address redirects. SMB
+  and NFS shares are configured in the destination itself (or *Already mounted*). The upgrade migrates the old
+  connection automatically and safely (*Needs Attention* if it does not validate; nothing is deleted). Destination
+  cards show health, free space (warning 20 %, critical 10 %, adjustable), last/next backup and retries. **Test
+  Connection** names the failed check (DNS, network, authentication, share, permission, client tools, space).
+- **Backup Now per destination** with a confirmation and a no-cancel notice, and a durable **first-in, first-out
+  backup queue**: one job at a time, no queue jumping, no duplicates.
+- **Tooltips were cut off** inside cards, tables and dialogs. Root cause: the bubble was positioned inside its card,
+  whose `overflow` clipped it. It is now one shared tooltip rendered at the top of the page, which flips and shifts to
+  stay on screen, works with keyboard and touch, and takes its text from a central registry.
+- **Help showed administrator guides to everyone.** Help now lists, searches and opens only the guides and sections
+  each person may use; others answer *Not found*. Links to hidden guides become plain text.
+- **Sign-in map showed local-language (e.g. Arabic) place names.** Root cause: OpenStreetMap's standard tiles are
+  pictures with labels in the local language. The default is now **OpenFreeMap** vector tiles, drawn in the browser
+  with English names. Markers show name, IP and place on hover and all details on click or tap; nearby sign-ins are
+  grouped with a count; filters (Today, 7/30/90 days, a year, custom range, person, trust, risk, device; default Last
+  7 days) apply to the map and the list, which select each other.
+- **Upgrade impact.** Three data migrations (NAS → destination, map provider, WhatsApp verification fields). Run
+  `sudo personaldocs whatsapp-bridge update` separately. See [upgrades](docs/guides/upgrades.md#change-set-v).
+
 ### Fixed (2026-10-12) — Folder tree, sign-in map tiles, sign-in designs, WhatsApp and Discord settings (Change Set U)
 - **Folder tree alignment.** Every row now uses the same four columns (expander, icon, name, extras) built from shared
   tree tokens. Rows line up at every depth, in every theme and at desktop, tablet and phone sizes. Long names wrap

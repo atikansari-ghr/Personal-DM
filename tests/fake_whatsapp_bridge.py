@@ -78,10 +78,12 @@ class FakeBridge:
                 if parts == ["_test", "health"]:  # test-only: simulate a stopped / restarted service
                     bridge.down = not b.get("up", True)
                     return self._json(200, {"down": bridge.down})
-                if parts == ["_test", "stage"]:  # test-only: move a session through the pairing stages
-                    bridge.sessions[b["session"]].update(state=b.get("state", "pending"), stage=b.get("stage"),
-                                                         error_code=b.get("error_code"), failure_stage=b.get("failure_stage"))
-                    return self._json(200, {"ok": True})
+                if parts == ["_test", "stage"]:  # test-only: move a session (or every pending one) through the pairing stages
+                    sids = [k for k, v in bridge.sessions.items() if v["state"] == "pending"] if b["session"] == "pending" else [b["session"]]
+                    for sid in sids:
+                        bridge.sessions[sid].update(state=b.get("state", "pending"), stage=b.get("stage"),
+                                                    error_code=b.get("error_code"), failure_stage=b.get("failure_stage"))
+                    return self._json(200, {"ok": True, "sessions": len(sids)})
                 if parts == ["admin", "restart"]:
                     bridge.restarts += 1
                     return self._json(200, {"restarting": True})

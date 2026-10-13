@@ -189,6 +189,21 @@ await step("AT-333 Backup & Recovery, Recovery Explorer, notifications and sign-
   await P.fill("#dst-name", "Second disk");
   await P.fill("#dst-path", "/srv/backups/personaldocs");
   await capture(P, "backup-destination-dialog.png", "Add destination: a local folder on another disk");
+  // Change Set V: the NAS is configured inside the destination (SMB example values, nothing real)
+  await P.selectOption("#dst-kind", "nas");
+  await P.waitForSelector("#dst-nas-server");
+  await P.fill("#dst-name", "Home NAS");
+  await P.fill("#dst-nas-server", "nas.example.lan");
+  await P.fill("#dst-nas-share", "backups");
+  await P.fill("#dst-nas-username", "backup-user");
+  await capture(P, "backup-nas-destination.png", "Add destination → NAS share: SMB connection, server, share, folder and account (password write-only)");
+  await dismiss();
+  await P.waitForSelector(".dest-card");
+  await P.waitForLoadState("networkidle");
+  await capture(P, "backup-destinations.png", "Destination cards: health, free space, last and next backup, Test Connection and Backup Now; the backup queue");
+  await P.locator(".dest-card button:has-text('Backup Now')").first().click();
+  await P.waitForSelector("[role=dialog] >> text=This backup cannot be cancelled once it starts.");
+  await capture(P, "backup-now-dialog.png", "Backup Now: destination, full-system scope, space, and the no-cancel notice");
   await dismiss();
   await P.goto(BASE + "/settings/backup?view=points");
   await P.waitForSelector(".points-table");
@@ -229,10 +244,16 @@ await step("AT-333 Backup & Recovery, Recovery Explorer, notifications and sign-
   // a second device so the device list has something to distrust
   const other = await session({ width: 1280, height: 800 });
   await other.ctx.close();
+  // the real OpenFreeMap vector map (English labels), drawn by this browser through the proxy
+  await api(P, "/api/settings", { method: "PUT", body: { values: { "security.map_enabled": true, "security.map_provider": "openfreemap" } } });
   await P.goto(BASE + "/settings/account?tab=signins");
-  await P.waitForSelector(".signin-map");
-  await P.waitForFunction(() => { const t = [...document.querySelectorAll(".leaflet-tile")]; return t.length > 0 && t.every((i) => i.complete); }, null, { timeout: 30000 }).catch(() => undefined);
-  await capture(P, "security-signin-map.png", "Sign-in map: Trusted Zone pin, recent sign-ins with explainable risk");
+  await P.waitForSelector(".signin-map[data-labels=en]", { timeout: 30000 });
+  await P.waitForTimeout(5000); // vector tiles and fonts
+  await P.locator(".map-cluster, .signin-map path.leaflet-interactive").first().hover().catch(() => undefined);
+  await capture(P, "security-signin-map.png", "Sign-in map: English place names, grouped sign-ins with a count, hover summary and the filters");
+  await P.locator(".signin-list tbody tr").first().click();
+  await P.waitForSelector(".signin-detail");
+  await capture(P, "security-signin-details.png", "Sign-in details next to the map after selecting a sign-in (the list and map stay in sync)");
   await P.locator("#devices").scrollIntoViewIfNeeded();
   const mark = P.locator("#devices button:has-text('Mark Unrecognized')").first();
   if (await mark.count()) { await mark.click(); await P.waitForSelector("[role=dialog] >> text=Mark this device Unrecognized?"); }
@@ -259,6 +280,7 @@ await step("AT-354 Change Set U documentation screenshots (folder tree, map prov
   const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
   const ok = await session({ width: 1440, height: 900 });
   await ok.ctx.route("https://tile.openstreetmap.org/**", (r) => r.fulfill({ status: 200, contentType: "image/png", body: PNG, headers: { "Access-Control-Allow-Origin": "*" } }));
+  await ok.ctx.route("https://tiles.openfreemap.org/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ version: 8, sources: {}, layers: [] }), headers: { "Access-Control-Allow-Origin": "*" } }));
   await ok.page.goto(BASE + "/settings/security?view=access");
   await ok.page.locator("#map-provider").scrollIntoViewIfNeeded();
   await ok.page.click("#map-provider button:has-text('Test Map Provider')");
@@ -268,6 +290,7 @@ await step("AT-354 Change Set U documentation screenshots (folder tree, map prov
   await capture(ok.page, "security-map-provider.png", "Sign-in map provider: preset, key, Test Map Provider and the last result");
   await ok.ctx.close();
   const blocked = await session({ width: 1440, height: 900 });
+  await blocked.ctx.route("https://tiles.openfreemap.org/**", (r) => r.fulfill({ status: 403, contentType: "text/plain", body: "blocked", headers: { "Access-Control-Allow-Origin": "*" } }));
   await blocked.ctx.route("https://tile.openstreetmap.org/**", (r) => r.fulfill({ status: 403, contentType: "text/plain", body: "blocked", headers: { "Access-Control-Allow-Origin": "*" } }));
   await blocked.page.goto(BASE + "/settings/account?tab=signins");
   await blocked.page.waitForSelector(".map-unavailable");
@@ -277,6 +300,27 @@ await step("AT-354 Change Set U documentation screenshots (folder tree, map prov
   await P.waitForSelector("#conn-whatsapp [data-bridge-state]");
   await toTop(P, "#conn-whatsapp");
   await capture(P, "connections-whatsapp.png", "WhatsApp Personal: bridge service installed, running, version, protocol and compatibility");
+  await P.click("#wa-diagnostics button:has-text('Run Diagnostics')");
+  await P.waitForSelector("#wa-diagnostics .diag-table");
+  await toTop(P, "#wa-diagnostics");
+  await capture(P, "whatsapp-diagnostics.png", "WhatsApp diagnostics (main administrator): versions, DNS, network, system time, storage, per-person state; no secrets");
+  if (process.env.WA_BRIDGE && process.env.WA_TOKEN) {
+    // linking progress after the (fake) scan: the stages, never a QR code
+    const wa = (path, body) => fetch(process.env.WA_BRIDGE + path, { method: "POST", headers: { Authorization: `Bearer ${process.env.WA_TOKEN}`, "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+    await P.goto(BASE + "/settings/account?tab=notifications");
+    await P.waitForSelector("#whatsapp[data-state]");
+    if (await P.locator("#whatsapp button:has-text('Unlink')").count()) { await P.click("#whatsapp button:has-text('Unlink')"); await P.waitForSelector("#whatsapp[data-state=not_linked]"); }
+    await P.click("#whatsapp button:has-text('Link WhatsApp')");
+    await P.waitForSelector("#whatsapp[data-stage=qr_ready]");
+    await wa("/_test/stage", { session: "pending", stage: "authenticating" });
+    await P.waitForSelector("#whatsapp[data-stage=authenticating]", { timeout: 10000 });
+    expect(!(await P.locator("#whatsapp .qr").count()), "QR code on a screenshot");
+    await toTop(P, "#whatsapp");
+    await capture(P, "whatsapp-linking.png", "Linking WhatsApp: live stages after the phone scanned the code");
+    await wa("/_test/connect/pending");
+    await P.waitForSelector("#whatsapp[data-key=verified]", { timeout: 15000 });
+    await capture(P, "whatsapp-verified.png", "Linked & Verified, with Send Test Notification, Reconnect and Unlink");
+  }
   await P.goto(BASE + "/settings/overview");
   await P.waitForSelector(".design-grid");
   await P.click(".design-option:has-text('Nature')");
