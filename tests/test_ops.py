@@ -232,7 +232,9 @@ def test_settings_api_permissions_validation_and_secret_masking(family, clients)
 def test_help_is_bundled_and_searchable(family, clients):
     r = clients["son1"].get("/api/help")
     slugs = {g["slug"] for g in r.json()["guides"]}
-    assert {"getting-started", "backup-restore", "google", "telegram"} <= slugs
+    assert {"getting-started", "telegram"} <= slugs
+    assert not {"backup-restore", "google"} & slugs  # Change Set V: administrator guides only for administrators
+    assert {"backup-restore", "google"} <= {g["slug"] for g in clients["dad"].get("/api/help").json()["guides"]}
     assert clients["son1"].get("/api/help", {"q": "telegram"}).json()["guides"]
     assert clients["son1"].get("/api/help/../../etc").status_code == 404
 
