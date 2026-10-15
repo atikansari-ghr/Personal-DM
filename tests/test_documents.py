@@ -91,12 +91,14 @@ def test_impossible_dates_are_flagged(family, clients):
     assert d.review_flags and d.state == Document.NEEDS_REVIEW
 
 
-def test_document_number_is_masked_and_copy_is_audited(family, clients):
+def test_document_number_is_complete_for_authorised_people_and_never_in_audit_or_history(family, clients):
+    # Change Set W: authorisation is the boundary, not masking. History and audit stay action-focused.
     d = _upload_one(clients["son1"], personal_root(family["son1"]))
     clients["son1"].post(f"/api/documents/{d.id}/fields", {"key": "document_number", "value": "Z1234567"}, format="json")
     detail = clients["son1"].get(f"/api/documents/{d.id}").json()
     num = next(f for f in detail["fields"] if f["key"] == "document_number")
-    assert num["value"].endswith("4567") and "Z123" not in num["value"]
+    assert num["value"] == "Z1234567" and num["identifier"] is True
+    assert clients["son2"].get(f"/api/documents/{d.id}").status_code in (403, 404)  # no access, no value
     r = clients["son1"].get(f"/api/documents/{d.id}/fields/document_number/reveal")
     assert r.json()["value"] == "Z1234567"
     ev = AuditEvent.objects.get(action="document.field_copy")

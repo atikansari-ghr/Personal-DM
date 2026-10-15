@@ -267,6 +267,8 @@ class DocumentField(models.Model):
     PROPOSED, CONFIRMED = "proposed", "confirmed"
     STANDARD = ("full_name", "document_number", "issue_date", "expiry_date", "no_expiry", "date_of_birth", "nationality",
                 "issuer", "country_code", "sex", "place_of_issue")
+    # Identifiers (Change Set W): shown in full to everyone who may open the document; the document history and the
+    # audit log record that they changed, never the value itself.
     SENSITIVE = ("document_number",)
 
     TYPE, CUSTOM, UNMAPPED = "type", "custom", "unmapped"

@@ -6,7 +6,8 @@ from django.utils import timezone
 from . import filetypes
 from . import permissions as P
 from .models import Document, DocumentField, DocumentVersion, Folder
-from .services import mask
+
+LOW_CONFIDENCE = 0.7  # OCR / AI proposals below this are marked "Low confidence · Review" (still shown in full)
 
 
 def user_mini(u) -> dict | None:
@@ -76,12 +77,13 @@ def field_json(f: DocumentField, labels: dict | None = None) -> dict:
 
     labels = labels or {}
     return {
-        "key": f.key, "value": mask(f.key, f.value), "sensitive": f.key in DocumentField.SENSITIVE,
+        "key": f.key, "value": f.value, "identifier": f.key in DocumentField.SENSITIVE,
         "label": labels.get(f.key) or f.label or standard_label(f.key.removeprefix("custom:")),
         "status": f.status, "source": f.source, "source_label": SOURCE_LABELS.get(f.source, f.source),
         "scope": f.scope, "overridden": f.overridden, "previous_type": f.previous_type,
         "confidence": f.confidence, "flags": f.flags,
-        "excerpt": f.source_excerpt, "proposed_value": mask(f.key, f.proposed_value) if f.proposed_value else "",
+        "excerpt": f.source_excerpt, "proposed_value": f.proposed_value or "",
+        "low_confidence": f.status == DocumentField.PROPOSED and f.confidence is not None and f.confidence < LOW_CONFIDENCE,
         "confirmed_at": f.confirmed_at, "updated_at": f.updated_at,
         "confirmed_by": f.confirmed_by.display_name if f.confirmed_by_id and f.confirmed_by else None,
     }
@@ -114,7 +116,7 @@ def _classification(ctx: P.AccessContext, d: Document) -> dict:
         "fields": out_fields,
         "template": [{"key": f.key, "label": f.label, "field_type": f.field_type, "required": f.required,
                       "help_text": f.help_text, "choices": f.choices, "role": f.role,
-                      "sensitive": f.key in DocumentField.SENSITIVE} for f in template],
+                      "identifier": f.key in DocumentField.SENSITIVE} for f in template],
         "type_info": {"source": d.type_source, "source_label": doctypes.SOURCE_LABELS.get(d.type_source, ""),
                       "confirmed": d.type_confirmed, "suggestions": doctypes.suggestions_json(d)},
         "details_status": doctypes.details_status(d),

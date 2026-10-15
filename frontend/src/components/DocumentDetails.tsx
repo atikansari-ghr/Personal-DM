@@ -63,7 +63,7 @@ function FieldRow({ doc, f, tf, label, canEdit, onSaved, extra }: { doc: DocDeta
     try { await api(`documents/${doc.id}/fields`, { body: { key, value: v, confirm: true } }); setEditing(false); onSaved(); }
     catch (e: any) { toast(e.message, "error"); }
   };
-  const start = async () => { setValue(f ? (f.sensitive ? (await api<any>(`documents/${doc.id}/fields/${key}/reveal`)).value : f.value) : ""); setEditing(true); };
+  const start = () => { setValue(f ? f.value : ""); setEditing(true); };
   return (
     <div style={{ display: "contents" }}>
       <div className="k">{label}{tf?.required && <span className="req" aria-label="required" title="Required"> *</span>}{tf?.help_text && <HelpTip text={tf.help_text} />}</div>
@@ -78,6 +78,7 @@ function FieldRow({ doc, f, tf, label, canEdit, onSaved, extra }: { doc: DocDeta
             <span className={f?.value ? "" : "muted"}>{f ? display(f, ftype) : "—"}</span>
             {f && tf?.role === "expiry" && f.status === "confirmed" && <ExpiryBadge expiry={doc.expiry} />}
             {f && <Provenance f={f} />}
+            {f?.low_confidence && <span className="badge warn" data-low-confidence title={`OCR confidence ${Math.round((f.confidence || 0) * 100)} % — check this value against the document`}>Low confidence · Review</span>}
             {f?.flags.map((fl) => <span key={fl} className="badge danger" title={fl}>Check</span>)}
             {f?.excerpt && f.status === "proposed" && <HelpTip text={`Found in text: “${f.excerpt}”`} />}
             {f?.proposed_value && <span className="small muted">New scan suggests {f.proposed_value}</span>}
@@ -86,7 +87,7 @@ function FieldRow({ doc, f, tf, label, canEdit, onSaved, extra }: { doc: DocDeta
         )}
       </div>
       <div className="c row" style={{ gap: 0, flexWrap: "nowrap" }}>
-        {f?.value && <CopyButton label={label} getValue={async () => (f.sensitive ? (await api<any>(`documents/${doc.id}/fields/${key}/reveal`)).value : f.value)} />}
+        {f?.value && <CopyButton label={label} getValue={async () => f.value} />}
         {canEdit && !editing && (
           <>
             {f?.status === "proposed" && <button className="icon-btn" aria-label={`Confirm ${label}`} title="Confirm" onClick={() => save(f.value)}><Icon name="check" size={18} /></button>}
