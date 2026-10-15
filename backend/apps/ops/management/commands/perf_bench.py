@@ -45,6 +45,8 @@ def requests_for(admin: bool, ids: dict) -> list[tuple[str, str]]:
         ("help index", "/api/help"),
         ("sign-in map (7 days)", "/api/security/map"),
     ]
+    if not ids.get("document"):  # this person may open no document at all
+        common = [(n, u) for n, u in common if n != "document details"]
     if not admin:
         return common
     return common + [
@@ -81,7 +83,8 @@ class Command(BaseCommand):
             raise CommandError("No folders: run perf_dataset first (in a test database).")
         big = folders.first()
         normal = folders.filter(n__gte=5, n__lte=40).first() or folders.last()
-        doc = Document.objects.filter(folder=normal, archived_at__isnull=True).first()
+        doc = (Document.objects.filter(folder=normal, archived_at__isnull=True).first()
+               or Document.objects.filter(archived_at__isnull=True).first())
         ids = {"big_folder": big.pk, "folder": normal.pk, "document": doc.pk, "search": "renewal"}
         results = {"dataset": {"documents": Document.objects.count(), "folders": Folder.objects.count(),
                                "big_folder_documents": big.n}, "users": {}}
@@ -114,8 +117,9 @@ class Command(BaseCommand):
             return ids
         big = max(folders, key=lambda f: f.get("count") or 0)
         normal = next((f for f in folders if 5 <= (f.get("count") or 0) <= 40), big)
-        docs = _json.loads(c.get(f"/api/documents?folder={normal['id']}&limit=1").content).get("documents") or []
-        return {**ids, "big_folder": big["id"], "folder": normal["id"], "document": docs[0]["id"] if docs else ids["document"]}
+        docs = (_json.loads(c.get(f"/api/documents?folder={normal['id']}&limit=1").content).get("documents")
+                or _json.loads(c.get("/api/documents?limit=1").content).get("documents") or [])
+        return {**ids, "big_folder": big["id"], "folder": normal["id"], "document": docs[0]["id"] if docs else None}
 
     def _measure(self, c, url, runs):
         times, db_ms, queries, size, status = [], [], 0, 0, 0

@@ -1,0 +1,11 @@
+cpu 100.0 throttle False 
+cpu 100.0 throttle True CPU 100%
+cpu 100.0 throttle True CPU 100%
+cpu 100.0 throttle True CPU 100%
+throttled claim picked: backup_retry | geoip waiting: queued
+cpu 24.6 throttle True CPU 100%
+cpu 0.0 throttle True CPU 100%
+cpu 25.4 throttle False 
+cpu 0.5 throttle False 
+2026-10-15T22:33:56 throttle_end Background processing resumed: load back to normal
+2026-10-15T22:32:07 throttle_start Background processing throttled: CPU 100%

@@ -136,14 +136,25 @@ def record_job(kind: str, ms: float, ok: bool) -> None:
 _cpu_prev: list = []
 
 
-def _cpu_percent() -> float | None:
+def _cpu_times() -> tuple[int, int] | None:
     try:
-        parts = Path("/proc/stat").read_text().splitlines()[0].split()[1:]
-        vals = [int(x) for x in parts]
-        idle = vals[3] + (vals[4] if len(vals) > 4 else 0)
-        total = sum(vals)
+        vals = [int(x) for x in Path("/proc/stat").read_text().splitlines()[0].split()[1:]]
+        return vals[3] + (vals[4] if len(vals) > 4 else 0), sum(vals)
     except Exception:  # noqa: BLE001
         return None
+
+
+def _cpu_percent() -> float | None:
+    """CPU busy since the previous sample of this process (the scheduler: about a minute); the first sample of a
+    process measures over half a second instead."""
+    now = _cpu_times()
+    if now is None:
+        return None
+    if not _cpu_prev:
+        _cpu_prev[:] = list(now)
+        time.sleep(0.5)
+        now = _cpu_times() or now
+    idle, total = now
     prev = _cpu_prev[:]
     _cpu_prev[:] = [idle, total]
     if not prev or total == prev[1]:
