@@ -221,7 +221,7 @@ HELP_CATEGORIES = [
     ("Security & sign-in", ["security-map", "passkeys", "totp-recovery", "password-reset", "security-access", "security-center",
                             "antivirus", "google", "authentik", "login-designs"]),
     ("Notifications", ["notifications", "smtp", "telegram", "discord", "whatsapp-personal"]),
-    ("Installation & operations", ["installation", "upgrades", "reverse-proxy", "settings", "troubleshooting", "private-github"]),
+    ("Installation & operations", ["installation", "upgrades", "performance", "reverse-proxy", "settings", "troubleshooting", "private-github"]),
     ("For contributors", ["architecture", "testing", "screenshots", "documentation"]),
 ]
 

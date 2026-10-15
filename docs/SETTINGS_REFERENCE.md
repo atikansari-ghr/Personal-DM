@@ -1156,6 +1156,111 @@ Audit events older than this are deleted. 0 keeps forever.
 - **Restart needed:** no
 - **Learn more:** [settings#activity](guides/settings.md#activity)
 
+## Section: performance
+
+### Adaptive background throttling (`performance.throttle_enabled`)
+
+When the server stays under heavy load (CPU, memory, swap or disk), postpone starting non-urgent background work (OCR, library antivirus scans, AI, reports) so signing in and browsing stay responsive. Running jobs finish normally; security work, notifications, uploads' safety checks and backups are never postponed.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [performance#throttling](guides/performance.md#throttling)
+
+### Throttle when CPU busy above (%) (`performance.throttle_cpu_percent`)
+
+Average CPU use over the last two minutes that counts as heavy load.
+
+- **Default:** `90`
+- **Allowed values:** 50–100
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [performance#throttling](guides/performance.md#throttling)
+- **Example:** 90
+
+### Throttle when available memory below (%) (`performance.throttle_memory_available_percent`)
+
+Share of memory still available below which the server counts as under memory pressure.
+
+- **Default:** `10`
+- **Allowed values:** 3–50
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [performance#throttling](guides/performance.md#throttling)
+- **Example:** 10
+
+### Throttle when swap used above (%) (`performance.throttle_swap_percent`)
+
+Share of swap in use above which the server counts as under memory pressure (ignored without swap).
+
+- **Default:** `50`
+- **Allowed values:** 5–100
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [performance#throttling](guides/performance.md#throttling)
+- **Example:** 50
+
+### Throttle when disk pressure above (%) (`performance.throttle_io_pressure`)
+
+Share of time tasks waited for the disk (Linux pressure information, where the container provides it).
+
+- **Default:** `40`
+- **Allowed values:** 5–100
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [performance#throttling](guides/performance.md#throttling)
+- **Example:** 40
+
+### Longest postponement (minutes) (`performance.max_defer_minutes`)
+
+A postponed job starts after at most this long even if the load stays high, so nothing waits forever.
+
+- **Default:** `15`
+- **Allowed values:** 1–240
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [performance#throttling](guides/performance.md#throttling)
+- **Example:** 15
+
+### Slow request warning (ms) (`performance.slow_request_ms`)
+
+Requests slower than this are listed under Recent performance warnings.
+
+- **Default:** `2000`
+- **Allowed values:** 200–60000
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [performance#dashboard](guides/performance.md#dashboard)
+- **Example:** 2000
+
+### Keep performance measurements (days) (`performance.retention_days`)
+
+Aggregated measurements (10-minute summaries) older than this are removed.
+
+- **Default:** `14`
+- **Allowed values:** 1–90
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [performance#dashboard](guides/performance.md#dashboard)
+- **Example:** 14
+
 ## Section: security
 
 ### Sign-in map (`security.map_enabled`)

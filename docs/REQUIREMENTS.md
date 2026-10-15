@@ -472,6 +472,26 @@ Acceptance tests AT-336…AT-355. The change prompt numbered them AT-311…AT-33
 
 Native apps, scanning enhancement, in-browser Office editing, DICOM viewing.
 
+## Change set X (2026-10): performance {#change-set-x}
+
+Acceptance tests AT-401…AT-425 (prompt AT-376…AT-400 = AT-(n+25)). See [TRACEABILITY.md](TRACEABILITY.md#change-set-x),
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-x) and [PERFORMANCE.md](PERFORMANCE.md).
+
+| ID | Requirement |
+|---|---|
+| PERF-1 | A reproducible BEFORE/AFTER benchmark on a sanitised synthetic dataset (pages, API, queries, bundles, concurrency, memory). |
+| PERF-2 | Targets: sign-in ≤ 1.5 s, dashboard ≤ 2 s, Settings ≤ 1.5 s, cached section ≤ 0.5 s, folder/document/details ≤ 1 s, search ≤ 1–2 s, typical API ≤ 0.5 s. |
+| PERF-3 | Settings loads per section on demand; cached sections switch instantly; direct links, Back/Forward and permissions unchanged; obsolete requests cancelled. |
+| PERF-4 | No query count grows with the data on list, dashboard, tree and preference endpoints; authorisation unchanged. |
+| PERF-5 | Safe, beneficial, reversible indexes created without blocking documents. |
+| PERF-6 | Caches only non-private derived data, with immediate invalidation, no cross-user reuse, no secrets, hit/miss counters; no external cache service. |
+| PERF-7 | Route/section code splitting, heavy modules on demand, request deduplication, compressed immutable static files, no stale deployments. |
+| PERF-8 | Large folders load incrementally in server order without losing documents; lists never fetch binaries. |
+| PERF-9 | Interactive requests take priority; under sustained load non-urgent jobs are postponed (bounded), running jobs never interrupted, critical work never postponed; visible and logged. |
+| PERF-10 | Admin Performance dashboard and main-admin Diagnostic Report: useful, lightweight, administrator-only, no secrets or document data, limited retention. |
+| PERF-11 | Runtime tuned from measurement within 6 GB; post-upgrade maintenance safe and repeatable. |
+| PERF-12 | Search/OCR architecture unchanged; every existing feature and permission intact. |
+
 ## Change set W (2026-10): named sign-in designs and rotation, complete details and IPs, Notification Detail Level {#change-set-w}
 
 Acceptance tests AT-376…AT-400. The change prompt numbered them AT-351…AT-375: prompt AT-n = AT-(n+25). See
