@@ -4,6 +4,37 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Changed (2026-10-15) — Named sign-in designs with rotation, complete document details, complete IPs, Notification Detail Level (Change Set W)
+- **Several sign-in page designs.** The main administrator keeps any number of named designs (Settings → Overview &
+  sign-in): **New design**, **Create from template**, **Duplicate**, **Rename**, **Edit**, **Preview Sign-in Page**,
+  **Set as Active**, **Revert to Previous Design**, **Delete** and **Reset to default**. Exactly one design is active.
+  The five built-in designs are protected templates; Minimal stays the default.
+- **The sign-in page matches the uploaded wallpaper.** Colour mode **Auto** reads the wallpaper (mainly the part next
+  to the sign-in panel) and builds a light or dark panel with matching buttons, fields, borders and links, adjusted to
+  WCAG contrast. **Light**, **Dark** and **Custom** are also available.
+- **Responsive wallpapers.** The original is kept; Desktop, Tablet and Phone versions are cropped around a chosen
+  **focal point**, never stretched. Previews at Desktop, Tablet and Phone size show password, passkey and SSO buttons.
+- **Safe changes.** Activation is atomic and audited. Deleting the active design activates the default first. A damaged
+  wallpaper falls back to the default and alerts the main administrator. Files are removed only when no design uses
+  them, and every design file is in the backups.
+- **Automatic Design Rotation.** A pool of at least two designs, Sequential (drag order) or Random (no immediate
+  repeat), Daily / Weekly / Monthly in the installation timezone (day 29–31 → last day of shorter months). A status
+  card and **Preview Rotation**. Missed rotations are worked out once; unavailable designs are skipped and reported.
+  Routine rotations are only in the activity log.
+- **Complete document details.** People who may open a document now see document numbers and other identifiers in
+  full everywhere (Details, OCR review, search, lists, exports, API, notifications). **Copy** copies the complete
+  value and is never logged. OCR Metadata opens by itself when recognition finishes; low-confidence values are marked
+  **Review**; your corrections are never overwritten. Document history and the activity log record only that a value
+  changed, never the value.
+- **Complete IP addresses** (IPv4 and IPv6) in sign-in history, the sign-in map, security alerts and notifications.
+- **Notification Detail Level.** Settings → Notifications: **Full Details** (default) or **Minimal Details**; each
+  person can choose *Use system default*, Full or Minimal in My account. Full never widens access: a recipient who may
+  not open a document gets no name or number from it. Passwords, keys and codes are never sent.
+- **Upgrade impact.** Migrations `core.0004`–`0006` (additive). The current sign-in page looks the same after the
+  upgrade; an uploaded wallpaper becomes the design **Custom wallpaper**. Masked-value notification settings are
+  replaced by the detail level (*Minimal* if names were turned off). See
+  [upgrades](docs/guides/upgrades.md#change-set-w).
+
 ### Fixed (2026-10-13) — NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing (Change Set V)
 - **WhatsApp phones stayed on "Connecting" and never linked.**
   - Root cause: right after a successful scan, WhatsApp closes the connection with code 515 (*restart required*) and

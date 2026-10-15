@@ -101,13 +101,13 @@ def path_for(kind: str) -> Path | None:
 
 
 def public() -> dict:
-    """What the sign-in page needs (shown before sign-in, so nothing private)."""
-    wall, logo = config.get("login.wallpaper_file"), config.get("login.logo_file")
-    design = config.get("login.design")
-    if design == "custom" and not wall:
-        design = "minimal"
-    return {"design": design, "title": config.get("login.title") or config.get("general.app_name"),
-            "tagline": config.get("login.tagline"), "overlay": config.get("login.overlay"),
-            "position": config.get("login.position"),
-            "wallpaper": f"/api/branding/wallpaper?v={wall[10:18]}" if wall and design == "custom" else None,
-            "has_wallpaper": bool(wall), "logo": f"/api/branding/logo?v={logo[5:13]}" if logo else None}
+    """What the sign-in page needs (shown before sign-in, so nothing private): the active named design (Change Set W).
+    The page reads it on load; an open sign-in page is never refreshed when the design changes."""
+    from . import designs
+
+    try:
+        return designs.payload(designs.active())
+    except Exception:  # noqa: BLE001 - the sign-in page must always render (before migrations, damaged data)
+        return {"design": "minimal", "title": config.get("login.title") or config.get("general.app_name"),
+                "tagline": config.get("login.tagline"), "overlay": 0, "position": "center", "focal": [0.5, 0.5],
+                "wallpaper": None, "wallpapers": None, "has_wallpaper": False, "logo": None, "palette": None}

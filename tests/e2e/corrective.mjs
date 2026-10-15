@@ -205,28 +205,28 @@ await step("AT-344 sign-in design thumbnails are light and clear in every app th
   await setting(page, { "me.theme": "green" });
 });
 
-await step("AT-345/AT-346 choosing a design previews it; Discard keeps, Save publishes; theme does not change the design", async () => {
+await step("AT-345/AT-346 selecting a design only previews it; Set as Active publishes; theme does not change the design", async () => {
   await setting(page, { "login.design": "minimal" });
   await page.goto(BASE + "/settings/overview");
   await page.click(".design-option:has-text('Nature')");
-  await page.waitForSelector("[role=status]:has-text('Previewing Nature')");
-  expect((await api(page, "/api/branding")).data.design === "minimal", "a click must not save the design");
-  await page.click("[role=status] button:has-text('Discard')");
-  await page.waitForSelector("[role=status]:has-text('Previewing')", { state: "detached" });
+  await page.waitForSelector(".design-actions button:has-text('Set as Active')");
+  expect((await api(page, "/api/branding")).data.design === "minimal", "a click must not change the live design");
   await page.click(".design-option:has-text('Travel')");
-  // the live preview follows the choice, on desktop and phone
+  // the live preview follows the choice, on desktop, tablet and phone
   await page.waitForSelector(".login-preview.desktop");
   const desk = await luminance(page, page.locator(".login-preview"));
   expect(desk.mean > 120, `desktop preview too dark (${desk.mean.toFixed(0)})`);
-  await page.click(".seg button:has-text('Phone')");
+  await page.click("#login-design .seg button:has-text('Tablet')");
+  await page.waitForSelector(".login-preview.tablet");
+  await page.click("#login-design .seg button:has-text('Phone')");
   await page.waitForSelector(".login-preview.mobile");
   await page.locator(".login-preview").screenshot({ path: `${OUT}/preview-phone.png` });
-  await page.click("button:has-text('Preview Sign-in Page')");
+  await page.click(".design-actions button:has-text('Preview Sign-in Page')");
   await page.waitForSelector("[role=dialog] .login-preview.full");
   await page.keyboard.press("Escape");
-  await page.click("button:has-text('Save design')");
+  await page.click(".design-actions button:has-text('Set as Active')");
   await page.waitForSelector(".design-option:has-text('Travel') .design-saved");
-  // the public sign-in page uses the saved design and the sign-in theme, whatever theme the admin uses
+  // the public sign-in page uses the active design and the sign-in theme, whatever theme the admin uses
   await setting(page, { "me.theme": "glass_dark" });
   const anon = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const ap = await anon.newPage();
@@ -236,7 +236,7 @@ await step("AT-345/AT-346 choosing a design previews it; Discard keeps, Save pub
   const pub = await luminance(ap, ap.locator(".auth"));
   expect(pub.mean > 120, `public sign-in page too dark (${pub.mean.toFixed(0)})`);
   await anon.close();
-  expect((await api(page, "/api/branding")).data.design === "travel", "changing the app theme changed the saved design");
+  expect((await api(page, "/api/branding")).data.design === "travel", "changing the app theme changed the active design");
   await setting(page, { "me.theme": "green", "login.design": "minimal" });
 });
 
@@ -618,6 +618,91 @@ if (WA_BRIDGE && WA_TOKEN) {
 } else {
   skip("AT-370..AT-373 WhatsApp lifecycle", "no fake bridge (run through scripts/e2e.sh)");
 }
+
+// ------------------------------------------------------------------ Change Set W: named designs, rotation, detail level
+await step("AT-376/AT-377/AT-379/AT-381 New design → wallpaper → focal point → Set as Active → public page matches → Revert", async () => {
+  await page.goto(BASE + "/settings/overview");
+  await page.waitForSelector(".design-grid");
+  await page.click("#login-design button:has-text('New design')");
+  await page.fill("#design-name", "E2E Meadow");
+  await page.click("[role=dialog] button:has-text('Save')");
+  await page.waitForSelector("[role=dialog] .design-editor");
+  // a pale green 1600 × 1000 wallpaper drawn in the page (no external image)
+  const b64 = await page.evaluate(() => {
+    const c = document.createElement("canvas"); c.width = 1600; c.height = 1000;
+    const g = c.getContext("2d"); g.fillStyle = "#cfe8c8"; g.fillRect(0, 0, 1600, 1000);
+    g.fillStyle = "#3f7f3a"; g.fillRect(200, 600, 500, 300);
+    return c.toDataURL("image/png").split(",")[1];
+  });
+  await page.locator("[role=dialog] input[type=file]").first().setInputFiles({ name: "meadow.png", mimeType: "image/png", buffer: Buffer.from(b64, "base64") });
+  await page.waitForSelector("[role=dialog] .focal-picker", { timeout: 20000 });
+  const box = await page.locator("[role=dialog] .focal-picker").boundingBox();
+  await page.mouse.click(box.x + box.width * 0.25, box.y + box.height * 0.7);
+  await page.click("[role=dialog] button:has-text('Save design')");
+  await page.waitForSelector("text=Design saved");
+  await page.locator("[role=dialog]").screenshot({ path: `${OUT}/design-editor.png` });
+  await page.click("[role=dialog] .btn:text-is('Close')");
+  const listing = (await api(page, "/api/signin-designs")).data;
+  const mine = listing.designs.find((x) => x.name === "E2E Meadow");
+  expect(mine && mine.has_wallpaper && !mine.active, "new design saved, not active");
+  expect(Math.abs(mine.focal_x - 0.25) < 0.05 && Math.abs(mine.focal_y - 0.7) < 0.05, `focal point ${mine.focal_x},${mine.focal_y}`);
+  const before = listing.active;
+  await page.click(`.design-option[data-design-id='${mine.id}']`);
+  await page.click("#login-design .seg button:has-text('Tablet')");
+  await page.waitForSelector(".login-preview.tablet");
+  await page.click(".design-actions button:has-text('Set as Active')");
+  await page.waitForSelector(`.design-option[data-design-id='${mine.id}'] .design-saved`);
+  // the anonymous sign-in page shows this design with colours derived from the light green wallpaper
+  const anon = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const ap = await anon.newPage();
+  await ap.goto(BASE + "/login");
+  await ap.waitForSelector(`.auth[data-design='${mine.id}']`);
+  const scheme = await ap.locator(".auth").getAttribute("data-scheme");
+  const bg = await ap.locator(".auth").evaluate((el) => getComputedStyle(el).getPropertyValue("--bg").trim());
+  expect(scheme === "light" && /^#/.test(bg), `palette: scheme=${scheme} bg=${bg}`);
+  expect(await ap.locator("input[type=password]").count() > 0, "password sign-in still offered");
+  await ap.screenshot({ path: `${OUT}/signin-custom-design.png` });
+  await anon.close();
+  await page.click("#login-design button:has-text('Revert to Previous Design')");
+  await page.waitForFunction(async ([b]) => (await (await fetch("/api/signin-designs")).json()).active === b, [before]);
+});
+
+await step("AT-383/AT-385/AT-391 rotation: pool of two, Save rotation, status card, Preview Rotation changes nothing", async () => {
+  await page.goto(BASE + "/settings/overview");
+  await page.waitForSelector("#design-rotation");
+  const active = (await api(page, "/api/signin-designs")).data.active;
+  const card = page.locator("#design-rotation");
+  await card.locator("label.check input").check();
+  for (const n of ["Nature", "Travel"]) await card.locator(`button:has-text('${n}')`).first().click();
+  expect(await card.locator(".rotation-pool li").count() >= 2, "pool rows");
+  await card.locator("button:has-text('Save rotation')").click();
+  await page.waitForSelector("#design-rotation [data-rotation-state=on]");
+  const text = await card.innerText();
+  expect(text.includes("Next Rotation") && text.includes("Current Design"), "status card facts");
+  await card.locator("button:has-text('Preview Rotation')").click();
+  await page.waitForSelector("[role=dialog]:has-text('Preview Rotation') .login-preview.full");
+  await page.keyboard.press("Escape");
+  expect((await api(page, "/api/signin-designs")).data.active === active, "preview changed the live design");
+  const bad = await api(page, "/api/signin-designs/rotation", { method: "PUT", body: { enabled: true, pool: [active] } });
+  expect(bad.status === 400, `single-design pool accepted (${bad.status})`);
+  await api(page, "/api/signin-designs/rotation", { method: "PUT", body: { enabled: false } });
+  const son = await session("son1");
+  expect((await api(son.page, "/api/signin-designs")).status === 403, "family member reached sign-in designs");
+  await son.ctx.close();
+});
+
+await step("AT-396/AT-397 Notification detail: Use system default / Full / Minimal per person", async () => {
+  const s = await session("son1");
+  await s.page.goto(BASE + "/settings/account?tab=notifications");
+  await s.page.waitForSelector("#notification-detail #notif-detail");
+  expect((await s.page.locator("#notif-detail").inputValue()) === "system", "default is the system setting");
+  expect((await s.page.locator("#notif-detail option").first().innerText()).includes("Full Details"), "system default is Full");
+  await s.page.selectOption("#notif-detail", "minimal");
+  await s.page.waitForSelector("text=Saved");
+  expect((await api(s.page, "/api/me/notification-preferences")).data.detail_level.mine === "minimal", "choice saved");
+  await s.page.selectOption("#notif-detail", "system");
+  await s.ctx.close();
+});
 
 await step("phone 390 px: Connections and notification cards fit without sideways scrolling", async () => {
   const m = await session("admin", { width: 390, height: 844 }, true);

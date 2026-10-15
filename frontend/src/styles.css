@@ -1085,3 +1085,38 @@ tr.risk-high td { background: var(--danger-bg); }
 .map-filters { align-items: center; }
 .map-filters select, .map-filters input[type=date] { width: auto; min-width: 9rem; max-width: 16rem; flex: 0 1 auto; }
 @media (max-width: 520px) { .map-filters select, .map-filters input[type=date] { flex: 1 1 calc(50% - 8px); min-width: 0; max-width: none; } }
+/* Change Set W: responsive sign-in wallpapers (Desktop / Tablet / Mobile derivatives, focal point via background-position) */
+.auth-wallpaper.responsive { background-image: var(--wall-desktop); }
+@media (max-width: 1279px) { .auth-wallpaper.responsive { background-image: var(--wall-tablet); } }
+@media (max-width: 760px) { .auth-wallpaper.responsive { background-image: var(--wall-mobile); } }
+.auth[data-scheme="dark"] .auth-brand { background: color-mix(in srgb, var(--surface) 78%, transparent); }
+.auth a { color: var(--accent); }
+/* Change Set W: named sign-in designs, editor and rotation */
+.design-option .design-tag { font-style: normal; font-weight: 600; font-size: 0.72rem; color: var(--neutral-ink); background: var(--neutral-bg); border-radius: 999px; padding: 0.05rem 0.45rem; margin-inline-start: 0.4rem; }
+.design-option .design-tag.danger { color: var(--danger-ink); background: var(--danger-bg); }
+.login-preview.tablet { grid-template-columns: 1fr 1fr; max-width: 820px; }
+/* the preview keeps the real layout, but a narrow preview (editor column, dialogs) scales its text so long titles
+   wrap between words instead of breaking inside them */
+.login-preview { container-type: inline-size; }
+.login-preview .auth-art.preview h1 { overflow-wrap: normal; hyphens: manual; }
+@container (max-width: 760px) {
+  .login-preview .auth-art.preview { padding: 0.9rem; }
+  .login-preview .auth-art.preview h1 { font-size: 1.12rem; }
+  .login-preview .auth-art.preview .auth-tagline { font-size: 0.86rem; }
+  .login-preview .auth-art.preview .auth-foot { font-size: 0.72rem; }
+  .login-preview .fake-form { padding: 0.9rem; }
+}
+.login-preview.tablet .auth-art.preview { min-height: 300px; }
+.design-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 1.2rem; align-items: start; }
+@media (max-width: 900px) { .design-editor { grid-template-columns: minmax(0, 1fr); } }
+.focal-picker { position: relative; width: 100%; aspect-ratio: 16 / 10; background-size: contain; background-repeat: no-repeat; background-position: center; background-color: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; cursor: crosshair; }
+.focal-picker:focus-visible { outline: none; box-shadow: var(--focus); }
+.focal-dot { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px #000a, 0 2px 6px #0006; pointer-events: none; }
+.palette-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0.5rem; }
+.swatch { display: flex; align-items: center; gap: 0.45rem; }
+.swatch input[type="color"] { width: 34px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
+.swatch input[type="color"]:disabled { opacity: 0.85; cursor: not-allowed; }
+.rotation-pool { margin: 0.3rem 0 0.5rem; padding: 0; display: grid; gap: 0.3rem; }
+.rotation-pool li { border: 1px solid var(--line); border-radius: 8px; padding: 0.3rem 0.5rem; background: var(--surface); flex-wrap: wrap; }
+.rotation-pool .drag-handle { cursor: grab; color: var(--muted); letter-spacing: -2px; }
+.label-like { font-weight: 600; font-size: 0.88rem; }

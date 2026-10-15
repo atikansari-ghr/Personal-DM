@@ -98,3 +98,43 @@ class WeatherCache(models.Model):
     key = models.CharField(max_length=120, primary_key=True)
     data = models.JSONField(default=dict)
     fetched_at = models.DateTimeField()
+
+
+class SigninDesign(models.Model):
+    """A named sign-in page design (Change Set W).
+
+    Built-in designs (``builtin_key`` set) are protected templates: they can be activated and duplicated, never
+    edited or deleted. Custom designs keep their own wallpaper (original plus Desktop/Tablet/Mobile derivatives),
+    optional logo, focal point, colour mode and palette. Exactly one design is active (setting ``login.active_design``).
+    Asset file names live in ``assets``; files are shared between designs after Duplicate and only removed when no
+    saved design (and no legacy setting) refers to them.
+    """
+
+    AUTO, LIGHT, DARK, CUSTOM = "auto", "light", "dark", "custom"
+    COLOR_MODES = (AUTO, LIGHT, DARK, CUSTOM)
+    OK, UNAVAILABLE = "ok", "unavailable"
+
+    name = models.CharField(max_length=80)
+    builtin_key = models.CharField(max_length=20, unique=True, null=True, blank=True)
+    template = models.CharField(max_length=20, default="minimal", help_text="Built-in artwork shown without a wallpaper")
+    assets = models.JSONField(default=dict, blank=True, help_text="{original, desktop, tablet, mobile, logo}: file names")
+    focal_x = models.FloatField(default=0.5)
+    focal_y = models.FloatField(default=0.5)
+    overlay = models.IntegerField(default=0)
+    color_mode = models.CharField(max_length=8, default=AUTO)
+    analysis = models.JSONField(default=dict, blank=True, help_text="Auto colour analysis of the wallpaper")
+    overrides = models.JSONField(default=dict, blank=True, help_text="Palette values chosen by the administrator")
+    palette = models.JSONField(default=dict, blank=True, help_text="Final palette used on the sign-in page")
+    state = models.CharField(max_length=12, default=OK)
+    state_detail = models.CharField(max_length=300, blank=True)
+    migrated_from = models.CharField(max_length=40, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["builtin_key", "name", "id"]
+
+    @property
+    def builtin(self) -> bool:
+        return bool(self.builtin_key)

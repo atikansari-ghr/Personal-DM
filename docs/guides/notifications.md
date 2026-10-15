@@ -1,4 +1,4 @@
-<!-- reviewed: 2026-10-11 -->
+<!-- reviewed: 2026-10-15 -->
 # Notifications
 
 Every notification is built once from a structured message (event, severity, category, icon, title, summary,
@@ -497,18 +497,39 @@ Severity: 7 days or less (or the expiry day itself) is **Critical**, up to 60 da
 **Information**. Dates use the installation time zone and the date format from Settings → General. Unconfirmed OCR
 or Local AI values are never shown.
 
-The **document number** is hidden by default. When the administrator turns on **Include document numbers in
-email/Telegram** (`notifications.include_document_number`), email, Telegram and in-app messages show it masked to the
-last four characters (for example `•••••1234`). It is never sent by push. See [privacy](#privacy).
+The **document number** is complete with **Full Details** (the default) and left out with **Minimal Details**; it is
+only included for people who may open the document. See [Notification Detail Level](#detail-level).
+
+## Notification Detail Level {#detail-level}
+
+How much a notification shows. It changes **presentation only, never permissions**.
+
+| Level | Shows |
+| --- | --- |
+| **Full Details** (default) | Complete names, document type, owner, expiry and status, the **complete document number**, and for security events the **complete IPv4/IPv6 address**, location, network and device, on every channel (in-app, email, Telegram, WhatsApp, Discord, push where it fits) |
+| **Minimal Details** | A short summary and a link to Personal DM; names, document numbers and IP addresses are left out |
+
+- The main administrator sets the system default in **Settings → Notifications → Notification policy → Notification
+  Detail Level**.
+- Each person can choose **Use system default**, **Full Details** or **Minimal Details** under **My account →
+  Notifications → Notification detail**.
+- **Full Details means unmasked, not unrestricted.** A message only contains what the recipient may already see:
+  document details only for people who may open the document (a family head without access gets the summary without
+  the document's name or number), security details only for the person and the administrators allowed to see them.
+- Passwords, one-time and recovery codes, TOTP seeds, recovery keys, API keys, tokens, webhook addresses, NAS
+  passwords and WhatsApp session data are never part of any notification, at any level.
+
+After upgrading, the system default is **Full Details**. An installation that had turned off *Include names in
+email/Telegram* keeps that stronger choice as **Minimal Details**. Everyone starts on **Use system default**.
 
 ## Privacy and security {#privacy}
 
 - **Never included:** passwords (including temporary passwords and attempted passwords), reset links outside the
   reset email itself, one-time codes, TOTP seeds, recovery codes, passkey material, tokens, API keys,
   file contents, unconfirmed OCR or AI values, or anything about documents the recipient cannot open.
-- **Document numbers** only masked and only when `notifications.include_document_number` is on; never in push.
-- **Names** in email and Telegram follow **Include names in email/Telegram** (see
-  [message rules](expiry-rules.md#templates)); push follows each person's [lock-screen detail](#lock-screen).
+- **Names, document numbers and IP addresses** are complete with **Full Details** and left out with **Minimal
+  Details**, and only ever included for people who may already see them (see [Notification Detail Level](#detail-level)).
+  Push also follows each person's [lock-screen detail](#lock-screen).
 - **Escaping:** document names, folder names and template text are escaped for each channel (HTML for email and
   Telegram, plain text elsewhere), so names containing markup cannot change a message or run code.
 - **Links** are application pages without tokens and require sign-in.

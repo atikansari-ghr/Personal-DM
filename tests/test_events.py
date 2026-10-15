@@ -29,7 +29,7 @@ def test_access_granted_notifies_grantee_once_with_minimal_external_text(family,
     n = Notification.objects.get(user=mom, kind="access")
     assert "Passport Z9988776" in n.title and n.link == f"/folders/{folder.id}"
     email = OutboxMessage.objects.get(user=mom, kind="access", channel="email")
-    assert "Z9988776" not in email.subject + email.body and "/folders/" in email.body
+    assert "Passport Z9988776" in email.body and "/folders/" in email.body  # Change Set W: complete name (Full Details)
     # changing capabilities of an existing view grant does not notify again
     clients["dad"].put(f"/api/folders/{folder.id}/permissions", {"user": str(mom.pk), "caps": ["view", "download"]}, format="json")
     assert Notification.objects.filter(user=mom, kind="access").count() == 1

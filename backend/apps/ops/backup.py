@@ -198,9 +198,10 @@ def _do_backup(target: Path) -> dict:
     # Sign-in page wallpaper and logo (referenced by login.wallpaper_file / login.logo_file)
     from apps.core.branding import branding_dir
 
-    for key in ("login.wallpaper_file", "login.logo_file"):
-        name = config.get(key)
-        if name and (branding_dir() / name).exists():
+    from apps.core import designs
+
+    for name in sorted(designs.referenced_files()):  # all saved sign-in designs (Change Set W)
+        if name and "/" not in name and (branding_dir() / name).exists():
             (work / "branding").mkdir(exist_ok=True)
             shutil.copyfile(branding_dir() / name, work / "branding" / name)
     (work / "settings.json").write_text(json.dumps(config.snapshot_global(), indent=1, default=str))

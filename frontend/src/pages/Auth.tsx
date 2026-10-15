@@ -1,3 +1,4 @@
+import type React from "react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError, safeNext } from "../api";
@@ -24,12 +25,31 @@ const GOOGLE_ERRORS: Record<string, string> = {
   sign_in_first: "Please sign in first.",
 };
 
-export interface LoginBranding { design: string; title: string; tagline: string; overlay: number; position: string; wallpaper: string | null; logo: string | null; has_wallpaper?: boolean }
+export type Palette = Partial<Record<"scheme" | "bg" | "surface" | "ink" | "ink_soft" | "heading" | "muted" | "brand" | "brand_ink" | "brand_soft" | "line" | "input_bg" | "link", string>>;
+export type Device = "desktop" | "tablet" | "mobile";
+export interface LoginBranding {
+  design: string; title: string; tagline: string; overlay: number; position: string; wallpaper: string | null; logo: string | null; has_wallpaper?: boolean;
+  design_id?: number; design_name?: string; focal?: [number, number]; wallpapers?: Record<Device, string | null> | null; palette?: Palette | null;
+}
+
+/** A design's colours as theme tokens, applied to the sign-in page (and its previews) only (Change Set W). */
+export function paletteStyle(p?: Palette | null): React.CSSProperties {
+  if (!p || !p.bg) return {};
+  const v: Record<string, string> = {
+    "--bg": p.bg!, "--surface": p.surface || p.bg!, "--surface-elevated": p.surface || p.bg!, "--surface-2": p.input_bg || p.bg!,
+    "--ink": p.ink!, "--ink-soft": p.ink_soft || p.ink!, "--heading-strong": p.heading || p.ink!, "--muted": p.muted || p.ink!,
+    "--brand": p.brand!, "--brand-ink": p.brand_ink!, "--brand-soft": p.brand_soft || p.bg!, "--brand-softer": p.brand_soft || p.bg!,
+    "--accent": p.link || p.brand!, "--line": p.line!, "--border": p.line!, "--input-bg": p.input_bg || p.bg!,
+    "--input-bg-focus": p.input_bg || p.bg!, "--btn-bg": p.surface || p.bg!, "colorScheme": p.scheme === "dark" ? "dark" : "light",
+  };
+  return v as React.CSSProperties;
+}
 
 /** Sign-in layout: light wallpaper on the left, the sign-in panel on the right. On phones the wallpaper becomes a
  *  short banner so the form comes first. Sign-in behaves identically with every design. */
 /** Static picture of the sign-in panel, used by the previews in Settings (same layout as the real page). */
 export function SignInPanelPreview({ b, compact }: { b: LoginBranding; compact?: boolean }) {
+  const { session } = useSession();
   return (
     <div className={`fake-form${compact ? " compact" : ""}`} aria-hidden="true">
       <strong className="ff-title">Sign in</strong>
@@ -37,16 +57,32 @@ export function SignInPanelPreview({ b, compact }: { b: LoginBranding; compact?:
       <span className="ff-label">Password</span><div className="ff-input" />
       <div className="btnlike">Sign in</div>
       <span className="ff-or">or</span>
-      <div className="ff-input ff-passkey">Sign in with Passkey</div>
+      {session?.passkeys_enabled !== false && <div className="ff-input ff-passkey">Sign in with Passkey</div>}
+      {session?.google_enabled && <div className="ff-input">Sign in with Google</div>}
+      {session?.authentik?.enabled && <div className="ff-input">{session.authentik.label || "Sign in with authentik"}</div>}
       <span className="ff-foot">{b.title}</span>
     </div>
   );
 }
 
-export function AuthWallpaper({ b, preview }: { b: LoginBranding; preview?: boolean }) {
+/** Wallpaper: the Desktop / Tablet / Mobile version for the screen width (``device`` forces one in previews), cropped
+ *  around the focal point and never stretched (``background-size: cover``). */
+function Wallpaper({ b, device }: { b: LoginBranding; device?: Device }) {
+  const w = b.wallpapers;
+  const pos = b.focal ? `${Math.round(b.focal[0] * 100)}% ${Math.round(b.focal[1] * 100)}%` : (b.position || "center");
+  if (w && (w.desktop || w.tablet || w.mobile)) {
+    const url = (k: Device) => `url(${w[k] || w.desktop})`;
+    const style = device ? { backgroundImage: url(device), backgroundPosition: pos }
+      : ({ "--wall-desktop": url("desktop"), "--wall-tablet": url("tablet"), "--wall-mobile": url("mobile"), backgroundPosition: pos } as React.CSSProperties);
+    return <div className={`auth-wallpaper${device ? "" : " responsive"}`} data-variant={device || "auto"} style={style} />;
+  }
+  return <div className="auth-wallpaper" style={{ backgroundImage: `url(${b.wallpaper})`, backgroundPosition: pos }} />;
+}
+
+export function AuthWallpaper({ b, preview, device }: { b: LoginBranding; preview?: boolean; device?: Device }) {
   return (
     <section className={`auth-art design-${b.design}${preview ? " preview" : ""}`} aria-hidden={preview ? undefined : true} aria-label={preview ? "Sign-in page preview" : undefined}>
-      {b.wallpaper ? <div className="auth-wallpaper" style={{ backgroundImage: `url(${b.wallpaper})`, backgroundPosition: b.position || "center" }} /> : <LoginArt design={b.design} />}
+      {b.wallpaper || b.wallpapers ? <Wallpaper b={b} device={device} /> : <LoginArt design={b.design} />}
       {b.overlay > 0 && <div className="auth-overlay" style={{ opacity: b.overlay / 100 }} />}
       <div className="auth-brand">
         <div className="brand">{b.logo ? <img src={b.logo} alt="" className="auth-logo" /> : <img src="/icon.svg" alt="" width={40} height={40} className="brand-mark" />}</div>
@@ -68,7 +104,7 @@ export function AuthFrame({ children }: { children: ReactNode }) {
   const { session } = useSession();
   const b: LoginBranding = session?.login || { ...DEFAULT_BRANDING, title: session?.app_name || DEFAULT_BRANDING.title };
   return (
-    <div className="auth" data-theme={SIGNIN_THEME}>
+    <div className="auth" data-theme={SIGNIN_THEME} data-design={b.design_id || ""} data-scheme={b.palette?.scheme || "default"} style={paletteStyle(b.palette)}>
       <AuthWallpaper b={b} />
       <section className="auth-form">{children}</section>
     </div>

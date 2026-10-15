@@ -347,8 +347,7 @@ def store_proposals(doc: Document, proposals, version=None, *, source: str | Non
         if f and f.status == DocumentField.CONFIRMED:
             if f.value != p.value:
                 f.proposed_value = p.value
-                note = (f"New scan suggests '{p.value}'." if p.key not in DocumentField.SENSITIVE
-                        else "New scan suggests a different value.")
+                note = f"New scan suggests '{p.value}'."
                 f.flags = list(set((f.flags or []) + [note]))
                 f.save(update_fields=["proposed_value", "flags", "updated_at"])
             continue
@@ -357,7 +356,7 @@ def store_proposals(doc: Document, proposals, version=None, *, source: str | Non
             defaults={"value": p.value, "status": DocumentField.PROPOSED, "source": source or p.source,
                       "version": version, "confidence": p.confidence, "flags": p.flags, "scope": DocumentField.TYPE,
                       "overridden": False,
-                      "source_excerpt": "" if p.key in DocumentField.SENSITIVE else (p.excerpt or "")[:300]})
+                      "source_excerpt": (p.excerpt or "")[:300]})
         n += 1
     return n
 
@@ -443,13 +442,11 @@ def suggestions_json(doc: Document) -> list[dict]:
 
 def plan_change(doc: Document, new_type: DocumentType | None) -> dict:
     """What happens to each value when the document becomes `new_type` (nothing is changed)."""
-    from .services import mask
-
     tfields = {f.key: f for f in active_fields(new_type)} if new_type else {}
     keep, unmapped, custom = [], [], []
     for f in doc.fields.all().order_by("key"):
         label = f.label or (tfields[f.key].label if f.key in tfields else standard_label(f.key))
-        item = {"key": f.key, "label": label, "value": mask(f.key, f.value), "status": f.status, "source": f.source}
+        item = {"key": f.key, "label": label, "value": f.value, "status": f.status, "source": f.source}
         if f.scope == DocumentField.CUSTOM:
             custom.append(item)
             continue

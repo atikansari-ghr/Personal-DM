@@ -340,21 +340,22 @@ def test_at129_custom_wallpaper_upload_configure_remove_and_rejections(clients, 
     r = admin.post("/api/branding/wallpaper", {"file": _file(_img("JPEG", (3000, 2000), exif=True), "w.jpg")}, format="multipart")
     assert r.status_code == 200, r.content
     b = r.json()
-    assert b["design"] == "custom" and b["wallpaper"].startswith("/api/branding/wallpaper?v=")
-    stored = list((data_dir / "branding").glob("wallpaper-*.webp"))
-    assert len(stored) == 1
+    # Change Set W: the upload became a named custom design (original + Desktop/Tablet/Mobile derivatives)
+    assert b["design_name"] == "Custom wallpaper" and b["wallpaper"].startswith(f"/api/branding/design/{b['design_id']}/desktop?v=")
+    stored = list((data_dir / "branding").glob("design-original-*.webp"))
+    assert len(stored) == 1 and len(list((data_dir / "branding").glob("design-*.webp"))) == 4
     with Image.open(stored[0]) as im:
-        assert im.format == "WEBP" and max(im.size) == 2400 and not im.getexif()  # resized, metadata dropped
+        assert im.format == "WEBP" and max(im.size) == 3000 and not im.getexif()  # original kept, metadata dropped
     assert b"SecretCam" not in stored[0].read_bytes()
     pub = APIClient().get("/api/branding/wallpaper")
     assert pub.status_code == 200 and pub["Content-Type"] == "image/webp" and pub["X-Content-Type-Options"] == "nosniff"
     assert _settings(admin, **{"login.overlay": 30, "login.position": "top"}).status_code == 200
     s = APIClient().get("/api/session").json()["login"]
-    assert s["overlay"] == 30 and s["position"] == "top" and s["design"] == "custom"
+    assert s["overlay"] == 30 and s["position"] == "top" and s["design_name"] == "Custom wallpaper"
     assert _settings(admin, **{"login.overlay": 95}).status_code == 400
     # replacing removes the old file
     admin.post("/api/branding/wallpaper", {"file": _file(_img())}, format="multipart")
-    assert len(list((data_dir / "branding").glob("wallpaper-*.webp"))) == 1
+    assert len(list((data_dir / "branding").glob("design-original-*.webp"))) == 1
     # logo keeps transparency, then removal
     logo = io.BytesIO()
     Image.new("RGBA", (300, 120), (0, 0, 0, 0)).save(logo, "PNG")
@@ -362,7 +363,7 @@ def test_at129_custom_wallpaper_upload_configure_remove_and_rejections(clients, 
     assert admin.delete("/api/branding/logo").json()["logo"] is None
     r = admin.delete("/api/branding/wallpaper").json()
     assert r["design"] == "minimal" and r["wallpaper"] is None and not r["has_wallpaper"]
-    assert not list((data_dir / "branding").glob("wallpaper-*.webp"))
+    assert not list((data_dir / "branding").glob("design-*.webp")) and not list((data_dir / "branding").glob("wallpaper-*.webp"))
     assert APIClient().get("/api/branding/wallpaper").status_code == 404
 
 

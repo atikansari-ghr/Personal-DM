@@ -324,10 +324,35 @@ await step("AT-354 Change Set U documentation screenshots (folder tree, map prov
   await P.goto(BASE + "/settings/overview");
   await P.waitForSelector(".design-grid");
   await P.click(".design-option:has-text('Nature')");
-  await P.waitForSelector("[role=status]:has-text('Previewing Nature')");
+  await P.waitForSelector(".design-actions button:has-text('Set as Active')");
   await P.locator(".design-grid").scrollIntoViewIfNeeded();
-  await capture(P, "settings-login-design.png", "Sign-in designs: a design selected, the live preview and Save design");
-  await P.click("[role=status] button:has-text('Discard')");
+  await capture(P, "settings-login-design.png", "Named sign-in designs: built-in and custom designs, the actions and the live preview");
+  // the editor of a custom design with a plain drawn wallpaper (no photo), created here if needed
+  const mine = await P.evaluate(async () => {
+    const csrf = decodeURIComponent((document.cookie.match(/pd_csrftoken=([^;]+)/) || [])[1] || "");
+    const list = await (await fetch("/api/signin-designs")).json();
+    let d = list.designs.find((x) => x.name === "Spring meadow" && x.has_wallpaper);
+    if (d) return d;
+    d = await (await fetch("/api/signin-designs", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, body: JSON.stringify({ name: "Spring meadow", template: "nature" }) })).json();
+    const c = document.createElement("canvas"); c.width = 1600; c.height = 1000;
+    const g = c.getContext("2d");
+    const sky = g.createLinearGradient(0, 0, 0, 1000); sky.addColorStop(0, "#e6f3e0"); sky.addColorStop(1, "#b9dcae");
+    g.fillStyle = sky; g.fillRect(0, 0, 1600, 1000);
+    g.fillStyle = "#7fb36f"; g.beginPath(); g.ellipse(500, 1000, 900, 300, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#4f8a44"; g.beginPath(); g.ellipse(1300, 1050, 700, 280, 0, 0, Math.PI * 2); g.fill();
+    const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+    const fd = new FormData(); fd.append("file", blob, "meadow.png");
+    return (await fetch(`/api/signin-designs/${d.id}/wallpaper`, { method: "POST", headers: { "X-CSRFToken": csrf }, body: fd })).json();
+  });
+  await P.reload();
+  await P.waitForSelector(".design-grid");
+  if (mine && mine.id) {
+    await P.click(`.design-option[data-design-id='${mine.id}']`);
+    await P.click(".design-actions button:has-text('Edit')");
+    await P.waitForSelector("[role=dialog] .design-editor");
+    await capture(P, "settings-login-design-editor.png", "Design editor: focal point, overlay, colour mode and palette with the device preview");
+    await P.keyboard.press("Escape");
+  }
 });
 
 await step("AT-334 guide screenshots load in Help (after capture)", async () => {

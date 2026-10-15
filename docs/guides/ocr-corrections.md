@@ -90,7 +90,17 @@ Use **Confirm all**, confirm one value with ✓, or edit it. If nothing was reco
 
 ## Copying details {#copy}
 
-Each detail has a copy button for filling forms. Document numbers are masked on screen; copying fetches the full value and records an audit entry (without the value).
+Every detail is shown complete to everyone who may open the document: passport, ID, residence, licence, visa and
+policy numbers are not hidden behind dots or a reveal button. Access to the document is the protection.
+
+Each detail has a **copy** button for filling forms. It copies the complete value and briefly shows **Copied**. The
+copied value is never written to a log or the activity log.
+
+After text recognition finishes, the document opens on **Details** with the recognised values. Values the OCR is
+unsure about are marked **Low confidence · Review**; check them against the document and correct or confirm them. A
+value you corrected is never overwritten by a later scan: a new scan only suggests its value next to yours.
+
+The document history and the activity log record *that* an identifier was set or changed, not the identifier itself.
 
 ## Limits {#limits}
 

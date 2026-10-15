@@ -102,7 +102,8 @@ export interface Version {
 export interface Field {
   key: string;
   value: string;
-  sensitive: boolean;
+  identifier?: boolean;
+  low_confidence?: boolean;
   label?: string;
   status: "proposed" | "confirmed";
   source: string;

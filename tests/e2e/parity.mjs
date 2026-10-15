@@ -322,8 +322,11 @@ await step("AT-101/106/112 selective OCR: manual by default, chosen pages and la
   await snap(page, { path: `${SHOTS}/ocr-run.png` });
   await page.click(".modal button:has-text('Run OCR')");
   await page.waitForSelector(".toast:has-text('Text recognition queued')");
-  await page.waitForSelector("text=OCR: Needs review", { timeout: 90000 });
-  expect(await page.locator(".badge:has-text('OCR confidence')").count() >= 1, "confidence shown");
+  // Change Set W: when recognition finishes, the Details tab (OCR Metadata) opens by itself
+  await page.waitForSelector("[role=tab][aria-selected=true]:has-text('Details')", { timeout: 90000 });
+  await page.click("[role=tab]:has-text('Text (OCR)')");
+  // the header also says "OCR: Needs review", so wait for the OCR panel's own result row
+  await page.waitForSelector(".ocr-panel .badge:has-text('OCR confidence')", { timeout: 30000 });
   await page.goto(BASE + "/ocr-review");
   await page.waitForSelector("text=Sample residence card");
   await snap(page, { path: `${SHOTS}/ocr-review.png` });

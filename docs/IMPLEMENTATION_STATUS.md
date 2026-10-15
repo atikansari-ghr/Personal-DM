@@ -81,6 +81,58 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
 - Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
 
+## Change set W: named sign-in designs and rotation, complete details and IPs, Notification Detail Level {#change-set-w}
+
+**Numbering.** The change prompt numbered its acceptance tests AT-351…AT-375. Here they are **AT-376…AT-400** (prompt
+AT-n → AT-(n+25)); see [TRACEABILITY.md](TRACEABILITY.md#change-set-w). Requirements SD-, ROT-, MD-, IP- and ND- are
+in [REQUIREMENTS.md](REQUIREMENTS.md#change-set-w). **Migrations:** `core.0004_notification_detail_level`,
+`core.0005_signin_designs`, `core.0006_signin_designs_data` (all additive and idempotent). The existing layout was
+kept: the design manager replaces the single design picker in the same card.
+
+### Defect 1: only one sign-in design, and its colours ignored the wallpaper
+
+| | |
+| --- | --- |
+| Issue | Only one design could exist (a choice of five drawings or one uploaded wallpaper), and the sign-in panel kept the default green colours whatever the wallpaper looked like. |
+| Root cause | The design was two settings (`login.design`, `login.wallpaper_file`) rather than an entity, so there was nothing to name, keep, duplicate or rotate. The panel colours were fixed CSS tokens of the sign-in theme; the wallpaper was never analysed. One wallpaper file was used for every screen size with `background-size: cover`, so phones cropped it arbitrarily. |
+| Fix | New model `SigninDesign` with assets, focal point, overlay, colour mode, analysis, overrides and palette (`core/designs.py`). Built-ins are protected rows. The wallpaper is validated by content (`branding.process`), the original kept and Desktop/Tablet/Phone derivatives made with `ImageOps.fit` around the focal point. `analyse()` measures the panel-side strip and the bottom strip; `build_palette()` chooses a light or dark panel and adjusts ink, button, muted and link colours until WCAG contrast is met; Custom overrides are kept. The palette is applied as CSS tokens on `.auth` (`Auth.tsx paletteStyle`), the responsive wallpaper through media queries. Activation is atomic and audited and keeps the old settings in step for rollback. Damaged assets fall back to the default with a main-administrator alert; file cleanup is reference-aware; backups include every referenced design file. Rotation (`core/rotation.py`) reuses the backup scheduler's `ops.schedule` (last valid day) and runs from the existing scheduler tick. |
+| Files | `backend/apps/core/models.py`, `designs.py` (new), `rotation.py` (new), `design_views.py` (new), `branding.py`, `branding_views.py`, `views.py`, `registry.py`, migrations 0005/0006; `backend/apps/notify/management/commands/scheduler.py`; `backend/apps/ops/bk_engine.py`, `backup.py`; `backend/personaldocs/urls.py`; `frontend/src/pages/Auth.tsx`, `pages/settings/SigninDesigns.tsx` (new), `OverviewAdmin.tsx`, `components/ui.tsx`, `styles.css` |
+| Migration / config | `core.0006` creates the built-ins, turns an uploaded wallpaper into **Custom wallpaper** (position → focal point, overlay kept) and keeps the active design. |
+
+### Defect 2: document numbers shown as "••••1234"
+
+| | |
+| --- | --- |
+| Issue | The owner of a driving licence saw only the last digits of its number in Details, OCR review and notifications. |
+| Root cause | `library/services.mask()` was applied to every field marked `SENSITIVE` when serialising, for every viewer, and the masked value was also what the editor started from; notifications masked digit runs in `notify/templates.mask_numbers` independently. Authorisation was already enforced by the document access check, so masking hid data from exactly the people allowed to see it. |
+| Fix | `field_json` returns the complete value to anyone who passed the document access check; identifiers are flagged `identifier` instead of being masked. Document history and the audit log store no identifier values at all (`history_value` returns ""; `audit._FORBIDDEN_KEYS` unchanged). OCR proposals keep the complete suggested value; values under 0.7 confidence are flagged `low_confidence` and shown with **Review**; manual corrections are never replaced by a later scan. `DocumentPanel` switches to Details when recognition finishes. Copy copies `f.value` and does not call the server. |
+| Files | `backend/apps/library/services.py`, `serializers.py`, `doctypes.py`, `models.py`; `frontend/src/types.ts`, `components/DocumentDetails.tsx`, `components/DocumentPanel.tsx`, `pages/OcrReview.tsx` |
+
+### Defect 3: IP addresses shown as "192.168.x.10" / "public address"
+
+| | |
+| --- | --- |
+| Issue | Sign-in alerts (e.g. Telegram) and sign-in history did not show the complete IP. |
+| Root cause | `security/location.privacy_ip()` shortened private addresses and replaced public ones with a network label; the sign-in API and alert templates used it. |
+| Fix | `privacy_ip()` returns the complete IPv4/IPv6 address (or "unknown"); `views_signins` returns `e.ip`. Who may see whose sign-ins is unchanged. |
+| Files | `backend/apps/security/location.py`, `alerts.py`, `views_signins.py` |
+
+### Change: Notification Detail Level
+
+| | |
+| --- | --- |
+| Design | System setting `notifications.detail_level` (Full default, Minimal) and personal `me.notification_detail` (system / full / minimal). `notify/templates.detail_for(user, document)` sets the level and whether the recipient may open the document (`AccessContext.can(doc, VIEW)`) in context variables for the duration of one recipient's rendering. `rich._value` is the single place where every channel's values are formatted: document identifiers and names only when Full **and** allowed, IPs only when Full. Secrets are never part of a notification. |
+| Files | `backend/apps/notify/templates.py`, `rich.py`, `expiry.py`, `views.py`; `backend/apps/core/registry.py`, migration 0004; `frontend/src/pages/settings/Account.tsx` |
+| Migration | `core.0004` sets **Minimal** where *Include names* had been turned off, otherwise Full. |
+
+### Known limitations
+
+- Delivery to real Email, Telegram, WhatsApp, Discord and Web Push accounts was not executed here (no accounts); the
+  shared renderer is covered by unit tests for every channel.
+- A design's Desktop, Tablet and Phone versions of a migrated wallpaper are made on first display, not during the
+  migration, so the first sign-in page load after the upgrade is slightly slower.
+- Search keeps the per-type *searchable* setting for identifiers; this is a search option, not masking.
+
 ## Change set V: NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing {#change-set-v}
 
 **Numbering.** The change prompt numbered its acceptance tests AT-331…AT-350. Here they are **AT-356…AT-375** (prompt

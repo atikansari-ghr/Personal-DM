@@ -50,8 +50,8 @@ def _network(event) -> str:
 
 
 def _login_facts(event) -> list:
-    """Routine notifications minimise the public address: location and network, the full address is under
-    Security details in the app (people see their own; authorised administrators see everyone's)."""
+    """Sign-in facts with the complete IP address (Full Details); Minimal Details leaves the address out. Recipients
+    are the person and the administrators allowed to see their security events."""
     from .location import privacy_ip
 
     device = " · ".join(x for x in (event.browser, event.os, event.device) if x)

@@ -60,7 +60,7 @@ export default function OcrReviewPage() {
                     <td className="small">{f.flags.map((x: string) => <div key={x} className="error-text">{x}</div>)}{f.excerpt && <div className="muted">“{f.excerpt}”</div>}</td>
                     <td className="row" style={{ gap: ".3rem", flexWrap: "nowrap" }}>
                       <button className="btn small primary" onClick={() => field(d.id, f.key, f.value)} aria-label={`Accept ${LABELS[f.key] || f.key}`}>Accept</button>
-                      <button className="btn small" onClick={() => { setEditing(`${d.id}:${f.key}`); setValue(f.sensitive ? "" : f.value); }}>Correct</button>
+                      <button className="btn small" onClick={() => { setEditing(`${d.id}:${f.key}`); setValue(f.value); }}>Correct</button>
                       <button className="btn small ghost" onClick={() => field(d.id, f.key, null)} aria-label={`Reject ${LABELS[f.key] || f.key}`}>Reject</button>
                     </td>
                   </tr>

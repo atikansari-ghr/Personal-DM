@@ -134,18 +134,11 @@ def resolve(ip_text: str | None) -> dict:
     return out
 
 
-def privacy_ip(ip_text: str | None, network: str) -> str:
-    """Routine notifications: private addresses are shortened, public ones replaced by a hint; the full address is
-    under View Security Details in the app."""
+def privacy_ip(ip_text: str | None, network: str = "") -> str:
+    """The complete IPv4/IPv6 address for people who may see the event (Change Set W: authorisation is the boundary,
+    not shortening). Minimal Details leaves the address out of notifications instead of shortening it."""
     ip = netutil.parse_ip(ip_text) if ip_text else None
-    if ip is None:
-        return "unknown"
-    if network in ("trusted_zone", "private"):
-        if ip.version == 4:
-            parts = str(ip).split(".")
-            return f"{parts[0]}.{parts[1]}.x.{parts[3]}"
-        return str(ip).split(":")[0] + ":…"
-    return "public address (see Security details in the app)"
+    return str(ip) if ip is not None else "unknown"
 
 
 def _km(a, b) -> float:

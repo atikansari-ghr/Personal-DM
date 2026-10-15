@@ -1,4 +1,4 @@
-<!-- reviewed: 2026-10-13 -->
+<!-- reviewed: 2026-10-15 -->
 # Sign-in security, Trusted Zones and the sign-in map
 
 Personal DM records where each sign-in came from, which device was used, and how unusual it looks. It also lets you
@@ -95,8 +95,9 @@ Who can see what:
 | A delegate with the *membership* scope of a family group | The members of that group. |
 | Main administrator | Everyone (also under Settings → Activity & health → Sign-in map & Trusted Zones). |
 
-Routine notifications show only the approximate location and network. For a Trusted Zone they show a shortened private
-address (for example `192.168.x.10`). The full public address is under **View Security Details** in the app.
+Sign-in lists, the map, sessions, devices and notifications show the **complete IPv4/IPv6 address** to the person and
+to the administrators allowed to see their sign-ins (for example `192.168.2.10` or `2001:db8::25`). In notifications,
+**Minimal Details** leaves the address out instead (see [Notification Detail Level](notifications.md#detail-level)).
 
 <a id="tiles"></a>
 

@@ -11,8 +11,10 @@ Security rules (the rendering is a security boundary):
 * actions are application paths only (``/documents/<id>`` …). They open the app, where sign-in and the normal
   permission checks apply; a link never grants access by itself and never carries a token;
 * there is no "release from quarantine" action outside the authenticated app;
-* names are masked or hidden outside the app (``notifications.include_names``), long digit runs are masked, document
-  numbers are left out unless the administrator allows a masked number in email/Telegram — never in push;
+* Notification Detail Level (Change Set W): Full Details (default) shows complete names, document numbers and IP
+  addresses on every channel; Minimal Details leaves them out. Document details are included only when the recipient
+  may open the document (``templates.detail_for``). Actual secrets (passwords, keys, tokens, codes, recovery keys) are
+  never part of a message;
 * no attachments, no OCR text, no tracking pixels or external images.
 """
 from __future__ import annotations
@@ -43,12 +45,16 @@ _SAFE_PATH = re.compile(r"^/(?!/)[A-Za-z0-9/_\-?=&.%:]*$")
 SEVERITY_RANK = {"info": 0, "success": 0, "warning": 1, "critical": 2}
 
 
+PERSONAL_FACTS = {"IP address"}  # complete in Full Details, left out in Minimal Details
+
+
 @dataclass
 class Detail:
     label: str
     value: Any
     icon: str = "info"
-    sensitive: bool = False  # document number: masked, opt-in for email/Telegram, never in push
+    sensitive: bool = False  # document identifier (number): complete in Full Details, only for people who may open it
+    personal: bool = False   # IP address and similar: complete in Full Details, left out in Minimal Details
     emphasis: bool = False   # shown in the severity colour (expiry date, days left)
 
 
@@ -176,18 +182,18 @@ def apply_template(msg: Message, channel: str, external: bool) -> dict:
 # ------------------------------------------------------------------ helpers
 
 def _value(d: Detail, channel: str) -> str | None:
-    external = channel != "in_app"
     v = d.value
     if v in (None, ""):
         return None
-    if d.sensitive:  # off unless the administrator allows a masked number; never on lock screens
-        if channel == "push" or not config.get("notifications.include_document_number"):
+    if d.sensitive:  # document identifiers: complete, but only in Full Details and only for people with access
+        if not templates.full() or not templates.DOC_ALLOWED.get():
             return None
-        s = str(v)
-        return "•" * max(0, len(s) - 4) + s[-4:] if len(s) > 4 else "••••"
-    if external and isinstance(v, templates.Name):
+        return str(v)
+    if d.personal and not templates.full():
+        return None
+    if isinstance(v, templates.Name):
         return templates.name(v)
-    return templates.mask_numbers(str(v)) if external else str(v)
+    return templates.mask_numbers(str(v))  # unchanged in Full Details
 
 
 def _details(msg: Message, channel: str) -> list[tuple[Detail, str]]:
@@ -406,7 +412,7 @@ def from_legacy(event: str, *, title, lines=(), facts=(), items=(), items_label=
     for k, v in facts:
         if v in (None, ""):
             continue
-        built.append(Detail(k, v, icons.FACT_ICONS.get(k, "info")))
+        built.append(Detail(k, v, icons.FACT_ICONS.get(k, "info"), personal=k in PERSONAL_FACTS))
     return Message(event=event, title=title, heading=heading, summary=summary or (lines[0] if lines else ""),
                    guidance=guidance if guidance is not None else lines[1:], details=built, actions=list(actions or []),
                    items=list(items), items_label=items_label, more=more, link=link, severity=severity, icon=icon,

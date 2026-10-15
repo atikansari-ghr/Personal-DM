@@ -8,6 +8,7 @@ from apps.accounts import authentik, google
 from apps.ai import views as ai
 from apps.accounts import views as acc
 from apps.core import branding_views as brand
+from apps.core import design_views as designs
 from apps.security import views_av as avv
 from apps.security import views_center as sc
 from apps.core import overview_views as ov
@@ -135,6 +136,15 @@ api = [
     path("branding", brand.login_branding),
     path("branding/wallpaper", brand.wallpaper),
     path("branding/logo", brand.logo),
+    path("branding/design/<int:pk>/<str:variant>", designs.design_asset),
+    path("signin-designs", designs.design_list),
+    path("signin-designs/revert", designs.design_revert),
+    path("signin-designs/reset", designs.design_reset),
+    path("signin-designs/rotation", designs.design_rotation),
+    path("signin-designs/rotation/preview", designs.design_rotation_preview),
+    path("signin-designs/<int:pk>", designs.design_detail),
+    path("signin-designs/<int:pk>/activate", designs.design_activate),
+    path("signin-designs/<int:pk>/<str:kind>", designs.design_file),
     path("overview/calendar", ov.calendar),
     path("overview/holidays", ov.upcoming_holidays),
     path("overview/countries", ov.countries),

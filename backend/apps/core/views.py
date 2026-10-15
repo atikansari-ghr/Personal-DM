@@ -73,6 +73,10 @@ def settings_api(request):
                 errors[key] = str(exc)
         if changed:
             audit.record("settings.update", request=request, keys=changed)
+            if any(k in ("login.design", "login.overlay", "login.position") for k in changed):
+                from . import designs
+
+                designs.apply_legacy_settings(changed, actor=user)  # older clients: map onto named designs
             if any(k.startswith("security.map_") for k in changed):
                 from .middleware import SecurityHeadersMiddleware
 

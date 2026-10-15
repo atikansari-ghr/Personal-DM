@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, formatBytes, formatDateTime, upload } from "../api";
 import type { DocDetail, DocRow, Meta } from "../types";
@@ -200,8 +200,13 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
   const [similar, setSimilar] = useState<(DocRow & { reasons: string[] })[] | null>(null);
   const load = () => api<DocDetail>(`documents/${id}`).then((d) => { setDoc(d); setError(""); }).catch((e) => setError(e.status === 404 ? "This document does not exist or you do not have access to it." : e.message));
   useEffect(() => { setDoc(null); setTab("details"); setSimilar(null); load(); }, [id]);
+  const busy = (d: DocDetail | null) => !!d && (["queued", "processing"].includes(d.state) || ["queued", "processing"].includes(d.ocr_state || ""));
+  const wasBusy = useRef(false);
   useEffect(() => {
-    if (!doc || !["queued", "processing"].includes(doc.state)) return;
+    // when recognition finishes while the document is open, show the recognised details (complete values)
+    if (doc && wasBusy.current && !busy(doc) && doc.fields.length) setTab("details");
+    wasBusy.current = busy(doc);
+    if (!busy(doc)) return;
     const t = setTimeout(load, 4000);
     return () => clearTimeout(t);
   }, [doc]);

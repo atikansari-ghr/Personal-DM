@@ -472,6 +472,30 @@ Acceptance tests AT-336…AT-355. The change prompt numbered them AT-311…AT-33
 
 Native apps, scanning enhancement, in-browser Office editing, DICOM viewing.
 
+## Change set W (2026-10): named sign-in designs and rotation, complete details and IPs, Notification Detail Level {#change-set-w}
+
+Acceptance tests AT-376…AT-400. The change prompt numbered them AT-351…AT-375: prompt AT-n = AT-(n+25). See
+[TRACEABILITY.md](TRACEABILITY.md#change-set-w) and the root causes in
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-w).
+
+| ID | Requirement |
+|---|---|
+| SD-1 | The main administrator can create, create from template, duplicate, rename, edit, preview, activate, revert and delete any number of named sign-in designs; exactly one is active globally. |
+| SD-2 | Built-in designs are protected templates (activate or duplicate only); Minimal is the protected default and Reset to default activates it. |
+| SD-3 | Colour mode Auto derives a readable palette from the wallpaper region next to the sign-in panel; Light, Dark and Custom are available; contrast meets WCAG (text 4.5:1); Custom overrides survive a wallpaper replacement. |
+| SD-4 | The original wallpaper is kept; Desktop, Tablet and Phone derivatives are cropped around a focal point without distortion; content is validated (type, size, dimensions) and metadata removed. |
+| SD-5 | Preview at Desktop, Tablet and Phone with password, passkey and SSO controls never changes the live design. |
+| SD-6 | Activation is atomic and audited; Revert restores the previous design; deleting the active design activates the default first; damaged assets fall back to the default with an alert; files are removed only when unreferenced; all design files are backed up. |
+| SD-7 | The upgrade migrates the previous design and wallpaper into named designs idempotently and keeps the appearance. |
+| ROT-1 | Rotation uses a pool of at least two valid designs, Sequential (ordered) or Random (no immediate repeat), Daily/Weekly/Monthly in the installation timezone, last valid day for 29–31. |
+| ROT-2 | Manual activation does not disable rotation; open sign-in pages are not refreshed; missed runs are reconciled once (Sequential) or with one recovery choice (Random), audited. |
+| ROT-3 | Unavailable designs are skipped and alerted; fewer than two valid → Needs Attention; none → built-in default; routine rotations are audit-only; Preview Rotation changes nothing. |
+| MD-1 | Authorised people see complete, unmasked document metadata on every surface; unauthorised people see nothing of it. |
+| MD-2 | OCR Metadata expands after OCR; low-confidence values are marked for review; manual corrections are not overwritten; Copy copies the complete value, shows "Copied" and is never logged. |
+| MD-3 | Masking is removed at the shared root; secrets (passwords, keys, tokens, codes) stay protected; history and audit never copy sensitive values. |
+| IP-1 | Complete IPv4 and IPv6 addresses are shown to authorised people in security views, alerts and notifications. |
+| ND-1 | Notification Detail Level Full (default) or Minimal as a system setting, with a per-person override (system default / Full / Minimal); it changes presentation only, never permissions; Full is limited to what the recipient may see. |
+
 ## Change set V (2026-10): NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing {#change-set-v}
 
 Acceptance tests AT-356…AT-375. The change prompt numbered them AT-331…AT-350: prompt AT-n = AT-(n+25). See

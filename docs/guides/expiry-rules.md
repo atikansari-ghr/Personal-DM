@@ -63,7 +63,7 @@ Push is never added to anyone's channels automatically. What each message contai
 | Name | The confirmed full name from the details, otherwise the owner |
 | Expiry date and days remaining | The confirmed value of the field with the expiry role, in the installation time zone and date format |
 | Folder | Where the document is kept |
-| Document number | Hidden by default. Shown masked (last four characters) in email, Telegram and in-app only when the administrator turns on **Include document numbers in email/Telegram**; never in push |
+| Document number | Complete, for people who may open the document, with **Full Details** (the default); left out with **Minimal Details**. See [Notification Detail Level](notifications.md#detail-level) |
 
 Severity: 7 days or less, or the expiry day itself, is **Critical**; up to 60 days **Warning**; otherwise
 **Information**. Unconfirmed OCR or Local AI values are never shown. There is never an attachment.
@@ -149,11 +149,10 @@ Sign-in alerts add the **IP address**, **Country** (from the local GeoIP databas
 
 Rules:
 - **Never included:** passwords, one-time codes, TOTP seeds, recovery codes, passkey material, tokens, API keys,
-  file contents, or anything about documents the recipient cannot open. Document numbers only masked and only when
-  the administrator allows it (never in push); see [privacy](notifications.md#privacy).
-- **Names:** folder, document and file names appear in full inside the app. In email and Telegram, long digit runs
-  (often document numbers) are masked, e.g. `Passport Z99•••••`. Turn off **Include names in email/Telegram** to
-  send only counts and a link.
+  file contents, or anything about documents the recipient cannot open; see [privacy](notifications.md#privacy).
+- **Names and numbers:** with **Full Details** (the default), folder, document and file names and document numbers
+  appear complete on every channel, for people who may open them. **Minimal Details** sends only counts and a link.
+  See [Notification Detail Level](notifications.md#detail-level).
 - **Links** open the app and still require signing in and the normal permissions.
 - **Bulk actions are summarised:** uploading 40 files or importing a folder produces one message per person with
   the first 10 names and "… and 30 more (see the report)", never 40 messages. Processing results of imported files

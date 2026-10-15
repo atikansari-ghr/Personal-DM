@@ -120,8 +120,7 @@ Guides: [SMTP](guides/smtp.md), [Telegram](guides/telegram.md).
 |---|---|
 | Critical notifications | Events members cannot turn off. Default: account security changes, sign-ins from new countries, failed-sign-in alerts, access/authentication policy changes, failed backups, integrity problems |
 | Channels for critical notifications | Where critical events always go (default in-app + email + Telegram) |
-| Include names in email/Telegram | Folder/file names in external messages (long numbers are always masked) |
-| Include document numbers in email/Telegram | `notifications.include_document_number`, default off. When on, expiry messages show the number masked to the last four characters in email, Telegram and in-app; never in push |
+| Notification Detail Level | `notifications.detail_level`, default **Full Details**: complete names, document numbers and IP addresses, only for recipients who may already see them. **Minimal Details**: a summary and a link. People can override it for themselves ([details](guides/notifications.md#detail-level)) |
 | Push notifications (PWA) | `notifications.push_enabled`, default on. Lets people turn on Web Push per device; needs the HTTPS address. Off: push is not offered and nothing is sent |
 | Repeat cooldown for recurring conditions | `notifications.repeat_cooldown_hours`, default 24 (1–168). Antivirus unavailable, stale signatures, failed signature updates and storage warnings are not repeated to the same person within this time; new critical events are always sent at once |
 | Expiry reminder days, send time, recipients | When and to whom reminders go |

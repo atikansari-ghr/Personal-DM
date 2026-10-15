@@ -19,6 +19,8 @@ names (which are often document numbers) are masked, and names can be left out e
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import re
 import zoneinfo
 
@@ -30,9 +32,48 @@ from apps.core import config
 MAX_ITEMS = 10
 _DIGIT_RUN = re.compile(r"\d{6,}")
 
+# Notification Detail Level (Change Set W) of the message being rendered, set per recipient by ``detail_for``:
+#   "full"    complete names, numbers, document details and IP addresses the recipient may see (the default)
+#   "minimal" a short summary; names, identifiers and addresses are left out (open the app for the details)
+# It changes presentation only, never who may see what: document details also need the recipient's access.
+LEVEL: contextvars.ContextVar[str] = contextvars.ContextVar("pd_notification_level", default="full")
+DOC_ALLOWED: contextvars.ContextVar[bool] = contextvars.ContextVar("pd_notification_doc_allowed", default=True)
+
+
+def level_for(user) -> str:
+    """The person's choice, else the system default (Full Details)."""
+    own = config.get_user(user, "me.notification_detail") if user is not None else "system"
+    return own if own in ("full", "minimal") else (config.get("notifications.detail_level") or "full")
+
+
+@contextlib.contextmanager
+def detail_for(user, document=None):
+    """Render everything inside for ``user``: their detail level, and document details only if they may open it."""
+    allowed = True
+    if document is not None and user is not None:
+        from apps.library import permissions as P
+
+        try:
+            allowed = P.AccessContext.build(user).can(document, P.VIEW)
+        except Exception:  # noqa: BLE001 - when in doubt, leave document details out
+            allowed = False
+    t1, t2 = LEVEL.set(level_for(user)), DOC_ALLOWED.set(allowed)
+    try:
+        yield
+    finally:
+        LEVEL.reset(t1)
+        DOC_ALLOWED.reset(t2)
+
+
+def full() -> bool:
+    return LEVEL.get() == "full"
+
 
 def mask_numbers(text: str) -> str:
-    """'Passport Z9988776' -> 'Passport Z99••••'; dates like '22July2026' stay readable."""
+    """Minimal Details only: long digit runs are shortened ('Z9988776' -> 'Z99••••'). Full Details shows them."""
+    if full():
+        return text or ""
+
     def repl(m):
         s = m.group(0)
         return s[:2] + "•" * (len(s) - 2)
@@ -40,10 +81,11 @@ def mask_numbers(text: str) -> str:
 
 
 def name(value: str) -> str:
-    """A folder/document/file name as it may appear in an external message."""
-    if not config.get("notifications.include_names"):
+    """A folder/document/file name in an external message: complete in Full Details, left out in Minimal Details or
+    when the recipient may not open the document."""
+    if not full() or not DOC_ALLOWED.get():
         return "(name hidden)"
-    return mask_numbers(value)
+    return str(value)
 
 
 def local_stamp(when=None) -> str:
@@ -59,7 +101,7 @@ class Name(str):
 def text(value, external: bool) -> str:
     """Resolve a title/line given as text or as ``lambda name: f"… {name(x)} …"``."""
     if callable(value):
-        return value(name if external else (lambda s: s))
+        return value(name)  # complete in Full Details for people with access, on every channel (in-app included)
     return value
 
 
@@ -75,7 +117,7 @@ def render(*, user, title, lines=(), facts=(), items=(), items_label: str = "Fil
     shown = [(k, v) for k, v in facts if v not in (None, "")]
     if shown:
         out.append("")
-        out += [f"{k}: {name(v) if external and isinstance(v, Name) else v}" for k, v in shown]
+        out += [f"{k}: {name(v) if isinstance(v, Name) else v}" for k, v in shown]
     if items:
         out += ["", f"{items_label}:"]
         out += [f"{i}. {name(n) if external else n}" for i, n in enumerate(items[:MAX_ITEMS], 1)]

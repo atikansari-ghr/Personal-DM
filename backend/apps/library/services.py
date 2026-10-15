@@ -329,9 +329,11 @@ def set_current_version(*, actor, doc: Document, version: DocumentVersion) -> No
 DATE_FIELDS = {"issue_date", "expiry_date", "date_of_birth"}
 
 
-def mask(key: str, value: str) -> str:
+def history_value(key: str, value: str) -> str:
+    """What the document history keeps of a value (Change Set W). People who may open the document see every value in
+    full on the document itself; the long-lived history records *that* an identifier changed, not the identifier."""
     if key in DocumentField.SENSITIVE and value:
-        return "•" * max(0, len(value) - 4) + value[-4:]
+        return ""
     return value
 
 
@@ -370,7 +372,7 @@ def set_field(*, actor, doc: Document, key: str, value: str, confirm: bool = Tru
         field.proposed_value = ""
     field.save()
     _history(doc, actor, "field_confirmed" if confirm else "field_set", key=key,
-             old=mask(key, old), new=mask(key, value), source=field.source)
+             old=history_value(key, old), new=history_value(key, value), source=field.source)
     apply_confirmed_fields(doc)
     return field
 
@@ -382,7 +384,7 @@ def confirm_all(*, actor, doc: Document, allow_incomplete: bool = False) -> None
         f.confirmed_at = timezone.now()
         f.flags = []
         f.save()
-        _history(doc, actor, "field_confirmed", key=f.key, new=mask(f.key, f.value))
+        _history(doc, actor, "field_confirmed", key=f.key, new=history_value(f.key, f.value))
     if allow_incomplete:
         Document.objects.filter(pk=doc.pk).update(details_incomplete_ok=True)
         doc.details_incomplete_ok = True

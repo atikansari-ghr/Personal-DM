@@ -188,9 +188,11 @@ def my_notification_preferences(request):
     for key, ev in catalog.EVENTS.items():
         if not catalog.applies_to(user, key):
             continue
+        locked = catalog.locked_channels(key)
+        on = set(prefs.get(key, [])) | set(locked)  # = catalog.channels_for, from the preferences read once
         events.append({"key": key, "label": ev.label, "description": ev.description, "group": ev.group,
-                       "critical": catalog.is_critical(key), "locked": catalog.locked_channels(key),
-                       "channels": catalog.channels_for(user, key), "chosen": prefs.get(key, [])})
+                       "critical": catalog.is_critical(key), "locked": locked,
+                       "channels": [c for c in catalog.CHANNELS if c in on], "chosen": prefs.get(key, [])})
     for e in events:
         e["category"] = route_of(e["key"])
     link = TelegramLink.objects.filter(user=user).first()
@@ -199,6 +201,8 @@ def my_notification_preferences(request):
                                     if any(e["category"] == k for e in events)],
                      "quiet_hours": config.get_user(user, "me.quiet_hours"), "timezone": config.get_user(user, "me.timezone") or "",
                      "installation_timezone": config.get("general.timezone"), "digest_time": config.get_user(user, "me.digest_time"),
+                     "detail_level": {"mine": config.get_user(user, "me.notification_detail") or "system",
+                                      "system": config.get("notifications.detail_level") or "full"},
                      "telegram": {"linked": bool(link), "username": link.username if link else None,
                                   "bot": config.get("telegram.bot_username")}})
 

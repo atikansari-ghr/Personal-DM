@@ -508,6 +508,45 @@ numbers. Root causes per defect: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 Not run (needs real accounts or environments, never reported as passed): a real WhatsApp phone scanning a real QR,
 a real Discord server, real OpenStreetMap / MapTiler / Stadia tiles from a production address, Firefox and Safari.
 
+## Change set W (2026-10): named sign-in designs and rotation, complete details and IPs, Notification Detail Level {#change-set-w}
+
+The change prompt numbered these AT-351…AT-375. AT-351…AT-375 already exist, so here they are **AT-376…AT-400**:
+prompt AT-n → AT-(n+25). Test functions in `tests/test_corrective_w.py` (CW) and the Change Set W steps in
+`tests/e2e/corrective.mjs` use these numbers. Root causes:
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-w). Evidence:
+[TEST_REPORT.md](TEST_REPORT.md#change-set-w).
+
+| ID (prompt) | Scenario (abridged) | Req | Code | Tests | Docs | Status |
+|---|---|---|---|---|---|---|
+| AT-376 (351) | Design CRUD: create, template, duplicate, rename, edit, preview, activate, delete | SD-1 | `core/designs.py`, `core/design_views.py`, `SigninDesigns.tsx` | CW `test_at376_*`; corrective.mjs "AT-376/AT-377/AT-379/AT-381" | login-designs#designs, #create | Passed |
+| AT-377 (352) | Built-ins are protected templates; Reset to default | SD-2 | `designs.ensure_builtins/update/delete`, `design_reset` | CW `test_at377_*` | login-designs#presets | Passed |
+| AT-378 (353) | Previous design and wallpaper migrate once and keep the appearance | SD-7 | `core/migrations/0006_signin_designs_data.py` | CW `test_at378_*`; `test_overview.py` AT-129 | login-designs#upgrade, upgrades#change-set-w | Passed |
+| AT-379 (354) | Auto colours from the panel-side wallpaper region; WCAG contrast | SD-3 | `designs.analyse/build_palette`, `Auth.tsx paletteStyle` | CW `test_at379_*` (light, dark, green); corrective.mjs public page `data-scheme=light` | login-designs#colours | Passed |
+| AT-380 (355) | Light / Dark / Custom modes; Custom survives wallpaper replacement; warnings | SD-3 | `designs.update/refresh_palette/palette_warnings`, `DesignEditor` | CW `test_at380_*` | login-designs#colours | Passed |
+| AT-381 (356) | Original kept; Desktop/Tablet/Phone crops around the focal point; content validation | SD-4 | `designs.set_wallpaper/_make_derivatives`, `branding.process`, `styles.css` media queries | CW `test_at381_*`; corrective.mjs focal-point click | login-designs#wallpaper | Passed |
+| AT-382 (357) | Preview at three sizes with Password / Passkey / SSO; never changes the live design | SD-5 | `DesignPreview`, `SignInPanelPreview` | CW `test_at382_*`; corrective.mjs "AT-345/AT-346" | login-designs#preview | Passed |
+| AT-383 (358) | Atomic, audited activation; Revert; delete active → default; corrupt asset fallback | SD-6 | `designs._set_active/revert/delete/active` | CW `test_at383_*`; corrective.mjs Revert | login-designs#activate | Passed |
+| AT-384 (359) | Reference-aware cleanup; design files in backups | SD-6 | `designs.referenced_files/cleanup_files`, `ops/bk_engine.py`, `ops/backup.py` | CW `test_at384_*` | login-designs#activate | Passed |
+| AT-385 (360) | Pool of ≥ 2 valid designs; Sequential wraps; Random avoids repeats | ROT-1 | `core/rotation.py configure/rotate`, `RotationCard` | CW `test_at385_*`; corrective.mjs "AT-383/AT-385/AT-391" | login-designs#rotation | Passed |
+| AT-386 (361) | Daily / Weekly / Monthly in the installation timezone; last valid day | ROT-1 | `rotation.spec`, `ops/schedule.py` | CW `test_at386_*` | login-designs#rotation-schedule | Passed |
+| AT-387 (362) | Manual activation keeps rotation; open pages not refreshed | ROT-2 | `designs.activate`, `rotation.tick` | CW `test_at387_*` | login-designs#rotation-schedule | Passed |
+| AT-388 (363) | Missed runs: Sequential reconciles, Random one recovery choice; audited; no replay | ROT-2 | `rotation.tick/_occurrences_since` | CW `test_at388_*` | login-designs#rotation-schedule | Passed |
+| AT-389 (364) | Unavailable designs skipped and alerted; Needs Attention; default at zero | ROT-3 | `rotation.rotate/_attention`, `designs._alert` | CW `test_at389_*` | login-designs#rotation-attention | Passed |
+| AT-390 (365) | Preview Rotation changes nothing | ROT-3 | `rotation.preview`, `RotationPreview` | CW `test_at390_*`; corrective.mjs "AT-383/AT-385/AT-391" | login-designs#rotation-preview | Passed |
+| AT-391 (366) | Routine rotations audit-only; failures notify the main administrator | ROT-3 | `rotation.rotate`, `notify/management/commands/scheduler.py` | CW `test_at391_*` | login-designs#rotation-schedule | Passed |
+| AT-392 (367) | Complete identifiers for authorised people; history and audit keep no values | MD-1, MD-3 | `library/serializers.field_json`, `library/services.history_value` | CW `test_at392_*`; `test_documents.py` | ocr-corrections | Passed |
+| AT-393 (368) | Complete metadata across details, OCR, search, lists, exports, API; denial for others | MD-1 | `library/serializers.py`, `DocumentDetails.tsx`, `OcrReview.tsx` | CW `test_at393_*` | ocr-corrections | Passed |
+| AT-394 (369) | OCR Metadata auto-expands; low-confidence Review; corrections kept | MD-2 | `DocumentPanel.tsx`, `doctypes.py`, `LOW_CONFIDENCE` | CW `test_at394_*` | ocr-corrections | Passed |
+| AT-395 (370) | Copy copies the complete value, "Copied", never logged | MD-2 | `CopyButton`, `DocumentDetails.tsx` | CW `test_at395_*` | ocr-corrections | Passed |
+| AT-396 (371) | Central masking audit: no masking of metadata or IPs; secrets still protected | MD-3 | `library/services.py`, `notify/rich.py`, `notify/templates.py`, `security/location.py` | CW `test_at396_*`; `test_rich_notifications.py`, `test_notification_policy.py` | notifications#detail-level | Passed |
+| AT-397 (372) | Complete IPv4 / IPv6 in sign-in views, map, alerts, notifications | IP-1 | `security/location.privacy_ip`, `views_signins.py`, `alerts.py` | CW `test_at397_*`; `test_signin_security.py`; corrective.mjs map details | security-map | Passed |
+| AT-398 (373) | Detail Level Full (default) / Minimal with personal override; presentation only | ND-1 | `core/registry.py`, `core/migrations/0004_*`, `notify/templates.detail_for`, `Account.tsx` | CW `test_at398_*`; corrective.mjs "AT-396/AT-397" | notifications#detail-level | Passed |
+| AT-399 (374) | Full Details never bypass recipient authorisation; all channels share one renderer | ND-1 | `templates.DOC_ALLOWED`, `rich._value`, `expiry.dispatch` | CW `test_at399_*`; `test_expiry.py`, `test_events.py` | notifications#detail-level | Passed (delivery to real Email/Telegram/WhatsApp/Discord/Push accounts: **Blocked / Not Executed**) |
+| AT-400 (375) | Full release gate; docs and settings reference current | all | — | CW `test_at400_*`; full `pytest` (520 passed, 5 skipped); `npm run build`; `scripts/e2e.sh` (158 PASS); `check_docs.py`; `privacy_check.sh` | TEST_REPORT.md#change-set-w | Passed (real-channel delivery and production smoke test: **Blocked / Not Executed**) |
+
+Not run (needs real accounts or devices, never reported as passed): delivery to real Email, Telegram, WhatsApp,
+Discord and Web Push accounts; a production smoke test; Firefox and Safari.
+
 ## Change set V (2026-10): NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing {#change-set-v}
 
 The change prompt numbered these AT-331…AT-350. AT-331…AT-355 already exist, so here they are **AT-356…AT-375**:
