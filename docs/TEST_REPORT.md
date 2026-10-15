@@ -56,6 +56,55 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
+## Change set W: named sign-in designs and rotation, complete details and IPs, Notification Detail Level {#change-set-w}
+
+**Numbering.** The change prompt numbered its tests AT-351…AT-375. Here they are **AT-376…AT-400** (prompt AT-n →
+AT-(n+25)). Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md#change-set-w). Root causes:
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-w).
+
+**Environment.** Development container (Ubuntu 24.04, PostgreSQL 16, Python 3.13, Node 22, Chromium via Playwright),
+2026-10-15. No real Email, Telegram, WhatsApp, Discord or Web Push accounts and no production address. Wallpapers in
+the tests and screenshots are drawn in the browser or generated with Pillow; no photos.
+
+| Command | Result |
+|---|---|
+| `pytest tests/test_corrective_w.py` | **28 passed** |
+| Full `pytest` | FULL_PYTEST |
+| `scripts/e2e.sh` (fresh database, final run) | **158 PASS, 0 FAIL** (exit 0): flow; accessibility in every theme; parity and layout (7 viewports); offline; PWA; themes; recovery; **corrective 32** (incl. Change Set W: new design → wallpaper → focal point → Set as Active → public sign-in page uses the design with a light palette → Revert; rotation pool, status card, Preview Rotation, single-design pool refused, family member refused; Notification detail per person); **screenshots 8** |
+| `npm run build` (TypeScript check and production build) | Passed |
+| `python3 scripts/check_docs.py` | **OK** |
+| `scripts/privacy_check.sh` | **OK** |
+
+**Blocked / Not Executed** (never reported as passed):
+
+- Delivery of Full and Minimal notifications to real Email, Telegram, WhatsApp, Discord and Web Push accounts (no
+  accounts here). Every channel uses the same renderer, which is covered per channel by `test_rich_notifications.py`,
+  `test_notification_policy.py`, `test_expiry.py`, `test_events.py` and CW AT-398/AT-399.
+- A production smoke test after `sudo personaldocs upgrade` (no production installation here); see
+  [upgrades](guides/upgrades.md#change-set-w) and [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+- Firefox and Safari.
+
+**Prior suites.** Every earlier backend test file and browser suite ran in the runs above. Tests that asserted the old
+masking (document numbers, names and IP addresses in notifications and sign-in views) were changed to assert the
+complete values for authorised people and the Minimal Details summary; their checks that secrets never appear were
+kept.
+
+**Defects found while testing, all fixed:**
+
+- The notification preferences page ran about 7,300 queries (≈ 21 s on the test server): every event recomputed
+  every event's defaults. A matrix toggle looked as if it did not stick until the slow reload returned (found by
+  parity AT-68; this predates Change Set W). Now about 380 queries (0.6 s); regression test in
+  `test_notification_policy.py`.
+- The sign-in preview showed "Sign in with Sign in with authentik": the configured button label already contains the
+  words. The preview now shows the label as the real sign-in page does.
+- In the narrow Desktop preview of the design editor the title broke inside a word. Narrow previews now scale their
+  text.
+- Replacing the active design's wallpaper left the old original file behind; backups held only the legacy wallpaper
+  and logo; a broken rotation pool could retry on every scheduler tick; the rotation audit entry failed on a reserved
+  argument name. All fixed with tests (CW AT-383/AT-384/AT-388/AT-389).
+- The parity test expected the Text (OCR) tab to stay open after recognition; Change Set W opens Details by itself, so
+  the test now checks that and then reads the confidence on the OCR tab.
+
 ## Change set V: NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing {#change-set-v}
 
 **Numbering.** The change prompt numbered its tests AT-331…AT-350. Here they are **AT-356…AT-375** (prompt AT-n →
