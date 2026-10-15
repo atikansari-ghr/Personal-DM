@@ -1095,6 +1095,17 @@ tr.risk-high td { background: var(--danger-bg); }
 .design-option .design-tag { font-style: normal; font-weight: 600; font-size: 0.72rem; color: var(--neutral-ink); background: var(--neutral-bg); border-radius: 999px; padding: 0.05rem 0.45rem; margin-inline-start: 0.4rem; }
 .design-option .design-tag.danger { color: var(--danger-ink); background: var(--danger-bg); }
 .login-preview.tablet { grid-template-columns: 1fr 1fr; max-width: 820px; }
+/* the preview keeps the real layout, but a narrow preview (editor column, dialogs) scales its text so long titles
+   wrap between words instead of breaking inside them */
+.login-preview { container-type: inline-size; }
+.login-preview .auth-art.preview h1 { overflow-wrap: normal; hyphens: manual; }
+@container (max-width: 760px) {
+  .login-preview .auth-art.preview { padding: 0.9rem; }
+  .login-preview .auth-art.preview h1 { font-size: 1.12rem; }
+  .login-preview .auth-art.preview .auth-tagline { font-size: 0.86rem; }
+  .login-preview .auth-art.preview .auth-foot { font-size: 0.72rem; }
+  .login-preview .fake-form { padding: 0.9rem; }
+}
 .login-preview.tablet .auth-art.preview { min-height: 300px; }
 .design-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 1.2rem; align-items: start; }
 @media (max-width: 900px) { .design-editor { grid-template-columns: minmax(0, 1fr); } }

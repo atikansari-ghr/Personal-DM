@@ -59,7 +59,7 @@ export function SignInPanelPreview({ b, compact }: { b: LoginBranding; compact?:
       <span className="ff-or">or</span>
       {session?.passkeys_enabled !== false && <div className="ff-input ff-passkey">Sign in with Passkey</div>}
       {session?.google_enabled && <div className="ff-input">Sign in with Google</div>}
-      {session?.authentik?.enabled && <div className="ff-input">Sign in with {session.authentik.label || "authentik"}</div>}
+      {session?.authentik?.enabled && <div className="ff-input">{session.authentik.label || "Sign in with authentik"}</div>}
       <span className="ff-foot">{b.title}</span>
     </div>
   );

@@ -331,7 +331,7 @@ await step("AT-354 Change Set U documentation screenshots (folder tree, map prov
   const mine = await P.evaluate(async () => {
     const csrf = decodeURIComponent((document.cookie.match(/pd_csrftoken=([^;]+)/) || [])[1] || "");
     const list = await (await fetch("/api/signin-designs")).json();
-    let d = list.designs.find((x) => !x.builtin && x.has_wallpaper);
+    let d = list.designs.find((x) => x.name === "Spring meadow" && x.has_wallpaper);
     if (d) return d;
     d = await (await fetch("/api/signin-designs", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, body: JSON.stringify({ name: "Spring meadow", template: "nature" }) })).json();
     const c = document.createElement("canvas"); c.width = 1600; c.height = 1000;
