@@ -92,7 +92,7 @@ SESSION_ENGINE = "django.contrib.sessions.backends.db"
 # (web workers, job worker, scheduler) sees, used only for non-private summaries (see apps/core/perfcache.py).
 CACHES = {
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
-    "shared": {"BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+    "shared": {"BACKEND": "apps.core.perfcache.SafeFileBasedCache",
                "LOCATION": str(DATA_DIR / "cache" / "shared"), "TIMEOUT": 300, "OPTIONS": {"MAX_ENTRIES": 500}},
 }
 SECURE_CONTENT_TYPE_NOSNIFF = True

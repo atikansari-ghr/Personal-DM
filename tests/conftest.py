@@ -39,7 +39,7 @@ def _clean_config(settings, tmp_path, monkeypatch):
     settings.TMP_DIR = settings.DATA_DIR / "tmp"
     settings.EXPORT_TMP_DIR = settings.DATA_DIR / "exports"
     # Change Set X: a fresh shared cache per test (as in production: file based, under the data folder)
-    settings.CACHES = {**settings.CACHES, "shared": {"BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+    settings.CACHES = {**settings.CACHES, "shared": {"BACKEND": "apps.core.perfcache.SafeFileBasedCache",
                                                      "LOCATION": str(settings.DATA_DIR / "cache" / "shared")}}
     crypto.reset_cache()
     crypto.ensure_key()  # the installer always creates the key

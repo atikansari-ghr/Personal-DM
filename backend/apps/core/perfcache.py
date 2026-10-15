@@ -16,6 +16,23 @@ from typing import Any, Callable
 _stats: dict[str, dict] = {}
 
 
+try:
+    from django.core.cache.backends.filebased import FileBasedCache as _FileBasedCache
+except Exception:  # pragma: no cover
+    _FileBasedCache = object
+
+
+class SafeFileBasedCache(_FileBasedCache):
+    """Django's file cache, except that a missing or unwritable directory never breaks anything (system checks,
+    commands run as another user, CI): the cache then simply misses."""
+
+    def _createdir(self):
+        try:
+            super()._createdir()
+        except OSError:
+            pass
+
+
 def _cache():
     from django.core.cache import caches
 
