@@ -266,9 +266,10 @@ If a required channel cannot reach you (no email address, Telegram not linked), 
 
 **Expiry reminders** go to the owner and the family head at 90/60/30/7/0 days, by default.
 
-Messages show what happened, when, the account, and, for sign-ins, the IP, country, method and device. Large
-imports arrive as one summary. Messages never contain passwords or codes; document numbers are hidden unless the
-administrator allows a masked number, and never appear in push notifications.
+Messages show what happened, when, the account, and, for sign-ins, the complete IP address, country, method and
+device. Large imports arrive as one summary. Messages never contain passwords or codes. Under **My account →
+Notifications → Notification detail** choose **Full Details** (complete names, document numbers and addresses you may
+already see) or **Minimal Details** (a short summary and a link), or use the system default.
 
 **Notification Center.** Open **Notifications** (the bell) to see your notifications as cards with an icon, the
 severity (Critical, Warning, Success, Information) and category as text, a summary and buttons such as **Open

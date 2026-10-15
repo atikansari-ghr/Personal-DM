@@ -499,9 +499,23 @@ Every critical notification is also sent on these channels. Missing email addres
 - **Restart needed:** no
 - **Learn more:** [expiry-rules#critical](guides/expiry-rules.md#critical)
 
-### Include names in email/Telegram (`notifications.include_names`)
+### Notification Detail Level (`notifications.detail_level`)
 
-Show folder, document and file names in external messages (long numbers are always masked). Turn off to send only counts and a sign-in link.
+Full Details: notifications show complete names, document numbers and IP addresses on every channel, but only what the recipient may already see. Minimal Details: a short summary and a link to the app. Each person can choose their own level; passwords, keys and codes are never sent.
+
+- **Default:** `'full'`
+- **Allowed values:** full, minimal
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Applies to the next notification.
+- **Restart needed:** no
+- **Learn more:** [notifications#detail-level](guides/notifications.md#detail-level)
+
+## Section: notifications_hidden
+
+### Include names in email/Telegram (replaced) (`notifications.include_names`)
+
+Replaced by Notification Detail Level (Change Set W). Kept so a rollback keeps its value.
 
 - **Default:** `True`
 - **Allowed values:** bool
@@ -509,19 +523,21 @@ Show folder, document and file names in external messages (long numbers are alwa
 - **Depends on:** nothing
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
-- **Learn more:** [expiry-rules#templates](guides/expiry-rules.md#templates)
+- **Learn more:** [notifications#detail-level](guides/notifications.md#detail-level)
 
-### Include document numbers in email/Telegram (`notifications.include_document_number`)
+### Include document numbers in email/Telegram (replaced) (`notifications.include_document_number`)
 
-Show a masked document number (last four characters) in email and Telegram expiry messages. Never shown in push notifications.
+Replaced by Notification Detail Level (Change Set W). Kept so a rollback keeps its value.
 
 - **Default:** `False`
 - **Allowed values:** bool
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
-- **Effect of changing:** Applies to the next notification.
+- **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
-- **Learn more:** [notifications#privacy](guides/notifications.md#privacy)
+- **Learn more:** [notifications#detail-level](guides/notifications.md#detail-level)
+
+## Section: notifications
 
 ### Push notifications (PWA) (`notifications.push_enabled`)
 
@@ -1633,6 +1649,46 @@ Wallpaper on the left of the sign-in page. Sign-in works the same with every des
 - **Restart needed:** no
 - **Learn more:** [login-designs#presets](guides/login-designs.md#presets)
 
+## Section: login_hidden
+
+### Active sign-in design (`login.active_design`)
+
+Id of the active named design (Change Set W).
+
+- **Default:** `None`
+- **Allowed values:** json
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [login-designs#designs](guides/login-designs.md#designs)
+
+### Previous sign-in design (`login.previous_design`)
+
+Id of the design before the last change (Revert).
+
+- **Default:** `None`
+- **Allowed values:** json
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [login-designs#activate](guides/login-designs.md#activate)
+
+### Sign-in design rotation (`login.rotation`)
+
+{enabled, mode: sequential|random, pool: [design ids], frequency: daily|weekly|monthly, time, weekday, month_day}.
+
+- **Default:** `{'enabled': False, 'mode': 'sequential', 'pool': [], 'frequency': 'weekly', 'time': '06:00', 'weekday': 'mon', 'month_day': 1}`
+- **Allowed values:** json
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [login-designs#rotation](guides/login-designs.md#rotation)
+
+## Section: login
+
 ### Sign-in title (`login.title`)
 
 Heading on the sign-in page.
@@ -1667,7 +1723,7 @@ Lightens the wallpaper so text stays readable.
 - **Depends on:** nothing
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
-- **Learn more:** [login-designs#custom](guides/login-designs.md#custom)
+- **Learn more:** [login-designs#wallpaper](guides/login-designs.md#wallpaper)
 
 ### Wallpaper position (`login.position`)
 
@@ -1679,7 +1735,7 @@ Which part of a custom wallpaper stays visible when it is cropped.
 - **Depends on:** nothing
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
-- **Learn more:** [login-designs#custom](guides/login-designs.md#custom)
+- **Learn more:** [login-designs#wallpaper](guides/login-designs.md#wallpaper)
 
 ## Section: login_hidden
 
@@ -1693,7 +1749,7 @@ Set by uploading a wallpaper.
 - **Depends on:** nothing
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
-- **Learn more:** [login-designs#custom](guides/login-designs.md#custom)
+- **Learn more:** [login-designs#wallpaper](guides/login-designs.md#wallpaper)
 
 ### Logo file (`login.logo_file`)
 
@@ -2203,6 +2259,18 @@ Channels you want reminders on. Required channels stay on.
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
 - **Learn more:** [expiry-rules#channels](guides/expiry-rules.md#channels)
+
+### Notification detail (`me.notification_detail`)
+
+How much your notifications show. Full Details: complete names, document numbers and IP addresses you may already see. Minimal Details: a short summary and a link to the app. Use system default follows the administrator's setting.
+
+- **Default:** `'system'`
+- **Allowed values:** system, full, minimal
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [notifications#detail-level](guides/notifications.md#detail-level)
 
 ### Push notification detail (`me.push_preview`)
 

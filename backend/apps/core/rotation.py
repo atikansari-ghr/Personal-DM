@@ -162,6 +162,10 @@ def rotate(*, steps: int = 1, reason: str = "scheduled", now=None) -> dict:
         _attention(f"Sign-in design rotation skipped unavailable design(s): {names}.", tag="skipped")
     ok = [d for _pk, d, good in entries if good]
     current = designs.active()
+    if len(ok) < 2:  # handled for this occurrence: never retried every scheduler tick
+        run = _run()
+        run.last_run_at = now or timezone.now()
+        run.save(update_fields=["last_run_at"])
     if not ok:
         if not current.builtin or current.builtin_key != designs.DEFAULT_KEY:
             designs._set_active(designs.default_design(), actor=None, reason="rotation: no valid design")
@@ -211,10 +215,10 @@ def tick(now_local: datetime | None = None) -> dict | None:
         from . import audit
 
         audit.record("settings.signin_rotation_missed", missed=missed, since=run.last_run_at.isoformat(),
-                     mode=cfg["mode"], action="reconciled once" if cfg["mode"] == "sequential" else "one recovery choice")
+                     mode=cfg["mode"], handling="reconciled once" if cfg["mode"] == "sequential" else "one recovery choice")
         steps = missed if cfg["mode"] == "sequential" else 1
-        return rotate(steps=steps, reason=f"recovered {missed} missed rotations", now=timezone.now())
-    return rotate(steps=1, reason="scheduled", now=timezone.now())
+        return rotate(steps=steps, reason=f"recovered {missed} missed rotations", now=occ)
+    return rotate(steps=1, reason="scheduled", now=occ)  # the handled occurrence: the same moment never runs twice
 
 
 def status() -> dict:

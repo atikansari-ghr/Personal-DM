@@ -1,4 +1,4 @@
-<!-- reviewed: 2026-10-12 -->
+<!-- reviewed: 2026-10-15 -->
 # Discord notifications
 
 Personal DM can post your own notifications to a Discord channel that you control. It uses an **official Discord
@@ -36,7 +36,7 @@ Prerequisites: a Discord server where you may manage webhooks, ideally a private
 
 > [!NOTE]
 > **Privacy** The webhook address contains a secret token, so it is stored encrypted and never appears in logs,
-> audits or diagnostics. Messages contain the same masked details as email or Telegram. They never contain attachments,
+> audits or diagnostics. Messages contain the same details as email or Telegram, following each person's [Notification Detail Level](notifications.md#detail-level). They never contain attachments,
 > document text or mentions (`@everyone` is disabled). Anyone who can read the Discord channel can read your
 > notifications, so use a private channel.
 
