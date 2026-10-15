@@ -352,9 +352,10 @@ def _build(point: RecoveryPoint, key: RecoveryKey, parent: RecoveryPoint | None)
             src = photo_dir() / f"{stem}.webp"
             if src.exists():
                 ref(_hash_name("photos", src.name), src, None, {"type": "photo", "path": src.name})
-    for k in ("login.wallpaper_file", "login.logo_file"):
-        n = config.get(k)
-        if n and (branding_dir() / n).exists():
+    from apps.core import designs
+
+    for n in sorted(designs.referenced_files()):  # every saved sign-in design's files + the shared logo (Change Set W)
+        if n and "/" not in n and (branding_dir() / n).exists():
             ref(_hash_name("branding", n), branding_dir() / n, None, {"type": "branding", "path": n})
     # 4. catalogue, settings, secrets
     catalog = build_catalog()

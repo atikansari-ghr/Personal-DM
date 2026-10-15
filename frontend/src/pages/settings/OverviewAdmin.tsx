@@ -1,11 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api, formatDate } from "../../api";
 import SettingsForm from "../../components/SettingsForm";
 import { CityDialog } from "../../components/OverviewWidgets";
-import LoginArt, { LOGIN_PRESETS } from "../../components/LoginArt";
-import { AuthWallpaper, DEFAULT_BRANDING, SIGNIN_THEME, SignInPanelPreview, type LoginBranding } from "../Auth";
+import SigninDesigns from "./SigninDesigns";
 import { Confirm, Icon, Modal, Skeleton, useAsync, useToast } from "../../components/ui";
-import { useSession } from "../../session";
 
 /** Settings → Overview & sign-in: holiday countries and corrections, weather provider, sign-in page design. */
 
@@ -105,106 +103,6 @@ function HolidayCorrections() {
   );
 }
 
-function LoginDesign() {
-  const toast = useToast();
-  const { refresh } = useSession();
-  const [b, setB] = useState<LoginBranding | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [removing, setRemoving] = useState(false);
-  const [pending, setPending] = useState<string | null>(null); // chosen design, not saved yet
-  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
-  const [fullPreview, setFullPreview] = useState(false);
-  const load = () => api<LoginBranding>("branding").then(setB);
-  useEffect(() => { load(); const h = () => load(); window.addEventListener("pd:settings-saved", h); return () => window.removeEventListener("pd:settings-saved", h); }, []);
-  if (!b) return <Skeleton />;
-  const choose = (design: string) => setPending(design === b.design ? null : design); // preview first, save explicitly
-  const save = async () => {
-    if (!pending) return;
-    try { await api("settings", { method: "PUT", body: { values: { "login.design": pending } } }); setPending(null); await load(); refresh(); toast("Sign-in design saved"); }
-    catch (e: any) { toast(e.message, "error"); }
-  };
-  const upload = async (kind: "wallpaper" | "logo", f: File) => {
-    const form = new FormData();
-    form.append("file", f);
-    try { setB(await api<LoginBranding>(`branding/${kind}`, { form })); refresh(); setPreview(null); setFile(null); toast(kind === "logo" ? "Logo saved" : "Custom wallpaper saved and selected"); }
-    catch (e: any) { toast(e.message, "error"); }
-  };
-  const shown: LoginBranding = preview ? { ...b, design: "custom", wallpaper: preview }
-    : pending ? { ...b, design: pending, wallpaper: pending === "custom" ? b.wallpaper : null } : b;
-  const current = pending || b.design;
-  return (
-    <section className="card stack">
-      <h2>Sign-in page design</h2>
-      <p className="small muted">The wallpaper fills the left side of the sign-in page and the sign-in panel stays on the right. Signing in works the same with every design. People see the sign-in page before they sign in, so <strong>do not use private family photos</strong>.</p>
-      <div className="design-grid" role="group" aria-label="Sign-in designs">
-        {LOGIN_PRESETS.map(([k, label]) => (
-          <button key={k} type="button" className="design-option" aria-pressed={current === k} onClick={() => choose(k)}>
-            <div className="thumb" data-theme={SIGNIN_THEME}><LoginArt design={k} /></div>
-            <span>{label}{k === "minimal" ? " (default)" : ""}{b.design === k && <em className="design-saved">In use</em>}</span>
-          </button>
-        ))}
-        {b.has_wallpaper && (
-          <button type="button" className="design-option" aria-pressed={current === "custom"} onClick={() => choose("custom")}>
-            <div className="thumb" data-theme={SIGNIN_THEME}><div className="auth-wallpaper" style={{ backgroundImage: `url(/api/branding/wallpaper?t=${Date.now() >> 16})` }} /></div>
-            <span>Custom wallpaper{b.design === "custom" && <em className="design-saved">In use</em>}</span>
-          </button>
-        )}
-      </div>
-      <div className="row">
-        <label className="btn small"><Icon name="upload" size={16} /> {b.has_wallpaper ? "Replace custom wallpaper…" : "Upload custom wallpaper…"}
-          <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setPreview(URL.createObjectURL(f)); } e.target.value = ""; }} /></label>
-        {b.has_wallpaper && <button className="btn small ghost danger" onClick={() => setRemoving(true)}>Remove custom wallpaper</button>}
-        <label className="btn small"><Icon name="upload" size={16} /> {b.logo ? "Replace logo…" : "Upload logo…"}
-          <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload("logo", f); e.target.value = ""; }} /></label>
-        {b.logo && <button className="btn small ghost" onClick={async () => { setB(await api<LoginBranding>("branding/logo", { method: "DELETE" })); refresh(); }}>Remove logo</button>}
-        <button className="btn small ghost" onClick={async () => {
-          await api("settings", { method: "PUT", body: { values: { "login.design": "minimal", "login.title": DEFAULT_BRANDING.title, "login.tagline": DEFAULT_BRANDING.tagline, "login.overlay": 0, "login.position": "center" } } });
-          await load(); refresh(); window.dispatchEvent(new Event("pd:settings-saved")); toast("Sign-in page reset to the default design");
-        }}>Reset to default</button>
-      </div>
-      <p className="small muted">Wallpaper: JPEG, PNG or WebP, at least 800 × 500 pixels, up to 10 MB. It is re-encoded on the server without its metadata (such as location) and stored only on this server. Logo: up to 2 MB.</p>
-      {preview && (
-        <div className="alert">
-          <strong>Preview of the new wallpaper.</strong> Adjust the position and overlay below after saving.
-          <div className="row" style={{ marginTop: ".4rem" }}><button className="btn small primary" onClick={() => file && upload("wallpaper", file)}>Use this wallpaper</button><button className="btn small" onClick={() => { setPreview(null); setFile(null); }}>Cancel</button></div>
-        </div>
-      )}
-      {pending && (
-        <div className="alert info row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }} role="status">
-          <span><strong>Previewing {LOGIN_PRESETS.find(([k]) => k === pending)?.[1] || "Custom wallpaper"}.</strong> Nothing changes on the sign-in page until you save.</span>
-          <span className="row" style={{ gap: 6 }}><button className="btn small primary" onClick={save}>Save design</button><button className="btn small" onClick={() => setPending(null)}>Discard</button></span>
-        </div>
-      )}
-      <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-        <h3 style={{ margin: 0 }}>Live sign-in preview</h3>
-        <div className="row" style={{ gap: 6 }}>
-          <div className="seg" role="group" aria-label="Preview size">
-            {(["desktop", "mobile"] as const).map((d) => <button key={d} type="button" className={device === d ? "active" : ""} aria-pressed={device === d} onClick={() => setDevice(d)}>{d === "desktop" ? "Desktop" : "Phone"}</button>)}
-          </div>
-          <button className="btn small" onClick={() => setFullPreview(true)}>Preview Sign-in Page</button>
-        </div>
-      </div>
-      <div className={`login-preview ${device}`} data-theme={SIGNIN_THEME} aria-label={`Sign-in preview (${device === "desktop" ? "desktop" : "phone"})`}>
-        <AuthWallpaper b={shown} preview />
-        <SignInPanelPreview b={shown} compact={device === "mobile"} />
-      </div>
-      <p className="small muted">The sign-in page always uses the default theme, whatever theme you use in the app, so the preview shows exactly what people see before they sign in.</p>
-      {fullPreview && (
-        <Modal title="Sign-in page preview" onClose={() => setFullPreview(false)} wide>
-          <div className={`login-preview full ${device}`} data-theme={SIGNIN_THEME}>
-            <AuthWallpaper b={shown} preview />
-            <SignInPanelPreview b={shown} compact={device === "mobile"} />
-          </div>
-          <p className="small muted">{pending ? "Not saved yet: use Save design to publish it." : "This is the design in use."}</p>
-        </Modal>
-      )}
-      {removing && <Confirm title="Remove custom wallpaper" danger confirmLabel="Remove" message={<p>The wallpaper file is deleted from the server. If it is in use, the sign-in page returns to the Minimal design.</p>}
-        onClose={() => setRemoving(false)} onConfirm={async () => { setB(await api<LoginBranding>("branding/wallpaper", { method: "DELETE" })); setRemoving(false); refresh(); }} />}
-    </section>
-  );
-}
-
 export default function OverviewAdminPanel() {
   return (
     <div className="stack">
@@ -212,8 +110,8 @@ export default function OverviewAdminPanel() {
         <WeatherTools />
       </SettingsForm>
       <HolidayCorrections />
-      <LoginDesign />
-      <SettingsForm keys={["login.title", "login.tagline", "login.overlay", "login.position"]} title="Sign-in page text and wallpaper" />
+      <SigninDesigns />
+      <SettingsForm keys={["login.title", "login.tagline"]} title="Sign-in page text" />
     </div>
   );
 }
