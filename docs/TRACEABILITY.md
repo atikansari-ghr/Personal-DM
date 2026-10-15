@@ -540,8 +540,8 @@ The change prompt numbered these AT-376…AT-400 (and called itself "Change Set 
 | AT-421 (396) | Search/OCR architecture unchanged; no Elasticsearch/OpenSearch | PERF-12 | `library/search.py` (same SearchQuery/rank/headline) | PX `test_at421_*`; existing search tests | — | Passed |
 | AT-422 (397) | Post-upgrade maintenance safe, idempotent; controlled restart; health checks | PERF-11 | `ops/perf_maintenance`, `scripts/personaldocs post-upgrade` | PX `test_at422_*`; run twice on the perf database | performance#maintenance | Passed (real upgrade on an LXC: **Blocked / Not Executed**) |
 | AT-423 (398) | Performance regression suite: large data, query counts, bundle budget, contention, concurrency | PERF-1 | `perf_bench --budget`, `test_performance.py`, `perf.mjs`, `perf_load.py` | PX (26 tests); budgets | PERFORMANCE.md#gate | Passed |
-| AT-424 (399) | Functional/security regression through AT-375 | PERF-12 | — | full `pytest`; `scripts/e2e.sh` | TEST_REPORT.md#change-set-x | See TEST_REPORT.md#change-set-x |
-| AT-425 (400) | Final release gate: Before → After → Target | all | — | PERFORMANCE.md#results | TEST_REPORT.md#change-set-x | See TEST_REPORT.md#change-set-x |
+| AT-424 (399) | Functional/security regression through AT-375 | PERF-12 | — | full `pytest` (547 passed, 5 skipped); `scripts/e2e.sh` (161 PASS) | TEST_REPORT.md#change-set-x | Passed |
+| AT-425 (400) | Final release gate: Before → After → Target | all | — | PERFORMANCE.md#results | TEST_REPORT.md#change-set-x | Passed in the development container (6 GB LXC and production smoke test: **Blocked / Not Executed**) |
 
 Not run (needs a production-equivalent environment, never reported as passed): measurements on a real 6 GB
 Proxmox LXC, a real upgrade and production smoke test, real OCR/ClamAV/backup load on that container, Firefox and
