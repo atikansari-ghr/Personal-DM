@@ -6,7 +6,7 @@ import PhotoEditor from "../../components/PhotoEditor";
 import { Reauth, withReauth } from "../../components/Reauth";
 import ThemeGallery from "../../components/ThemeGallery";
 import SettingsForm from "../../components/SettingsForm";
-import { Avatar, CopyButton, Icon, Skeleton, useAsync, useToast } from "../../components/ui";
+import { Avatar, CopyButton, HelpTip, Icon, Skeleton, useAsync, useToast } from "../../components/ui";
 import { FolderSelect } from "../../components/UploadDialog";
 import { useSession } from "../../session";
 import type { FolderNode } from "../../types";
@@ -208,7 +208,7 @@ function PushCard() {
   return (
     <div className="card" id="push">
       <h2>Push notifications on this device</h2>
-      <p className="small muted">Alerts on your phone's lock screen or your computer, through the installed app. Choose Push in the table above for the events you want. Document numbers and document text are never shown.</p>
+      <p className="small muted">Alerts on your phone's lock screen or your computer, through the installed app. Choose Push in the table above for the events you want. Lock-screen text follows this choice and your Notification detail; document text is never shown.</p>
       {!supported ? <p className="small">This browser does not support push notifications. On iPhone and iPad, add the app to the Home Screen first.</p>
         : <div className="row"><button className="btn primary" disabled={busy} onClick={enable}>Turn on for this device</button>
           {data.devices.length > 0 && <button className="btn" onClick={() => api<any>("notifications/push/test", { method: "POST" }).then(() => toast("Test push sent")).catch((e) => toast(e.message, "error"))}>Send test push</button>}</div>}
@@ -251,6 +251,15 @@ function Channels() {
           <p className="small" style={{ margin: ".3rem 0 0" }}>Add an email address under Profile, link Telegram below, or ask the administrator to configure the channel.</p>
         </div>
       )}
+      {data.detail_level && <div className="card" id="notification-detail">
+        <h2>Notification detail <HelpTip text="Full Details: complete names, document numbers and IP addresses you may already see in the app. Minimal Details: a short summary and a link. This never changes what you may access; passwords, keys and codes are never sent." link="/help/notifications#detail-level" /></h2>
+        <div className="field" style={{ maxWidth: 420 }}><label htmlFor="notif-detail">Show in my notifications</label>
+          <select id="notif-detail" value={data.detail_level.mine} onChange={(e) => api("settings", { method: "PUT", body: { values: { "me.notification_detail": e.target.value } } }).then(() => { toast("Saved"); reload(); }).catch((x) => toast(x.message, "error"))}>
+            <option value="system">Use system default ({data.detail_level.system === "minimal" ? "Minimal Details" : "Full Details"})</option>
+            <option value="full">Full Details</option>
+            <option value="minimal">Minimal Details</option>
+          </select></div>
+      </div>}
       <div className="card">
         <h2>Critical notifications</h2>
         <p className="small muted">Chosen by the family administrator. They cannot be turned off and always arrive on the channels shown.</p>

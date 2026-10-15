@@ -145,7 +145,7 @@ def test_at17_required_channels_missing_details_and_content(family, clients):
     email_msg = OutboxMessage.objects.get(document=d, user=son1, channel="email")
     assert email_msg.status == "skipped" and email_msg.last_error  # never faked as delivered
     for msg in OutboxMessage.objects.filter(document=d):
-        assert "Q9988776" not in msg.body and "8776" not in msg.body
+        assert "Q9988776" in msg.body and "•" not in msg.body  # Change Set W: complete number for the owner (Full Details)
         assert "Sam Sample" in msg.subject and "Passport" in msg.subject
         # external messages carry a sign-in link; in-app entries link to the document themselves
         assert "/documents/" in msg.body if msg.channel != "in_app" else Notification.objects.get(document=d, user=son1).link.startswith("/documents/")
@@ -169,7 +169,7 @@ def test_email_and_telegram_delivery_with_retry(family):
             mock.patch("apps.notify.telegram.send") as tg:
         res = expiry.deliver_outbox()
     assert res == {"sent": 1, "failed": 1}
-    assert tg.call_args[0][0] == "42" and "Z7654321" not in tg.call_args[0][1]
+    assert tg.call_args[0][0] == "42" and "Z7654321" in tg.call_args[0][1]  # Change Set W: Full Details
     em = OutboxMessage.objects.get(document=d, channel="email", user=son1)
     assert em.status == "pending" and em.attempts == 1 and "hunter2" not in em.last_error
     OutboxMessage.objects.filter(pk=em.pk).update(next_attempt_at=__import__("django.utils.timezone", fromlist=["now"]).now())

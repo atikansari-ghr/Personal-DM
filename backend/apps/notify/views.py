@@ -199,6 +199,8 @@ def my_notification_preferences(request):
                                     if any(e["category"] == k for e in events)],
                      "quiet_hours": config.get_user(user, "me.quiet_hours"), "timezone": config.get_user(user, "me.timezone") or "",
                      "installation_timezone": config.get("general.timezone"), "digest_time": config.get_user(user, "me.digest_time"),
+                     "detail_level": {"mine": config.get_user(user, "me.notification_detail") or "system",
+                                      "system": config.get("notifications.detail_level") or "full"},
                      "telegram": {"linked": bool(link), "username": link.username if link else None,
                                   "bot": config.get("telegram.bot_username")}})
 

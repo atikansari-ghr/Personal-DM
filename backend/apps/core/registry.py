@@ -378,12 +378,19 @@ SETTINGS: list[SettingDef] = [
                "Every critical notification is also sent on these channels. Missing email addresses or unlinked Telegram are flagged to the person and to you, never reported as sent.",
                "channel_list", ["in_app", "email", "telegram"], "notifications",
                effect="Applies to the next notification.", help="expiry-rules#critical"),
-    SettingDef("notifications.include_names", "Include names in email/Telegram",
-               "Show folder, document and file names in external messages (long numbers are always masked). Turn off to send only counts and a sign-in link.",
-               "bool", True, "notifications", help="expiry-rules#templates"),
-    SettingDef("notifications.include_document_number", "Include document numbers in email/Telegram",
-               "Show a masked document number (last four characters) in email and Telegram expiry messages. Never shown in push notifications.",
-               "bool", False, "notifications", effect="Applies to the next notification.", help="notifications#privacy"),
+    SettingDef("notifications.detail_level", "Notification Detail Level",
+               "Full Details: notifications show complete names, document numbers and IP addresses on every channel, but "
+               "only what the recipient may already see. Minimal Details: a short summary and a link to the app. Each person "
+               "can choose their own level; passwords, keys and codes are never sent.",
+               "choice", "full", "notifications", choices=("full", "minimal"), effect="Applies to the next notification.",
+               choice_labels={"full": "Full Details", "minimal": "Minimal Details"},
+               help="notifications#detail-level"),
+    SettingDef("notifications.include_names", "Include names in email/Telegram (replaced)",
+               "Replaced by Notification Detail Level (Change Set W). Kept so a rollback keeps its value.",
+               "bool", True, "notifications_hidden", help="notifications#detail-level"),
+    SettingDef("notifications.include_document_number", "Include document numbers in email/Telegram (replaced)",
+               "Replaced by Notification Detail Level (Change Set W). Kept so a rollback keeps its value.",
+               "bool", False, "notifications_hidden", help="notifications#detail-level"),
     SettingDef("notifications.push_enabled", "Push notifications (PWA)",
                "Let people receive notifications on their phone or computer through the installed app (Web Push). "
                "Needs the HTTPS address; only known push services (Apple, Google, Mozilla, Microsoft) are contacted.",
@@ -778,6 +785,12 @@ SETTINGS: list[SettingDef] = [
                "event_matrix", {}, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#optional"),
     SettingDef("me.channels", "My notification channels", "Channels you want reminders on. Required channels stay on.",
                "channel_list", None, "my_notifications", scope=USER, editable_by=SELF, help="expiry-rules#channels"),
+    SettingDef("me.notification_detail", "Notification detail",
+               "How much your notifications show. Full Details: complete names, document numbers and IP addresses you may "
+               "already see. Minimal Details: a short summary and a link to the app. Use system default follows the administrator's setting.",
+               "choice", "system", "my_notifications", scope=USER, editable_by=SELF, choices=("system", "full", "minimal"),
+               choice_labels={"system": "Use system default", "full": "Full Details", "minimal": "Minimal Details"},
+               help="notifications#detail-level"),
     SettingDef("me.push_preview", "Push notification detail",
                "What your phone or computer may show on the lock screen. Minimal: only that something needs attention. "
                "Standard: the alert title and a short summary without names. Detailed: also document names. Document numbers and text are never shown.",

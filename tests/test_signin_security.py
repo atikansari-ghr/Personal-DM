@@ -55,7 +55,7 @@ def test_at323_trusted_zone_replaces_unknown_country(family, citydb):
     login("192.168.2.10")
     e = LoginEvent.objects.get(result="success")
     assert (e.network, e.zone_name, e.location) == ("trusted_zone", "Home", "Home") and e.country == ""
-    assert location.privacy_ip(e.ip, e.network) == "192.168.x.10"
+    assert location.privacy_ip(e.ip, e.network) == "192.168.2.10"  # Change Set W: complete address
     login("10.20.30.40")  # private, no zone: not "Unknown country"
     e2 = LoginEvent.objects.filter(result="success").order_by("-at").first()
     assert e2.network == "private" and e2.location == "Private network"
@@ -150,7 +150,7 @@ def test_at328_explainable_risk_and_no_blocking(family, citydb):
     assert e5.risk == "high" and any("Unusual travel" in r for r in e5.risk_reasons)
     assert signed_in(c)
     n = Notification.objects.filter(event="security.risky_signin", user=family["dad"]).first()
-    assert n is not None and CITY_B not in n.body  # routine notifications minimise the public address
+    assert n is not None and CITY_B in n.body  # Change Set W: complete address for the authorised recipient
 
 
 # ------------------------------------------------------------------ AT-329 devices, AT-330 Mark Unrecognized
@@ -204,7 +204,7 @@ def test_zone_secrets_and_ip_privacy_in_notifications(family, citydb):
     login("192.168.2.10")
     e = LoginEvent.objects.get(result="success")
     facts = dict(_login_facts(e))
-    assert facts["Network"] == "Home — Trusted Zone" and facts["IP address"] == "192.168.x.10" and facts["Location"] == "Home"
+    assert facts["Network"] == "Home — Trusted Zone" and facts["IP address"] == "192.168.2.10" and facts["Location"] == "Home"
     login(CITY_A)
     e2 = LoginEvent.objects.filter(result="success").order_by("-at").first()
-    assert CITY_A not in json.dumps(_login_facts(e2))
+    assert CITY_A in json.dumps(_login_facts(e2))  # Change Set W: complete IPv4/IPv6, never shortened

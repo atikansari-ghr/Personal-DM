@@ -154,16 +154,21 @@ def dispatch(user, message, *, kind: str, key: str, document=None, group: str = 
     """Deliver one structured message for ``message.event`` on the channels it resolves to (critical / required
     channels plus the person's choices). Every channel is rendered from the same message.
     Returns {channel: "in-app" | "queued" | "skipped: <reason>"}."""
-    from . import rich, templates
+    from . import templates
 
     if message.secret_link:  # a token link must never reach the outbox, in-app history or chat channels
         raise ValueError("messages with a secret link are sent directly (send_direct_email), not dispatched")
-    from . import routing
+    result = {}
+    chans = channels_for(user, message.event)
+    with templates.detail_for(user, document):  # this recipient's detail level and document access
+        return _dispatch(user, message, chans, kind=kind, key=key, document=document, group=group, result=result)
+
+
+def _dispatch(user, message, chans, *, kind, key, document, group, result) -> dict:
+    from . import rich, routing, templates
     from .catalog import locked_channels
 
     event = message.event
-    result = {}
-    chans = channels_for(user, event)
     if "in_app" in chans:
         card = rich.render_in_app(message)
         body = templates.render(user=user, title=card["title"], lines=[x for x in (card["summary"],) if x] + card["guidance"],

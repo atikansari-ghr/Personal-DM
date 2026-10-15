@@ -129,7 +129,7 @@ SOURCE_LABELS = {"zone_pin": "Configured Trusted Zone location", "geoip_city": "
 
 def event_json(e: LoginEvent, full_ip: bool) -> dict:
     return {"id": e.id, "at": e.at, "user": e.user.display_name if e.user_id else e.username, "user_id": str(e.user_id) if e.user_id else None,
-            "result": e.result, "method": e.method, "ip": e.ip if full_ip else location.privacy_ip(e.ip, e.network),
+            "result": e.result, "method": e.method, "ip": e.ip,
             "network": e.network, "zone": e.zone_name, "location": e.location or e.country_name, "country": e.country,
             "lat": e.lat, "lon": e.lon, "coord_source": e.coord_source, "coord_label": SOURCE_LABELS.get(e.coord_source, ""),
             "device": " · ".join(x for x in (e.browser, e.os) if x), "recognized_device": str(e.recognized_device_id) if e.recognized_device_id else None,

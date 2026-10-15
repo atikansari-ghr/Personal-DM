@@ -291,7 +291,7 @@ def test_at186_preview_and_test_messages(family, clients):
     r = a.post("/api/notifications/templates/expiry.reminder/preview", {"draft": {"title": "Draft {document_type}"}}, format="json").json()
     assert r["email"]["subject"].endswith("[TEST] Draft Passport") and "<html" in r["email"]["html"]
     assert r["telegram"]["text"] and r["in_app"]["title"] == "Draft Passport" and r["push"]["title"]
-    assert "X1234567" not in json.dumps(r)  # sample number hidden by default
+    assert "X1234567" in json.dumps(r)  # Change Set W: Full Details (default) shows the complete sample number
     assert not NotificationTemplate.objects.exists()  # preview stores nothing
     _channels(admin)
     before_audit = set(AuditEvent.objects.values_list("action", flat=True))
@@ -383,10 +383,17 @@ def test_at191_document_type_and_metadata(family):
     labels = {x.label: x for x in m.details}
     assert labels["Document type"].value == "Passport" and "Passport number" in labels and labels["Passport number"].sensitive
     _s, text, html_doc = rich.render_email(m, son)
-    assert "X1234567" not in html_doc + text and "4567" not in html_doc  # numbers hidden by default
-    config.set_value("notifications.include_document_number", True)
-    _s, text, html_doc = rich.render_email(m, son)
-    assert "••••4567" in html_doc and "X1234567" not in html_doc
+    # Change Set W: Full Details (default) shows the complete number to the owner; Minimal Details leaves it out
+    from apps.notify import templates
+
+    with templates.detail_for(son, d):
+        _s, text, html_doc = rich.render_email(m, son)
+    assert "X1234567" in html_doc and "X1234567" in text and "•" not in html_doc
+    config.set_value("notifications.detail_level", "minimal")
+    with templates.detail_for(son, d):
+        _s, text, html_doc = rich.render_email(m, son)
+    assert "X1234567" not in html_doc + text and "4567" not in html_doc
+    config.set_value("notifications.detail_level", "full")
     # unconfirmed values are never presented as facts; unassigned type renders gracefully
     u = Document.objects.create(folder=personal_root(son), owner=son, title="u", state=Document.READY)
     set_field(actor=son, doc=u, key="expiry_date", value=(TODAY + timedelta(days=10)).isoformat())

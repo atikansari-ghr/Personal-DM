@@ -103,11 +103,11 @@ def test_at69_templates_are_detailed_but_secret_free_and_names_masked(family, cl
     assert ext.body.startswith("Notification from ")
     assert "Account: son1 (Sam Sample)" in ext.body and "Date/time:" in ext.body and "Review: " in ext.body
     assert "1. scan0" in ext.body and "2. scan1" in ext.body
-    assert "Z9988776" not in ext.body and "Z99•" in ext.body  # long numbers masked outside the app
+    assert "Passport Z9988776" in ext.body and "•" not in ext.body  # Change Set W: Full Details, complete names
     for secret in SECRETS:
         assert secret not in ext.body and secret not in ext.subject
-    # names can be left out of external messages entirely
-    config.set_value("notifications.include_names", False)
+    # Minimal Details leaves names out of messages entirely
+    config.set_value("notifications.detail_level", "minimal")
     clients["dad"].post("/api/documents", {"folder": str(folder.id), "files": [SimpleUploadedFile("x.pdf", make_text_pdf("x"))]}, format="multipart")
     latest = OutboxMessage.objects.filter(user=son1, kind="document", channel="email").order_by("-id").first()
     assert "(name hidden)" in latest.body and "x" not in latest.body.split("Files:")[1].split("Review:")[0].replace("(name hidden)", "")
@@ -127,12 +127,10 @@ def test_at69_login_alert_template_has_ip_country_method_device(family, clients)
                                    device="desktop", flags=["new_country"])
     alerts.on_login_event(ev)
     msg = OutboxMessage.objects.get(user=son1, channel="email", kind="security")
-    # Change Set T (AT-326): routine notifications show the approximate location and network; the full public
-    # address is only under Security details in the app.
-    for part in ("Location: Saudi Arabia", "Network: Unknown network", "IP address: public address", "Sign-in method: password+passkey",
+    # Change Set W: the complete IP address (Full Details, the default)
+    for part in ("Location: Saudi Arabia", "Network: Unknown network", "IP address: 5.42.0.7", "Sign-in method: password+passkey",
                  "Device: Firefox · Linux · desktop"):
         assert part in msg.body
-    assert "5.42.0.7" not in msg.body
     # "every sign-in" information is optional and off by default
     assert not Notification.objects.filter(user=son1, title="New sign-in to your account").exists()
 
