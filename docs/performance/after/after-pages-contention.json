@@ -1,0 +1,114 @@
+{
+ "base": "http://localhost:8001",
+ "conditions": "Chromium; 20 ms latency, 40/20 Mbit/s; CPU 2x slowdown; cold browser cache",
+ "flows": {
+  "Sign-in page usable": {
+   "median_ms": 484,
+   "runs": [
+    413,
+    484,
+    489
+   ],
+   "requests": 21,
+   "api_requests": 1,
+   "kb": 89,
+   "js_kb": 72
+  },
+  "Sign-in → dashboard usable": {
+   "median_ms": 1055,
+   "runs": [
+    980,
+    1055,
+    1066
+   ],
+   "requests": 16,
+   "api_requests": 7,
+   "kb": 35,
+   "js_kb": 0
+  },
+  "Settings initial (General)": {
+   "median_ms": 227,
+   "runs": [
+    188,
+    227,
+    231
+   ],
+   "requests": 4,
+   "api_requests": 4,
+   "kb": 8,
+   "js_kb": 0
+  },
+  "Settings section first visit (Backup & Recovery)": {
+   "median_ms": 308,
+   "runs": [
+    270,
+    308,
+    353
+   ],
+   "requests": 4,
+   "api_requests": 4,
+   "kb": 15,
+   "js_kb": 0
+  },
+  "Settings section switch, previously loaded": {
+   "median_ms": 316,
+   "runs": [
+    298,
+    316,
+    368
+   ],
+   "requests": 7,
+   "api_requests": 7,
+   "kb": 66,
+   "js_kb": 0
+  },
+  "Folder browse (large folder, first documents)": {
+   "median_ms": 818,
+   "runs": [
+    744,
+    818,
+    943
+   ],
+   "requests": 34,
+   "api_requests": 6,
+   "kb": 258,
+   "js_kb": 0
+  },
+  "Folder browse (normal folder)": {
+   "median_ms": 642,
+   "runs": [
+    463,
+    642,
+    672
+   ],
+   "requests": 34,
+   "api_requests": 6,
+   "kb": 193,
+   "js_kb": 0
+  },
+  "Document Details open": {
+   "median_ms": 492,
+   "runs": [
+    434,
+    492,
+    552
+   ],
+   "requests": 8,
+   "api_requests": 8,
+   "kb": 11,
+   "js_kb": 0
+  },
+  "Search (family dataset)": {
+   "median_ms": 634,
+   "runs": [
+    603,
+    634,
+    700
+   ],
+   "requests": 36,
+   "api_requests": 8,
+   "kb": 80,
+   "js_kb": 0
+  }
+ }
+}

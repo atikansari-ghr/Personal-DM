@@ -7,14 +7,14 @@ import { Avatar, Confirm, CopyButton, Icon, Skeleton, useAsync, useToast } from 
 
 function GroupMapping() {
   const toast = useToast();
-  const { data, reload } = useAsync(() => api<{ settings: any[] }>("settings"), []);
+  const { data, reload } = useAsync(() => api<{ settings: any[] }>("settings", { query: { keys: "authentik.group_mapping" } }), []);
   const [rows, setRows] = useState<[string, string][] | null>(null);
   if (!data) return <Skeleton />;
   const current: Record<string, string> = data.settings.find((s) => s.key === "authentik.group_mapping")?.value || {};
   const list = rows ?? Object.entries(current);
   const save = async () => {
     const value = Object.fromEntries(list.filter(([g]) => g.trim()).map(([g, r]) => [g.trim(), r]));
-    try { await api("settings", { method: "PUT", body: { values: { "authentik.group_mapping": value } } }); toast("Group mapping saved"); setRows(null); reload(); }
+    try { await api("settings", { method: "PUT", body: { values: { "authentik.group_mapping": value } }, query: { brief: 1 } }); toast("Group mapping saved"); setRows(null); reload(); }
     catch (e: any) { toast(e.data?.fields?.["authentik.group_mapping"] || e.message, "error"); }
   };
   return (

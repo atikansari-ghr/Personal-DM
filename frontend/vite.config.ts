@@ -1,4 +1,5 @@
-import { cpSync, existsSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { brotliCompressSync, constants as zc, gzipSync } from "node:zlib";
 import { resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
@@ -21,8 +22,34 @@ function pdfjsAssets(): Plugin {
   };
 }
 
+// Change Set X: pre-compressed copies (.br and .gz) of every text asset, written next to the file. The server
+// (WhiteNoise) sends them to browsers that accept them; nothing is compressed per request. Node's own zlib: no
+// extra dependency.
+function precompress(): Plugin {
+  const TEXT = /\.(js|mjs|css|html|svg|json|webmanifest|txt|map|bcmap|ttf|pfb)$/i;
+  const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
+    const p = resolve(dir, n);
+    return statSync(p).isDirectory() ? walk(p) : [p];
+  });
+  return {
+    name: "precompress",
+    apply: "build",
+    closeBundle() {
+      const out = resolve(__dirname, "dist");
+      for (const f of walk(out)) {
+        if (!TEXT.test(f) || statSync(f).size < 1024) continue;
+        const buf = readFileSync(f);
+        const br = brotliCompressSync(buf, { params: { [zc.BROTLI_PARAM_QUALITY]: 11, [zc.BROTLI_PARAM_SIZE_HINT]: buf.length } });
+        const gz = gzipSync(buf, { level: 9 });
+        if (br.length < buf.length * 0.95) writeFileSync(f + ".br", br);
+        if (gz.length < buf.length * 0.95) writeFileSync(f + ".gz", gz);
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), pdfjsAssets()],
+  plugins: [react(), pdfjsAssets(), precompress()],
   // MapLibre (sign-in map, Change Set V): always the CSP build, whose worker is a same-origin file - the strict
   // Content-Security-Policy (script-src 'self', no blob: workers) stays unchanged. The Leaflet bridge imports
   // "maplibre-gl" too, so the alias covers it.

@@ -98,6 +98,8 @@ def settings_api(request):
                                    link="/settings/authentication")
         if errors:
             return Response({"error": "Some settings were not saved.", "fields": errors, "saved": changed}, status=400)
+        if request.query_params.get("brief"):  # Change Set X: callers that do not need the full list back
+            return Response({"saved": changed})
     visible = [s for s in SETTINGS if s.scope == USER or user.is_main_admin or s.section in ("general",)
                or (user.is_admin and s.section in ADMIN_SECTIONS)]
     if not user.is_main_admin:

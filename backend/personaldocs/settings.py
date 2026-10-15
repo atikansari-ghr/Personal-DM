@@ -185,6 +185,17 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [d for d in [FRONTEND_DIST / "assets"] if d.exists()]
 WHITENOISE_ROOT = FRONTEND_DIST if FRONTEND_DIST.exists() else None
+
+
+def _immutable_asset(path, url) -> bool:
+    """Change Set X: built app files whose name carries a content hash (or a versioned folder) never change, so
+    browsers may keep them for a year; a new release has new names. index.html and sw.js are always re-checked."""
+    import re as _re
+
+    return bool(_re.search(r"/static/app/(pdfjs-[^/]+/.+|.+-[A-Za-z0-9_-]{8}\.(js|mjs|css|woff2?|wasm))$", url))
+
+
+WHITENOISE_IMMUTABLE_FILE_TEST = _immutable_asset
 # Installed-app identity files need their proper types (Python's mimetypes has no entry for .webmanifest).
 WHITENOISE_MIMETYPES = {".webmanifest": "application/manifest+json", ".ico": "image/x-icon"}
 

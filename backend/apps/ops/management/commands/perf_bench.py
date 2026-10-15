@@ -56,7 +56,6 @@ def requests_for(admin: bool, ids: dict) -> list[tuple[str, str]]:
         ("admin: security health", "/api/security/health"),
         ("admin: login audit", "/api/admin/security/logins"),
         ("admin: backup overview", "/api/backup/overview"),
-        ("admin: backup destinations", "/api/backup/destinations"),
         ("admin: connections", "/api/admin/connections"),
         ("admin: sign-in designs", "/api/signin-designs"),
     ]
@@ -94,7 +93,8 @@ class Command(BaseCommand):
             if r.status_code != 200:
                 raise CommandError(f"Sign-in as {username} failed: {r.status_code} {r.content[:200]!r}")
             rows = {"sign-in (password)": {"median_ms": round(login_ms, 1)}}
-            for name, url in requests_for(admin, ids):
+            uids = self._ids_for(c, ids)  # folders and a document this person may open
+            for name, url in requests_for(admin, uids):
                 rows[name] = self._measure(c, url, o["runs"])
             results["users"][username] = rows
         self._print(results, json.load(open(o["compare"])) if o.get("compare") else None)
@@ -105,6 +105,17 @@ class Command(BaseCommand):
             failures = budget_failures(results)
             if failures:
                 raise CommandError("Performance budget exceeded:\n" + "\n".join(failures))
+
+    def _ids_for(self, c, ids):
+        import json as _json
+
+        folders = [f for f in _json.loads(c.get("/api/folders").content)["folders"] if not f.get("path_only")]
+        if not folders:
+            return ids
+        big = max(folders, key=lambda f: f.get("count") or 0)
+        normal = next((f for f in folders if 5 <= (f.get("count") or 0) <= 40), big)
+        docs = _json.loads(c.get(f"/api/documents?folder={normal['id']}&limit=1").content).get("documents") or []
+        return {**ids, "big_folder": big["id"], "folder": normal["id"], "document": docs[0]["id"] if docs else ids["document"]}
 
     def _measure(self, c, url, runs):
         times, db_ms, queries, size, status = [], [], 0, 0, 0

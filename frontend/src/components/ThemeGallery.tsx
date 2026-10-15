@@ -22,7 +22,7 @@ export default function ThemeGallery() {
     setCurrent(id);
     applyThemeAttr(id);
     try {
-      await api("settings", { method: "PUT", body: { values: { "me.theme": id } } });
+      await api("settings", { method: "PUT", body: { values: { "me.theme": id } }, query: { brief: 1 } });
       toast(`Theme: ${THEMES.find((t) => t.id === id)?.name}. Applies on all your devices.`);
       window.dispatchEvent(new Event("pd:settings-saved"));
       refresh().catch(() => undefined);

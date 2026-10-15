@@ -1,30 +1,52 @@
+import { Suspense, useEffect } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import OcrReviewPage from "./pages/OcrReview";
 import { safeNext } from "./api";
-import Layout from "./components/Layout";
 import { Skeleton } from "./components/ui";
-import ArchivePage from "./pages/Archive";
 import { ChangePassword, ForcedTwoFactor, ForgotPassword, Login, ResetPassword } from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
-import DocumentPage from "./pages/DocumentPage";
-import FoldersPage from "./pages/Folders";
-import HelpPage from "./pages/Help";
-import ImportWizard from "./pages/ImportWizard";
-import NotificationsPage from "./pages/Notifications";
-import OfflinePage from "./pages/Offline";
-import SearchPage from "./pages/Search";
-import SettingsPage from "./pages/Settings";
 import Setup from "./pages/Setup";
-import SharedPage from "./pages/Shared";
-import UploadShared from "./pages/UploadShared";
 import { useSession } from "./session";
-import AssistantPage from "./pages/Assistant";
-import RecoveryPage from "./pages/Recovery";
+import { clearChunkReloadFlag, lazyPage, prefetchWhenIdle } from "./lazy";
+
+// Change Set X: sign-in, setup and password screens stay in the main file (they must work at once); every other
+// screen loads when first opened, and the likely next ones are fetched in the background when the browser is idle.
+const load = {
+  layout: () => import("./components/Layout"),
+  dashboard: () => import("./pages/Dashboard"),
+  folders: () => import("./pages/Folders"),
+  document: () => import("./pages/DocumentPage"),
+  search: () => import("./pages/Search"),
+  settings: () => import("./pages/Settings"),
+  notifications: () => import("./pages/Notifications"),
+};
+const Layout = lazyPage(load.layout);
+const Dashboard = lazyPage(load.dashboard);
+const FoldersPage = lazyPage(load.folders);
+const DocumentPage = lazyPage(load.document);
+const SearchPage = lazyPage(load.search);
+const SettingsPage = lazyPage(load.settings);
+const NotificationsPage = lazyPage(load.notifications);
+const OcrReviewPage = lazyPage(() => import("./pages/OcrReview"));
+const ArchivePage = lazyPage(() => import("./pages/Archive"));
+const HelpPage = lazyPage(() => import("./pages/Help"));
+const ImportWizard = lazyPage(() => import("./pages/ImportWizard"));
+const OfflinePage = lazyPage(() => import("./pages/Offline"));
+const SharedPage = lazyPage(() => import("./pages/Shared"));
+const UploadShared = lazyPage(() => import("./pages/UploadShared"));
+const AssistantPage = lazyPage(() => import("./pages/Assistant"));
+const RecoveryPage = lazyPage(() => import("./pages/Recovery"));
+
+const Loading = () => <div style={{ padding: 40 }}><Skeleton /></div>;
 
 export default function App() {
   const { session, offline } = useSession();
   const loc = useLocation();
-  if (!session) return <div style={{ padding: 40 }}><Skeleton /></div>;
+  const signedIn = !!session?.user;
+  useEffect(() => {
+    clearChunkReloadFlag();
+    // on the sign-in page: the first screen after signing in; when signed in: the screens people open next
+    prefetchWhenIdle(signedIn ? [load.folders, load.document, load.search, load.settings, load.notifications] : [load.layout, load.dashboard]);
+  }, [signedIn]);
+  if (!session) return <Loading />;
   const publicRoutes = (
     <Routes>
       <Route path="/setup" element={<Setup />} />
@@ -37,17 +59,17 @@ export default function App() {
   if (!session.user) return publicRoutes;
   if (offline) {
     return (
-      <Layout>
+      <Suspense fallback={<Loading />}><Layout>
         <Routes>
           <Route path="*" element={<OfflinePage />} />
         </Routes>
-      </Layout>
+      </Layout></Suspense>
     );
   }
   if (session.user.must_change_password) return <ChangePassword forced />;
   if (session.user.two_factor_setup_required) return <ForcedTwoFactor />;
   return (
-    <Layout>
+    <Suspense fallback={<Loading />}><Layout><Suspense fallback={<Skeleton />}>
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/folders" element={<FoldersPage />} />
@@ -73,6 +95,6 @@ export default function App() {
         <Route path="/setup" element={<Navigate to="/" replace />} />
         <Route path="*" element={<div className="empty"><h1>Page not found</h1></div>} />
       </Routes>
-    </Layout>
+    </Suspense></Layout></Suspense>
   );
 }

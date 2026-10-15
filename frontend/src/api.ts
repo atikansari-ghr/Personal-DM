@@ -15,14 +15,53 @@ function csrf(): string {
   return m ? decodeURIComponent(m[1]) : "";
 }
 
-export async function api<T = any>(path: string, opts: { method?: string; body?: any; form?: FormData; query?: Record<string, any> } = {}): Promise<T> {
+type ApiOpts = { method?: string; body?: any; form?: FormData; query?: Record<string, any>; signal?: AbortSignal };
+
+export function apiUrl(path: string, query?: Record<string, any>): string {
   let url = path.startsWith("/") ? path : `/api/${path}`;
-  if (opts.query) {
+  if (query) {
     const q = new URLSearchParams();
-    Object.entries(opts.query).forEach(([k, v]) => v !== undefined && v !== null && v !== "" && q.set(k, String(v)));
+    Object.entries(query).forEach(([k, v]) => v !== undefined && v !== null && v !== "" && q.set(k, String(v)));
     const s = q.toString();
     if (s) url += (url.includes("?") ? "&" : "?") + s;
   }
+  return url;
+}
+
+// Change Set X: identical GET requests that are in flight at the same time share one network request (several
+// components asking for the same data on one screen). Each caller still gets its own copy of the data.
+const inflight = new Map<string, Promise<{ status: number; ok: boolean; ct: string; text: string }>>();
+// Short-lived copies of data a screen may show again at once (Settings sections). Any change made through the API
+// (POST/PUT/PATCH/DELETE) clears them, so what a person just saved is always re-read.
+const recent = new Map<string, { at: number; data: any }>();
+const listeners = new Set<() => void>();
+export function onApiWrite(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; }
+
+/** Data for `path` (a GET): the copy from the last `maxAgeMs` if there is one (onCached receives it at once), then
+ *  fresh data from the server. Used for screens that are opened again and again, e.g. Settings sections. */
+export async function apiFresh<T = any>(path: string, opts: { query?: Record<string, any>; signal?: AbortSignal; maxAgeMs?: number; onCached?: (d: T) => void } = {}): Promise<T> {
+  const url = apiUrl(path, opts.query);
+  const hit = recent.get(url);
+  if (hit && Date.now() - hit.at < (opts.maxAgeMs ?? 10 * 60_000)) opts.onCached?.(structuredClone(hit.data));
+  const data = await api<T>(url, { signal: opts.signal });
+  recent.set(url, { at: Date.now(), data: structuredClone(data) });
+  return data;
+}
+
+// Loading problems are reported to the server for Admin → Performance (kind and status only, never the address).
+const pending: { kind: string; status?: number }[] = [];
+let reportTimer: number | undefined;
+export function reportClientError(kind: "api_error" | "network_error" | "chunk_error", status?: number) {
+  if (pending.length < 20) pending.push({ kind, status });
+  if (reportTimer === undefined) reportTimer = window.setTimeout(() => {
+    reportTimer = undefined;
+    const errors = pending.splice(0);
+    if (errors.length) fetch("/api/perf/client", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf() }, body: JSON.stringify({ errors }) }).catch(() => undefined);
+  }, 15_000);
+}
+
+export async function api<T = any>(path: string, opts: ApiOpts = {}): Promise<T> {
+  const url = apiUrl(path, opts.query);
   const method = opts.method || (opts.body || opts.form ? "POST" : "GET");
   const headers: Record<string, string> = { Accept: "application/json" };
   if (method !== "GET") headers["X-CSRFToken"] = csrf();
@@ -32,11 +71,32 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
     headers["Content-Type"] = "application/json";
     body = JSON.stringify(opts.body);
   }
-  const res = await fetch(url, { method, headers, body, credentials: "same-origin" });
-  if (res.status === 204) return undefined as T;
-  const ct = res.headers.get("content-type") || "";
-  const data = ct.includes("json") ? await res.json() : await res.text();
-  if (!res.ok) {
+  let r: { status: number; ok: boolean; ct: string; text: string };
+  try {
+    if (method === "GET" && !opts.signal) {
+      let p = inflight.get(url);
+      if (!p) {
+        p = fetch(url, { method, headers, credentials: "same-origin" })
+          .then(async (res) => ({ status: res.status, ok: res.ok, ct: res.headers.get("content-type") || "", text: await res.text() }))
+          .finally(() => inflight.delete(url));
+        inflight.set(url, p);
+      }
+      r = await p;
+    } else {
+      const res = await fetch(url, { method, headers, body, credentials: "same-origin", signal: opts.signal });
+      r = { status: res.status, ok: res.ok, ct: res.headers.get("content-type") || "", text: await res.text() };
+    }
+  } catch (e: any) {
+    if (e?.name !== "AbortError" && navigator.onLine) reportClientError("network_error");
+    throw e;  // unchanged: callers (offline mode) tell network failures apart from server answers
+  }
+  if (method !== "GET") { recent.clear(); listeners.forEach((fn) => fn()); }
+  if (r.status === 204) return undefined as T;
+  let data: any = r.text;
+  if (r.ct.includes("json")) { try { data = JSON.parse(r.text); } catch { data = { error: r.text }; } }
+  if (!r.ok) {
+    if (r.status >= 500) reportClientError("api_error", r.status);
+    const res = r;
     const err = new ApiError(res.status, data);
     if (res.status === 403 && data?.code === "password_change_required") window.dispatchEvent(new Event("pd:password-change"));
     if (res.status === 403 && data?.code === "two_factor_setup_required") window.dispatchEvent(new Event("pd:2fa-setup"));

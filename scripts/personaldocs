@@ -385,6 +385,7 @@ PD_BEHIND_PROXY=1
 PD_TRUSTED_PROXY_IPS=127.0.0.1
 PD_BIND=${OPT_BIND:-127.0.0.1:8000}
 PD_WEB_WORKERS=2
+PD_WEB_THREADS=4
 PD_DATA_DIR=$DATA_DIR
 PD_CONFIG_DIR=$CONF_DIR
 PD_FRONTEND_DIST=$CURRENT/frontend/dist
@@ -768,6 +769,9 @@ cmd_post_upgrade() { # setup steps a new release adds (ClamAV, host helper, unit
   install_optional_packages
   install_units "$rel"
   install_security_tools "$rel"
+  grep -q '^PD_WEB_THREADS=' "$ENV_FILE" 2>/dev/null || env_set PD_WEB_THREADS 4   # Change Set X (gunicorn threads)
+  # Change Set X: safe performance maintenance (statistics, index validity, cache and temporary files); never deletes data
+  manage perf_maintenance || c_warn "performance maintenance reported a problem (the upgrade continues); see: journalctl -u personaldocs-web"
   if [ "${PD_NO_RESTART:-0}" != 1 ]; then
     for u in "${UNITS[@]}"; do systemctl restart "$u"; done
     health || { show_web_failure; die "web service unhealthy after the post-upgrade steps; run: sudo personaldocs repair"; }

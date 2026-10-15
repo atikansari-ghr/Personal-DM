@@ -128,7 +128,7 @@ export default function Dashboard() {
   };
   const save = async () => {
     try {
-      await api("settings", { method: "PUT", body: { values: { "me.dashboard_widgets": order, "me.overview_layout": Object.fromEntries(order.map((id) => [id, cfgOf(id)])) } } });
+      await api("settings", { method: "PUT", body: { values: { "me.dashboard_widgets": order, "me.overview_layout": Object.fromEntries(order.map((id) => [id, cfgOf(id)])) } }, query: { brief: 1 } });
       await refresh();
       setEditing(false);
       toast("Overview saved on all your devices");

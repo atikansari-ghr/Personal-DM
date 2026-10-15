@@ -14,7 +14,7 @@ function WeatherTools() {
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
   const [city, setCity] = useState<any>(undefined);
-  const { data: settings } = useAsync(() => api<{ settings: any[] }>("settings"), []);
+  const { data: settings } = useAsync(() => api<{ settings: any[] }>("settings", { query: { keys: "weather.default_city" } }), []);
   const current = city !== undefined ? city : settings?.settings.find((s) => s.key === "weather.default_city")?.value;
   return (
     <div className="row" style={{ marginTop: ".6rem" }}>
