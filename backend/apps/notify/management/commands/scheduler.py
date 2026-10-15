@@ -80,6 +80,19 @@ def tick() -> dict:
         out["security"] = security_tick(now_local, _due_daily, _mark)
     except Exception:  # noqa: BLE001 - security housekeeping must not stop reminders/backups
         log.exception("security maintenance failed")
+    try:
+        from apps.core import rotation
+
+        out["signin_rotation"] = rotation.tick(now_local)
+    except Exception as exc:  # noqa: BLE001 - a design problem must never stop reminders/backups
+        log.exception("sign-in design rotation failed")
+        try:
+            from apps.core import designs
+
+            designs._alert(f"Sign-in design rotation failed: {type(exc).__name__}. The current design stays active.",
+                           tag="rotation:failed")
+        except Exception:  # noqa: BLE001
+            pass
     return out
 
 
