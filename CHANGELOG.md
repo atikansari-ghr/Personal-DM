@@ -26,8 +26,8 @@ Measured before and after on a synthetic 8,000-document family library ([docs/PE
 - **Settings → Performance** (administrators): response times by request type, slowest requests, job durations,
   CPU/memory/swap/storage, queue, database connections, caches, warnings and events; **Performance Diagnostic
   Report** for the main administrator. Aggregated measurements only, kept 14 days, nothing private.
-- **Dashboard and folder tree.** Document counts in one query; admin health summaries cached 30 s and refreshed when
-  a backup, scan or security job ends; a partial index (built concurrently) makes per-folder counts an index-only scan.
+- **Dashboard and folder tree.** Document counts in one query; a partial index (built concurrently) makes
+  per-folder counts an index-only scan.
 - **Safe post-upgrade maintenance** (statistics, index validity, cache, temporary files, app file check).
 - Search and OCR work exactly as before (same search design, faster list queries).
 - **Upgrade impact.** Migrations `core.0007`, `library.0012` (additive, reversible). See

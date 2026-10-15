@@ -60,7 +60,7 @@ background once the page is usable. They are not counted in "usable" time and la
 | Folder documents, 100 rows | 183 ms, 108 queries | 44 ms, 7 queries |
 | Folder documents, 200 rows | 367 ms, 208 queries | 74 ms, 7 queries |
 | Session check (every page load) | 44 ms, 44 queries | 16 ms, 12 queries |
-| Dashboard | 121 ms, 59 queries | 105 ms, 18 queries |
+| Dashboard | 121 ms, 59 queries | 93 ms, 32 queries (health summaries computed fresh) |
 | Search | 386 ms, 58 queries | 96 ms, 7 queries |
 | Sign-in designs | 46 ms, 36 queries | 19 ms, 14 queries |
 | Family members | 44 ms, 42 queries | 34 ms, 29 queries (one query per person remains: passkey counts; family scale) |
@@ -109,7 +109,7 @@ start. After the load stopped, throttling ended after three calm samples. Start 
 | 4 | Every screen downloaded the whole app | One 829 KB file for every page, sent uncompressed and cached only 60 s | Route and Settings-section code splitting, idle prefetch, precompressed (Brotli/gzip) immutable files |
 | 5 | Settings fetched everything for every section, again on every switch | One endpoint returned all settings; sections re-fetched on remount | Section filter, cached section data shown at once and refreshed, cancelled on leave |
 | 6 | Slow requests made everyone wait under load | 2 single-threaded web workers: two slow requests blocked the app | 2 workers × 4 threads (measured +48 % throughput under contention) |
-| 7 | Dashboard | Four separate document counts, full document rows | One aggregate query, deferred columns; admin health summaries cached 30 s with invalidation |
+| 7 | Dashboard | Four separate document counts, full document rows | One aggregate query, deferred columns (health summaries are not cached: they must never be stale) |
 | 8 | Folder tree counts grow with the library | Sequential scan for per-folder counts | Partial index `doc_active_folder_idx` (index-only scan: 9.1 → 1.3 ms at 8,000 documents), built concurrently |
 
 ## How to repeat the measurements {#repeat}

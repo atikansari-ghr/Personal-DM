@@ -45,7 +45,7 @@ Personal DM caches only data that is the same for everyone allowed to see it, an
 | Signing in, permissions, sessions, documents, details, uploads, archive, sharing | Always read fresh, on every request |
 | Settings | Read once per request; a saved change applies from the next request, in every server process |
 | Sign-in page design (public) | Cached until a design or the sign-in title changes |
-| Backup and security health summaries (administrators) | Up to 30 s old; refreshed at once when a backup, scan or security job ends or a related setting changes |
+| Backup and security health (administrators) | Always computed fresh |
 
 Passwords, keys, tokens and other secrets are never cached. No external cache service (such as Redis) is needed.
 

@@ -390,14 +390,10 @@ def test_at420_permission_and_settings_changes_apply_immediately(family, clients
     assert clients["son1"].get(f"/api/documents/{docs[0].pk}").status_code in (403, 404)
     config.set_value("general.app_name", "Fresh name")
     assert clients["dad"].get("/api/session").json()["app_name"] == "Fresh name"
-    # health summaries are retired when a health-relevant job finishes
-    calls = []
-    perfcache.cached("health", 30, lambda: calls.append(1), key="backup")
-    from apps.core import jobs
-
-    jobs.run_job(jobs.enqueue("integrity_check", {}))
-    perfcache.cached("health", 30, lambda: calls.append(1), key="backup")
-    assert len(calls) == 2
+    # health summaries (backup, security) are computed fresh for every request, never cached
+    clients["dad"].get("/api/dashboard")
+    clients["dad"].get("/api/dashboard")
+    assert "health" not in perfcache.stats()
 
 
 # ------------------------------------------------------------------ AT-421 search architecture unchanged

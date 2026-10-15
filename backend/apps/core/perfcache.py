@@ -1,8 +1,7 @@
 """Small shared cache for derived, non-private summaries (Change Set X).
 
-Only for data that is the same for everyone allowed to see it and that may be a few seconds old: the public
-sign-in page design, the administrators' backup and security health summaries. Never for permissions, sessions,
-documents, metadata or secrets: those are always read fresh.
+Only for data that is the same for everyone and is retired explicitly on every change: the public sign-in page
+design. Never for permissions, sessions, documents, metadata, health or secrets: those are always read fresh.
 
 The cache is file-based (``<data dir>/cache/shared``), so every web worker, the job worker and the scheduler see the
 same entries, and an invalidation in one process takes effect in all of them at once. Each name has a generation

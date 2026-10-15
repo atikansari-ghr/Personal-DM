@@ -114,10 +114,6 @@ def claim(worker: str, heavy_limit: int = 1) -> Job | None:
         return job
 
 
-# job kinds whose completion changes the administrators' health summaries (perfcache "health")
-HEALTH_KINDS = ("backup", "av_", "security", "integrity", "recovery", "key_rotation", "geoip")
-
-
 def run_job(job: Job) -> None:
     import time as _time
 
@@ -125,12 +121,10 @@ def run_job(job: Job) -> None:
     ok = [False]
     try:
         _run_job(job, ok)
-    finally:  # Change Set X: job durations for Admin → Performance; fresh health summaries after health-relevant jobs
-        from . import perf, perfcache
+    finally:  # Change Set X: job durations for Admin → Performance
+        from . import perf
 
         perf.record_job(job.kind, (_time.perf_counter() - started) * 1000, ok[0])
-        if job.kind.startswith(HEALTH_KINDS):
-            perfcache.invalidate("health")
 
 
 def _run_job(job: Job, ok: list) -> None:

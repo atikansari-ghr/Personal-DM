@@ -99,7 +99,7 @@ layout is unchanged except the new Settings → Performance tab and a **Load mor
 | Frontend size | All screens in one 829 KB file; WhiteNoise served it uncompressed with `max-age=60` | Route and Settings-section splitting, idle prefetch, build-time Brotli/gzip, immutable caching of hashed files, reload once on a missing chunk | `App.tsx`, `lazy.ts`, `pages/Settings.tsx`, `vite.config.ts`, `settings.py` |
 | Settings data | One endpoint returned every setting (107 KB) for every section and every save | `?section=` / `?keys=` filters, `?brief=1` saves, stale-while-revalidate section cache | `core/views.py`, `api.ts`, `SettingsForm.tsx` |
 | Concurrency | 2 sync gunicorn workers: two slow requests blocked everyone | `deployment/gunicorn.conf.py`: 2 × 4 gthread (measured) | `deployment/*`, `scripts/personaldocs` |
-| Dashboard | 4 COUNT queries; health summaries recomputed per request | One conditional aggregate; health cached 30 s, invalidated by jobs and settings | `library/views.py`, `core/perfcache.py`, `core/jobs.py` |
+| Dashboard | 4 COUNT queries; full document rows | One conditional aggregate, deferred columns (health summaries stay fresh: a 30 s cache was tried and removed after the backup-health test caught a stale value) | `library/views.py` |
 | Folder-tree counts | Sequential scan of documents | Partial index, index-only count | `library/migrations/0012_*` |
 | Background contention | No reaction to sustained pressure | Adaptive throttling of non-urgent job starts, bounded | `core/throttle.py`, `core/jobs.py`, scheduler |
 | No visibility | No performance data | Request/job/system metrics (aggregated), Performance page, Diagnostic Report | `core/perf.py`, `core/perf_views.py`, `Performance.tsx` |

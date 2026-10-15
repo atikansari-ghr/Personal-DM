@@ -1032,10 +1032,7 @@ def dashboard(request):
         from apps.security import center
 
         try:
-            from apps.core import perfcache
-
-            # Change Set X: a summary that may be up to 30 s old; retired at once by related jobs and settings
-            data["security_health"] = perfcache.cached("health", 30, center.security_health, key="security")
+            data["security_health"] = center.security_health()
         except Exception:  # noqa: BLE001 - the Overview must load even if a health source fails
             data["security_health"] = None
     for v in SavedView.objects.filter(user=request.user, show_on_dashboard=True):
@@ -1049,10 +1046,7 @@ def dashboard(request):
         try:
             from apps.ops import bk_engine
 
-            from apps.core import perfcache
-
-            # from verified recovery state, not process liveness; up to 30 s old, retired by backup jobs and settings
-            data["admin"]["backup_health"] = perfcache.cached("health", 30, bk_engine.health, key="backup")
+            data["admin"]["backup_health"] = bk_engine.health()  # from verified recovery state, not process liveness
         except Exception:  # noqa: BLE001 - the Overview must load even if a health source fails
             data["admin"]["backup_health"] = None
     try:

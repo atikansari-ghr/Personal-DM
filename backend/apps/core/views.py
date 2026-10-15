@@ -78,8 +78,6 @@ def settings_api(request):
 
             if any(k.startswith(("login.", "general.app_name", "auth.", "google.", "authentik.")) for k in changed):
                 perfcache.invalidate("branding")  # the sign-in page shows the title, logo and enabled sign-in methods
-            if any(k.startswith(("security.", "backup.", "antivirus.", "nas.", "storage.")) for k in changed):
-                perfcache.invalidate("health")
             if any(k in ("login.design", "login.overlay", "login.position") for k in changed):
                 from . import designs
 
