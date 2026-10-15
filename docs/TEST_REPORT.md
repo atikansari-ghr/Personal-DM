@@ -69,7 +69,7 @@ the tests and screenshots are drawn in the browser or generated with Pillow; no 
 | Command | Result |
 |---|---|
 | `pytest tests/test_corrective_w.py` | **28 passed** |
-| Full `pytest` | FULL_PYTEST |
+| Full `pytest` | **525 tests: 520 passed, 5 skipped, 0 failed** (skipped: 2 need a running ClamAV, 3 need the real PaddleOCR runtime) |
 | `scripts/e2e.sh` (fresh database, final run) | **158 PASS, 0 FAIL** (exit 0): flow; accessibility in every theme; parity and layout (7 viewports); offline; PWA; themes; recovery; **corrective 32** (incl. Change Set W: new design → wallpaper → focal point → Set as Active → public sign-in page uses the design with a light palette → Revert; rotation pool, status card, Preview Rotation, single-design pool refused, family member refused; Notification detail per person); **screenshots 8** |
 | `npm run build` (TypeScript check and production build) | Passed |
 | `python3 scripts/check_docs.py` | **OK** |

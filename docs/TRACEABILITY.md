@@ -542,7 +542,7 @@ prompt AT-n → AT-(n+25). Test functions in `tests/test_corrective_w.py` (CW) a
 | AT-397 (372) | Complete IPv4 / IPv6 in sign-in views, map, alerts, notifications | IP-1 | `security/location.privacy_ip`, `views_signins.py`, `alerts.py` | CW `test_at397_*`; `test_signin_security.py`; corrective.mjs map details | security-map | Passed |
 | AT-398 (373) | Detail Level Full (default) / Minimal with personal override; presentation only | ND-1 | `core/registry.py`, `core/migrations/0004_*`, `notify/templates.detail_for`, `Account.tsx` | CW `test_at398_*`; corrective.mjs "AT-396/AT-397" | notifications#detail-level | Passed |
 | AT-399 (374) | Full Details never bypass recipient authorisation; all channels share one renderer | ND-1 | `templates.DOC_ALLOWED`, `rich._value`, `expiry.dispatch` | CW `test_at399_*`; `test_expiry.py`, `test_events.py` | notifications#detail-level | Passed (delivery to real Email/Telegram/WhatsApp/Discord/Push accounts: **Blocked / Not Executed**) |
-| AT-400 (375) | Full release gate; docs and settings reference current | all | — | CW `test_at400_*`; full `pytest`; `scripts/e2e.sh`; `check_docs.py`; `privacy_check.sh` | TEST_REPORT.md#change-set-w | See TEST_REPORT.md#change-set-w |
+| AT-400 (375) | Full release gate; docs and settings reference current | all | — | CW `test_at400_*`; full `pytest` (520 passed, 5 skipped); `npm run build`; `scripts/e2e.sh` (158 PASS); `check_docs.py`; `privacy_check.sh` | TEST_REPORT.md#change-set-w | Passed (real-channel delivery and production smoke test: **Blocked / Not Executed**) |
 
 Not run (needs real accounts or devices, never reported as passed): delivery to real Email, Telegram, WhatsApp,
 Discord and Web Push accounts; a production smoke test; Firefox and Safari.
