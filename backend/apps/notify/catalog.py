@@ -25,6 +25,9 @@ def is_critical(key: str) -> bool:
 def _legacy(user, key):
     from apps.core.models import UserSetting
 
+    rows = config._user_rows(user)  # the request's settings snapshot, when inside a request
+    if rows is not None:
+        return rows.get(key)
     row = UserSetting.objects.filter(user=user, key=key).first()
     return None if row is None else row.value
 

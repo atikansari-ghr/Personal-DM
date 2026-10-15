@@ -103,10 +103,11 @@ def path_for(kind: str) -> Path | None:
 def public() -> dict:
     """What the sign-in page needs (shown before sign-in, so nothing private): the active named design (Change Set W).
     The page reads it on load; an open sign-in page is never refreshed when the design changes."""
-    from . import designs
+    from . import designs, perfcache
 
     try:
-        return designs.payload(designs.active())
+        # Change Set X: the same for every visitor; invalidated by every design change (designs.py, settings)
+        return perfcache.cached("branding", 300, lambda: designs.payload(designs.active()))
     except Exception:  # noqa: BLE001 - the sign-in page must always render (before migrations, damaged data)
         return {"design": "minimal", "title": config.get("login.title") or config.get("general.app_name"),
                 "tagline": config.get("login.tagline"), "overlay": 0, "position": "center", "focal": [0.5, 0.5],

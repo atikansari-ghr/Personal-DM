@@ -201,7 +201,11 @@ class Document(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [GinIndex(fields=["search_vector"])]
+        indexes = [
+            GinIndex(fields=["search_vector"]),
+            # Change Set X: document counts per folder (folder tree) as an index-only scan of active documents
+            models.Index(fields=["folder"], condition=Q(archived_at__isnull=True), name="doc_active_folder_idx"),
+        ]
 
     def __str__(self):
         return self.title

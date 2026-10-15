@@ -26,6 +26,7 @@ SECTIONS = [
     ("storage", "Storage & Backup"), ("security", "Security & Access"), ("activity", "Activity & Health"), ("appearance", "Appearance"),
     ("my_notifications", "My notifications"), ("ai", "Local AI"), ("overview", "Overview widgets"), ("login", "Sign-in page"),
     ("antivirus", "Antivirus"), ("identity", "External identity providers"), ("security_center", "Security center"), ("offline", "Offline & PWA"),
+    ("performance", "Performance"),
 ]
 ADMIN_SECTIONS = ("antivirus", "security_center")  # visible (read, and editable where allowed) to Administrators
 
@@ -73,6 +74,12 @@ def settings_api(request):
                 errors[key] = str(exc)
         if changed:
             audit.record("settings.update", request=request, keys=changed)
+            from . import perfcache
+
+            if any(k.startswith(("login.", "general.app_name", "auth.", "google.", "authentik.")) for k in changed):
+                perfcache.invalidate("branding")  # the sign-in page shows the title, logo and enabled sign-in methods
+            if any(k.startswith(("security.", "backup.", "antivirus.", "nas.", "storage.")) for k in changed):
+                perfcache.invalidate("health")
             if any(k in ("login.design", "login.overlay", "login.position") for k in changed):
                 from . import designs
 
@@ -96,6 +103,12 @@ def settings_api(request):
     if not user.is_main_admin:
         visible = [s for s in visible if s.scope == USER or s.key in ("general.app_name", "general.timezone", "general.date_format")
                    or (user.is_admin and s.section in ADMIN_SECTIONS)]
+    # Change Set X: a Settings section asks only for its own values (?section=a,b or ?keys=k1,k2); without a
+    # filter every visible setting is returned, as before. The filter narrows; it never widens what is visible.
+    only_sections = {x for x in (request.query_params.get("section") or "").split(",") if x}
+    only_keys = {x for x in (request.query_params.get("keys") or "").split(",") if x}
+    if only_sections or only_keys:
+        visible = [s for s in visible if s.section in only_sections or s.key in only_keys]
     return Response({"sections": [{"id": sid, "label": label} for sid, label in SECTIONS],
                      "settings": [_setting_json(s, user) for s in visible]})
 

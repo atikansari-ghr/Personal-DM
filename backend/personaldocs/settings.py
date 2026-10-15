@@ -87,6 +87,14 @@ SESSION_COOKIE_NAME = "pd_session"
 CSRF_COOKIE_NAME = "pd_csrftoken"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 14
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
+
+# Change Set X: "default" stays the per-process memory cache; "shared" is a small file cache that every process
+# (web workers, job worker, scheduler) sees, used only for non-private summaries (see apps/core/perfcache.py).
+CACHES = {
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    "shared": {"BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+               "LOCATION": str(DATA_DIR / "cache" / "shared"), "TIMEOUT": 300, "OPTIONS": {"MAX_ENTRIES": 500}},
+}
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "SAMEORIGIN"
@@ -112,6 +120,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "apps.core.middleware.RequestSettingsMiddleware",  # Change Set X: settings read once per request
+    "apps.core.perf.PerformanceMiddleware",  # Change Set X: request timings by route (Admin → Performance)
     "apps.security.traffic.AccessLogMiddleware",  # outermost: logs the final status (incl. policy denials)
     "apps.core.middleware.RecoveryInProgressMiddleware",  # 503 while a full-system recovery runs
     "apps.core.middleware.LocalAccessCookieMiddleware",  # adjusts the final response

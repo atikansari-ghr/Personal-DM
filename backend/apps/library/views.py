@@ -6,7 +6,7 @@ import re
 from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from django.http import FileResponse, Http404, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -97,7 +97,7 @@ def folders(request):
         while node is not None and node.parent_id is not None and node.parent_id not in visible:
             needed.add(node.parent_id)
             node = by_id.get(node.parent_id)
-    counts = dict(ctx.documents(P.VIEW).values("folder_id").annotate(n=Count("id")).values_list("folder_id", "n"))
+    counts = dict(ctx.documents(P.VIEW).values("folder_id").annotate(n=Count("*")).values_list("folder_id", "n"))
     out = [folder_json(ctx, by_id[i], counts) for i in visible if i in by_id]
     out += [folder_json(ctx, by_id[i], None, path_only=True) for i in needed if i in by_id]
     return Response({"folders": sorted(out, key=lambda f: (f["parent"] or "", f["name"].lower()))})
@@ -977,37 +977,45 @@ def metadata_delete(request, kind, pk):
 @permission_classes([IsActiveAuthenticated])
 def dashboard(request):
     ctx = _ctx(request)
-    from apps.accounts.views import _visible_member_ids, user_json
+    from apps.accounts.views import _visible_member_ids, user_json, with_head_flag
 
     docs = ctx.documents(P.VIEW)
     today = timezone.localdate()
     expiring = docs.filter(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=90))
     member_ids = _visible_member_ids(request.user)
     members = User.objects.filter(is_active=True) if member_ids is None else User.objects.filter(pk__in=member_ids, is_active=True)
+    members = with_head_flag(members)
     storage_bytes = DocumentVersion.objects.filter(document__in=docs).aggregate(s=Sum("size"))["s"] or 0
-    review = [d for d in docs.filter(state=Document.NEEDS_REVIEW).select_related("owner", "doc_type", "current_version")[:20]
-              if ctx.doc_caps(d) & P.EDIT][:8]
+    # list rows without the recognised text and OCR layout data (Change Set X: these columns can be large)
+    rows = docs.select_related(*searchlib.LIST_RELATED).defer(*searchlib.LIST_DEFER)
+    review = [d for d in rows.filter(state=Document.NEEDS_REVIEW)[:20] if ctx.doc_caps(d) & P.EDIT][:8]
+    # all document counts in one query (was four separate COUNT queries)
+    counts = docs.aggregate(
+        total=Count("id"),
+        expiring=Count("id", filter=Q(expiry_date__gte=today, expiry_date__lte=today + timedelta(days=90))),
+        expired=Count("id", filter=Q(expiry_date__lt=today)),
+        shared=Count("id", filter=~Q(owner=request.user)))
+    members = list(members)
     data = {
         "stats": {
-            "documents": docs.count(),
-            "members": members.count(),
-            "expiring_90": expiring.count(),
-            "expired": docs.filter(expiry_date__lt=today).count(),
+            "documents": counts["total"],
+            "members": len(members),
+            "expiring_90": counts["expiring"],
+            "expired": counts["expired"],
             "storage_bytes": storage_bytes,
             "needs_review": len(review),
+            "shared": counts["shared"],
         },
         "members": [user_json(u) for u in members],
-        "recent": [document_row(ctx, d) for d in docs.select_related("owner", "doc_type", "current_version").order_by("-created_at")[:6]],
-        "expiring": [document_row(ctx, d) for d in expiring.select_related("owner", "doc_type", "current_version").order_by("expiry_date")[:6]],
+        "recent": [document_row(ctx, d) for d in rows.order_by("-created_at")[:6]],
+        "expiring": [document_row(ctx, d) for d in rows.filter(pk__in=expiring.values("pk")).order_by("expiry_date")[:6]],
         "review": [document_row(ctx, d) for d in review],
         "saved_views": [],
     }
     from apps.core import config as cfg
     from apps.core import overview
 
-    shared = docs.exclude(owner=request.user)
-    data["stats"]["shared"] = shared.count()
-    data["shared"] = [document_row(ctx, d) for d in shared.select_related("owner", "doc_type", "current_version").order_by("-created_at")[:6]]
+    data["shared"] = [document_row(ctx, d) for d in rows.exclude(owner=request.user).order_by("-created_at")[:6]]
     labels = {"created": "added", "edited": "edited", "moved": "moved", "archived": "archived", "restored": "restored",
               "version_added": "uploaded a new version of", "file_added": "added a file to", "current_version": "changed the current version of",
               "field_confirmed": "confirmed details of", "field_removed": "removed a detail from", "ai_suggestion_accepted": "accepted a suggestion for"}
@@ -1024,7 +1032,10 @@ def dashboard(request):
         from apps.security import center
 
         try:
-            data["security_health"] = center.security_health()
+            from apps.core import perfcache
+
+            # Change Set X: a summary that may be up to 30 s old; retired at once by related jobs and settings
+            data["security_health"] = perfcache.cached("health", 30, center.security_health, key="security")
         except Exception:  # noqa: BLE001 - the Overview must load even if a health source fails
             data["security_health"] = None
     for v in SavedView.objects.filter(user=request.user, show_on_dashboard=True):
@@ -1038,7 +1049,10 @@ def dashboard(request):
         try:
             from apps.ops import bk_engine
 
-            data["admin"]["backup_health"] = bk_engine.health()  # from verified recovery state, not process liveness
+            from apps.core import perfcache
+
+            # from verified recovery state, not process liveness; up to 30 s old, retired by backup jobs and settings
+            data["admin"]["backup_health"] = perfcache.cached("health", 30, bk_engine.health, key="backup")
         except Exception:  # noqa: BLE001 - the Overview must load even if a health source fails
             data["admin"]["backup_health"] = None
     try:

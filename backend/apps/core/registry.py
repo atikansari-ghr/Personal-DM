@@ -536,6 +536,33 @@ SETTINGS: list[SettingDef] = [
                "path", "", "storage", help="backup-restore#validation", example="/srv/pd-validation"),
     SettingDef("audit.retention_days", "Audit log retention (days)", "Audit events older than this are deleted. 0 keeps forever.",
                "int", 730, "activity", min=0, max=36500, help="settings#activity"),
+    # ---- Performance (Change Set X): adaptive throttling and measurements
+    SettingDef("performance.throttle_enabled", "Adaptive background throttling",
+               "When the server stays under heavy load (CPU, memory, swap or disk), postpone starting non-urgent background "
+               "work (OCR, library antivirus scans, AI, reports) so signing in and browsing stay responsive. Running jobs "
+               "finish normally; security work, notifications, uploads' safety checks and backups are never postponed.",
+               "bool", True, "performance", help="performance#throttling"),
+    SettingDef("performance.throttle_cpu_percent", "Throttle when CPU busy above (%)",
+               "Average CPU use over the last two minutes that counts as heavy load.", "int", 90, "performance",
+               min=50, max=100, help="performance#throttling", example="90"),
+    SettingDef("performance.throttle_memory_available_percent", "Throttle when available memory below (%)",
+               "Share of memory still available below which the server counts as under memory pressure.", "int", 10,
+               "performance", min=3, max=50, help="performance#throttling", example="10"),
+    SettingDef("performance.throttle_swap_percent", "Throttle when swap used above (%)",
+               "Share of swap in use above which the server counts as under memory pressure (ignored without swap).",
+               "int", 50, "performance", min=5, max=100, help="performance#throttling", example="50"),
+    SettingDef("performance.throttle_io_pressure", "Throttle when disk pressure above (%)",
+               "Share of time tasks waited for the disk (Linux pressure information, where the container provides it).",
+               "int", 40, "performance", min=5, max=100, help="performance#throttling", example="40"),
+    SettingDef("performance.max_defer_minutes", "Longest postponement (minutes)",
+               "A postponed job starts after at most this long even if the load stays high, so nothing waits forever.",
+               "int", 15, "performance", min=1, max=240, help="performance#throttling", example="15"),
+    SettingDef("performance.slow_request_ms", "Slow request warning (ms)",
+               "Requests slower than this are listed under Recent performance warnings.", "int", 2000, "performance",
+               min=200, max=60000, help="performance#dashboard", example="2000"),
+    SettingDef("performance.retention_days", "Keep performance measurements (days)",
+               "Aggregated measurements (10-minute summaries) older than this are removed.", "int", 14, "performance",
+               min=1, max=90, help="performance#dashboard", example="14"),
     # ---- Security & access
     SettingDef("security.map_enabled", "Sign-in map", "Show sign-ins on a map (Trusted Zone pins and approximate GeoIP "
                "positions). Uses online map tiles; sign-in addresses are never sent to the tile server or a geolocation service.",

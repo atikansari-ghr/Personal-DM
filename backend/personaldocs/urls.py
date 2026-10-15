@@ -13,6 +13,7 @@ from apps.security import views_av as avv
 from apps.security import views_center as sc
 from apps.core import overview_views as ov
 from apps.core import views as core
+from apps.core import perf_views as perfv
 from apps.library import offline as offl
 from apps.library import export, ocr_views as ocrv, views as lib, views_import as imp, views_share as share, views_types as vt
 from apps.mailimport import views as mail
@@ -269,6 +270,9 @@ api = [
     path("jobs/<uuid:pk>/retry", core.job_retry),
     path("health", core.health),
     path("admin/health", core.admin_health),
+    path("admin/performance", perfv.performance),
+    path("admin/performance/report", perfv.diagnostic_report),
+    path("perf/client", perfv.client_report),
     path("admin/email-connectors", mail.admin_connectors),
     path("backup", ops.backup_status),
     path("backup/run", ops.backup_now),
