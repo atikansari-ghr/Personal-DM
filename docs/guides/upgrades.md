@@ -14,6 +14,46 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to Change Set W (named sign-in designs and rotation, complete details and IPs, Notification Detail Level) {#change-set-w}
+
+```
+sudo personaldocs upgrade     # safety backup first, then migrations core.0004 – core.0006
+sudo personaldocs doctor
+```
+
+(The change prompt numbered its tests AT-351..AT-375. Here they are **AT-376..AT-400**: prompt AT-n = AT-(n+25).)
+
+### What the upgrade does
+
+- **Sign-in designs.** `core.0005` adds the design table; `core.0006` creates the five protected built-in designs.
+  If you had uploaded a wallpaper, it becomes a custom design named **Custom wallpaper**, with your overlay and image
+  position as its focal point. Whatever was active stays active, so the sign-in page looks the same. Nothing has to
+  be uploaded again, and running the migration twice creates nothing new. The Desktop, Tablet and Phone versions and
+  the colours are made the first time the design is shown.
+- **Notification Detail Level.** `core.0004` sets the new setting to **Full Details**, or **Minimal Details** if you
+  had turned off *Include names*. The two old switches are no longer shown.
+- **Complete values.** Document numbers, identifiers and IP addresses are shown in full to the people allowed to see
+  them. Nothing about who may see a document changes.
+- Users, documents, permissions, backups, routing and other settings are unchanged.
+
+### After the upgrade (main administrator)
+
+1. Open the sign-in page in a private window: it looks as before.
+2. **Settings → Overview & sign-in → Sign-in page design**: your designs are listed, the active one marked **In use**.
+   To make the panel match your wallpaper, select the design, click **Edit**, choose **Auto — Match wallpaper** and
+   **Save design**.
+3. Optional: set up **Automatic Design Rotation** with at least two designs and click **Preview Rotation**.
+4. **Settings → Notifications → Notification Detail Level**: check Full or Minimal. Each person can override it in
+   **My account → Notifications**.
+5. `sudo personaldocs doctor` reports no errors.
+
+### Rollback
+
+`sudo personaldocs rollback` switches back to the previous release. The migrations only add data, and the previous
+settings (`login.design`, `login.wallpaper_file`, overlay and position) are kept in step with the active design, so
+the previous release shows the same sign-in page. Designs and rotation settings are kept for a later upgrade; the
+old release ignores them. Notification masking returns to the old behaviour.
+
 ## Upgrading to Change Set V (NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing) {#change-set-v}
 
 ```
