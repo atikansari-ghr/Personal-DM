@@ -29,24 +29,37 @@ def _legacy(user, key):
     return None if row is None else row.value
 
 
-def default_channels(user, key: str) -> list[str]:
+def _legacy_prefs(user) -> tuple:
+    """The two older channel preferences, read once (each call is a query; computing every event's defaults per
+    event made the preferences page run thousands of queries)."""
+    return _legacy(user, "me.channels"), _legacy(user, "me.event_alerts")
+
+
+def default_channels(user, key: str, legacy: tuple | None = None) -> list[str]:
     """What an optional event uses until the person chooses: catalogue default, narrowed by the older
     "my channels" / "other alerts by email/Telegram" preferences when those were set."""
-    legacy_channels = _legacy(user, "me.channels")
+    legacy_channels, event_alerts = legacy if legacy is not None else _legacy_prefs(user)
     if key == "expiry.reminder":
         base = legacy_channels if legacy_channels is not None else config.get("notifications.default_channels")
         return [c for c in CHANNELS if c in set(base) | {"in_app"}]
     base = set(EVENTS[key].default_channels)
     if legacy_channels is not None:
         base &= set(legacy_channels) | {"in_app"}
-    if _legacy(user, "me.event_alerts") is False:
+    if event_alerts is False:
         base &= {"in_app"}
     return [c for c in CHANNELS if c in base]
 
 
 def preferences(user) -> dict[str, list[str]]:
     stored = config.get_user(user, "me.notification_prefs") or {}
-    return {k: list(stored[k]) if k in stored else default_channels(user, k) for k in EVENTS}
+    legacy = _legacy_prefs(user)
+    return {k: list(stored[k]) if k in stored else default_channels(user, k, legacy) for k in EVENTS}
+
+
+def preference(user, key: str) -> list[str]:
+    """One event's chosen channels (same result as ``preferences(user)[key]``, without computing every event)."""
+    stored = config.get_user(user, "me.notification_prefs") or {}
+    return list(stored[key]) if key in stored else default_channels(user, key)
 
 
 def locked_channels(key: str) -> list[str]:
@@ -60,7 +73,7 @@ def locked_channels(key: str) -> list[str]:
 
 
 def channels_for(user, key: str) -> list[str]:
-    chosen = set(preferences(user).get(key, [])) | set(locked_channels(key))
+    chosen = (set(preference(user, key)) if key in EVENTS else set()) | set(locked_channels(key))
     return [c for c in CHANNELS if c in chosen]
 
 

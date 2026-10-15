@@ -174,3 +174,20 @@ def test_unconfigured_channels_are_an_administrator_problem_not_each_members(fam
     # now email works, so a member without an address is told (and listed for the administrator)
     assert any(p["channel"] == "email" for p in clients["son1"].get("/api/me/notification-preferences").json()["problems"])
     assert any(p["username"] == "son1" for p in clients["dad"].get("/api/notifications/problems").json()["people"])
+
+
+def test_preferences_page_matches_channels_for_and_reads_each_setting_once(family, clients, django_assert_max_num_queries):
+    """Regression: every event recomputed every event's defaults (thousands of queries, ~20 s on a busy server),
+    so a toggle in the matrix seemed not to stick until the slow reload returned."""
+    from apps.accounts.models import User
+    from apps.notify import catalog
+
+    config.set_user(User.objects.get(username="son1"), "me.channels", ["in_app", "email"])  # legacy defaults in play
+    clients["son1"].put("/api/me/notification-preferences", {"preferences": {"processing.completed": ["in_app"]}}, format="json")
+    with django_assert_max_num_queries(600):
+        events = _prefs(clients["son1"])
+    son = User.objects.get(username="son1")
+    for key, e in events.items():
+        assert e["channels"] == catalog.channels_for(son, key), key
+        assert e["chosen"] == catalog.preferences(son)[key], key
+    assert events["processing.completed"]["channels"] == ["in_app"]
