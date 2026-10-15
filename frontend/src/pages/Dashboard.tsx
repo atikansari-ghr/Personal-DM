@@ -7,7 +7,7 @@ import { useSession } from "../session";
 import FileTypeIcon from "../components/FileTypeIcon";
 import { ActivityWidget, CalendarWidget, DateWidget, DocList, HolidaysWidget, SummaryWidget, WeatherWidget } from "../components/OverviewWidgets";
 import { HealthSummary } from "./settings/SecurityCenter";
-import { HealthBadge } from "./settings/Backup";
+import { HealthBadge } from "../components/HealthBadge";
 import type { DocRow, User, WidgetCfg } from "../types";
 
 function greeting() {

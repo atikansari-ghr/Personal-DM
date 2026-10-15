@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, formatBytes, formatDateTime } from "../../api";
 import { useStepUp } from "../../components/StepUp";
 import SettingsForm from "../../components/SettingsForm";
+import { HealthBadge, STATE_CLASS } from "../../components/HealthBadge";
 import { HelpTip, Icon, Modal, Skeleton, useAsync, useToast } from "../../components/ui";
 
 // Settings → Backup & Recovery (main administrator). Every label here matches docs/guides/backup-restore.md.
@@ -12,18 +13,13 @@ type Health = { state: "healthy" | "attention" | "critical"; label: string; warn
 type Overview = { health: Health; policies: any[]; destinations: any[]; points: any[]; legacy: any[]; key: any; retiring: number[]; rotation: any;
   running: string[]; kinds: { kind: string; label: string; config: string[]; secrets: string[] }[]; stepup_valid: boolean; restores: any[] };
 
-const STATE_CLASS: Record<string, string> = { healthy: "ok", attention: "warn", critical: "danger", verified: "ok", partial: "warn", warning: "warn",
-  failed: "danger", running: "neutral", stored_verified: "ok", stored_warning: "warn", retry_pending: "warn", auth_required: "danger",
-  unavailable: "danger", insufficient_storage: "danger", uploading: "neutral", deleted: "neutral" };
 const VIEWS: [string, string][] = [["overview", "Overview"], ["policies", "Policies & schedule"], ["destinations", "Destinations"],
   ["points", "Recovery points"], ["key", "Recovery Key"], ["restores", "Restores & reports"]];
 const FIELD_LABELS: Record<string, string> = { path: "Folder path", require_mount: "Require mounted share", endpoint: "Endpoint (https://…)", region: "Region",
   bucket: "Bucket", prefix: "Folder prefix", folder_id: "Folder id", folder: "Folder", access_key: "Access key", secret_key: "Secret key",
   session_token: "Session token (optional)", client_id: "OAuth client id", client_secret: "OAuth client secret", refresh_token: "Refresh token" };
 
-export function HealthBadge({ state, label }: { state: string; label: string }) {
-  return <span className={`badge ${STATE_CLASS[state] || "neutral"}`} data-health={state}><Icon name={state === "healthy" || state === "verified" ? "check" : "alert"} size={14} /> {label}</span>;
-}
+export { HealthBadge };
 
 export default function BackupPanel() {
   const [params, setParams] = useSearchParams();
