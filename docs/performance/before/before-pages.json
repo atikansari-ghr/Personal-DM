@@ -1,0 +1,132 @@
+{
+ "base": "http://localhost:8001",
+ "conditions": "Chromium; 20 ms latency, 40/20 Mbit/s; CPU 2x slowdown; cold browser cache",
+ "flows": {
+  "Sign-in page usable": {
+   "median_ms": 513,
+   "runs": [
+    484,
+    511,
+    513,
+    529,
+    547
+   ],
+   "requests": 6,
+   "api_requests": 1,
+   "kb": 886,
+   "js_kb": 811
+  },
+  "Sign-in → dashboard usable": {
+   "median_ms": 935,
+   "runs": [
+    828,
+    932,
+    935,
+    945,
+    973
+   ],
+   "requests": 9,
+   "api_requests": 9,
+   "kb": 38,
+   "js_kb": 0
+  },
+  "Settings initial (General)": {
+   "median_ms": 357,
+   "runs": [
+    341,
+    350,
+    357,
+    361,
+    397
+   ],
+   "requests": 4,
+   "api_requests": 4,
+   "kb": 112,
+   "js_kb": 0
+  },
+  "Settings section first visit (Backup & Recovery)": {
+   "median_ms": 242,
+   "runs": [
+    218,
+    237,
+    242,
+    242,
+    302
+   ],
+   "requests": 4,
+   "api_requests": 4,
+   "kb": 13,
+   "js_kb": 0
+  },
+  "Settings section switch, previously loaded": {
+   "median_ms": 707,
+   "runs": [
+    660,
+    691,
+    707,
+    754,
+    790
+   ],
+   "requests": 7,
+   "api_requests": 7,
+   "kb": 148,
+   "js_kb": 0
+  },
+  "Folder browse (large folder, first documents)": {
+   "median_ms": 1093,
+   "runs": [
+    965,
+    1059,
+    1093,
+    1132,
+    1211
+   ],
+   "requests": 11,
+   "api_requests": 6,
+   "kb": 337,
+   "js_kb": 0
+  },
+  "Folder browse (normal folder)": {
+   "median_ms": 509,
+   "runs": [
+    498,
+    504,
+    509,
+    538,
+    563
+   ],
+   "requests": 11,
+   "api_requests": 6,
+   "kb": 191,
+   "js_kb": 0
+  },
+  "Document Details open": {
+   "median_ms": 438,
+   "runs": [
+    362,
+    398,
+    438,
+    472,
+    499
+   ],
+   "requests": 8,
+   "api_requests": 8,
+   "kb": 10,
+   "js_kb": 0
+  },
+  "Search (family dataset)": {
+   "median_ms": 866,
+   "runs": [
+    817,
+    825,
+    866,
+    881,
+    888
+   ],
+   "requests": 14,
+   "api_requests": 9,
+   "kb": 81,
+   "js_kb": 0
+  }
+ }
+}

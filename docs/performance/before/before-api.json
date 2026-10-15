@@ -1,0 +1,442 @@
+{
+ "dataset": {
+  "documents": 8000,
+  "folders": 408,
+  "big_folder_documents": 1514
+ },
+ "users": {
+  "dad": {
+   "sign-in (password)": {
+    "median_ms": 257.9
+   },
+   "branding (sign-in page)": {
+    "url": "/api/branding",
+    "status": 200,
+    "median_ms": 11.4,
+    "max_ms": 12.7,
+    "queries": 9,
+    "db_ms": 2.0,
+    "bytes": 305
+   },
+   "session": {
+    "url": "/api/session",
+    "status": 200,
+    "median_ms": 43.6,
+    "max_ms": 49.6,
+    "queries": 44,
+    "db_ms": 9.0,
+    "bytes": 1792
+   },
+   "dashboard": {
+    "url": "/api/dashboard",
+    "status": 200,
+    "median_ms": 121.4,
+    "max_ms": 227.6,
+    "queries": 59,
+    "db_ms": 62.0,
+    "bytes": 21416
+   },
+   "settings (all values)": {
+    "url": "/api/settings",
+    "status": 200,
+    "median_ms": 186.5,
+    "max_ms": 224.7,
+    "queries": 196,
+    "db_ms": 30.0,
+    "bytes": 109702
+   },
+   "folders (tree)": {
+    "url": "/api/folders",
+    "status": 200,
+    "median_ms": 66.2,
+    "max_ms": 76.8,
+    "queries": 9,
+    "db_ms": 24.0,
+    "bytes": 171952
+   },
+   "folder documents, large folder, first page": {
+    "url": "/api/documents?folder=fd0532dd-1666-4d81-aa8a-d099e71608c3&limit=100",
+    "status": 200,
+    "median_ms": 183.2,
+    "max_ms": 186.7,
+    "queries": 108,
+    "db_ms": 89.0,
+    "bytes": 81587
+   },
+   "folder documents, large folder, 200": {
+    "url": "/api/documents?folder=fd0532dd-1666-4d81-aa8a-d099e71608c3&limit=200",
+    "status": 200,
+    "median_ms": 366.6,
+    "max_ms": 451.2,
+    "queries": 208,
+    "db_ms": 176.0,
+    "bytes": 163483
+   },
+   "folder documents, normal folder": {
+    "url": "/api/documents?folder=79e6e3d2-0171-4aa7-9eaa-97912d5149a2&limit=100",
+    "status": 200,
+    "median_ms": 67.5,
+    "max_ms": 80.9,
+    "queries": 32,
+    "db_ms": 33.0,
+    "bytes": 19758
+   },
+   "document details": {
+    "url": "/api/documents/6b3ec187-9251-47fa-9b8a-d6d980bc1563",
+    "status": 200,
+    "median_ms": 46.1,
+    "max_ms": 57.1,
+    "queries": 24,
+    "db_ms": 20.0,
+    "bytes": 5032
+   },
+   "folder details": {
+    "url": "/api/folders/79e6e3d2-0171-4aa7-9eaa-97912d5149a2",
+    "status": 200,
+    "median_ms": 22.1,
+    "max_ms": 40.4,
+    "queries": 10,
+    "db_ms": 10.0,
+    "bytes": 766
+   },
+   "metadata (types, tags)": {
+    "url": "/api/metadata",
+    "status": 200,
+    "median_ms": 13.4,
+    "max_ms": 19.0,
+    "queries": 9,
+    "db_ms": 5.0,
+    "bytes": 2960
+   },
+   "notification banners (unread 5)": {
+    "url": "/api/notifications?status=unread&limit=5",
+    "status": 200,
+    "median_ms": 13.6,
+    "max_ms": 16.2,
+    "queries": 8,
+    "db_ms": 7.0,
+    "bytes": 1996
+   },
+   "notification centre": {
+    "url": "/api/notifications",
+    "status": 200,
+    "median_ms": 17.2,
+    "max_ms": 22.4,
+    "queries": 8,
+    "db_ms": 8.0,
+    "bytes": 11435
+   },
+   "my notification preferences": {
+    "url": "/api/me/notification-preferences",
+    "status": 200,
+    "median_ms": 399.1,
+    "max_ms": 469.3,
+    "queries": 381,
+    "db_ms": 90.0,
+    "bytes": 21833
+   },
+   "my sessions": {
+    "url": "/api/me/sessions",
+    "status": 200,
+    "median_ms": 8.5,
+    "max_ms": 9.3,
+    "queries": 6,
+    "db_ms": 4.0,
+    "bytes": 260
+   },
+   "search": {
+    "url": "/api/documents?q=renewal&limit=50",
+    "status": 200,
+    "median_ms": 385.5,
+    "max_ms": 414.1,
+    "queries": 58,
+    "db_ms": 318.0,
+    "bytes": 63874
+   },
+   "help index": {
+    "url": "/api/help",
+    "status": 200,
+    "median_ms": 19.1,
+    "max_ms": 53.4,
+    "queries": 5,
+    "db_ms": 5.0,
+    "bytes": 6558
+   },
+   "sign-in map (7 days)": {
+    "url": "/api/security/map",
+    "status": 200,
+    "median_ms": 24.3,
+    "max_ms": 27.0,
+    "queries": 15,
+    "db_ms": 7.0,
+    "bytes": 11373
+   },
+   "admin: family members": {
+    "url": "/api/family/members",
+    "status": 200,
+    "median_ms": 43.5,
+    "max_ms": 49.4,
+    "queries": 42,
+    "db_ms": 9.0,
+    "bytes": 3488
+   },
+   "admin: document types": {
+    "url": "/api/document-types",
+    "status": 200,
+    "median_ms": 10.8,
+    "max_ms": 15.4,
+    "queries": 6,
+    "db_ms": 5.0,
+    "bytes": 2630
+   },
+   "admin: activity log": {
+    "url": "/api/audit",
+    "status": 200,
+    "median_ms": 24.5,
+    "max_ms": 28.8,
+    "queries": 7,
+    "db_ms": 9.0,
+    "bytes": 22373
+   },
+   "admin: jobs": {
+    "url": "/api/jobs",
+    "status": 200,
+    "median_ms": 16.1,
+    "max_ms": 31.4,
+    "queries": 9,
+    "db_ms": 6.0,
+    "bytes": 19449
+   },
+   "admin: health": {
+    "url": "/api/admin/health",
+    "status": 200,
+    "median_ms": 12.7,
+    "max_ms": 14.6,
+    "queries": 9,
+    "db_ms": 3.0,
+    "bytes": 363
+   },
+   "admin: security health": {
+    "url": "/api/security/health",
+    "status": 200,
+    "median_ms": 24.5,
+    "max_ms": 27.2,
+    "queries": 17,
+    "db_ms": 10.0,
+    "bytes": 1156
+   },
+   "admin: login audit": {
+    "url": "/api/admin/security/logins",
+    "status": 200,
+    "median_ms": 46.2,
+    "max_ms": 52.8,
+    "queries": 17,
+    "db_ms": 19.0,
+    "bytes": 35773
+   },
+   "admin: backup overview": {
+    "url": "/api/backup/overview",
+    "status": 200,
+    "median_ms": 45.1,
+    "max_ms": 58.9,
+    "queries": 25,
+    "db_ms": 23.0,
+    "bytes": 1407
+   },
+   "admin: backup destinations": {
+    "url": "/api/backup/destinations",
+    "status": 405,
+    "median_ms": 12.1,
+    "max_ms": 18.2,
+    "queries": 5,
+    "db_ms": 5.0,
+    "bytes": 39
+   },
+   "admin: connections": {
+    "url": "/api/admin/connections",
+    "status": 200,
+    "median_ms": 36.1,
+    "max_ms": 39.3,
+    "queries": 26,
+    "db_ms": 11.0,
+    "bytes": 1470
+   },
+   "admin: sign-in designs": {
+    "url": "/api/signin-designs",
+    "status": 200,
+    "median_ms": 45.5,
+    "max_ms": 49.5,
+    "queries": 36,
+    "db_ms": 8.0,
+    "bytes": 3761
+   }
+  },
+  "son1": {
+   "sign-in (password)": {
+    "median_ms": 308.8
+   },
+   "branding (sign-in page)": {
+    "url": "/api/branding",
+    "status": 200,
+    "median_ms": 15.6,
+    "max_ms": 19.2,
+    "queries": 9,
+    "db_ms": 6.0,
+    "bytes": 305
+   },
+   "session": {
+    "url": "/api/session",
+    "status": 200,
+    "median_ms": 54.2,
+    "max_ms": 65.3,
+    "queries": 44,
+    "db_ms": 17.0,
+    "bytes": 1796
+   },
+   "dashboard": {
+    "url": "/api/dashboard",
+    "status": 200,
+    "median_ms": 117.3,
+    "max_ms": 127.4,
+    "queries": 42,
+    "db_ms": 62.0,
+    "bytes": 13406
+   },
+   "settings (all values)": {
+    "url": "/api/settings",
+    "status": 200,
+    "median_ms": 27.9,
+    "max_ms": 31.2,
+    "queries": 24,
+    "db_ms": 4.0,
+    "bytes": 11433
+   },
+   "folders (tree)": {
+    "url": "/api/folders",
+    "status": 200,
+    "median_ms": 53.3,
+    "max_ms": 62.8,
+    "queries": 11,
+    "db_ms": 13.0,
+    "bytes": 5670
+   },
+   "folder documents, large folder, first page": {
+    "url": "/api/documents?folder=fd0532dd-1666-4d81-aa8a-d099e71608c3&limit=100",
+    "status": 200,
+    "median_ms": 35.7,
+    "max_ms": 43.9,
+    "queries": 11,
+    "db_ms": 17.0,
+    "bytes": 26
+   },
+   "folder documents, large folder, 200": {
+    "url": "/api/documents?folder=fd0532dd-1666-4d81-aa8a-d099e71608c3&limit=200",
+    "status": 200,
+    "median_ms": 44.1,
+    "max_ms": 55.9,
+    "queries": 11,
+    "db_ms": 18.0,
+    "bytes": 26
+   },
+   "folder documents, normal folder": {
+    "url": "/api/documents?folder=79e6e3d2-0171-4aa7-9eaa-97912d5149a2&limit=100",
+    "status": 200,
+    "median_ms": 38.1,
+    "max_ms": 54.7,
+    "queries": 11,
+    "db_ms": 19.0,
+    "bytes": 26
+   },
+   "document details": {
+    "url": "/api/documents/6b3ec187-9251-47fa-9b8a-d6d980bc1563",
+    "status": 404,
+    "median_ms": 30.5,
+    "max_ms": 34.3,
+    "queries": 10,
+    "db_ms": 14.0,
+    "bytes": 22
+   },
+   "folder details": {
+    "url": "/api/folders/79e6e3d2-0171-4aa7-9eaa-97912d5149a2",
+    "status": 404,
+    "median_ms": 24.8,
+    "max_ms": 37.7,
+    "queries": 10,
+    "db_ms": 11.0,
+    "bytes": 22
+   },
+   "metadata (types, tags)": {
+    "url": "/api/metadata",
+    "status": 200,
+    "median_ms": 16.1,
+    "max_ms": 20.0,
+    "queries": 9,
+    "db_ms": 7.0,
+    "bytes": 2960
+   },
+   "notification banners (unread 5)": {
+    "url": "/api/notifications?status=unread&limit=5",
+    "status": 200,
+    "median_ms": 16.6,
+    "max_ms": 18.4,
+    "queries": 8,
+    "db_ms": 8.0,
+    "bytes": 1991
+   },
+   "notification centre": {
+    "url": "/api/notifications",
+    "status": 200,
+    "median_ms": 22.0,
+    "max_ms": 27.6,
+    "queries": 8,
+    "db_ms": 9.0,
+    "bytes": 11421
+   },
+   "my notification preferences": {
+    "url": "/api/me/notification-preferences",
+    "status": 200,
+    "median_ms": 183.2,
+    "max_ms": 194.9,
+    "queries": 196,
+    "db_ms": 22.0,
+    "bytes": 10166
+   },
+   "my sessions": {
+    "url": "/api/me/sessions",
+    "status": 200,
+    "median_ms": 9.6,
+    "max_ms": 11.1,
+    "queries": 6,
+    "db_ms": 4.0,
+    "bytes": 260
+   },
+   "search": {
+    "url": "/api/documents?q=renewal&limit=50",
+    "status": 200,
+    "median_ms": 159.5,
+    "max_ms": 201.4,
+    "queries": 61,
+    "db_ms": 85.0,
+    "bytes": 61771
+   },
+   "help index": {
+    "url": "/api/help",
+    "status": 200,
+    "median_ms": 21.1,
+    "max_ms": 23.3,
+    "queries": 6,
+    "db_ms": 6.0,
+    "bytes": 3293
+   },
+   "sign-in map (7 days)": {
+    "url": "/api/security/map",
+    "status": 200,
+    "median_ms": 22.0,
+    "max_ms": 25.4,
+    "queries": 13,
+    "db_ms": 8.0,
+    "bytes": 13675
+   }
+  }
+ }
+}
