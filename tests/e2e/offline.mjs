@@ -295,8 +295,15 @@ await step("AT-259 offline text follows its own policy and is removed with OCR",
   await A.page.click("[role=menuitem]:has-text('Make available offline')");
   await A.page.waitForSelector(".doc-header [data-offline-status=available]", { timeout: 20000 });
   // wait for THIS document's text: the trip folder's documents (also offline on this device) can be stored first
-  await A.page.waitForFunction(async ([uid, id]) => !!(await (await caches.open(`pd-offline-text-${uid}`)).match(`/offline-text/${id}`)), [A.uid, docSolo], { timeout: 20000 });
-  const text = await A.page.evaluate(async ([uid, id]) => (await (await caches.open(`pd-offline-text-${uid}`)).match(`/offline-text/${id}`))?.text(), [A.uid, docSolo]);
+  const readText = () => A.page.evaluate(async ([uid, id]) => (await (await caches.open(`pd-offline-text-${uid}`)).match(`/offline-text/${id}`))?.text(), [A.uid, docSolo]);
+  let text = await readText();
+  for (let i = 0; i < 40 && !(text && text.includes("SAMPLE SINGLE DOCUMENT")); i++) { await A.page.waitForTimeout(500); text = await readText(); }
+  if (!(text && text.includes("SAMPLE SINGLE DOCUMENT"))) {  // say what the device holds and what the server has, to find the cause
+    const server = await api(A.page, `/api/documents/${docSolo}/text`);
+    const st = await localState(A.page, A.uid);
+    console.log("AT-259 diagnostic:", JSON.stringify({ cached: text === undefined ? null : String(text).slice(0, 160), server: server.status, serverText: String(server.data?.text || "").slice(0, 160),
+      item: st.items.find((i) => i.documentId === docSolo) }));
+  }
   expect(text && text.includes("SAMPLE SINGLE DOCUMENT"), "offline text missing");
   const del = await api(A.page, `/api/documents/${docSolo}/ocr`, { method: "DELETE", body: { confirm: true, include_embedded: true } });
   expect(del.status === 200, "OCR removal failed " + del.status + JSON.stringify(del.data));
