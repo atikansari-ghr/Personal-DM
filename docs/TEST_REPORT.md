@@ -69,7 +69,7 @@ Playwright), 2026-10-16. LM Studio is emulated by `tests/fake_ai_server.py` (its
 |---|---|
 | `pytest tests/test_ai_pipeline.py tests/test_ai.py` | **36 passed** (21 new: AT-426…AT-439, the reproduced HTTP 400, sanitizer, roles, long text, test OCR) |
 | Full `pytest` | **572 tests: 566 passed, 5 skipped (2 need a running ClamAV, 3 the real PaddleOCR runtime), 1 failed: the documentation checker, only because this section did not exist yet; it passes with this report** |
-| `scripts/e2e.sh` (fresh database) | E2E_RESULT |
+| `scripts/e2e.sh` (fresh database) | flow, accessibility, parity and layout (25), offline 9, PWA 4, themes 6, recovery 10: all PASS; **corrective 36 PASS** (incl. the new Local AI diagnostics step: OCR test per engine, Tesseract recognises the generated sample); screenshots 7 PASS, 1 FAIL in this container only (AT-333: Chromium here cannot load the real OpenFreeMap tiles through the container's proxy certificate; unchanged by this change set; CI has direct internet access) |
 | Migration `ai.0002` forwards, backwards, forwards; `makemigrations --check` | OK; no missing migrations |
 | `npm run build` (TypeScript check, build) | Passed |
 | `python3 scripts/check_docs.py` | OK |
