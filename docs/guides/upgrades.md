@@ -14,6 +14,44 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to Change Set Y (Analyze Document: OCR → AI pipeline) {#change-set-y}
+
+```
+sudo personaldocs upgrade     # safety backup, migration ai.0002, restart
+sudo personaldocs doctor
+```
+
+(The change prompt numbered its tests AT-401..AT-415 and called itself "Change Set X", which is taken. Here it is
+**Change Set Y, AT-426..AT-440**: prompt AT-n = AT-(n+25).)
+
+### What the upgrade does
+
+- **Migration `ai.0002`** adds the stage and safe details to AI jobs and a small "what this server supports" record
+  to AI profiles. Analyze Document jobs that failed before keep their *failed* state and can now be retried. Nothing
+  else changes: AI profiles (including LM Studio profiles), suggestions and OCR results stay as they are. You do
+  **not** need to recreate an AI profile.
+- **Analyze Document** now asks the AI server for JSON in a way LM Studio accepts (this was the cause of
+  *The AI server returned HTTP 400*). OCR always runs first with the engine chosen in Settings → OCR & processing;
+  only the recognised text goes to the profile's text model.
+
+### After the upgrade (main administrator)
+
+1. **Settings → Local AI → your profile → Test connection**: every step shows ✓, including *Text model* and
+   *Embedding model*.
+2. **Test AI analysis**: ✓ with the fields read back from the synthetic sample.
+3. **Test OCR — Tesseract** and **Test OCR — PaddleOCR** (for the engines you use): ✓ with a character count.
+4. Open a document and choose **Analyse again**: the panel shows the stages and ends with suggestions. In
+   **AI jobs**, press **Retry** on earlier failed analyses you still want.
+
+### Rollback
+
+```
+sudo personaldocs manage migrate ai 0001
+sudo personaldocs rollback
+```
+
+Only the stage details of AI jobs and the remembered server capabilities are removed.
+
 ## Upgrading to Change Set X (performance) {#change-set-x}
 
 ```

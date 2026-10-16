@@ -16,8 +16,19 @@ such as LM Studio or Ollama on a PC in your home. It is off by default and never
 
 ## How it works {#architecture}
 
-Upload → file checks → original stored → text extraction / Tesseract OCR (as the OCR policy allows) → *(optional)* AI analysis → **suggestions** → you review →
+Upload → file checks → original stored → text extraction / OCR (as the OCR policy allows) → *(optional)* AI analysis → **suggestions** → you review →
 accepted values saved → search, reminders and assistant use them.
+
+The **OCR engine** and the **AI model** are two separate choices:
+
+| Part | What it does | Where it is chosen |
+|---|---|---|
+| OCR engine: **Tesseract** or **PaddleOCR (PP-OCRv5)** | Reads the text of a scan or photo, on this server | Settings → OCR & processing |
+| **Text model** | Reads that text and proposes metadata; answers the assistant | The AI profile |
+| **Embedding model** | Turns text into vectors for semantic search; never writes answers | The AI profile |
+| **Vision model** (optional) | Not used by Analyze Document | The AI profile |
+
+You can switch the OCR engine at any time without touching the AI profile.
 
 - AI never changes a document by itself. Title, type, owner, folder, dates, reminders, tags, issuer and confirmed details only
   change when someone with edit rights clicks **Accept**. Accepting goes through the same checks as editing by hand, and accepted dates become
@@ -46,7 +57,12 @@ A profile is one AI server connection:
 - **which features it may serve**
 - **default:** the default profile serves the features
 
-**Test connection** checks the privacy class, reachability, the model list, a tiny prompt and the embedding size.
+**Test connection** checks, step by step, the privacy class, reachability, the model list, that the **text model** exists and is a
+chat model, that the **embedding model** exists and returns a vector, and the optional vision model. **Test AI analysis** sends a
+small synthetic text document (no family data) through exactly the same path as Analyze Document and shows what came back. See
+[Diagnostics](#diagnostics).
+
+The text model and the embedding model must be different models; a name containing “embed” is refused as the text model.
 
 ### LM Studio (or other OpenAI-compatible servers) {#lm-studio}
 
@@ -56,6 +72,13 @@ On a PC with a decent GPU or Apple Silicon:
 3. Profile: connection type *OpenAI-compatible*, URL `http://<pc-ip>:1234/v1`, privacy *Private LAN*.
 
 llama.cpp `llama-server`, vLLM, LocalAI and Jan work the same way (URL ending in `/v1`).
+
+Choose a chat/instruct model as the **text model** (for example `qwen3-8b`) and the embedding model separately (for example
+`text-embedding-nomic-embed-text-v1.5`). Personal DM asks for JSON with the server's *structured output* feature
+(`response_format` of type `json_schema`), which LM Studio, llama.cpp, vLLM and OpenAI support. A server that rejects it gets one
+plain request asking for JSON in the prompt instead, and the profile remembers this (shown under the profile as
+*Structured output: not supported*). Reasoning models that write a `<think>` block first are fine: the block is ignored. If such a
+model's answer is cut off, raise *Max reply (tokens)* in the profile.
 
 ### Ollama {#ollama}
 
@@ -87,13 +110,34 @@ never follow redirects.
 ## OCR assist {#ocr-assist}
 
 After processing (if *Analyse new uploads automatically* is on), or with **Analyse again** on a document, the model gets the OCR text
-(up to *Max text sent*). This happens only for document types where **AI may read text** is allowed in Settings → OCR & processing
+(up to *Max text sent* per request). This happens only for document types where **AI may read text** is allowed in Settings → OCR & processing
 (or, for documents without a type, the *Untyped documents* setting); other documents are skipped by re-indexing and **Analyse** is
 refused. The AI never receives every upload by default; see [Local AI and OCR text](ocr-corrections.md#ai). It returns suggestions shown under **AI suggestions** in the document's details:
 
 - **Accept**, **Dismiss** or **Accept all**.
 - Document numbers are only suggested if they literally appear in the text.
-- Without OCR text, a configured vision model can read the preview image instead.
+- Details a person entered or corrected by hand are never proposed for replacement.
+- The model always receives **text**, never the file or a page image.
+
+## Analyze Document step by step {#pipeline}
+
+1. **Preparing:** the document is checked (permissions, antivirus quarantine, AI allowed for its type).
+2. **OCR:** the current text is reused when it is usable (text layer or an earlier OCR run of this file). Otherwise, when you
+   chose **Analyse**, text recognition is queued with the configured engine (Tesseract or PaddleOCR) and the analysis continues by
+   itself when recognition finishes. Automatic analysis after an upload never starts OCR for a type set to manual OCR.
+3. **Checking OCR text:** if recognition found no usable text, the job stops with *OCR completed, but no usable text was detected.*
+   The AI server is **not** called.
+4. **AI analysis:** the text goes to the profile's **text model**. A long document is analysed in up to three parts, in page order;
+   if text remains after that, the job says how much was analysed.
+5. **Checking AI answer:** only the requested fields with valid values (real dates, known types and folders) are kept; an answer
+   that is not JSON or has none of the fields fails here.
+6. **Saving suggestions**, then **done**.
+
+**Retries:** a timeout, a lost connection, HTTP 429 or a temporary 5xx error is retried automatically, at most three attempts in all
+(after 1 and 5 minutes); the job shows *queued · retry 2 of 3 at …*. Everything else, such as a rejected request (HTTP 400), an
+unknown model, an empty OCR result or an invalid answer, fails at once with its stage and reason and is **not** queued again. After
+fixing the cause, press **Retry** in the job list or **Analyse again** on the document. A document never has more than one queued
+analysis.
 
 ## Smart organisation {#smart-organization}
 
@@ -138,18 +182,36 @@ A 2 vCPU / 4 GB LXC cannot run useful language models itself. Run the AI server 
 connect to it. Keep **Parallel AI jobs** at 1 on small containers. Analysis of one document typically takes 5–60 seconds
 depending on the model and hardware.
 
+## Diagnostics {#diagnostics}
+
+Settings → Local AI has four separate tests, so you can tell whether OCR or AI is failing:
+
+| Test | Checks |
+|---|---|
+| **Test connection** (per profile) | Server reachable, privacy class, model list, text model, embedding model, optional vision model |
+| **Test AI analysis** (per profile) | A synthetic text document through the Analyze Document path, with the structured-output fallback |
+| **Test OCR — Tesseract** | Recognition of a generated sample image |
+| **Test OCR — PaddleOCR** | The same with PaddleOCR |
+
 ## Troubleshooting {#troubleshooting}
 
 | Message | What to do |
 |---|---|
+| failed · AI analysis: The AI server rejected the request (HTTP 400) — … | The text after the dash is the server's own explanation (document text and keys removed). Run **Test AI analysis**. A message about `response_format` is handled automatically from this release on; for others, check the model and the limits in the profile. |
+| failed · AI analysis: Model or endpoint not found | The text model name does not exist on the server, or no model is loaded. Use **Discover models** and **Test connection**. |
+| The request is too large for the model | Lower *Max text sent* in the profile, or load the model with a larger context in LM Studio. |
+| The model's answer was cut off at the output limit | Raise *Max reply (tokens)* (reasoning models need more). |
+| failed · OCR: OCR completed, but no usable text was detected | The scan is blank, unreadable or too small. Try **Run OCR** with the other engine or a better scan. The AI was not called. |
+| failed · OCR: OCR failed: … | Run **Test OCR** for that engine; see the OCR guide. |
+| queued · retry 2 of 3 at … | The server was busy or unreachable; the job retries by itself. |
 | Cannot connect to the AI server | Is the server running and listening on the network (LM Studio "Serve on local network", `OLLAMA_HOST=0.0.0.0`)? Firewall on the PC? |
 | The endpoint is EXTERNAL but the profile is marked LAN | The URL resolves to a public address. Use the LAN address, or change the class deliberately. |
-| Endpoint or model not found | Check the URL (`/v1` for OpenAI-compatible) and use **Discover models**. |
-| The model did not return JSON | Use a larger or instruction-tuned model; the job can be retried with **Analyse again**. |
+| The model did not return JSON | Use a larger or instruction-tuned model, then **Retry**. |
 | The AI server did not answer in time | Increase the profile timeout or use a smaller model. |
 
-**Settings → Local AI → AI jobs** shows each job's type, who requested it, profile/model, status and error category, without
-document content. *AI diagnostic logging* logs request and response **sizes** only; prompts and answers are never logged.
+**Settings → Local AI → AI jobs** shows each job's type, who requested it, profile/model, status, the stage it reached or failed
+at, the OCR engine and character count, and the HTTP status, without document content. *AI diagnostic logging* logs request
+and response **sizes** only; prompts and answers are never logged.
 
 ## Backups {#backup}
 

@@ -31,6 +31,13 @@ class FakeAI:
                               "document_type": "Passport", "correspondent": "Ministry of Samples", "tags": ["travel"],
                               "summary": "A synthetic passport."}
         self.extra_citation = ""
+        # Change Set Y switches
+        self.lmstudio = False        # reject response_format json_object exactly like LM Studio; list model types
+        self.reject_schema = False   # reject any response_format (an older server without structured outputs)
+        self.think = False           # wrap answers in a <think> block (Qwen3-style reasoning models)
+        self.raw_reply = None        # a fixed (e.g. malformed) answer for document analysis
+        self.echo_400 = False        # answer chat with 400 whose message echoes part of the prompt and a token
+        self.fail_queue: list[int] = []  # statuses to answer the next chat requests with (503, 429, 400 ...)
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
@@ -49,12 +56,21 @@ class FakeAI:
     def prompts(self) -> str:
         return "\n".join(json.dumps(body) for _p, body in self.requests)
 
+    def chats(self) -> list[dict]:
+        return [b for p, b in self.requests if p.endswith("/chat/completions") or p.endswith("/api/chat")]
+
+    def analysis_chats(self) -> list[dict]:
+        return [b for b in self.chats() if "OCR TEXT" in json.dumps(b)]
+
     def _chat_text(self, messages) -> str:
         last = messages[-1]["content"]
         if isinstance(last, list):
             last = " ".join(part.get("text", "") for part in last if isinstance(part, dict))
         if "OCR TEXT" in last:
-            return "Here you go:\n```json\n" + json.dumps(self.analyze_reply) + "\n```"
+            if self.raw_reply is not None:
+                return self.raw_reply
+            body = json.dumps(self.analyze_reply)
+            return f"<think>Let me read the {{document}} first.</think>\n{body}" if self.think else "Here you go:\n```json\n" + body + "\n```"
         if "single word OK" in last:
             return "OK"
         ids = re.findall(r"\[doc:([0-9a-f-]{36})\]", last)
@@ -80,6 +96,9 @@ class FakeAI:
                 fake.requests.append((self.path, {}))
                 if self.path.endswith("/v1/models"):
                     return self._send(200, {"data": [{"id": "text-model"}, {"id": "embed-model"}, {"id": "vision-model"}]})
+                if self.path.endswith("/api/v0/models") and fake.lmstudio:
+                    return self._send(200, {"data": [{"id": "text-model", "type": "llm"}, {"id": "embed-model", "type": "embeddings"},
+                                                     {"id": "vision-model", "type": "vlm"}]})
                 if self.path.endswith("/api/tags"):
                     return self._send(200, {"models": [{"name": "llama3"}, {"name": "nomic-embed-text"}]})
                 self._send(404, {"error": "not found"})
@@ -88,7 +107,23 @@ class FakeAI:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
                 fake.requests.append((self.path, body))
                 if self.path.endswith("/v1/chat/completions"):
-                    return self._send(200, {"choices": [{"message": {"content": fake._chat_text(body["messages"])}}]})
+                    if fake.fail_queue:
+                        code = fake.fail_queue.pop(0)
+                        return self._send(code, {"error": {"message": f"Synthetic failure {code}"}})
+                    rf = body.get("response_format")
+                    if rf and fake.reject_schema:
+                        return self._send(400, {"error": {"message": "response_format is not supported by this server"}})
+                    if rf and fake.lmstudio and rf.get("type") == "json_object":
+                        return self._send(400, {"error": "'response_format.type' must be 'json_schema' or 'text'"})
+                    if fake.echo_400:
+                        last = str(body["messages"][-1]["content"])
+                        start = last.find("OCR TEXT:") + 10
+                        return self._send(400, {"error": {"message": "Invalid request near: " + last[start:start + 60]
+                                                          + " (Authorization: Bearer sk-local-SECRETKEY)"}})
+                    content = fake._chat_text(body["messages"])
+                    if rf and rf.get("type") == "json_schema" and "OCR TEXT" in json.dumps(body) and fake.raw_reply is None:
+                        content = json.dumps(fake.analyze_reply)  # a server that honours the schema answers with JSON only
+                    return self._send(200, {"choices": [{"message": {"content": content}, "finish_reason": "stop"}]})
                 if self.path.endswith("/v1/embeddings"):
                     inputs = body["input"] if isinstance(body["input"], list) else [body["input"]]
                     return self._send(200, {"data": [{"index": i, "embedding": embed(t)} for i, t in enumerate(inputs)]})

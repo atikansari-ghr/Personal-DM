@@ -472,6 +472,24 @@ Acceptance tests AT-336…AT-355. The change prompt numbered them AT-311…AT-33
 
 Native apps, scanning enhancement, in-browser Office editing, DICOM viewing.
 
+## Change set Y (2026-10): OCR → AI document analysis pipeline {#change-set-y}
+
+Acceptance tests AT-426…AT-440 (prompt AT-401…AT-415 = AT-(n+25); the prompt called itself "Change Set X", which is
+taken). See [TRACEABILITY.md](TRACEABILITY.md#change-set-y) and [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-y).
+
+| ID | Requirement |
+|---|---|
+| AIP-1 | One pipeline: document → selected OCR engine (Tesseract or PaddleOCR) → normalized text → validation → selected AI profile's text model → validated metadata suggestions. OCR engine and AI profile are chosen independently. |
+| AIP-2 | The text model receives only text, never the original file or a page image; the embedding model is never used for generation; a vision model is not required. |
+| AIP-3 | Usable existing text is reused; explicit OCR re-runs and new file versions take effect; manual corrections are never overwritten. |
+| AIP-4 | Empty OCR stops the job before the AI server is called, attributed to OCR. |
+| AIP-5 | OpenAI-compatible servers (incl. LM Studio) and Ollama: only supported parameters; structured output with exactly one compatibility fallback; defensive JSON parsing and schema validation. |
+| AIP-6 | Sanitized HTTP diagnostics (status, server message, rejected capability) without document text or secrets. |
+| AIP-7 | Deterministic failures fail at once; transient failures (timeout, connection, 429, temporary 5xx) retry with backoff, bounded; truthful job states and visible stages; no duplicate queued analyses. |
+| AIP-8 | Separate tests: AI profile/connection with model roles, AI analysis, OCR Tesseract, OCR PaddleOCR. |
+| AIP-9 | Long text is split deterministically in page order; any unanalysed remainder is recorded. |
+| AIP-10 | Backward compatible: existing profiles work unchanged, old failed jobs stay failed but may be retried; privacy, throttling and performance controls apply. |
+
 ## Change set X (2026-10): performance {#change-set-x}
 
 Acceptance tests AT-401…AT-425 (prompt AT-376…AT-400 = AT-(n+25)). See [TRACEABILITY.md](TRACEABILITY.md#change-set-x),

@@ -77,14 +77,20 @@ def start_job(kind: str, *, document=None, user=None, profile=None, model="") ->
 
 
 def finish_job(job: AIJob, *, error: AIError | None = None) -> None:
+    """Record the outcome truthfully: done, skipped (feature switched off) or failed at the stage it reached."""
     job.finished_at = timezone.now()
+    job.next_retry_at = None
     if error is None:
         job.status = AIJob.DONE
+        job.stage = "done"
+        job.error_category, job.error = "", ""
     else:
         job.status = AIJob.SKIPPED if error.category == "disabled" else AIJob.FAILED
         job.error_category = error.category
         job.error = str(error)[:300]
-        job.retryable = error.category in ("unavailable", "timeout", "bad_response")
+        job.detail = {**(job.detail or {}), **error.detail()}
+        # a person may retry a failed analysis once the cause is fixed (automatic retries are only for transient errors)
+        job.retryable = job.status == AIJob.FAILED and job.kind in (AIJob.ANALYZE, AIJob.EMBED)
     job.save()
 
 
@@ -130,9 +136,29 @@ Existing tags: {tags}
 Known issuers: {correspondents}
 Folders: {folders}
 Current title: {title}
-
+{part}
 OCR TEXT:
 {text}"""
+
+# Change Set Y: the OCR-first analysis pipeline. Stages are stored on the AIJob so a person can see where it is, or
+# where it failed. OCR (Tesseract or PaddleOCR, whichever is configured) always runs first; the AI text model only
+# ever receives the recognised TEXT, never the file or a page image.
+STAGES = ("queued", "preparing", "ocr_queued", "ocr_running", "validating_ocr", "ai_running", "validating_ai", "saving",
+          "done")
+STAGE_LABELS = {"queued": "Queued", "preparing": "Preparing document", "ocr_queued": "OCR queued", "ocr_running": "OCR running",
+                "validating_ocr": "Checking OCR text", "ai_running": "AI analysis", "validating_ai": "Checking AI answer",
+                "saving": "Saving suggestions", "done": "Done"}
+MIN_USABLE_CHARS = 12      # letters or digits; below this the AI server is not called
+ANALYSIS_PARTS = 3         # a long document is analysed in at most this many parts, in page order
+EMPTY_OCR = "OCR completed, but no usable text was detected."
+
+FIELD_SCHEMA = {
+    "title": {"type": "string"}, "issue_date": {"type": "string"}, "expiry_date": {"type": "string"},
+    "document_number": {"type": "string"}, "summary": {"type": "string"}, "document_type": {"type": "string"},
+    "correspondent": {"type": "string"}, "tags": {"type": "array", "items": {"type": "string"}}, "folder": {"type": "string"},
+}
+OCR_KEYS = ("title", "issue_date", "expiry_date", "document_number", "summary")
+ORGANIZE_KEYS = ("document_type", "correspondent", "tags", "folder")
 
 
 def _date(value) -> str | None:
@@ -142,8 +168,171 @@ def _date(value) -> str | None:
         return None
 
 
-def analyze_document(doc, user, *, job: AIJob | None = None) -> list[AISuggestion]:
-    """Ask the model for suggestions. Never changes the document; creates pending AISuggestion rows."""
+def set_stage(job: AIJob | None, stage: str, **detail) -> None:
+    if job is None:
+        return
+    job.stage = stage
+    if detail:
+        job.detail = {**(job.detail or {}), **detail}
+    if job.pk:
+        AIJob.objects.filter(pk=job.pk).update(stage=job.stage, detail=job.detail)
+
+
+def usable_chars(text: str) -> int:
+    return sum(1 for ch in (text or "") if ch.isalnum())
+
+
+def ocr_text(doc) -> dict:
+    """The document's current recognised/extracted text plus safe facts about where it came from."""
+    from apps.library import ocr_runs
+
+    cv = doc.current_version
+    text = ocr_runs.document_text(doc) or doc.content_text or ""
+    if cv is not None and cv.ocr_applied:
+        engine = cv.ocr_engine or "ocr"
+    else:
+        engine = "text layer" if text.strip() else ""
+    return {"text": text, "engine": engine, "pages": getattr(cv, "page_count", None) or None, "chars": usable_chars(text),
+            "ocr_applied": bool(cv and cv.ocr_applied)}
+
+
+def prepare_text(doc, user, job: AIJob | None) -> dict | None:
+    """Stage 1 (OCR). Returns the text to analyse, or None when OCR was queued and the job must wait for it.
+    Raises AIError for OCR problems: the AI server is never called without usable text."""
+    from apps.library import ocr_runs
+
+    info = ocr_text(doc)
+    if info["chars"] >= MIN_USABLE_CHARS:
+        set_stage(job, "validating_ocr", ocr_engine=info["engine"], ocr_pages=info["pages"], ocr_chars=info["chars"],
+                  ocr_reused=True)
+        return info
+    if ocr_runs._active_job(doc) is not None:  # recognition already queued or running: wait for it
+        set_stage(job, "ocr_queued", ocr_requested=True)
+        return None
+    if job is not None and not (job.detail or {}).get("requested") and not info["ocr_applied"]:
+        raise AIError("Skipped: the document has no recognised text yet. Run OCR or choose Analyze Document.", "disabled")
+    if info["ocr_applied"] or (job is not None and (job.detail or {}).get("ocr_requested")):
+        set_stage(job, "validating_ocr", ocr_engine=info["engine"] or "ocr", ocr_pages=info["pages"], ocr_chars=info["chars"])
+        raise AIError(EMPTY_OCR, "ocr_empty")
+    try:
+        ocr_runs.request_ocr(actor=user if getattr(user, "pk", None) else None, doc=doc, automatic=True)
+    except ocr_runs.OCRError as exc:
+        raise AIError(f"The document has no usable text and text recognition could not start: {exc}", "ocr_unavailable")
+    set_stage(job, "ocr_queued", ocr_requested=True)
+    return None
+
+
+def split_for_model(text: str, limit: int) -> list[str]:
+    """Split long text into parts of at most ``limit`` characters at page or paragraph boundaries, in order."""
+    text = text.strip()
+    if len(text) <= limit:
+        return [text]
+    parts, cur = [], ""
+    for block in re.split(r"(\f|\n\s*\n)", text):
+        if not block or block.isspace() or block == "\f":
+            if cur and block:
+                cur += "\n\n"
+            continue
+        while len(block) > limit:  # one very long block: cut at a line or space near the limit
+            cut = max(block.rfind("\n", 0, limit), block.rfind(" ", 0, limit))
+            cut = cut if cut > limit // 2 else limit
+            if cur:
+                parts.append(cur.strip())
+                cur = ""
+            parts.append(block[:cut].strip())
+            block = block[cut:]
+        if len(cur) + len(block) > limit and cur:
+            parts.append(cur.strip())
+            cur = ""
+        cur += block
+    if cur.strip():
+        parts.append(cur.strip())
+    return [p for p in parts if p]
+
+
+def _clean(value, limit: int = 300) -> str:
+    return "".join(ch for ch in str(value) if ch.isprintable() or ch in " ")[:limit].strip()
+
+
+def validate_ai_data(data) -> dict:
+    """Stage 'validating_ai': keep only the requested keys with the right types; reject an answer with none of them."""
+    if not isinstance(data, dict):
+        raise AIError("The model's answer is not a JSON object.", "bad_response")
+    out = {}
+    for key, spec in FIELD_SCHEMA.items():
+        if key not in data or data[key] in (None, "", []):
+            continue
+        val = data[key]
+        if spec["type"] == "array":
+            if isinstance(val, str):
+                val = [x for x in re.split(r"[,;]", val)]
+            if not isinstance(val, list):
+                continue
+            val = [_clean(x, 60) for x in val if isinstance(x, (str, int, float)) and _clean(x, 60)][:8]
+            if val:
+                out[key] = val
+        elif isinstance(val, (str, int, float)) and not isinstance(val, bool):
+            v = _clean(val)
+            if key in ("issue_date", "expiry_date"):
+                v = _date(v) or ""
+            if v:
+                out[key] = v
+    if not out and not any(k in data for k in FIELD_SCHEMA):
+        raise AIError("The model's answer did not contain any of the requested fields.", "bad_response")
+    return out
+
+
+def merge_parts(results: list[dict]) -> dict:
+    """Combine the answers for the parts of a long document: the first value in page order wins; tags are joined."""
+    merged: dict = {}
+    for r in results:
+        for k, v in r.items():
+            if k == "tags":
+                merged["tags"] = list(dict.fromkeys((merged.get("tags") or []) + v))[:8]
+            elif k not in merged:
+                merged[k] = v
+    return merged
+
+
+def run_analysis(profile: AIProfile, text: str, *, keys: list[str], vocab: dict, folders: dict, title: str,
+                 job: AIJob | None = None) -> tuple[dict, dict]:
+    """Stage 2 (AI): send the OCR text (never a file or image) to the profile's TEXT model and return validated data.
+    Shared by Analyze Document and Settings → Test AI analysis, so both use the same compatibility path."""
+    model = model_for(profile, "text")
+    if profile.embedding_model and model == profile.embedding_model:
+        raise AIError("The text model is set to the embedding model. Choose a chat/text model in the AI profile.", "model_role")
+    parts = split_for_model(text, profile.max_input_chars)
+    used = parts[:ANALYSIS_PARTS]
+    info = {"parts": len(used), "total_chars": len(text), "analyzed_chars": sum(len(p) for p in used),
+            "truncated": len(parts) > len(used)}
+    schema = {"type": "object", "properties": {k: FIELD_SCHEMA[k] for k in keys}}
+    key_lines = {"title": '"title": short descriptive title', "issue_date": '"issue_date"', "expiry_date": '"expiry_date"',
+                 "document_number": '"document_number": as printed', "summary": '"summary": one sentence',
+                 "document_type": '"document_type"', "correspondent": '"correspondent": issuing organisation',
+                 "tags": '"tags": [list]', "folder": '"folder": one of the folder paths'}
+    prov = provider_for(profile)
+    results = []
+    for i, part in enumerate(used):
+        prompt = ANALYZE_PROMPT.format(
+            keys="\n".join(key_lines[k] for k in keys), types=", ".join(vocab.get("types") or []) or "-",
+            tags=", ".join(vocab.get("tags") or []) or "-", correspondents=", ".join((vocab.get("correspondents") or [])[:80]) or "-",
+            folders="; ".join(list(folders)[:80]) or "-", title=title,
+            part=f"(Part {i + 1} of {len(used)} of a longer document, in page order.)\n" if len(used) > 1 else "", text=part)
+        set_stage(job, "ai_running", model=model, **info)
+        reply, how = prov.structured([{"role": "system", "content": "Return only one JSON object."},
+                                      {"role": "user", "content": prompt}], model, schema)
+        info.update(structured_output=how["structured_output"], fallback=bool(how.get("fallback") or info.get("fallback")))
+        if how.get("rejected"):
+            info["rejected_capability"] = "response_format"
+        _debug("analyze", len(prompt), len(reply))
+        set_stage(job, "validating_ai", **info)
+        results.append(validate_ai_data(parse_json_object(reply)))
+    return merge_parts(results), info
+
+
+def analyze_document(doc, user, *, job: AIJob | None = None) -> list[AISuggestion] | None:
+    """OCR → validate text → AI text model → validate → pending AISuggestion rows. Never changes the document.
+    Returns None when OCR had to be queued first (the job resumes when recognition finishes)."""
     from apps.library import permissions as P
 
     ocr = enabled("ocr_assist")
@@ -154,38 +343,29 @@ def analyze_document(doc, user, *, job: AIJob | None = None) -> list[AISuggestio
     if not ctx.can(doc, P.EDIT):
         raise AIError("You cannot edit this document.", "disabled")
     profile = profile_for("ocr_assist" if ocr else "smart_organization")
-    version = doc.current_version
-    text = (version.text if version else "") or doc.content_text or ""
-    image = None
-    if not text.strip() and version and version.preview_path and profile.vision_model:
-        from apps.library import storage
-
-        try:
-            image = storage.resolve_derivative(version.thumbnail_path or version.preview_path).read_bytes()[:4_000_000]
-        except OSError:
-            image = None
-    if not text.strip() and image is None:
-        raise AIError("The document has no OCR text yet and no vision model is configured.", "disabled")
-    keys = []
-    if ocr:
-        keys += ['"title": short descriptive title', '"issue_date"', '"expiry_date"', '"document_number": as printed', '"summary": one sentence']
-    if organize:
-        keys += ['"document_type"', '"correspondent": issuing organisation', '"tags": [list]', '"folder": one of the folder paths']
+    if job:
+        job.profile, job.model = profile, profile.text_model
+        job.save(update_fields=["profile", "model"])
+    set_stage(job, "preparing")
+    info = prepare_text(doc, user, job)
+    if info is None:
+        return None
+    keys = (list(OCR_KEYS) if ocr else []) + (list(ORGANIZE_KEYS) if organize else [])
     vocab = _vocab(doc)
     folders = _folder_options(user, doc) if organize else {}
-    prompt = ANALYZE_PROMPT.format(
-        keys="\n".join(keys), types=", ".join(vocab["types"]) or "-", tags=", ".join(vocab["tags"]) or "-",
-        correspondents=", ".join(vocab["correspondents"][:80]) or "-", folders="; ".join(list(folders)[:80]) or "-",
-        title=doc.title, text=text[: profile.max_input_chars] if text else "(no OCR text: read the attached image)")
-    model = model_for(profile, "vision" if image is not None else "text")
-    if job:
-        job.profile, job.model = profile, model
-        job.save(update_fields=["profile", "model"])
-    reply = provider_for(profile).chat([{"role": "system", "content": "Return only JSON."},
-                                        {"role": "user", "content": prompt}], model, json_mode=True, image=image)
-    _debug("analyze", len(prompt), len(reply))
-    data = parse_json_object(reply)
+    data, _how = run_analysis(profile, info["text"], keys=keys, vocab=vocab, folders=folders, title=doc.title, job=job)
+    set_stage(job, "saving")
     return _store_suggestions(doc, data, vocab, folders, job, ocr=ocr, organize=organize)
+
+
+def manual_keys(doc) -> set[str]:
+    """Detail keys a person confirmed by hand (entered, or replaced an OCR/AI value)."""
+    from apps.library.models import DocumentField
+
+    from django.db.models import Q
+
+    return set(DocumentField.objects.filter(document=doc, status=DocumentField.CONFIRMED)
+               .filter(Q(source="manual") | Q(overridden=True)).values_list("key", flat=True))
 
 
 def _store_suggestions(doc, data: dict, vocab: dict, folders: dict, job, *, ocr: bool, organize: bool) -> list[AISuggestion]:
@@ -197,8 +377,9 @@ def _store_suggestions(doc, data: dict, vocab: dict, folders: dict, job, *, ocr:
         from apps.library import doctypes
 
         allowed = doctypes.allowed_extract_keys(doc)  # a typed document only gets its own template's fields
+        manual = manual_keys(doc)  # details a person entered or corrected are never proposed for replacement
         for key in ("issue_date", "expiry_date"):
-            if allowed is not None and key not in allowed:
+            if (allowed is not None and key not in allowed) or key in manual:
                 continue
             val = _date(data.get(key))
             current = getattr(doc, key)
@@ -206,7 +387,7 @@ def _store_suggestions(doc, data: dict, vocab: dict, folders: dict, job, *, ocr:
                 out.append((key, val, val, current.isoformat() if current else ""))
         number = re.sub(r"[^A-Za-z0-9\-/ ]", "", str(data.get("document_number") or ""))[:40].strip()
         text = (doc.current_version.text if doc.current_version else "") or ""
-        if number and (allowed is None or "document_number" in allowed) \
+        if number and (allowed is None or "document_number" in allowed) and "document_number" not in manual \
                 and number.replace(" ", "") in text.replace(" ", ""):  # only numbers that really appear in the text
             out.append(("document_number", number, number, ""))
         summary = str(data.get("summary") or "").strip()[:300]

@@ -81,6 +81,36 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
 - Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
 
+## Change set Y: OCR → AI document analysis pipeline {#change-set-y}
+
+**Numbering.** Prompt AT-401…AT-415 → **AT-426…AT-440** (the prompt also called itself "Change Set X", which is taken);
+see [TRACEABILITY.md](TRACEABILITY.md#change-set-y). Requirements AIP-1…AIP-10 in [REQUIREMENTS.md](REQUIREMENTS.md#change-set-y).
+**Migration:** `ai.0002_analysis_stages` (additive, reversible; marks earlier failed analyses as retryable, never as successful).
+
+### Reproduced failure and root cause
+
+An LM Studio profile (`qwen3-8b`, embeddings `text-embedding-nomic-embed-text-v1.5`): assistant jobs succeeded,
+every Analyze Document job failed with *unavailable: The AI server returned HTTP 400*. Reproduced against a server that
+answers like LM Studio (`tests/fake_ai_server.py`, `lmstudio` mode; `test_reported_http_400_reproduced_and_explained`):
+the sanitized server answer is `'response_format.type' must be 'json_schema' or 'text'`.
+
+| Problem | Root cause | Fix | Files |
+| --- | --- | --- | --- |
+| HTTP 400 on Analyze Document only | Analysis sent `response_format: {"type": "json_object"}` (the assistant sends a plain chat) | `json_schema` structured output; one prompt-only fallback when a server rejects it; remembered per profile | `ai/providers.py` |
+| "unavailable", queued again | Every HTTP status ≥ 300 was classified *unavailable* (retryable) and the server's explanation was dropped | Status classes (auth, model missing, too large, bad request, transient 408/425/429/5xx); sanitized server message, rejected capability | `ai/providers.py`, `ai/jobs.py` |
+| No usable text → image sent / AI called | Without text, the preview image went to a vision model; empty text still reached the AI | OCR first (reuse, or queue OCR with the configured engine and resume when it finishes); empty OCR fails before AI | `ai/service.py`, `ai/jobs.py`, `library/ocr_runs.py` |
+| Opaque queue | No stages; retries reused the same status; repeated clicks added jobs | Stages and safe details on AIJob; bounded retries with next-retry time; one analysis per document; Retry action | `ai/models.py`, `ai/jobs.py`, `ai/views.py`, `LocalAI.tsx`, `AISuggestions.tsx` |
+| Reasoning models | `<think>` blocks could precede (and contain braces before) the JSON | Stripped before parsing; cut-off answers reported | `ai/providers.py` |
+| Long OCR text | Silently cut at *Max text sent* | Page-order split into up to three parts, results merged, remainder recorded | `ai/service.py` |
+| No way to isolate OCR vs AI | One "Test connection" | Step-by-step connection test with model roles, Test AI analysis, Test OCR per engine | `ai/views.py`, `LocalAI.tsx` |
+
+### Known limitations
+
+- The real LM Studio server and the real PaddleOCR runtime were not available in this environment: LM Studio was
+  emulated (its documented error for `json_object`, its `/api/v0/models` type listing); PaddleOCR used the existing fake
+  worker in tests. Live verification against the reported server: **Blocked / Not Executed**.
+- The vision model setting is kept but no longer used by Analyze Document (OCR-first by design).
+
 ## Change set X: performance {#change-set-x}
 
 **Numbering.** Prompt AT-376…AT-400 → **AT-401…AT-425** (the prompt also called itself "Change Set W", which is
