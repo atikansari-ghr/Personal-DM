@@ -1,0 +1,132 @@
+{
+ "base": "http://localhost:8001",
+ "conditions": "Chromium; 20 ms latency, 40/20 Mbit/s; CPU 2x slowdown; cold browser cache",
+ "flows": {
+  "Sign-in page usable": {
+   "median_ms": 337,
+   "runs": [
+    261,
+    299,
+    337,
+    350,
+    358
+   ],
+   "requests": 21,
+   "api_requests": 1,
+   "kb": 89,
+   "js_kb": 72
+  },
+  "Sign-in → dashboard usable": {
+   "median_ms": 831,
+   "runs": [
+    786,
+    810,
+    831,
+    834,
+    836
+   ],
+   "requests": 15,
+   "api_requests": 7,
+   "kb": 35,
+   "js_kb": 0
+  },
+  "Settings initial (General)": {
+   "median_ms": 191,
+   "runs": [
+    160,
+    187,
+    191,
+    196,
+    206
+   ],
+   "requests": 4,
+   "api_requests": 4,
+   "kb": 8,
+   "js_kb": 0
+  },
+  "Settings section first visit (Backup & Recovery)": {
+   "median_ms": 216,
+   "runs": [
+    205,
+    214,
+    216,
+    253,
+    262
+   ],
+   "requests": 4,
+   "api_requests": 4,
+   "kb": 14,
+   "js_kb": 0
+  },
+  "Settings section switch, previously loaded": {
+   "median_ms": 301,
+   "runs": [
+    265,
+    295,
+    301,
+    331,
+    371
+   ],
+   "requests": 7,
+   "api_requests": 7,
+   "kb": 66,
+   "js_kb": 0
+  },
+  "Folder browse (large folder, first documents)": {
+   "median_ms": 610,
+   "runs": [
+    390,
+    572,
+    610,
+    621,
+    670
+   ],
+   "requests": 34,
+   "api_requests": 6,
+   "kb": 258,
+   "js_kb": 0
+  },
+  "Folder browse (normal folder)": {
+   "median_ms": 495,
+   "runs": [
+    373,
+    484,
+    495,
+    517,
+    561
+   ],
+   "requests": 34,
+   "api_requests": 6,
+   "kb": 193,
+   "js_kb": 0
+  },
+  "Document Details open": {
+   "median_ms": 428,
+   "runs": [
+    391,
+    407,
+    428,
+    467,
+    490
+   ],
+   "requests": 8,
+   "api_requests": 8,
+   "kb": 11,
+   "js_kb": 0
+  },
+  "Search (family dataset)": {
+   "median_ms": 496,
+   "runs": [
+    425,
+    472,
+    496,
+    505,
+    560
+   ],
+   "requests": 36,
+   "api_requests": 8,
+   "kb": 80,
+   "js_kb": 0
+  }
+ }
+}

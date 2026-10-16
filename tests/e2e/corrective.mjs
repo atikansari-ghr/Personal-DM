@@ -704,9 +704,67 @@ await step("AT-396/AT-397 Notification detail: Use system default / Full / Minim
   await s.ctx.close();
 });
 
+// ------------------------------------------------------------------ Change Set X: performance
+await step("AT-404/AT-405/AT-409 Settings loads only the open section; a section opened before switches back at once", async () => {
+  const s = await session("admin");
+  const urls = [];
+  s.page.on("request", (r) => { if (r.url().includes("/api/settings")) urls.push(new URL(r.url()).search); });
+  const chunks = [];
+  s.page.on("response", (r) => { if (r.url().includes("/static/app/") && r.url().endsWith(".js")) chunks.push(r.url().split("/").pop()); });
+  await s.page.goto(BASE + "/settings/general");
+  await s.page.waitForSelector("main .setting-row");
+  expect(urls.length > 0 && urls.every((q) => q.includes("section=") || q.includes("keys=")), `settings requests: ${urls.join(" ")}`);
+  expect(!chunks.some((c) => /^Backup-/.test(c)), "Backup & Recovery code loaded before it was opened");
+  await s.page.click("nav.tabs a:has-text('Backup & Recovery')");
+  await s.page.waitForSelector("nav.tabs a.active[href='/settings/backup']");
+  await s.page.waitForSelector("main .card");
+  expect(chunks.some((c) => /^Backup-/.test(c)), "Backup & Recovery code loads when opened");
+  await s.page.click("nav.tabs a:has-text('General')");
+  const t = Date.now();
+  await s.page.waitForSelector("main .setting-row");
+  expect(Date.now() - t < 1500, `switching back to General took ${Date.now() - t} ms`);
+  // direct link, Back and Forward
+  await s.page.goto(BASE + "/settings/notifications");
+  await s.page.waitForSelector("nav.tabs a.active[href='/settings/notifications']");
+  await s.page.goBack();
+  await s.page.waitForSelector("main .setting-row");
+  await s.page.goForward();
+  await s.page.waitForSelector("nav.tabs a.active[href='/settings/notifications']");
+  await s.ctx.close();
+});
+
+await step("AT-416/AT-417 Admin → Performance: metrics, throttle state, report for the main administrator only", async () => {
+  await page.goto(BASE + "/settings/performance");
+  await page.waitForSelector("#performance [data-throttle]");
+  const text = await page.locator("#performance").innerText();
+  expect(text.includes("Slowest requests") && text.includes("Background jobs") && /Background processing (normal|throttled)/.test(text), `performance: ${text.slice(0, 200)}`);
+  expect(!/Sample-Passw0rd|Bearer|recovery key/i.test(text), "secret on the performance page");
+  expect(await page.locator("#performance a:has-text('Download Diagnostic Report')").count() === 1, "report button");
+  const rep = await api(page, "/api/admin/performance/report");
+  expect(rep.status === 200 && rep.data.environment, "report");
+  await page.locator("#performance").screenshot({ path: `${OUT}/performance.png` });
+  const son = await session("son1");
+  expect((await api(son.page, "/api/admin/performance")).status === 403, "family member reached Performance");
+  await son.page.goto(BASE + "/settings");
+  expect(!(await son.page.locator("nav.tabs a:has-text('Performance')").count()), "Performance tab shown to a family member");
+  await son.ctx.close();
+});
+
+await step("AT-409/AT-419 app files: small first download, compressed, cached as immutable; index.html re-checked", async () => {
+  const r = await fetch(BASE + "/login");
+  const html = await r.text();
+  expect(r.headers.get("cache-control") === "no-cache", "index.html cache header");
+  const main = html.match(/\/static\/app\/main-[\w-]+\.js/)[0];
+  const js = await fetch(BASE + main, { headers: { "Accept-Encoding": "br, gzip" } });
+  expect(/immutable/.test(js.headers.get("cache-control") || ""), `cache header ${js.headers.get("cache-control")}`);
+  expect(["br", "gzip"].includes(js.headers.get("content-encoding")), `encoding ${js.headers.get("content-encoding")}`);
+  const size = Number(js.headers.get("content-length") || (await js.arrayBuffer()).byteLength);
+  expect(size < 150_000, `main bundle transfer ${size} bytes`);
+});
+
 await step("phone 390 px: Connections and notification cards fit without sideways scrolling", async () => {
   const m = await session("admin", { width: 390, height: 844 }, true);
-  for (const url of ["/settings/connections", "/settings/account?tab=notifications", "/settings/security", "/settings/overview"]) {
+  for (const url of ["/settings/connections", "/settings/account?tab=notifications", "/settings/security", "/settings/overview", "/settings/performance"]) {
     await m.page.goto(BASE + url);
     await m.page.waitForLoadState("networkidle");
     const over = await m.page.evaluate(() => document.documentElement.scrollWidth - innerWidth);

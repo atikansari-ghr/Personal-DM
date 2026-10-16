@@ -7,7 +7,7 @@ import { useSession } from "../session";
 import FileTypeIcon from "../components/FileTypeIcon";
 import { ActivityWidget, CalendarWidget, DateWidget, DocList, HolidaysWidget, SummaryWidget, WeatherWidget } from "../components/OverviewWidgets";
 import { HealthSummary } from "./settings/SecurityCenter";
-import { HealthBadge } from "./settings/Backup";
+import { HealthBadge } from "../components/HealthBadge";
 import type { DocRow, User, WidgetCfg } from "../types";
 
 function greeting() {
@@ -128,7 +128,7 @@ export default function Dashboard() {
   };
   const save = async () => {
     try {
-      await api("settings", { method: "PUT", body: { values: { "me.dashboard_widgets": order, "me.overview_layout": Object.fromEntries(order.map((id) => [id, cfgOf(id)])) } } });
+      await api("settings", { method: "PUT", body: { values: { "me.dashboard_widgets": order, "me.overview_layout": Object.fromEntries(order.map((id) => [id, cfgOf(id)])) } }, query: { brief: 1 } });
       await refresh();
       setEditing(false);
       toast("Overview saved on all your devices");

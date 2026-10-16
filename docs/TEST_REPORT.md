@@ -56,6 +56,52 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
+## Change set X: performance {#change-set-x}
+
+**Numbering.** Prompt AT-376…AT-400 → **AT-401…AT-425**. Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md#change-set-x).
+Measurements (Before → After → Target): [PERFORMANCE.md](PERFORMANCE.md#results). Root causes:
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-x).
+
+**Environment.** Development container (4 vCPU, 16 GB, Ubuntu 24.04, PostgreSQL 16, Python 3.13, Node 22, Chromium
+via Playwright), 2026-10-16. Performance runs on the synthetic dataset (8,000 documents) with the web server pinned
+to 2 cores; the browser suites ran on the production gunicorn configuration (2 workers × 4 threads).
+
+| Command | Result |
+|---|---|
+| `pytest tests/test_performance.py` | **26 passed** |
+| Full `pytest` | **553 tests: 547 passed, 5 skipped (2 need a running ClamAV, 3 the real PaddleOCR runtime), 1 failed: the documentation checker, only because this section did not exist yet; it passes with this report** |
+| `scripts/e2e.sh` (fresh database, final run) | **161 PASS, 0 FAIL** (exit 0): flow; accessibility; parity and layout (7 viewports); offline 9; PWA 4; themes 6; recovery 10; **corrective 35** (incl. Change Set X: Settings loads only the open section and Backup code only when opened, direct links and Back/Forward, Performance page for administrators only with the report, compressed immutable app files, Performance page at 390 px); screenshots 8 |
+| `manage.py perf_bench --budget` (8,000 documents) | every request within budget (40 queries, 500 ms); results in docs/performance/after/after-api.json |
+| `tests/e2e/perf.mjs`, `scripts/perf_load.py` | all page targets met, also under background contention (PERFORMANCE.md#results) |
+| Live adaptive throttling check | activation after two hot samples, deferrable job held back, recovery after three calm samples (docs/performance/after/throttle-live.txt) |
+| `manage.py perf_maintenance` twice | both runs OK, nothing deleted |
+| Migrations `library.0012`, `core.0007` forwards, backwards, forwards | OK (also reversing Change Set W's `core.0004`–`0006`) |
+| `npm run build` (TypeScript check, build) | Passed; main bundle 252 KB (72 KB Brotli), under the 400 KB budget |
+| `python3 scripts/check_docs.py`, `scripts/privacy_check.sh`, `shellcheck -S error` | OK |
+
+**Blocked / Not Executed** (never reported as passed):
+
+- Measurements on a production-equivalent **6 GB Proxmox LXC** (AT-401, AT-418, AT-425): not available; the
+  development container with the web server pinned to 2 cores was used, and memory use was measured.
+- A real `personaldocs upgrade` and production smoke test (AT-422, AT-425).
+- Real OCR, ClamAV and backup load on such a container during browsing (AT-414): contention was simulated with
+  CPU-bound processes at the same priorities.
+- Firefox and Safari.
+
+**Defects found while testing, all fixed:**
+
+- The admin health summaries (backup and security), cached for 30 s, showed a missing recovery point right after one
+  was created outside a job (found by `test_at309_backup_health_*`). Health is no longer cached.
+- The Overview loaded the whole Backup & Recovery screen for one status badge (found by the new "Settings loads only
+  the open section" browser check); the badge is now its own component.
+- The system sampler's first CPU reading in a new process was empty: the first sample now measures over 0.5 s.
+- `personaldocs rollback` refuses after an upgrade that added migrations; the upgrade guide (Change Set W and X and
+  the general rollback section) now gives the exact steps to reverse them first.
+
+**Environment note.** `test_at309_backup_health_*` also marks a destination *critical* below 10 % free disk; in this
+container free space was close to 10 % (26 GB of 252 GB). After removing package caches (10.7 % free) it passes, and
+it passed in the final run.
+
 ## Change set W: named sign-in designs and rotation, complete details and IPs, Notification Detail Level {#change-set-w}
 
 **Numbering.** The change prompt numbered its tests AT-351…AT-375. Here they are **AT-376…AT-400** (prompt AT-n →

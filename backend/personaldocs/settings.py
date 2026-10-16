@@ -87,6 +87,14 @@ SESSION_COOKIE_NAME = "pd_session"
 CSRF_COOKIE_NAME = "pd_csrftoken"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 14
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
+
+# Change Set X: "default" stays the per-process memory cache; "shared" is a small file cache that every process
+# (web workers, job worker, scheduler) sees, used only for non-private summaries (see apps/core/perfcache.py).
+CACHES = {
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    "shared": {"BACKEND": "apps.core.perfcache.SafeFileBasedCache",
+               "LOCATION": str(DATA_DIR / "cache" / "shared"), "TIMEOUT": 300, "OPTIONS": {"MAX_ENTRIES": 500}},
+}
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "SAMEORIGIN"
@@ -112,6 +120,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "apps.core.middleware.RequestSettingsMiddleware",  # Change Set X: settings read once per request
+    "apps.core.perf.PerformanceMiddleware",  # Change Set X: request timings by route (Admin → Performance)
     "apps.security.traffic.AccessLogMiddleware",  # outermost: logs the final status (incl. policy denials)
     "apps.core.middleware.RecoveryInProgressMiddleware",  # 503 while a full-system recovery runs
     "apps.core.middleware.LocalAccessCookieMiddleware",  # adjusts the final response
@@ -175,6 +185,17 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [d for d in [FRONTEND_DIST / "assets"] if d.exists()]
 WHITENOISE_ROOT = FRONTEND_DIST if FRONTEND_DIST.exists() else None
+
+
+def _immutable_asset(path, url) -> bool:
+    """Change Set X: built app files whose name carries a content hash (or a versioned folder) never change, so
+    browsers may keep them for a year; a new release has new names. index.html and sw.js are always re-checked."""
+    import re as _re
+
+    return bool(_re.search(r"/static/app/(pdfjs-[^/]+/.+|.+-[A-Za-z0-9_-]{8}\.(js|mjs|css|woff2?|wasm))$", url))
+
+
+WHITENOISE_IMMUTABLE_FILE_TEST = _immutable_asset
 # Installed-app identity files need their proper types (Python's mimetypes has no entry for .webmanifest).
 WHITENOISE_MIMETYPES = {".webmanifest": "application/manifest+json", ".ico": "image/x-icon"}
 

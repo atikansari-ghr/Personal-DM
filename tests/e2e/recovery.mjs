@@ -163,7 +163,10 @@ await step("AT-318/AT-320 notification routing: category channels, fallback chai
   await page.check("text=Quiet hours on");
   await page.fill("#qh-start", "22:00");
   await page.fill("#qh-end", "07:00");
+  // read back only after the save has been answered (the web service handles requests concurrently)
+  const saved = page.waitForResponse((res) => res.url().includes("/api/notifications/routing") && res.request().method() === "PUT");
   await page.click("#quiet-hours button:has-text('Save')");
+  expect((await saved).ok(), "quiet hours save failed");
   const r = await api(page, "/api/me/notification-preferences");
   expect(r.data.quiet_hours.enabled === true, "quiet hours saved");
   await page.locator("#routing").scrollIntoViewIfNeeded();

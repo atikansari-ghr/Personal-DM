@@ -56,6 +56,16 @@ Backup destination, schedule (daily, weekly or monthly; see [schedule](backup-re
 
 Service and tool health, disk space, failed jobs, the audit log with filters, and audit retention (default 730 days; 0 keeps forever). The audit log is not tamper-proof against someone with root access to the server.
 
+## Performance {#performance}
+
+**Settings → Performance** (administrators) shows response times, background jobs, server load, cache use and
+recent performance events; the main administrator can download the **Performance Diagnostic Report** and set the
+adaptive throttling thresholds (CPU, available memory, swap, disk pressure, longest postponement), the slow-request
+warning and how long measurements are kept. See [Performance](performance.md#dashboard).
+
+Settings itself loads one section at a time: only the section you open is fetched, and a section you opened before
+appears at once while it refreshes. Saved changes apply from the next request.
+
 ## Secrets {#secrets}
 
 Passwords and tokens are stored encrypted and never displayed again. Leave a secret field empty to keep the stored value; use *Clear stored value* to remove it.

@@ -508,6 +508,45 @@ numbers. Root causes per defect: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 Not run (needs real accounts or environments, never reported as passed): a real WhatsApp phone scanning a real QR,
 a real Discord server, real OpenStreetMap / MapTiler / Stadia tiles from a production address, Firefox and Safari.
 
+## Change set X (2026-10): performance {#change-set-x}
+
+The change prompt numbered these AT-376…AT-400 (and called itself "Change Set W"; W is taken). Here they are
+**AT-401…AT-425**: prompt AT-n → AT-(n+25). Tests in `tests/test_performance.py` (PX) and the Change Set X steps in
+`tests/e2e/corrective.mjs`. Measurements: [PERFORMANCE.md](PERFORMANCE.md). Root causes:
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-x). Evidence: [TEST_REPORT.md](TEST_REPORT.md#change-set-x).
+
+| ID (prompt) | Scenario (abridged) | Req | Code | Tests | Docs | Status |
+|---|---|---|---|---|---|---|
+| AT-401 (376) | Reproducible baseline: synthetic dataset, page/API/query/bundle/concurrency/memory BEFORE | PERF-1 | `ops/perf_dataset`, `ops/perf_bench`, `tests/e2e/perf.mjs`, `scripts/perf_load.py` | PX `test_at401_at423_*`; docs/performance/before/ | PERFORMANCE.md#results | Passed (dev container; 6 GB LXC: **Blocked / Not Executed**) |
+| AT-402 (377) | Sign-in ≤ 1.5 s with Password, Passkey, SSO, designs/rotation intact | PERF-2 | `lazy.ts`, `App.tsx` (auth eager), `branding.public` cache, `designs._changed` | PX `test_at402_*`; perf.mjs 337 ms (484 ms under load) | performance#how | Passed |
+| AT-403 (378) | Dashboard ≤ 2 s with correct data and permissions | PERF-2, PERF-4 | `library/views.dashboard` (one aggregate, deferred columns) | PX `test_at403_*`; perf.mjs 831 ms (1,055 ms) | performance#how | Passed |
+| AT-404 (379) | Settings initial ≤ 1.5 s; modules not fetched synchronously | PERF-3 | `pages/Settings.tsx` (lazy sections), `settings_api ?section/?keys`, `SettingsForm` | PX `test_at404_*`, `test_at409_*`; corrective.mjs AT-404/AT-405/AT-409; perf.mjs 191 ms | settings#performance | Passed |
+| AT-405 (380) | On-demand sections: cached switch ≤ 500 ms, cancellation, links, Back/Forward, permissions, save | PERF-3 | `api.ts apiFresh/abort`, `SettingsForm`, `?brief=1` | PX `test_at405_*`; corrective.mjs; perf.mjs 301 ms (316 ms) | performance#how | Passed |
+| AT-406 (381) | No N+1 on major endpoints; authorisation unchanged | PERF-4 | `core/config` request snapshot, `library/search LIST_*`, `accounts.with_head_flag` | PX `test_at406_*`, `test_at401_*` (budget) | PERFORMANCE.md#bottlenecks | Passed |
+| AT-407 (382) | Indexes safe, beneficial, idempotent, data-preserving | PERF-5 | `library/migrations/0012_doc_active_folder_idx` (concurrent, IF NOT EXISTS, reversible) | PX `test_at407_*`; EXPLAIN 9.1 → 1.3 ms | PERFORMANCE.md#bottlenecks | Passed |
+| AT-408 (383) | Cache hit/miss, invalidation, no cross-user leakage, no stale grants, no secrets | PERF-6 | `core/perfcache.py` (file-shared, generations), `core/config` snapshot | PX `test_at408_*`, `test_at402_*`, `test_at420_*` | performance#caching | Passed |
+| AT-409 (384) | Code splitting, heavy modules on demand, bundle budget | PERF-7 | `lazy.ts`, `App.tsx`, `Settings.tsx`, `vite.config.ts` | PX `test_at409_*`; corrective.mjs; main bundle 829 → 252 KB (72 KB br) | PERFORMANCE.md#results | Passed |
+| AT-410 (385) | Duplicate-request reduction, cancellation, rapid-navigation state | PERF-7 | `api.ts` (in-flight dedupe, AbortSignal, section cache cleared on writes), `Folders.tsx` abort | PX `test_at410_*`; corrective.mjs Back/Forward | — | Passed |
+| AT-411 (386) | Large folders: ≤ 1 s, pagination, sorting, counts, permissions, selection, bulk | PERF-8 | `Folders.tsx` (100/page, IntersectionObserver, Load more), server order | PX `test_at411_*` (5 sort orders); perf.mjs 610 ms (818 ms) | performance#how | Passed |
+| AT-412 (387) | Lists fetch no binaries; thumbnails lazy; content only on request | PERF-8 | `LIST_DEFER`, `loading=lazy`, API `no-store` kept | PX `test_at412_*` | performance#how | Passed |
+| AT-413 (388) | Folder tree scales without permission/navigation regressions | PERF-4 | `folders` view, partial index | PX `test_at413_*` | — | Passed |
+| AT-414 (389) | Background work does not slow browsing; durable jobs correct | PERF-9 | worker priority (unchanged), `jobs.claim` throttle filter, bounded deferral | PX `test_at414_*`; perf_load under contention 19.8 → 37.2 req/s | performance#throttling | Passed (real OCR/AV/backup on a 6 GB LXC: **Blocked / Not Executed**) |
+| AT-415 (390) | Adaptive throttling: activation, reduced work, logged/visible, recovery | PERF-9 | `core/throttle.py`, scheduler sampling, `perf.sample_system` | PX `test_at415_*`; live check (docs/performance/after/throttle-live.txt) | performance#throttling | Passed |
+| AT-416 (391) | Admin Performance useful, restricted, lightweight, no secrets/contents | PERF-10 | `core/perf.py`, `core/perf_views.py`, `pages/settings/Performance.tsx` | PX `test_at416_*`; corrective.mjs AT-416/AT-417 | performance#dashboard | Passed |
+| AT-417 (392) | Diagnostic Report useful without secrets | PERF-10 | `perf_views.diagnostic_report` (main admin, audited) | PX `test_at417_*`; corrective.mjs | performance#dashboard | Passed |
+| AT-418 (393) | Runtime tuning within 6 GB headroom | PERF-11 | `deployment/gunicorn.conf.py`, web unit, `PD_WEB_THREADS` | PX `test_at418_*`; perf_load sync vs gthread; memory 2 × 126 MB | performance#runtime | Passed (6 GB LXC soak: **Blocked / Not Executed**) |
+| AT-419 (394) | Compression, cache headers, versioned invalidation, no stale deployments | PERF-7 | `vite.config.ts precompress`, `WHITENOISE_IMMUTABLE_FILE_TEST`, `lazyPage` reload once | PX `test_at419_*`; corrective.mjs AT-409/AT-419 | performance#runtime | Passed |
+| AT-420 (395) | Real-time auth/permission/document changes; correct invalidation; async health | PERF-6 | request snapshot, perfcache invalidation in jobs and settings | PX `test_at420_*` | performance#caching | Passed |
+| AT-421 (396) | Search/OCR architecture unchanged; no Elasticsearch/OpenSearch | PERF-12 | `library/search.py` (same SearchQuery/rank/headline) | PX `test_at421_*`; existing search tests | — | Passed |
+| AT-422 (397) | Post-upgrade maintenance safe, idempotent; controlled restart; health checks | PERF-11 | `ops/perf_maintenance`, `scripts/personaldocs post-upgrade` | PX `test_at422_*`; run twice on the perf database | performance#maintenance | Passed (real upgrade on an LXC: **Blocked / Not Executed**) |
+| AT-423 (398) | Performance regression suite: large data, query counts, bundle budget, contention, concurrency | PERF-1 | `perf_bench --budget`, `test_performance.py`, `perf.mjs`, `perf_load.py` | PX (26 tests); budgets | PERFORMANCE.md#gate | Passed |
+| AT-424 (399) | Functional/security regression through AT-375 | PERF-12 | — | full `pytest` (547 passed, 5 skipped); `scripts/e2e.sh` (161 PASS) | TEST_REPORT.md#change-set-x | Passed |
+| AT-425 (400) | Final release gate: Before → After → Target | all | — | PERFORMANCE.md#results | TEST_REPORT.md#change-set-x | Passed in the development container (6 GB LXC and production smoke test: **Blocked / Not Executed**) |
+
+Not run (needs a production-equivalent environment, never reported as passed): measurements on a real 6 GB
+Proxmox LXC, a real upgrade and production smoke test, real OCR/ClamAV/backup load on that container, Firefox and
+Safari.
+
 ## Change set W (2026-10): named sign-in designs and rotation, complete details and IPs, Notification Detail Level {#change-set-w}
 
 The change prompt numbered these AT-351…AT-375. AT-351…AT-375 already exist, so here they are **AT-376…AT-400**:

@@ -294,7 +294,8 @@ await step("AT-259 offline text follows its own policy and is removed with OCR",
   await A.page.click(".doc-actions [aria-label='More actions']");
   await A.page.click("[role=menuitem]:has-text('Make available offline')");
   await A.page.waitForSelector(".doc-header [data-offline-status=available]", { timeout: 20000 });
-  await A.page.waitForFunction(async (uid) => (await (await caches.open(`pd-offline-text-${uid}`)).keys()).length > 0, A.uid, { timeout: 20000 });
+  // wait for THIS document's text: the trip folder's documents (also offline on this device) can be stored first
+  await A.page.waitForFunction(async ([uid, id]) => !!(await (await caches.open(`pd-offline-text-${uid}`)).match(`/offline-text/${id}`)), [A.uid, docSolo], { timeout: 20000 });
   const text = await A.page.evaluate(async ([uid, id]) => (await (await caches.open(`pd-offline-text-${uid}`)).match(`/offline-text/${id}`))?.text(), [A.uid, docSolo]);
   expect(text && text.includes("SAMPLE SINGLE DOCUMENT"), "offline text missing");
   const del = await api(A.page, `/api/documents/${docSolo}/ocr`, { method: "DELETE", body: { confirm: true, include_embedded: true } });

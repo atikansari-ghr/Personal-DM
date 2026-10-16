@@ -95,16 +95,27 @@ SORTS = {  # folder browsing order (the "Sort by" menu); the same keys are store
 }
 
 
+# List rows never show the recognised text, the search index or OCR layout data: leave those (often large) columns
+# out of list queries. Details and search snippets read them separately.
+LIST_DEFER = ("content_text", "search_vector", "ocr_sources", "review_flags",
+              "current_version__text", "current_version__ocr_blocks", "current_version__ocr_quality",
+              "current_version__pdfa_report")
+LIST_RELATED = ("owner", "doc_type", "folder", "current_version")
+
+
 def search(ctx: P.AccessContext, q: str, params: dict | None = None, limit: int = 50, offset: int = 0):
     params = params or {}
-    qs = _filters(ctx.documents(P.VIEW), params).distinct()
+    qs = _filters(ctx.documents(P.VIEW), params)
+    if params.get("tag"):
+        qs = qs.distinct()  # only the tag join can repeat a document
     if params.get("shared") and ctx.user is not None:
         qs = qs.exclude(owner=ctx.user)  # documents other people own that this person may open
     q = (q or "").strip()
     if not q:
         total = qs.count()
         order = SORTS.get(params.get("sort") or "-added", SORTS["-added"])
-        return list(qs.select_related("owner", "doc_type", "folder").order_by(*order, "-created_at", "id")[offset:offset + limit]), total, {}
+        return list(qs.select_related(*LIST_RELATED).defer(*LIST_DEFER)
+                    .order_by(*order, "-created_at", "id")[offset:offset + limit]), total, {}
     query = SearchQuery(q, config=CONFIG, search_type="websearch")
     prefix = _prefix_query(q)
     combined = query | prefix if prefix is not None else query
@@ -114,7 +125,7 @@ def search(ctx: P.AccessContext, q: str, params: dict | None = None, limit: int 
         qs.annotate(rank=Coalesce(SearchRank(F("search_vector"), combined), Value(0.0)) + Value(0.0))
         .annotate(snippet=SearchHeadline("content_text", query, config=CONFIG, start_sel="«", stop_sel="»",
                                          max_words=30, min_words=12, max_fragments=2))
-        .select_related("owner", "doc_type", "folder")
+        .select_related(*LIST_RELATED).defer(*LIST_DEFER)
         .order_by("-rank", "-created_at")[offset:offset + limit]
     )
     snippets = {r.id: (r.snippet or "") for r in rows}

@@ -1,0 +1,3 @@
+Cache-Control: max-age=315360000, public, immutable
+Content-Length: 71982
+Content-Encoding: br

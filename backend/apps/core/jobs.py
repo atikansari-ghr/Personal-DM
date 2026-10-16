@@ -90,6 +90,10 @@ def claim(worker: str, heavy_limit: int = 1) -> Job | None:
         )
         if running_heavy >= heavy_limit:
             qs = qs.filter(heavy=False)
+        from . import throttle
+
+        if throttle.active():  # Change Set X: under sustained load, do not START non-urgent work (it waits, bounded)
+            qs = qs.exclude(Q(kind__in=throttle.DEFERRABLE) & Q(run_after__gt=throttle.defer_cutoff()))
         if SERIAL_KINDS and Job.objects.filter(status=Job.RUNNING, kind__in=SERIAL_KINDS, locked_until__gt=now).exists():
             qs = qs.exclude(kind__in=SERIAL_KINDS)
         elif SERIAL_KINDS:
@@ -111,6 +115,19 @@ def claim(worker: str, heavy_limit: int = 1) -> Job | None:
 
 
 def run_job(job: Job) -> None:
+    import time as _time
+
+    started = _time.perf_counter()
+    ok = [False]
+    try:
+        _run_job(job, ok)
+    finally:  # Change Set X: job durations for Admin → Performance
+        from . import perf
+
+        perf.record_job(job.kind, (_time.perf_counter() - started) * 1000, ok[0])
+
+
+def _run_job(job: Job, ok: list) -> None:
     fn = HANDLERS.get(job.kind)
     try:
         if fn is None:
@@ -118,6 +135,7 @@ def run_job(job: Job) -> None:
         result = fn(job) or {}
         Job.objects.filter(pk=job.pk).update(status=Job.DONE, result=result, finished_at=timezone.now(),
                                              locked_until=None, last_error="")
+        ok[0] = True
     except RetryLater as exc:
         _fail(job, str(exc), retry_delay=exc.delay_seconds)
     except PermanentFailure as exc:

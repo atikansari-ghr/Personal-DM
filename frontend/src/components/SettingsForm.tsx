@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { SORT_LABELS, VIEW_LABELS } from "../docview";
 import { Link } from "react-router-dom";
-import { api } from "../api";
+import { api, apiFresh } from "../api";
 import { HelpTip, Icon, Skeleton, useToast } from "./ui";
 import WidgetListEditor from "./WidgetListEditor";
 
@@ -125,19 +125,27 @@ export default function SettingsForm({ section, keys, exclude, title, children }
   const [defs, setDefs] = useState<SettingDef[] | null>(null);
   const [draft, setDraft] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const load = () => api<{ settings: SettingDef[] }>("settings").then((r) => {
-    setDefs(r.settings.filter((s) => (keys ? keys.includes(s.key) : s.section === section) && !exclude?.includes(s.key)));
+  // Change Set X: only this form's own settings are requested; a form opened before shows its last values at once
+  // and is refreshed in the background (a change saved anywhere clears that copy, so saved values are re-read).
+  const query = keys ? { keys: keys.join(",") } : { section };
+  const apply = (r: { settings: SettingDef[] }) => setDefs(r.settings.filter((s) => (keys ? keys.includes(s.key) : s.section === section) && !exclude?.includes(s.key)));
+  const load = (signal?: AbortSignal) => apiFresh<{ settings: SettingDef[] }>("settings", { query, signal, onCached: apply }).then((r) => {
+    apply(r);
     setDraft({});
     setErrors({});
-  });
-  useEffect(() => { load(); }, [section, keys?.join()]);
+  }).catch((e) => { if (e?.name !== "AbortError") throw e; });
+  useEffect(() => {
+    const ctl = new AbortController();  // leaving the section cancels its request
+    load(ctl.signal);
+    return () => ctl.abort();
+  }, [section, keys?.join()]);
   if (!defs) return <Skeleton />;
   if (!defs.length) return null;
   const dirty = Object.keys(draft).length > 0;
   const save = async () => {
     const values = Object.fromEntries(Object.entries(draft).filter(([k, v]) => !(defs.find((d) => d.key === k)?.secret && v === "")));
     try {
-      await api("settings", { method: "PUT", body: { values } });
+      await api("settings", { method: "PUT", body: { values }, query });
       toast("Settings saved");
       if (values["me.theme"]) document.documentElement.dataset.theme = values["me.theme"];
       if (values["me.theme"]) try { localStorage.setItem("pd-theme", values["me.theme"]); } catch { /* ignore */ }

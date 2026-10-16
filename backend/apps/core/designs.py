@@ -71,8 +71,20 @@ def active():
     return d
 
 
+def _changed() -> None:
+    """Change Set X: the public sign-in page payload is cached (perfcache "branding"); every change retires it.
+    Called at the start of each change so even a change that fails half-way never leaves a stale page cached."""
+    from . import perfcache
+
+    perfcache.invalidate("branding")
+    from django.db import transaction
+
+    transaction.on_commit(lambda: perfcache.invalidate("branding"))
+
+
 def _set_active(d, *, actor, reason: str) -> None:
     """Atomic switch: active, previous, and the legacy settings a rollback to the previous release would read."""
+    _changed()
     current = config.get(ACTIVE)
     with transaction.atomic():
         if current and int(current) != d.pk:
@@ -152,6 +164,7 @@ def create(*, name: str, template: str = DEFAULT_KEY, source=None, actor=None):
 
 
 def update(d, data: dict, *, actor=None):
+    _changed()
     if d.builtin:
         raise DesignError("Built-in designs are protected. Duplicate it to make your own version.")
     if "name" in data:
@@ -211,6 +224,7 @@ def clean_overrides(raw) -> dict:
 def delete(d, *, actor=None) -> dict:
     """Deleting the active design first activates the protected default, atomically. Files only this design used
     are removed; shared and built-in files stay."""
+    _changed()
     if d.builtin:
         raise DesignError("Built-in designs are protected and cannot be deleted.")
     D = _model()
@@ -283,6 +297,7 @@ def _encode(img: Image.Image, quality: int = 84) -> bytes:
 def set_wallpaper(d, data: bytes, *, actor=None):
     """Validate, keep the original (EXIF dropped), derive Desktop/Tablet/Mobile, re-run the Auto analysis.
     A Custom palette keeps the administrator's chosen colours."""
+    _changed()
     if d.builtin:
         raise DesignError("Built-in designs are protected. Duplicate it to add a wallpaper.")
     branding.process("wallpaper", data)  # content validation: format, size, pixels, minimum size
@@ -305,6 +320,7 @@ def set_wallpaper(d, data: bytes, *, actor=None):
 
 
 def remove_wallpaper(d):
+    _changed()
     if d.builtin:
         raise DesignError("Built-in designs are protected.")
     old = [v for k, v in d.assets.items() if k != "logo"]
@@ -320,6 +336,7 @@ def remove_wallpaper(d):
 
 
 def set_logo(d, data: bytes | None):
+    _changed()
     if d.builtin:
         raise DesignError("Built-in designs are protected. Duplicate it to add a logo.")
     old = d.assets.get("logo")
@@ -531,6 +548,7 @@ def build_palette(analysis: dict, mode: str) -> dict:
 def refresh_palette(d) -> dict:
     """Re-run the analysis from the Desktop derivative (what people actually see) and rebuild the palette.
     Custom mode keeps the administrator's colours on top of the generated ones."""
+    _changed()
     analysis = {}
     path = d.assets.get("desktop") or d.assets.get("original")
     if path and _file_ok(path):

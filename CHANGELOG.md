@@ -4,6 +4,35 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Changed (2026-10-16) — Performance (Change Set X)
+Measured before and after on a synthetic 8,000-document family library ([docs/PERFORMANCE.md](docs/PERFORMANCE.md)).
+- **Settings opens and switches quickly.** Settings loads only the section you open (each section is its own
+  file and asks only for its own values); a section opened before appears at once and refreshes in the
+  background. Settings data: 112 KB → 8 KB; switching back to a section: 707 → 301 ms.
+- **Every setting was a database query.** Settings are now read once per request (196 → 5 queries for Settings,
+  381 → 7 for notification preferences, 44 → 12 for the session check on every page). A saved change applies from
+  the next request in every server process; secrets are never kept in memory.
+- **Large folders.** Lists no longer run a query per document or fetch each document's recognised text (100 rows:
+  108 → 7 queries, 183 → 44 ms). The folder view loads 100 documents at a time and more as you scroll or with
+  **Load more**: documents past the first 200 were previously not reachable from the folder view.
+- **Smaller, compressed, cached app files.** The app is split by screen and fetched in the background when idle;
+  the sign-in page downloads 89 KB instead of 886 KB. Files are sent pre-compressed (Brotli/gzip) and cached as
+  immutable; each release has new file names, and an open tab that misses a file reloads once.
+- **Requests no longer wait behind each other.** The web service runs 2 processes × 4 threads (`PD_WEB_THREADS`),
+  measured at +48 % requests per second under background load for about 26 MB more memory.
+- **Adaptive background throttling.** Under sustained heavy load (CPU, memory, swap, disk), non-urgent background
+  work (OCR, library scans, AI, reports) waits up to 15 minutes; running jobs, security work, notifications, upload
+  scans and backups are never held back. Settings → Performance shows *Background processing throttled*.
+- **Settings → Performance** (administrators): response times by request type, slowest requests, job durations,
+  CPU/memory/swap/storage, queue, database connections, caches, warnings and events; **Performance Diagnostic
+  Report** for the main administrator. Aggregated measurements only, kept 14 days, nothing private.
+- **Dashboard and folder tree.** Document counts in one query; a partial index (built concurrently) makes
+  per-folder counts an index-only scan.
+- **Safe post-upgrade maintenance** (statistics, index validity, cache, temporary files, app file check).
+- Search and OCR work exactly as before (same search design, faster list queries).
+- **Upgrade impact.** Migrations `core.0007`, `library.0012` (additive, reversible). See
+  [upgrades](docs/guides/upgrades.md#change-set-x).
+
 ### Changed (2026-10-15) — Named sign-in designs with rotation, complete document details, complete IPs, Notification Detail Level (Change Set W)
 - **Several sign-in page designs.** The main administrator keeps any number of named designs (Settings → Overview &
   sign-in): **New design**, **Create from template**, **Duplicate**, **Rename**, **Edit**, **Preview Sign-in Page**,

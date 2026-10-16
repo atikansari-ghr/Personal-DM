@@ -138,3 +138,36 @@ class SigninDesign(models.Model):
     @property
     def builtin(self) -> bool:
         return bool(self.builtin_key)
+
+
+class PerfBucket(models.Model):
+    """Change Set X: aggregated performance measurements in 10-minute buckets (Admin → Performance).
+
+    kind: "api" (a request route such as "documents/<uuid:pk>", never a URL with identifiers), "job" (a background job
+    kind), "client" (loading errors reported by browsers) or "system" (CPU, memory, swap, I/O, queue, connections).
+    Holds counts and timings only: no request contents, document data, names or secrets."""
+
+    bucket = models.DateTimeField(db_index=True)
+    kind = models.CharField(max_length=10)
+    name = models.CharField(max_length=120)
+    count = models.IntegerField(default=0)
+    total_ms = models.FloatField(default=0)
+    max_ms = models.FloatField(default=0)
+    queries = models.BigIntegerField(default=0)
+    db_ms = models.FloatField(default=0)
+    errors = models.IntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["bucket", "kind", "name"], name="perf_bucket_uniq")]
+
+
+class PerfEvent(models.Model):
+    """Notable performance events: slow requests, throttling started/ended, warnings. No private data."""
+
+    at = models.DateTimeField(auto_now_add=True, db_index=True)
+    kind = models.CharField(max_length=30)
+    message = models.CharField(max_length=300)
+    data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-at"]

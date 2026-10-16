@@ -25,6 +25,22 @@ class LocalAccessCookieMiddleware:
         return response
 
 
+class RequestSettingsMiddleware:
+    """Change Set X: settings are read once per request (see core.config) and forgotten when it ends."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from . import config
+
+        config.begin_request()
+        try:
+            return self.get_response(request)
+        finally:
+            config.end_request()
+
+
 class SecurityHeadersMiddleware:
     """Adds a strict CSP and disables caching of API/file responses."""
 
@@ -50,9 +66,14 @@ class SecurityHeadersMiddleware:
         import time
 
         try:
+            from . import config
             from .models import AppSetting
 
-            key = tuple(AppSetting.objects.filter(key__startswith="security.map_").order_by("key").values_list("key", "value"))
+            rows = config._app_rows()  # Change Set X: the request's settings snapshot (no extra query)
+            if rows is not None:
+                key = tuple(sorted((k, v) for k, v in rows.items() if k.startswith("security.map_")))
+            else:
+                key = tuple(AppSetting.objects.filter(key__startswith="security.map_").order_by("key").values_list("key", "value"))
         except Exception:  # noqa: BLE001 - before migrations / without a database
             return ""
         if key != cls._tiles["key"] or time.monotonic() - cls._tiles["at"] > 300:

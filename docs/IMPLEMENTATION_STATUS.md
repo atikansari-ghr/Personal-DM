@@ -81,6 +81,39 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
 - Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
 
+## Change set X: performance {#change-set-x}
+
+**Numbering.** Prompt AT-376…AT-400 → **AT-401…AT-425** (the prompt also called itself "Change Set W", which is
+taken); see [TRACEABILITY.md](TRACEABILITY.md#change-set-x). Requirements PERF-1…PERF-12 in
+[REQUIREMENTS.md](REQUIREMENTS.md#change-set-x). Measurements and the bottleneck table: [PERFORMANCE.md](PERFORMANCE.md).
+**Migrations:** `core.0007_performance_metrics`, `library.0012_doc_active_folder_idx` (additive, reversible). The
+layout is unchanged except the new Settings → Performance tab and a **Load more** row under long folder lists.
+
+### Root causes
+
+| Area | Root cause | Fix | Files |
+| --- | --- | --- | --- |
+| Settings, notification preferences, session | `config.get`/`get_user` ran one query per read; endpoints read hundreds of settings | Per-request snapshot (one query for global settings, one per person), invalidated on write in the same request, never holds secrets | `core/config.py`, `core/middleware.py`, `notify/catalog.py` |
+| Document lists (folders, search, dashboard) | `current_version` not joined (a query per row); full `content_text`, `search_vector` and OCR JSON fetched; `DISTINCT` over all columns | `select_related` + `defer`; `DISTINCT` only for the tag filter | `library/search.py`, `library/views.py` |
+| Folder view | Fixed `limit=200`, no further pages | 100 per page, scroll or Load more, requests cancelled on folder/sort change | `frontend/src/pages/Folders.tsx` |
+| Frontend size | All screens in one 829 KB file; WhiteNoise served it uncompressed with `max-age=60` | Route and Settings-section splitting, idle prefetch, build-time Brotli/gzip, immutable caching of hashed files, reload once on a missing chunk | `App.tsx`, `lazy.ts`, `pages/Settings.tsx`, `vite.config.ts`, `settings.py` |
+| Settings data | One endpoint returned every setting (107 KB) for every section and every save | `?section=` / `?keys=` filters, `?brief=1` saves, stale-while-revalidate section cache | `core/views.py`, `api.ts`, `SettingsForm.tsx` |
+| Concurrency | 2 sync gunicorn workers: two slow requests blocked everyone | `deployment/gunicorn.conf.py`: 2 × 4 gthread (measured) | `deployment/*`, `scripts/personaldocs` |
+| Dashboard | 4 COUNT queries; full document rows | One conditional aggregate, deferred columns (health summaries stay fresh: a 30 s cache was tried and removed after the backup-health test caught a stale value) | `library/views.py` |
+| Folder-tree counts | Sequential scan of documents | Partial index, index-only count | `library/migrations/0012_*` |
+| Background contention | No reaction to sustained pressure | Adaptive throttling of non-urgent job starts, bounded | `core/throttle.py`, `core/jobs.py`, scheduler |
+| No visibility | No performance data | Request/job/system metrics (aggregated), Performance page, Diagnostic Report | `core/perf.py`, `core/perf_views.py`, `Performance.tsx` |
+
+### Known limitations
+
+- Measured in a 4 vCPU / 16 GB development container (web server pinned to 2 cores); the production-equivalent
+  6 GB LXC was not available.
+- Thumbnails stay `no-store` (no browser disk cache) on purpose: document images must not persist on shared devices.
+- Family members list: one passkey-count query per person remains (family scale).
+- Search snippet generation (~70 ms at 8,000 documents) is part of the unchanged search design.
+- Cache counters on the Performance page are those of the web process that answered the request.
+- `personaldocs rollback` needs the two migrations reversed first (upgrades.md#change-set-x).
+
 ## Change set W: named sign-in designs and rotation, complete details and IPs, Notification Detail Level {#change-set-w}
 
 **Numbering.** The change prompt numbered its acceptance tests AT-351…AT-375. Here they are **AT-376…AT-400** (prompt

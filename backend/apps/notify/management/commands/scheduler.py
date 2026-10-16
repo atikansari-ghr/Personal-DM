@@ -44,6 +44,20 @@ def tick() -> dict:
     out = {}
     now_local = expiry.local_now()
     SchedulerRun.objects.update_or_create(name="scheduler_heartbeat", defaults={"last_run_at": timezone.now()})
+    # Change Set X: a system sample about once a minute (Admin → Performance) and the adaptive throttle decision
+    perf_run = SchedulerRun.objects.filter(name="perf_sample").first()
+    if perf_run is None or perf_run.last_run_at is None or (timezone.now() - perf_run.last_run_at).total_seconds() >= 55:
+        try:
+            from apps.core import perf, throttle
+
+            sample = perf.sample_system()
+            out["throttle"] = throttle.evaluate(sample).get("active")
+            SchedulerRun.objects.update_or_create(name="perf_sample", defaults={"last_run_at": timezone.now(), "state": sample})
+            if _due_daily("perf_purge", "03:40", now_local):
+                out["perf_purged"] = perf.purge()
+                _mark("perf_purge", now_local)
+        except Exception:  # noqa: BLE001 - measuring must never stop reminders or deliveries
+            log.exception("performance sample failed")
     if _due_daily("expiry_scan", config.get("notifications.send_time"), now_local):
         out["expiry"] = expiry.run_expiry_scan(now_local.date())
         _mark("expiry_scan", now_local)

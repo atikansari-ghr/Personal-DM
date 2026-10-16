@@ -14,6 +14,46 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to Change Set X (performance) {#change-set-x}
+
+```
+sudo personaldocs upgrade     # safety backup, migrations core.0007 and library.0012, then performance maintenance
+sudo personaldocs doctor
+```
+
+(The change prompt numbered its tests AT-376..AT-400. Here they are **AT-401..AT-425**: prompt AT-n = AT-(n+25).)
+
+### What the upgrade does
+
+- **Migrations.** `core.0007` adds the performance measurement tables. `library.0012` adds one partial index on
+  documents, built **concurrently** so reading and writing documents are never blocked while it is created; on a
+  family library this takes seconds. No data is changed.
+- **Web service.** The service now reads `deployment/gunicorn.conf.py`: 2 processes with 4 threads each. The upgrade
+  adds `PD_WEB_THREADS=4` to `/etc/personaldocs/personaldocs.env` if it is missing (existing values are kept).
+- **Performance maintenance** (also `sudo personaldocs post-upgrade`): database statistics, index validity, shared
+  cache, temporary files, a check of the compressed app files, removal of old measurements. Its result is printed.
+- Nothing else changes: users, documents, permissions, search, OCR, notifications, backups and settings stay as they
+  are. Search and OCR work exactly as before.
+
+### After the upgrade (main administrator)
+
+1. Sign in, open a large folder and Settings: both should feel quicker.
+2. **Settings → Performance**: *Background processing normal*, no warnings; the worker and scheduler report.
+3. Optional: **Download Diagnostic Report** and keep it as your own baseline.
+4. Behind a reverse proxy that compresses responses itself, nothing needs to change: the app already sends
+   compressed files (`Content-Encoding: br` or `gzip`) and the proxy passes them through.
+
+### Rollback
+
+```
+sudo personaldocs manage migrate library 0011   # drops the new index
+sudo personaldocs manage migrate core 0006      # drops the measurement tables
+sudo personaldocs rollback
+```
+
+Only the performance measurements are lost. `PD_WEB_THREADS` stays in the environment file and is ignored by the
+previous release, whose service file starts 2 single-threaded processes as before.
+
 ## Upgrading to Change Set W (named sign-in designs and rotation, complete details and IPs, Notification Detail Level) {#change-set-w}
 
 ```
@@ -49,9 +89,16 @@ sudo personaldocs doctor
 
 ### Rollback
 
-`sudo personaldocs rollback` switches back to the previous release. The migrations only add data, and the previous
-settings (`login.design`, `login.wallpaper_file`, overlay and position) are kept in step with the active design, so
-the previous release shows the same sign-in page. Designs and rotation settings are kept for a later upgrade; the
+`personaldocs rollback` refuses while the database contains migrations the previous release does not know, so
+reverse this release's migrations first, then switch back:
+
+```
+sudo personaldocs manage migrate core 0003   # removes the design table and the detail-level marker (data kept elsewhere)
+sudo personaldocs rollback
+```
+
+The previous settings (`login.design`, `login.wallpaper_file`, overlay and position) are kept in step with the active
+design, so the previous release shows the same sign-in page. Designs and rotation settings are kept for a later upgrade; the
 old release ignores them. Notification masking returns to the old behaviour.
 
 ## Upgrading to Change Set V (NAS in Backup Destinations, English sign-in map, tooltips, Help permissions, WhatsApp pairing) {#change-set-v}
@@ -605,7 +652,12 @@ Afterwards, optionally:
 sudo personaldocs rollback
 ```
 
-Switches back to the previous release only if its code knows every migration applied in the database (same schema). If the newer version changed the schema, running old code is refused — restore the pre-upgrade backup instead (`personaldocs restore /mnt/nas-backup/personaldocs/backup-...`).
+Switches back to the previous release only if its code knows every migration applied in the database (same schema). If the newer version changed the schema, running old code is refused. Then either:
+
+- reverse the newer release's migrations with the newer release still active, then roll back. Each "Upgrading to
+  Change Set …" section above names its migrations; for example `sudo personaldocs manage migrate core 0006` returns
+  the `core` app to migration 0006. Only reversible migrations can be undone this way; or
+- restore the pre-upgrade backup (`personaldocs restore /mnt/nas-backup/personaldocs/backup-...`).
 
 ## Repair {#repair}
 

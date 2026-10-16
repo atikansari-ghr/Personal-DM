@@ -29,6 +29,15 @@ def reauth_window() -> timedelta:
     return timedelta(minutes=int(config.get("auth.recent_auth_minutes")))
 
 
+def with_head_flag(qs):
+    """Change Set X: whether each person heads a family group, in the same query (was one query per person)."""
+    from django.db.models import Exists, OuterRef
+
+    from .models import FamilyGroup
+
+    return qs.annotate(head_flag=Exists(FamilyGroup.objects.filter(head=OuterRef("pk"))))
+
+
 def user_json(u: User, *, full: bool = False) -> dict:
     data = {
         "id": str(u.pk),
@@ -40,7 +49,7 @@ def user_json(u: User, *, full: bool = False) -> dict:
         "is_main_admin": u.is_main_admin,
         "is_admin": u.is_admin or u.is_main_admin,
         "is_active": u.is_active,
-        "is_head": u.headed_groups.exists(),
+        "is_head": u.head_flag if hasattr(u, "head_flag") else u.headed_groups.exists(),
     }
     if full:
         data.update({
@@ -472,7 +481,7 @@ def members(request):
         ids = None if request.user.is_admin else _visible_member_ids(request.user)
         qs = User.objects.all() if ids is None else User.objects.filter(pk__in=ids, is_active=True)
         full = request.user.is_main_admin or request.user.is_admin  # administrators manage passwords
-        return Response({"members": [user_json(u, full=full or u.pk == request.user.pk) for u in qs]})
+        return Response({"members": [user_json(u, full=full or u.pk == request.user.pk) for u in with_head_flag(qs)]})
     if not request.user.is_main_admin:
         raise PermissionDenied("Only the main administrator can add family members.")
     d = request.data

@@ -213,7 +213,7 @@ function PushCard() {
         : <div className="row"><button className="btn primary" disabled={busy} onClick={enable}>Turn on for this device</button>
           {data.devices.length > 0 && <button className="btn" onClick={() => api<any>("notifications/push/test", { method: "POST" }).then(() => toast("Test push sent")).catch((e) => toast(e.message, "error"))}>Send test push</button>}</div>}
       <div className="field" style={{ maxWidth: 360, marginTop: ".6rem" }}><label htmlFor="push-preview">Lock-screen detail</label>
-        <select id="push-preview" value={data.preview} onChange={(e) => api("settings", { method: "PUT", body: { values: { "me.push_preview": e.target.value } } }).then(reload).catch((x) => toast(x.message, "error"))}>
+        <select id="push-preview" value={data.preview} onChange={(e) => api("settings", { method: "PUT", body: { values: { "me.push_preview": e.target.value } }, query: { brief: 1 } }).then(reload).catch((x) => toast(x.message, "error"))}>
           <option value="minimal">Minimal — only that something needs attention</option>
           <option value="standard">Standard — alert title and short summary, no names</option>
           <option value="detailed">Detailed — also document names</option>
@@ -254,7 +254,7 @@ function Channels() {
       {data.detail_level && <div className="card" id="notification-detail">
         <h2>Notification detail <HelpTip text="Full Details: complete names, document numbers and IP addresses you may already see in the app. Minimal Details: a short summary and a link. This never changes what you may access; passwords, keys and codes are never sent." link="/help/notifications#detail-level" /></h2>
         <div className="field" style={{ maxWidth: 420 }}><label htmlFor="notif-detail">Show in my notifications</label>
-          <select id="notif-detail" value={data.detail_level.mine} onChange={(e) => api("settings", { method: "PUT", body: { values: { "me.notification_detail": e.target.value } } }).then(() => { toast("Saved"); reload(); }).catch((x) => toast(x.message, "error"))}>
+          <select id="notif-detail" value={data.detail_level.mine} onChange={(e) => api("settings", { method: "PUT", body: { values: { "me.notification_detail": e.target.value } }, query: { brief: 1 } }).then(() => { toast("Saved"); reload(); }).catch((x) => toast(x.message, "error"))}>
             <option value="system">Use system default ({data.detail_level.system === "minimal" ? "Minimal Details" : "Full Details"})</option>
             <option value="full">Full Details</option>
             <option value="minimal">Minimal Details</option>

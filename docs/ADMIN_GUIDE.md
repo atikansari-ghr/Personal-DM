@@ -518,7 +518,8 @@ Guides: [backup & restore](guides/backup-restore.md), [disaster recovery](guides
 | Antivirus Unavailable or Error | Settings → Security → Antivirus → **Diagnose / Repair**, or `sudo personaldocs antivirus repair` |
 | Country policy locked everyone out | `sudo personaldocs access-policy off` (or `rollback`) |
 | Services broken after a failed change | `sudo personaldocs repair` |
-| Bad upgrade | `sudo personaldocs rollback` (when the schema allows) or restore the pre-upgrade backup |
+| Bad upgrade | `sudo personaldocs rollback` (when the schema allows; reverse the new release's migrations first, see guides/upgrades.md#rollback) or restore the pre-upgrade backup |
+| App feels slow | Settings → Performance: warnings, throttling, slowest requests; Download Diagnostic Report. See guides/performance.md#troubleshooting |
 | Server lost, data corrupted or suspected attack | Installer → **Recover Existing Installation**, or `sudo personaldocs recover` ([disaster recovery](guides/disaster-recovery.md)) |
 | A device you do not recognise signed in | My account → Sign-in security → **Mark Unrecognized** ([sign-in security](guides/security-map.md#unrecognized)) |
 

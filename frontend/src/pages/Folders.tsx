@@ -111,7 +111,7 @@ export default function FoldersPage() {
   const [sort, setSort] = useState<string>(prefSort || "-added");
   useEffect(() => { if (prefView) setView(normaliseView(prefView)); }, [prefView]); // changed on another device
   useEffect(() => { if (prefSort) setSort(prefSort); }, [prefSort]);
-  const savePref = (key: string, value: string) => api("settings", { method: "PUT", body: { values: { [key]: value } } }).catch(() => undefined);
+  const savePref = (key: string, value: string) => api("settings", { method: "PUT", body: { values: { [key]: value } }, query: { brief: 1 } }).catch(() => undefined);
   const chooseView = (v: DocView) => { setView(v); try { localStorage.setItem("pd-view", v); } catch { /* private mode */ } savePref("me.doc_view", v); };
   const chooseSort = (v: string) => { setSort(v); savePref("me.doc_sort", v); };
   const [dialog, setDialog] = useState("");
@@ -154,15 +154,45 @@ export default function FoldersPage() {
       return exp;
     });
   }, [folders, folderId]);
+  // Change Set X: documents arrive a page at a time (fast first view of large folders); scrolling to the end, or
+  // "Load more", fetches the next page in the same server order. Changing folder or sort cancels pending requests.
+  const PAGE = 100;
+  const docsCtl = useRef<AbortController | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const fetchPage = (offset: number) => {
+    docsCtl.current?.abort();
+    const ctl = new AbortController();
+    docsCtl.current = ctl;
+    return api<{ documents: DocRow[]; total: number }>("documents", { query: { folder: folderId, limit: PAGE, offset, sort }, signal: ctl.signal });
+  };
   const loadDocs = () => {
     if (!folderId) return;
     setDocs(null);
     setDocsError("");
-    api<{ documents: DocRow[]; total: number }>("documents", { query: { folder: folderId, limit: 200, sort } })
+    fetchPage(0)
       .then((r) => { setDocs(r.documents); setTotal(r.total); })
-      .catch((e) => { setDocs([]); setDocsError(e.message); });
+      .catch((e) => { if (e?.name === "AbortError") return; setDocs([]); setDocsError(e.message); });
   };
-  useEffect(() => { loadDocs(); }, [folderId, sort]);
+  const loadMore = () => {
+    if (!docs || loadingMore || docs.length >= total) return;
+    setLoadingMore(true);
+    fetchPage(docs.length)
+      .then((r) => {
+        setDocs((cur) => { const seen = new Set((cur || []).map((d) => d.id)); return [...(cur || []), ...r.documents.filter((d) => !seen.has(d.id))]; });
+        setTotal(r.total);
+      })
+      .catch((e) => { if (e?.name !== "AbortError") setDocsError(e.message); })
+      .finally(() => setLoadingMore(false));
+  };
+  useEffect(() => { loadDocs(); return () => docsCtl.current?.abort(); }, [folderId, sort]);
+  const moreRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = moreRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const obs = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) loadMore(); }, { rootMargin: "300px" });
+    obs.observe(el);
+    return () => obs.disconnect();
+  });
   useEffect(() => { setSelected(new Set()); }, [folderId]);
   const folder = folderId ? byId.get(folderId) : undefined;
   const path: FolderNode[] = [];
@@ -436,7 +466,12 @@ export default function FoldersPage() {
               ))}</tbody>
             </table>
           )}
-          {docs && total > docs.length && <p className="small muted" style={{ padding: ".6rem" }}>Showing {docs.length} of {total}. Use search to narrow down.</p>}
+          {docs && total > docs.length && (
+            <div ref={moreRef} className="row load-more" style={{ padding: ".6rem", gap: 8 }} data-loaded={docs.length} data-total={total}>
+              <span className="small muted">Showing {docs.length} of {total}.</span>
+              <button className="btn small" onClick={loadMore} disabled={loadingMore} aria-busy={loadingMore || undefined}>{loadingMore ? "Loading…" : "Load more"}</button>
+            </div>
+          )}
         </section>
         <section className="detail-pane" aria-label="Document details">
           {docId ? (
