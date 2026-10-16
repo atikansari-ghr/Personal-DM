@@ -4,6 +4,26 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Fixed (2026-10-16) — Analyze Document with LM Studio; OCR → AI pipeline (Change Set Y)
+- **Analyze Document failed with HTTP 400 on LM Studio** while the assistant worked. Root cause: analysis asked for
+  JSON with `response_format: {"type": "json_object"}`, which LM Studio rejects (it accepts `json_schema` or `text`);
+  the 400 was then reported as "unavailable" and queued again. Analysis now uses `json_schema`; a server without
+  structured output gets one plain request that asks for JSON in the prompt, and the profile remembers it. Existing
+  profiles keep working without changes.
+- **OCR first, text only.** Analyze Document reuses usable text, or runs OCR with the configured engine (Tesseract or
+  PaddleOCR) and continues when recognition finishes. The AI text model only ever receives text, never a file or
+  page image. When OCR finds no usable text the AI server is not called (*OCR completed, but no usable text was
+  detected.*).
+- **Truthful jobs.** Stages (OCR, AI analysis, checking the answer, saving) are shown in Settings → Local AI → AI jobs
+  and on the document; failures say which stage failed and include the server's own sanitized explanation
+  (*failed · AI analysis: HTTP 400 — …*). Only timeouts, lost connections, HTTP 429 and temporary 5xx are retried, at
+  most three attempts; one analysis per document at a time; **Retry** after fixing the cause.
+- **Separate diagnostics:** Test connection (step by step, with model roles), Test AI analysis, Test OCR — Tesseract,
+  Test OCR — PaddleOCR.
+- Reasoning models' `<think>` blocks are ignored; a cut-off answer, an over-long request and an unknown model each get
+  their own message; long documents are analysed in up to three parts in page order, and any text left over is
+  recorded. Details entered by hand are never proposed for replacement.
+
 ### Changed (2026-10-16) — Performance (Change Set X)
 Measured before and after on a synthetic 8,000-document family library ([docs/PERFORMANCE.md](docs/PERFORMANCE.md)).
 - **Settings opens and switches quickly.** Settings loads only the section you open (each section is its own

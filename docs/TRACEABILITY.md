@@ -508,6 +508,34 @@ numbers. Root causes per defect: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 Not run (needs real accounts or environments, never reported as passed): a real WhatsApp phone scanning a real QR,
 a real Discord server, real OpenStreetMap / MapTiler / Stadia tiles from a production address, Firefox and Safari.
 
+## Change set Y (2026-10): OCR → AI document analysis pipeline {#change-set-y}
+
+The change prompt numbered these AT-401…AT-415 (and called itself "Change Set X"; X is taken). Here they are
+**AT-426…AT-440**: prompt AT-n → AT-(n+25). Tests in `tests/test_ai_pipeline.py` and the Change Set Y step in
+`tests/e2e/corrective.mjs`. Requirements: [REQUIREMENTS.md](REQUIREMENTS.md#change-set-y). Root causes:
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-y). Evidence: [TEST_REPORT.md](TEST_REPORT.md#change-set-y).
+
+| ID (prompt) | Scenario (abridged) | Req | Code | Tests | Docs | Status |
+|---|---|---|---|---|---|---|
+| AT-426 (401) | Tesseract → text model: OCR runs, only text reaches the text model, metadata validated, job done | AIP-1, AIP-2 | `ai/service.py` `prepare_text`, `run_analysis`; `ai/jobs.py` `resume_after_ocr` | `test_at426_tesseract_ocr_feeds_text_model` | local-ai.md#pipeline | Passed |
+| AT-427 (402) | PaddleOCR → the same AI layer | AIP-1 | same | `test_at427_paddleocr_feeds_the_same_ai_layer` (fake PaddleOCR worker) | local-ai.md#architecture | Passed (real PP-OCRv5: Blocked / Not Executed) |
+| AT-428 (403) | Switching Tesseract ↔ PaddleOCR needs no AI-profile change | AIP-1 | same | `test_at428_switching_ocr_engines_needs_no_ai_profile_change` | local-ai.md#architecture | Passed |
+| AT-429 (404) | Reuse valid OCR; explicit re-run and new versions take effect | AIP-3 | `prepare_text` | `test_at429_existing_text_is_reused_and_new_versions_invalidate` | local-ai.md#pipeline | Passed |
+| AT-430 (405) | Empty OCR: AI not called, failure attributed to OCR | AIP-4 | `prepare_text`, `EMPTY_OCR` | `test_at430_empty_ocr_never_calls_ai` | local-ai.md#troubleshooting | Passed |
+| AT-431 (406) | Each OCR engine failing: stage-specific error, failed state, no AI request | AIP-4, AIP-7 | `ocr_runs` hooks, `resume_after_ocr` | `test_at431_ocr_engine_failures_fail_at_the_ocr_stage`, `test_ocr_disabled_document_fails_without_ai`, `test_automatic_analysis_never_starts_ocr_on_manual_types` | local-ai.md#pipeline | Passed |
+| AT-432 (407) | LM Studio: Test AI analysis and OCR-text analysis use the text model and succeed | AIP-5 | `providers.py` `structured`, `model_types` | `test_at432_lm_studio_profile_test_analysis_and_document`, `test_reported_http_400_reproduced_and_explained`, `test_reasoning_blocks_are_ignored` (LM Studio emulated) | local-ai.md#lm-studio | Passed against the emulation (live LM Studio: Blocked / Not Executed) |
+| AT-433 (408) | HTTP 400: sanitized server error, no leak, not requeued | AIP-6, AIP-7 | `providers.py` `_http_error`, `sanitize_server_message` | `test_at433_http_400_is_diagnosed_sanitized_and_not_requeued`, `test_sanitizer_removes_keys_and_echoed_text`; e2e Local AI diagnostics | local-ai.md#troubleshooting | Passed |
+| AT-434 (409) | Structured output rejected: exactly one fallback, defensive parsing, no loop | AIP-5 | `Provider.structured`, `parse_json_object`, `validate_ai_data` | `test_at434_one_structured_output_fallback_then_remembered` | local-ai.md#lm-studio | Passed |
+| AT-435 (410) | Model roles: text model exists, embedding separate, vision optional | AIP-2, AIP-8 | `views._apply_profile`, `profile_test`, `run_analysis` | `test_at435_model_roles` | local-ai.md#profiles | Passed |
+| AT-436 (411) | Timeout / connection / 429 / 5xx: bounded retry with backoff, truthful state | AIP-7 | `ai/jobs.py` | `test_at436_transient_errors_retry_with_backoff_then_succeed_or_fail` | local-ai.md#pipeline | Passed |
+| AT-437 (412) | Stages queued → OCR → AI → validation → save → done; failing stage visible | AIP-7 | `set_stage`, `STAGE_LABELS`, `aiJobText` | `test_at437_stages_and_retry_after_fix`, `test_at430_*` | local-ai.md#pipeline | Passed |
+| AT-438 (413) | Metadata validation, provenance, manual corrections protected | AIP-3 | `validate_ai_data`, `manual_keys`, `_store_suggestions` | `test_at438_validation_and_manual_details_protected`, `test_long_text_is_split_in_order_and_truncation_recorded` | local-ai.md#ocr-assist | Passed |
+| AT-439 (414) | No OCR text/secrets in logs or diagnostics; throttling applies; browsing unaffected | AIP-10 | `safe_detail`, `throttle.DEFERRABLE` | `test_at439_no_content_in_logs_or_job_data_and_throttling_applies`, `test_ai_logs_and_jobs_contain_no_document_content`, `tests/test_performance.py` | local-ai.md#troubleshooting | Passed |
+| AT-440 (415) | Corrective release gate | all | — | full `pytest`; `scripts/e2e.sh`; migration forwards/backwards | TEST_REPORT.md#change-set-y | See TEST_REPORT.md#change-set-y |
+
+Not run (never reported as passed): the reported LM Studio server itself, the real PaddleOCR runtime with this
+pipeline, and a production upgrade and smoke test.
+
 ## Change set X (2026-10): performance {#change-set-x}
 
 The change prompt numbered these AT-376…AT-400 (and called itself "Change Set W"; W is taken). Here they are

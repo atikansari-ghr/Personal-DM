@@ -56,6 +56,31 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
+## Change set Y: OCR → AI document analysis pipeline {#change-set-y}
+
+**Numbering.** Prompt AT-401…AT-415 → **AT-426…AT-440**. Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md#change-set-y).
+Root causes and the reproduced failure: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-y).
+
+**Environment.** Development container (Ubuntu 24.04, PostgreSQL 16, Python 3.13, Tesseract 5, Node 22, Chromium via
+Playwright), 2026-10-16. LM Studio is emulated by `tests/fake_ai_server.py` (its documented answer to
+`response_format: json_object`, its model-type listing); PaddleOCR by the existing fake worker.
+
+| Command | Result |
+|---|---|
+| `pytest tests/test_ai_pipeline.py tests/test_ai.py` | **36 passed** (21 new: AT-426…AT-439, the reproduced HTTP 400, sanitizer, roles, long text, test OCR) |
+| Full `pytest` | **572 tests: 566 passed, 5 skipped (2 need a running ClamAV, 3 the real PaddleOCR runtime), 1 failed: the documentation checker, only because this section did not exist yet; it passes with this report** |
+| `scripts/e2e.sh` (fresh database) | flow, accessibility, parity and layout (25), offline 9, PWA 4, themes 6, recovery 10: all PASS; **corrective 36 PASS** (incl. the new Local AI diagnostics step: OCR test per engine, Tesseract recognises the generated sample); screenshots 7 PASS, 1 FAIL in this container only (AT-333: Chromium here cannot load the real OpenFreeMap tiles through the container's proxy certificate; unchanged by this change set; CI has direct internet access) |
+| Migration `ai.0002` forwards, backwards, forwards; `makemigrations --check` | OK; no missing migrations |
+| `npm run build` (TypeScript check, build) | Passed |
+| `python3 scripts/check_docs.py` | OK |
+
+**Blocked / Not Executed** (never reported as passed):
+
+- Analyze Document against the reported **LM Studio** server (`qwen3-8b`) itself; it was emulated.
+- The **real PaddleOCR** runtime with this pipeline (AT-427/428 used the fake worker; the live PaddleOCR tests are
+  skipped here as before).
+- A real `personaldocs upgrade` and production smoke test (AT-440).
+
 ## Change set X: performance {#change-set-x}
 
 **Numbering.** Prompt AT-376…AT-400 → **AT-401…AT-425**. Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md#change-set-x).

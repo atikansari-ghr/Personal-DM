@@ -733,6 +733,22 @@ await step("AT-404/AT-405/AT-409 Settings loads only the open section; a section
   await s.ctx.close();
 });
 
+await step("AT-433/AT-440 Local AI diagnostics: separate OCR tests per engine, AI tests per profile, job stages", async () => {
+  await page.goto(BASE + "/settings/ai");
+  await page.waitForSelector("#ai-ocr-tests");
+  expect(await page.locator("#ai-ocr-tests button:has-text('Test OCR — Tesseract')").count() === 1, "Tesseract test button");
+  expect(await page.locator("#ai-ocr-tests button:has-text('Test OCR — PaddleOCR')").count() === 1, "PaddleOCR test button");
+  const saved = page.waitForResponse((r) => r.url().includes("/api/ai/test-ocr") && r.request().method() === "POST");
+  await page.click("#ai-ocr-tests button:has-text('Test OCR — Tesseract')");
+  const res = await (await saved).json();
+  await page.waitForSelector("#ai-ocr-tests [role=status]:not(:has-text('testing'))", { timeout: 60000 });
+  const shown = await page.locator("#ai-ocr-tests").innerText();
+  expect(res.ok ? /✓ .*read \d+ characters/.test(shown) : /✗/.test(shown), `OCR test result not shown: ${shown.slice(0, 200)}`);
+  expect(res.ok, `Tesseract test failed: ${res.error}`);
+  const jobs = await api(page, "/api/ai/jobs");
+  expect(jobs.status === 200 && "counts" in jobs.data, "AI jobs list");
+});
+
 await step("AT-416/AT-417 Admin → Performance: metrics, throttle state, report for the main administrator only", async () => {
   await page.goto(BASE + "/settings/performance");
   await page.waitForSelector("#performance [data-throttle]");

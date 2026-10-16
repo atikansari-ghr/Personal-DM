@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, formatDateTime } from "../../api";
-import { resetAiStatus } from "../../ai";
+import { aiJobFacts, aiJobText, resetAiStatus } from "../../ai";
 import SettingsForm from "../../components/SettingsForm";
 import { HelpTip, Icon, Modal, Skeleton, useAsync, useToast } from "../../components/ui";
 
 type Profile = {
   id?: number; name: string; enabled: boolean; is_default: boolean; provider: "openai" | "ollama"; base_url: string; api_key_configured?: boolean;
   text_model: string; vision_model: string; embedding_model: string; timeout_seconds: number; max_input_chars: number; max_output_tokens: number;
-  privacy: "local" | "lan" | "external"; external_acknowledged: boolean; features: string[];
+  privacy: "local" | "lan" | "external"; external_acknowledged: boolean; features: string[]; capabilities?: Record<string, string>;
 };
 
 const BLANK: Profile = { name: "", enabled: true, is_default: false, provider: "openai", base_url: "http://192.168.1.50:1234/v1", text_model: "", vision_model: "",
@@ -49,7 +49,7 @@ function ProfileDialog({ initial, onClose, onSaved }: { initial: Profile; onClos
         </div>
         <datalist id="ai-models">{models.map((m) => <option key={m} value={m} />)}</datalist>
         <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-          {[["text_model", "Text model", "Answers questions and suggests metadata"], ["vision_model", "Vision model (optional)", "Reads images when a scan has no OCR text"], ["embedding_model", "Embedding model", "Needed for semantic search"]].map(([k, l, h]) => (
+          {[["text_model", "Text model", "A chat model (not an embedding model). Analyze Document sends it the OCR text — never the file"], ["vision_model", "Vision model (optional)", "Not used by Analyze Document, which always runs OCR first"], ["embedding_model", "Embedding model", "Only for semantic search; never used to write answers"]].map(([k, l, h]) => (
             <div className="field" key={k}><label htmlFor={`ai-${k}`}>{l}</label><input id={`ai-${k}`} type="text" list="ai-models" value={(p as any)[k]} onChange={(e) => set(k, e.target.value)} /><div className="hint">{h}</div></div>
           ))}
         </div>
@@ -83,30 +83,80 @@ function ProfileDialog({ initial, onClose, onSaved }: { initial: Profile; onClos
   );
 }
 
+function TestResult({ r }: { r: any }) {
+  if (!r) return null;
+  if (r.busy) return <div className="small muted" role="status">Testing…</div>;
+  if (r.kind === "analysis") {
+    return r.error
+      ? <div className="small error-text" role="status">✗ Test AI analysis failed · AI analysis: {r.error}</div>
+      : <div className="small" role="status">✓ AI analysis works ({r.latency_ms} ms, {r.structured_output === "schema" ? "structured output" : "JSON by prompt"}{r.fallback ? " — this server has no structured output, so the plain-prompt mode is used" : ""}). Read back: {Object.keys(r.fields || {}).join(", ") || "nothing"}{r.dates_correct?.length === 2 ? " · dates correct" : " · check the dates"}</div>;
+  }
+  return (
+    <div className="small" role="status">
+      {r.error && <div className="error-text">✗ {r.error}</div>}
+      {r.steps?.length > 0 && <ul className="plain test-steps">{r.steps.map((s: any, i: number) => <li key={i}>{s.ok ? "✓" : "✗"} {s.step}{s.detail ? ` — ${s.detail}` : ""}</li>)}</ul>}
+      {!r.error && <div>Connected ({r.privacy_actual}, {r.latency_ms} ms) · {r.models?.length || 0} models</div>}
+    </div>
+  );
+}
+
+function OcrTests() {
+  const [res, setRes] = useState<Record<string, any>>({});
+  const run = (engine: string) => {
+    setRes((x) => ({ ...x, [engine]: { busy: true } }));
+    api<any>("ai/test-ocr", { body: { engine } }).then((r) => setRes((x) => ({ ...x, [engine]: r })))
+      .catch((e) => setRes((x) => ({ ...x, [engine]: { ok: false, error: e.message } })));
+  };
+  return (
+    <div className="card" id="ai-ocr-tests">
+      <h2>Test OCR <HelpTip text="Analyze Document always runs text recognition first and sends only the recognised text to the AI text model. Test each OCR engine here on a generated sample, and the AI separately in the profile above, to see which part fails." link="/help/local-ai#diagnostics" /></h2>
+      <div className="row" style={{ gap: ".4rem", flexWrap: "wrap" }}>
+        <button className="btn small" onClick={() => run("tesseract")}>Test OCR — Tesseract</button>
+        <button className="btn small" onClick={() => run("paddleocr")}>Test OCR — PaddleOCR</button>
+      </div>
+      {["tesseract", "paddleocr"].map((e) => res[e] && (
+        <div key={e} className="small" role="status">{res[e].busy ? `${e === "tesseract" ? "Tesseract" : "PaddleOCR"}: testing…`
+          : res[e].ok ? `✓ ${res[e].label || e}: read ${res[e].chars} characters in ${res[e].seconds} s${res[e].accuracy != null ? ` · accuracy ${res[e].accuracy}%` : ""}`
+            : <span className="error-text">✗ {res[e].label || e}: {res[e].error || "no text was recognised"}</span>}</div>
+      ))}
+    </div>
+  );
+}
+
 function ProfilesCard() {
   const list = useAsync(() => api<{ profiles: Profile[] }>("ai/profiles"), []);
   const [edit, setEdit] = useState<Profile | null>(null);
-  const [results, setResults] = useState<Record<number, any>>({});
-  const test = (p: Profile) => api<any>(`ai/profiles/${p.id}/test`, { method: "POST" })
-    .then((r) => setResults({ ...results, [p.id!]: r }))
-    .catch((e) => setResults({ ...results, [p.id!]: { error: e.message, ...(e.data || {}) } }));
+  const [results, setResults] = useState<Record<string, any>>({});
+  const put = (key: string, v: any) => setResults((x) => ({ ...x, [key]: v }));
+  const test = (p: Profile) => {
+    put(`c${p.id}`, { busy: true });
+    api<any>(`ai/profiles/${p.id}/test`, { method: "POST" }).then((r) => put(`c${p.id}`, r))
+      .catch((e) => put(`c${p.id}`, { error: e.message, ...(e.data || {}) }));
+  };
+  const testAnalysis = (p: Profile) => {
+    put(`a${p.id}`, { busy: true, kind: "analysis" });
+    api<any>(`ai/profiles/${p.id}/test-analysis`, { method: "POST" }).then((r) => { put(`a${p.id}`, { ...r, kind: "analysis" }); list.reload(); })
+      .catch((e) => put(`a${p.id}`, { error: e.message, kind: "analysis" }));
+  };
   if (!list.data) return <Skeleton />;
   return (
     <div className="card">
       <h2>AI profiles <HelpTip text="A profile is one AI server connection. The default profile serves the features; there is never a fallback to another server or to the cloud." link="/help/local-ai#profiles" /></h2>
       {list.data.profiles.length === 0 && <p className="small muted">No AI server configured yet. Add an LM Studio, Ollama or other OpenAI-compatible server running on your network.</p>}
       {list.data.profiles.map((p) => {
-        const r = results[p.id!];
         return (
           <div key={p.id} className="list-item" style={{ alignItems: "flex-start" }}>
             <div className="grow">
               <strong>{p.name}</strong> {p.is_default && <span className="badge ok">default</span>} {!p.enabled && <span className="badge neutral">disabled</span>}
               <span className={`badge ${p.privacy === "external" ? "danger" : "neutral"}`}>{PRIVACY.find((x) => x[0] === p.privacy)?.[1]}</span>
               <div className="small muted">{p.provider === "ollama" ? "Ollama" : "OpenAI-compatible"} · {p.base_url} · text: {p.text_model || "—"} · embeddings: {p.embedding_model || "—"}</div>
-              {r && (r.error ? <div className="small error-text">{r.error}</div> : <div className="small">✓ Connected ({r.privacy_actual}, {r.latency_ms} ms) · {r.models?.length || 0} models{r.missing_models?.length ? ` · missing: ${r.missing_models.join(", ")}` : ""}{r.chat_ok ? " · chat OK" : ""}{r.embedding_dimensions ? ` · embeddings ${r.embedding_dimensions}-d` : ""}</div>)}
+              {p.capabilities?.structured_output && <div className="small muted">Structured output: {p.capabilities.structured_output === "supported" ? "supported" : "not supported by this server (JSON is requested in the prompt instead)"}</div>}
+              <TestResult r={results[`c${p.id}`]} />
+              <TestResult r={results[`a${p.id}`]} />
             </div>
-            <div className="row" style={{ gap: ".3rem" }}>
+            <div className="row" style={{ gap: ".3rem", flexWrap: "wrap" }}>
               <button className="btn small" onClick={() => test(p)}>Test connection</button>
+              <button className="btn small" onClick={() => testAnalysis(p)}>Test AI analysis</button>
               <button className="btn small ghost" onClick={() => setEdit(p)}>Edit</button>
               <button className="btn small ghost" onClick={() => api(`ai/profiles/${p.id}`, { method: "DELETE" }).then(() => { resetAiStatus(); list.reload(); })}>Remove</button>
             </div>
@@ -130,7 +180,11 @@ function AiJobsCard() {
       <table className="responsive"><thead><tr><th>Job</th><th>Requested by</th><th>Model</th><th>Status</th><th>When</th></tr></thead><tbody>
         {jobs.data.jobs.slice(0, 30).map((j: any) => <tr key={j.id}><td>{j.kind}{j.document && <div className="small"><Link to={`/documents/${j.document}`}>document</Link></div>}</td><td className="small">{j.requested_by || "—"}</td>
           <td className="small">{j.profile ? `${j.profile} · ${j.model}` : "—"}</td>
-          <td><span className={`badge ${j.status === "failed" ? "danger" : j.status === "done" ? "ok" : "neutral"}`}>{j.status}</span>{j.error && <div className="small error-text">{j.error_category}: {j.error}</div>}</td>
+          <td><span className={`badge ${j.status === "failed" ? "danger" : j.status === "done" ? "ok" : "neutral"}`}>{j.status}</span>
+            {j.status !== "done" && <div className={`small ${j.status === "failed" ? "error-text" : "muted"}`} data-job-state>{aiJobText(j, formatDateTime).replace(/^\w+ · /, "")}</div>}
+            {j.status === "queued" && j.next_retry_at && j.error && <div className="small muted">Last attempt: {j.error}</div>}
+            {aiJobFacts(j.detail) && <div className="small muted">{aiJobFacts(j.detail)}</div>}
+            {j.status === "failed" && j.retryable && j.document && <button className="btn small ghost" onClick={() => api(`ai/jobs/${j.id}/retry`, { method: "POST" }).then(() => { toast("Queued again"); jobs.reload(); }).catch((e) => toast(e.message, "error"))}>Retry</button>}</td>
           <td className="small">{formatDateTime(j.finished_at || j.created_at)}</td></tr>)}
       </tbody></table>
       <button className="btn small" onClick={() => api<any>("ai/reindex", { method: "POST" }).then((r) => toast(`${r.queued} documents queued for the semantic index`)).catch((e) => toast(e.message, "error"))}>Rebuild semantic index</button>
@@ -145,6 +199,7 @@ export default function LocalAIPanel() {
         <p className="small muted">A 2-CPU / 4 GB container cannot run useful models itself: run LM Studio or Ollama on a PC or server on your LAN and connect it here.</p></div>
       <SettingsForm section="ai" title="Features" />
       <ProfilesCard />
+      <OcrTests />
       <AiJobsCard />
     </div>
   );

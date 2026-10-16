@@ -288,6 +288,17 @@ def _run_paddle(v, original: Path, pages_spec: str, profile: str, timeout: int, 
             "blocks": res.blocks()}
 
 
+def _ai_hook(name: str, doc, **kw):
+    """Change Set Y: tell Local AI analyses that wait for this OCR run (never lets AI affect OCR)."""
+    try:
+        from apps.ai import jobs as ai_jobs
+
+        return getattr(ai_jobs, name)(doc, **kw)
+    except Exception:  # noqa: BLE001 - optional component
+        log.exception("Local AI hook %s failed", name)
+        return 0
+
+
 @jobs.handler("ocr_run", heavy=True)
 def ocr_run(job):
     """Recognise every source, then replace the OCR-derived data in one transaction. If any source fails, nothing is
@@ -300,6 +311,8 @@ def ocr_run(job):
     if doc is None or doc.archived_at:
         if run:
             OcrRun.objects.filter(pk=run.pk).update(status=OcrRun.CANCELLED, finished_at=timezone.now())
+        if doc is not None:
+            _ai_hook("resume_after_ocr", doc, ok=False, error="Text recognition was cancelled: the document was archived.")
         return {"skipped": "document missing or archived"}
     if config.get("processing.ocr_paused"):
         # paused: wait without using an attempt; the same job is picked up again after the delay
@@ -310,6 +323,7 @@ def ocr_run(job):
         Document.objects.filter(pk=doc.pk).update(ocr_state="disabled", ocr_updated_at=timezone.now())
         if run:
             OcrRun.objects.filter(pk=run.pk).update(status=OcrRun.CANCELLED, finished_at=timezone.now(), error="OCR disabled")
+        _ai_hook("resume_after_ocr", doc, ok=False, error="Text recognition is disabled for this document.")
         return {"skipped": "OCR disabled for this document"}
     profile = job.payload.get("profile") or ocr_engines.profile_for(doc)
     langs = job.payload.get("languages") or ocr_engines.TESSERACT_LANGS.get(profile, ["eng"])
@@ -323,6 +337,7 @@ def ocr_run(job):
         OcrRun.objects.filter(pk=run.pk).update(status=OcrRun.RUNNING, engine=engine,
                                                 options={**(run.options or {}), "fallback": note} if note else run.options)
     Document.objects.filter(pk=doc.pk).update(ocr_state="processing", ocr_updated_at=timezone.now())
+    _ai_hook("ocr_started", doc)
     t0 = timezone.now()
     staged = []  # (version, result) — nothing is written to the document until every source succeeded
     workdirs = []
@@ -357,10 +372,14 @@ def ocr_run(job):
             line_count=sum(int(x.get("line_count") or 0) for x in q), low_lines=sum(len(x.get("low_lines") or []) for x in q),
             engine_version=(staged[0][2]["version"] if staged else "")[:80], model=(staged[0][2]["model"] if staged else "")[:200])
     doc.refresh_from_db()
+    resumed = _ai_hook("resume_after_ocr", doc, ok=True)  # analyses that waited for this text continue now
     if ocr_policy.ai_allowed(doc) and staged:
         from apps.ai.jobs import after_processing
 
-        after_processing(doc)
+        if resumed:  # the waiting analysis continues; only the other AI work (embeddings) is queued here
+            after_processing(doc, skip_analyze=True)
+        else:
+            after_processing(doc)
     return {"sources": len(staged), "engine": engine, "profile": profile}
 
 
@@ -421,6 +440,8 @@ def ocr_run_failed(job):
             ocr_error=(job.last_error or "OCR failed")[-500:], ocr_updated_at=timezone.now())
     OcrRun.objects.filter(pk=job.payload.get("run_id")).update(status=OcrRun.FAILED, finished_at=timezone.now(),
                                                               error=(job.last_error or "OCR failed")[-500:])
+    if doc is not None:
+        _ai_hook("resume_after_ocr", doc, ok=False, error=job.last_error or "")
 
 
 # ------------------------------------------------------------------ removal, disabling and review

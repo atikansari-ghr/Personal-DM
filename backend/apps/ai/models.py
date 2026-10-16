@@ -30,6 +30,9 @@ class AIProfile(models.Model):
     privacy = models.CharField(max_length=10, choices=PRIVACY, default=LAN)
     external_acknowledged = models.BooleanField(default=False)
     features = models.JSONField(default=list, blank=True, help_text="Features this profile may serve (empty = all enabled)")
+    # Change Set Y: what this server was seen to support (e.g. {"structured_output": "unsupported"}); cleared when the
+    # server URL, provider or text model changes
+    capabilities = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
@@ -55,6 +58,12 @@ class AIJob(models.Model):
     error = models.CharField(max_length=300, blank=True)  # safe message, never prompt/response content
     attempts = models.PositiveIntegerField(default=0)
     retryable = models.BooleanField(default=False)
+    # Change Set Y: where the job is (queued, preparing, ocr_queued, ocr_running, validating_ocr, ai_running,
+    # validating_ai, saving, done) or where it failed; safe facts only (engine, counts, HTTP status, sanitized
+    # server message) — never document text
+    stage = models.CharField(max_length=20, blank=True)
+    detail = models.JSONField(default=dict, blank=True)
+    next_retry_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
