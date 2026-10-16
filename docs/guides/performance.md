@@ -85,11 +85,16 @@ background work seems to wait too often.
 
 Administrators see:
 
-- current CPU, available memory, swap, load, a 4 KB storage write time, disk pressure, database connections and the
-  job queue;
+- **Server now**: a tile each for CPU, available memory, swap, load, a 4 KB storage write time, disk pressure,
+  database connections and background jobs. A tile with an amber edge needs attention, using the same limits as
+  the warnings;
+- **Requests and services** for the chosen period: requests and their average time, server errors, when the worker
+  and the scheduler last reported, the web service size (processes × threads) and the version;
 - whether background processing is throttled, and why;
 - warnings (for example little memory, swap in use, slow storage, a growing queue, a worker that stopped reporting);
-- trends for response time, CPU, memory and the queue;
+- **Trends** for response time, requests, CPU, memory and waiting jobs. Each shows the latest value, the lowest and
+  highest in the period, and the time span. Point at a chart to read the value at that moment. A new installation
+  shows "Not enough data yet" until the first summaries exist (one every 10 minutes);
 - **Slowest requests** and all requests by type, with average and slowest time, database queries and server errors;
 - background job durations and failures;
 - cache use and loading problems reported by browsers;

@@ -740,6 +740,16 @@ await step("AT-416/AT-417 Admin → Performance: metrics, throttle state, report
   expect(text.includes("Slowest requests") && text.includes("Background jobs") && /Background processing (normal|throttled)/.test(text), `performance: ${text.slice(0, 200)}`);
   expect(!/Sample-Passw0rd|Bearer|recovery key/i.test(text), "secret on the performance page");
   expect(await page.locator("#performance a:has-text('Download Diagnostic Report')").count() === 1, "report button");
+  // every metric tile shows a value; every trend shows its numbers (or says there is not enough data yet)
+  const tiles = await page.locator("#performance .perf-tile .num").allInnerTexts();
+  expect(tiles.length >= 6 && tiles.every((t) => t.trim() && t.trim() !== "undefined"), `tiles: ${tiles.join(" | ")}`);
+  for (const t of await page.locator("#performance .perf-trend").all()) {
+    const txt = await t.innerText();
+    expect(/Low .* High /.test(txt) || /Not enough data yet/.test(txt), `trend without numbers: ${txt.slice(0, 80)}`);
+  }
+  // the period control sits on one line with the title on a desktop
+  const sel = await page.locator("#perf-hours").boundingBox(), h2 = await page.locator("#performance h2").first().boundingBox();
+  expect(sel.width < 300 && Math.abs((sel.y + sel.height / 2) - (h2.y + h2.height / 2)) < 24, "period control not aligned with the title");
   const rep = await api(page, "/api/admin/performance/report");
   expect(rep.status === 200 && rep.data.environment, "report");
   await page.locator("#performance").screenshot({ path: `${OUT}/performance.png` });
