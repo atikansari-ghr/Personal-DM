@@ -42,12 +42,16 @@ def _clean_config(settings, tmp_path, monkeypatch):
     settings.CACHES = {**settings.CACHES, "shared": {"BACKEND": "apps.core.perfcache.SafeFileBasedCache",
                                                      "LOCATION": str(settings.DATA_DIR / "cache" / "shared")}}
     crypto.reset_cache()
+    from apps.core import throttle
+
+    throttle.reset_cache()  # the worker's remembered throttle state must not leak from one test into the next
     crypto.ensure_key()  # the installer always creates the key
     from apps.library import storage
 
     storage.ensure_dirs()
     yield
     crypto.reset_cache()
+    throttle.reset_cache()
 
 
 def setup_payload(**extra):

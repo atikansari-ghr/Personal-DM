@@ -86,6 +86,7 @@ def evaluate(sample: dict) -> dict:
     run.state = st
     run.last_run_at = timezone.now()
     run.save(update_fields=["state", "last_run_at"])
+    _cache.update(at=time.monotonic(), active=bool(st.get("active")))  # this process knows at once
     return st
 
 
@@ -101,6 +102,11 @@ def active() -> bool:
             _cache["active"] = False
         _cache["at"] = time.monotonic()
     return _cache["active"]
+
+
+def reset_cache() -> None:
+    """Forget the remembered state (tests, and after the state is changed directly)."""
+    _cache.update(at=0.0, active=False)
 
 
 def defer_cutoff():
