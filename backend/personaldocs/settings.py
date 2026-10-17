@@ -232,6 +232,10 @@ PROCESS_MEMORY_LIMIT_MB = int(env("PROCESS_MEMORY_LIMIT_MB", "1536") or 1536)
 # PaddleOCR runs in its own virtual environment (isolated from the app's dependencies), one process per OCR job.
 PADDLE_PYTHON = env("PADDLE_PYTHON", "/opt/personaldocs/paddle-venv/bin/python")
 PADDLE_HOME = Path(env("PADDLE_HOME", "") or (DATA_DIR / "paddle"))  # models live in PADDLE_HOME/official_models
+# light-ocr (Change Set Z): the @arcships/light-ocr Node.js package (PP-OCRv6 Small on ONNX Runtime, CPU), installed
+# with npm into LIGHT_OCR_HOME and run as a separate process per page.
+NODE_CMD = env("NODE_CMD", "node")
+LIGHT_OCR_HOME = Path(env("LIGHT_OCR_HOME", "") or "/opt/personaldocs/light-ocr")
 
 APP_VERSION = (REPO_DIR / "VERSION").read_text().strip() if (REPO_DIR / "VERSION").exists() else "0.0.0"
 DOCS_DIR = REPO_DIR / "docs"

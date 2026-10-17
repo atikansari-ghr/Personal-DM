@@ -44,7 +44,7 @@ def _filtered(params) -> "QuerySet[Document]":  # noqa: F821
     if params.get("type"):
         qs = qs.filter(doc_type_id=None) if params["type"] == "none" else qs.filter(doc_type_id=params["type"])
     engine = params.get("engine")
-    if engine in ("paddleocr", "tesseract", "unknown"):
+    if engine in ("paddleocr", "tesseract", "light-ocr", "unknown"):
         qs = qs.filter(versions__ocr_applied=True, versions__ocr_engine=engine)
     elif engine == "none":
         qs = qs.exclude(versions__ocr_applied=True)
@@ -114,6 +114,7 @@ def inventory(params) -> dict:
     counts = {
         "documents_with_ocr": ocr_versions.values("document").distinct().count(),
         "paddleocr": by_engine.get("paddleocr", 0), "tesseract": by_engine.get("tesseract", 0),
+        "light_ocr": by_engine.get("light-ocr", 0),
         "unknown": by_engine.get("unknown", 0) + by_engine.get("", 0),
         "indexed": base.filter(versions__ocr_applied=True).exclude(content_text="").distinct().count(),
         "disabled": base.filter(ocr_override="disabled").count(),
@@ -223,7 +224,7 @@ def ocr_bulk(job):
                         not DocumentVersion.objects.filter(document=doc, ocr_applied=True).exists() and not doc.ocr_sources):
                     skipped += 1  # OCR disabled for this document, or nothing was ever recognised
                     continue
-                ocr_runs.request_ocr(actor=actor, doc=doc, set_primary=False, engine="paddleocr", reprocess=True,
+                ocr_runs.request_ocr(actor=actor, doc=doc, set_primary=False, engine=None, reprocess=True,
                                      profile=(doc.ocr_profile or None))
             done += 1
         except Exception as exc:  # noqa: BLE001 - one document must not stop the rest
@@ -401,6 +402,8 @@ def test_ocr(*, upload, engines: list[str], profile: str, expected: str = "", te
             try:
                 if engine == "paddleocr":
                     r = ocr_engines.paddle_recognise(images, profile, workdir, timeout)
+                elif engine == "light-ocr":
+                    r = ocr_engines.light_ocr_recognise(images, workdir, timeout, profile=profile)
                 else:
                     r = ocr_engines.tesseract_recognise(images, profile, None, timeout)
                 text = r.text(len(images) > 1)
@@ -408,7 +411,7 @@ def test_ocr(*, upload, engines: list[str], profile: str, expected: str = "", te
                 entry.update(ok=True, model=r.model, version=r.version, profile=r.profile, text=text,
                              lines=lines[:500], line_count=len(lines), low_confidence_lines=sum(1 for x in lines if x["score"] < ocr_engines.LOW_SCORE),
                              mean_score=round(100 * sum(x["score"] for x in lines) / len(lines), 1) if lines else None,
-                             has_geometry=engine == "paddleocr", pages=[{"page": p.page, "angle": p.angle} for p in r.pages])
+                             has_geometry=engine in ("paddleocr", "light-ocr"), pages=[{"page": p.page, "angle": p.angle} for p in r.pages])
                 if expected.strip():
                     entry["accuracy"] = _cer_accuracy(expected, text)
                 if template:

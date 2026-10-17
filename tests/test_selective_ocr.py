@@ -319,7 +319,7 @@ def test_at114_limits_queue_cancel_and_pause(family, clients):
 def test_at115_local_ai_receives_only_permitted_content(family, clients, settings):
     _manual()
     config.set_value("ai.enabled", True)
-    config.set_value("ai.auto_analyze", True)
+    config.set_value("ai.mode", "auto")
     from apps.ai import service
 
     settings_feature = "ai.feature_ocr_assist"

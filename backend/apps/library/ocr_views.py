@@ -22,7 +22,7 @@ def _status(doc: Document, caps: int) -> dict:
               "text": v.text if v.ocr_applied else "", "quality": v.ocr_quality or None,
               "engine": v.ocr_engine or "unknown", "engine_label": ocr_engines.ENGINE_LABELS.get(v.ocr_engine or "unknown"),
               "model": v.ocr_model, "profile": v.ocr_profile, "ocr_at": v.ocr_at,
-              "blocks": v.ocr_blocks if v.ocr_engine == "paddleocr" else []}
+              "blocks": v.ocr_blocks if v.ocr_engine in ("paddleocr", "light-ocr") else []}
              for v in versions if v.ocr_applied]
     cur = next((v for v in versions if v.id == doc.current_version_id), None)
     job = ocr_runs._active_job(doc)
@@ -33,7 +33,8 @@ def _status(doc: Document, caps: int) -> dict:
         "type_mode": (doc.doc_type.ocr_mode if doc.doc_type_id else config.get("processing.ocr_untyped_mode"))
         if config.get("processing.ocr_enabled") else "disabled",
         "profiles": [{"key": k, "label": OCR_PROFILES[k]} for k in ocr_engines.offered_profiles()],
-        "engine_default": config.get("processing.ocr_engine"),
+        "engine_default": ocr_engines.primary_engine(), "engine_order": ocr_engines.engine_order(),
+        "ocr_mode": config.get("processing.ocr_mode"),
         "embedded_text": bool(cur and not cur.ocr_applied and (cur.text or "").strip()),
         "job": {"status": job.status, "queued_at": job.created_at} if job else None,
         "paused": bool(config.get("processing.ocr_paused")),
@@ -84,7 +85,7 @@ def document_ocr(request, pk):
         return _err("Sources must be a list of files.")
     try:
         engine = d.get("engine") or None
-        if engine not in (None, "paddleocr", "tesseract"):
+        if engine not in (None, *ocr_engines.ENGINES):
             return _err("Unknown OCR engine.")
         ocr_runs.request_ocr(actor=request.user, doc=doc, sources=sources, languages=d.get("languages") or [],
                              rotate=rotate, set_primary=d.get("set_primary", True) is not False, request=request,
@@ -270,11 +271,16 @@ def ocr_engines_status(request):
 
     from .ocr_admin import _size
 
-    st = ocr_engines.paddle_status(refresh=request.query_params.get("refresh") == "1")
+    refresh = request.query_params.get("refresh") == "1"
+    st = ocr_engines.paddle_status(refresh=refresh)
+    lo = ocr_engines.light_ocr_status(refresh=refresh)
     tmp = sum(_size(p) for p in __import__("pathlib").Path(str(ocr_engines.settings.TMP_DIR)).glob("*")
-              if p.name.startswith(("ocr-", "paddle-", "ocrtest-"))) if ocr_engines.settings.TMP_DIR.exists() else 0
+              if p.name.startswith(("ocr-", "paddle-", "ocrtest-", "lightocr-"))) if ocr_engines.settings.TMP_DIR.exists() else 0
     return Response({
-        "default_engine": config.get("processing.ocr_engine"), "fallback": bool(config.get("processing.ocr_engine_fallback")),
+        "default_engine": ocr_engines.primary_engine(), "order": ocr_engines.engine_order(),
+        "mode": config.get("processing.ocr_mode"), "fallback": config.get("processing.ocr_mode") != "primary_only",
+        "engines": ocr_engines.engines_overview(),
+        "light_ocr": {k: lo.get(k) for k in ("installed", "home", "version", "selftest", "healthy", "error", "checked_at")},
         "paddle": {k: st.get(k) for k in ("installed", "python", "home", "paddle", "paddleocr", "paddlex", "cpu_avx", "models",
                                           "required_models", "missing_models", "selftest", "healthy", "error", "checked_at")},
         "model": config.get("processing.paddle_model"), "device": "cpu", "threads": config.get("processing.paddle_cpu_threads"),
@@ -296,6 +302,11 @@ def ocr_engines_status(request):
 @api_view(["POST"])
 @permission_classes([IsMainAdmin])
 def ocr_engines_selftest(request):
+    if (request.data or {}).get("engine") == "light-ocr":
+        ocr_engines.light_ocr_status(refresh=True)
+        res = ocr_engines.light_ocr_selftest(actor=request.user)
+        ocr_engines.light_ocr_status(refresh=True)
+        return Response(res)
     res = ocr_engines.paddle_selftest(actor=request.user)
     ocr_engines.paddle_status(refresh=True)
     return Response(res)  # "healthy" says whether real inference worked
@@ -348,7 +359,7 @@ def ocr_test(request):
     name = f.name.lower()
     if not name.endswith((".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff")):
         return _err("Use a PDF or an image (PNG, JPG, WebP, TIFF).")
-    engines = [e for e in (request.data.get("engines") or "paddleocr").split(",") if e in ("paddleocr", "tesseract")]
+    engines = [e for e in (request.data.get("engines") or "paddleocr").split(",") if e in ocr_engines.ENGINES]
     if not engines:
         return _err("Choose an engine.")
     profile = request.data.get("profile") or config.get("processing.ocr_default_profile")

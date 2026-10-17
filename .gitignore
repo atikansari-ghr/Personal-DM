@@ -46,3 +46,4 @@ tests/e2e/node_modules/
 bridge/whatsapp/node_modules/
 *.tsbuildinfo
 tests/e2e/out/
+backend/light-ocr/node_modules/

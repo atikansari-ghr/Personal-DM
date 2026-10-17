@@ -39,7 +39,7 @@ def paddle(settings, tmp_path, monkeypatch):
     settings.PADDLE_PYTHON = sys.executable
     settings.PADDLE_HOME = home
     monkeypatch.setattr(ocr_engines, "WORKER", Path(FAKE))
-    config.set_value("processing.ocr_engine", "paddleocr")
+    config.set_value("processing.ocr_engine_order", ["paddleocr", "tesseract"])
     from apps.security.models import HealthState
 
     HealthState.objects.filter(key__startswith="paddleocr").delete()
@@ -176,7 +176,8 @@ def test_at213_fallback_and_explicit_engine(family, clients, settings, tmp_path)
     v = DocumentVersion.objects.get(pk=doc.current_version_id)
     run = OcrRun.objects.get(document=doc)
     assert v.ocr_engine == "tesseract" and "fallback" in run.options.get("fallback", "").lower()  # truthfully labelled
-    config.set_value("processing.ocr_engine_fallback", False)
+    config.set_value("processing.ocr_engine_order", ["paddleocr", "tesseract"])
+    config.set_value("processing.ocr_mode", "primary_only")  # Change Set Z: no fallback engine is tried
     doc2 = _ocr_doc(clients["son1"], family, ["NO FALLBACK"], name="nf.png")
     assert doc2.ocr_state == "failed" and "PaddleOCR" in doc2.ocr_error
 
@@ -573,7 +574,7 @@ def real_paddle(settings):
     from apps.security.models import HealthState
 
     HealthState.objects.filter(key__startswith="paddleocr").delete()
-    config.set_value("processing.ocr_engine", "paddleocr")
+    config.set_value("processing.ocr_engine_order", ["paddleocr", "tesseract"])
     config.set_value("processing.ocr_profiles", ["en", "ar_en", "hi_en", "te_en", "ta_en"])
 
 

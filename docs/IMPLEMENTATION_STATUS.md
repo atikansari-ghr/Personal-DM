@@ -81,6 +81,37 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
 - Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
 
+## Change set Z: optional AI Document Intelligence and the OCR engine order {#change-set-z}
+
+**Numbering.** Prompt AT-416…AT-435 → **AT-441…AT-460** (AT-416…AT-440 belong to Change Sets X and Y); see
+[TRACEABILITY.md](TRACEABILITY.md#change-set-z). Requirements ADI-1…ADI-14 in [REQUIREMENTS.md](REQUIREMENTS.md#change-set-z).
+**Migrations:** `core.0008_ocr_engine_order_ai_mode` (settings, data only, reversible) and `ai.0003_intelligence`
+(additive fields and the AI output table, reversible). Upgrade notes: [upgrades.md](guides/upgrades.md#change-set-z).
+
+| Area | What was built | Files |
+| --- | --- | --- |
+| OCR engine order | `processing.ocr_engine_order` (new `order_list` setting type: order kept) and `processing.ocr_mode` replace *Default OCR engine* / *Fall back to Tesseract*; `resolve_engine` walks the order and records why engines were skipped; engines overview with availability | `library/ocr_engines.py`, `core/registry.py`, `library/ocr_views.py`, `SettingsForm.tsx`, `OcrEngines.tsx` |
+| light-ocr | Adapter for the `@arcships/light-ocr` 0.5.9 CLI (JSON lines → the PaddleOCR line shape with boxes and confidence), status, real-recognition self-test, sandboxed process per page; pinned `package.json` + lockfile; installer/upgrade/repair install it with `npm ci` (non-fatal), `personaldocs ocr light-ocr[-reinstall]`, doctor checks | `library/ocr_engines.py`, `library/ocr_runs.py`, `backend/light-ocr/`, `scripts/personaldocs`, `ops/.../doctor.py` |
+| AI modes | `ai.mode` (on demand / OCR only / OCR + AI / Smart Auto), Smart Auto triggers and threshold, `ai.cloud_automatic`, `ai.allow_profile_choice`; `after_processing` follows the mode; `ai.auto_analyze` migrated | `ai/jobs.py`, `ai/service.py`, `core/registry.py` |
+| Providers | OpenAI, Anthropic (Messages), Gemini (generateContent), OpenRouter next to the local adapters; usage tokens; capabilities; `guard_payload` refuses images/files a profile may not receive | `ai/providers.py` |
+| Local / Cloud | `AIProfile.location` and four Cloud send controls; `plan_payload` (the one policy check), `ConsentRequired` + `disclosure`; metadata left out of prompts when not allowed | `ai/service.py`, `ai/views.py`, `ai/models.py` |
+| AI Actions | `run_action` for analyze, extract, verify, summarize, suggest_type, filename, expiry (background jobs) and ask (document-scoped); `AIOutput` for disposable results; per-action source (OCR text / page image / PDF) | `ai/service.py`, `ai/jobs.py`, `ai/views.py`, `AIActions.tsx` |
+| Review | Evidence (observed — checked against the OCR text — or inferred), AI confidence, conflict flag; accept / edit then accept / accept selected / reject all; conflicts need confirmation | `ai/service.py` `_store_suggestions`, `accept`; `AISuggestions.tsx` |
+| Safety | System policy + task + delimited untrusted document (random marker, forged markers neutralised); dates only when the year is printed, numbers/names only when present | `ai/service.py` `build_messages`, `wrap_document`, `_date_in_text` |
+| Provenance | Job trigger, profile name snapshot, provider, Local/Cloud, data categories, usage; AI History and output deletion in Document Details; status labels | `ai/models.py`, `ai/views.py` `job_json`, `status_label` |
+| Settings / doctor | Settings → AI: Document Processing (mode), provider choice, Local/Cloud badge, send controls, Last Test, **Test Profile**; doctor: AI mode, default profile, provider/model/capabilities, key stored yes/no, reachability | `LocalAI.tsx`, `ai/views.py` `_save_test`, `doctor.py` |
+
+**Decisions.**
+- *Runtime fallback.* Auto mode skips engines that are unavailable before recognition starts (not installed, failed
+  self-test, missing model, profile not supported). An engine that crashes on a document still fails the run safely
+  instead of handing the document to the next engine, because AT-214 / AT-224 require exactly that.
+- *light-ocr profiles.* The PP-OCRv6 Small bundle reads Latin script; the Arabic, Devanagari, Telugu and Tamil
+  profiles go to the next engine with the reason recorded.
+- *Node.js.* light-ocr declares Node ≥ 22 but runs on Debian 13's Node 20 (verified with 0.5.9); the installer
+  requires 20+.
+- *Upgrades.* An installation that had AI on with automatic analysis keeps *OCR + AI* (an opt-in already made) for
+  new uploads only; nothing existing is queued. Automatic AI never uses a Cloud profile unless allowed (off).
+
 ## Change set Y: OCR → AI document analysis pipeline {#change-set-y}
 
 **Numbering.** Prompt AT-401…AT-415 → **AT-426…AT-440** (the prompt also called itself "Change Set X", which is taken);

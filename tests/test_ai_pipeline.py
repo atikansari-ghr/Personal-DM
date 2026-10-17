@@ -30,7 +30,7 @@ SECRET = "QUOKKAPASSPORT"  # a marker that appears only in a document's text
 
 def _setup(engine="tesseract"):
     enable_ai(**{"ai.auto_analyze": False})
-    config.set_value("processing.ocr_engine", engine)
+    config.set_value("processing.ocr_engine_order", [engine] if engine == "tesseract" else [engine, "tesseract"])
     config.set_value("processing.ocr_untyped_ai_allowed", True)
     config.set_value("processing.ocr_untyped_mode", "manual")
 
@@ -202,7 +202,7 @@ def test_ocr_disabled_document_fails_without_ai(family, clients, fake_ai, profil
 
 def test_automatic_analysis_never_starts_ocr_on_manual_types(family, clients, fake_ai, profile):
     _setup()
-    config.set_value("ai.auto_analyze", True)
+    config.set_value("ai.mode", "auto")
     doc = _image_doc(clients["dad"], family, ["SAMPLE"], name="auto.png")
     run_jobs()
     assert not AIJob.objects.filter(document=doc, kind=AIJob.ANALYZE).exists()  # no text: nothing automatic queued

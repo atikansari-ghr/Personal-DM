@@ -24,6 +24,9 @@ const KEY_CHOICE_LABELS: Record<string, Record<string, string>> = {
 const SHOW_IF: Record<string, [string, any[]]> = {
   "backup.weekday": ["backup.frequency", ["weekly"]],
   "backup.month_day": ["backup.frequency", ["monthly"]],
+  "ai.smart_triggers": ["ai.mode", ["smart"]],
+  "ai.smart_confidence": ["ai.mode", ["smart"]],
+  "ai.smart_types": ["ai.mode", ["smart"]],
 };
 
 export function helpHref(help: string) {
@@ -75,6 +78,27 @@ function Input({ def, value, onChange }: { def: SettingDef; value: any; onChange
             return <label key={k} className="check" title={locked ? "Always critical; cannot be turned off" : undefined}><input type="checkbox" checked={locked || cur.includes(k)} disabled={locked} onChange={(e) => onChange(e.target.checked ? [...cur, k] : cur.filter((x) => x !== k))} /> {labels[k] || k}{locked ? " (always)" : ""}</label>;
           })}
         </fieldset>
+      );
+    }
+    case "order_list": {  // ordered: first = primary, then fallbacks in order; unticked = not used
+      const cur: string[] = Array.isArray(value) ? value : [];
+      const labels = def.choice_labels || {};
+      const rows = [...cur, ...def.choices.filter((k) => !cur.includes(k))];
+      const move = (k: string, d: number) => { const i = cur.indexOf(k); const j = i + d; if (i < 0 || j < 0 || j >= cur.length) return; const n = [...cur]; [n[i], n[j]] = [n[j], n[i]]; onChange(n); };
+      return (
+        <ol className="order-list" aria-label={def.label} data-setting-order={def.key}>
+          {rows.map((k) => {
+            const i = cur.indexOf(k);
+            return (
+              <li key={k} className="row" style={{ gap: ".4rem", alignItems: "center" }} data-engine={k}>
+                <label className="check"><input type="checkbox" disabled={disabled || (i >= 0 && cur.length === 1)} checked={i >= 0} onChange={(e) => onChange(e.target.checked ? [...cur, k] : cur.filter((x) => x !== k))} /> {labels[k] || k}</label>
+                <span className={`badge ${i === 0 ? "ok" : "neutral"}`}>{i === 0 ? "Primary" : i > 0 ? `Fallback ${i}` : "Not used"}</span>
+                {i >= 0 && <><button type="button" className="btn small ghost" aria-label={`Move ${labels[k] || k} up`} disabled={disabled || i === 0} onClick={() => move(k, -1)}>↑</button>
+                  <button type="button" className="btn small ghost" aria-label={`Move ${labels[k] || k} down`} disabled={disabled || i === cur.length - 1} onClick={() => move(k, 1)}>↓</button></>}
+              </li>
+            );
+          })}
+        </ol>
       );
     }
     case "country_list":

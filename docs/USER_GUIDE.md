@@ -216,17 +216,24 @@ Moving a document never changes its type, and changing the type never moves it.
 
 See [document types and details](guides/document-types.md).
 
-## 8. Local AI (if your administrator turned it on) {#ai}
+## 8. AI (if your administrator turned it on) {#ai}
 
-- **AI suggestions** on a document propose a title, type, dates, tags and folder. Nothing changes until you click
-  **Accept**.
+- **AI Actions** in a document's details: *Analyze Document*, *Extract Metadata*, *Verify OCR*, *Summarize*, *Ask AI*,
+  *Suggest Document Type*, *Suggest Filename* and *Detect Expiry/Renewal*. You only see the actions you may use on
+  that document. A badge shows whether the AI is **Local** (your family's server) or **Cloud** (a provider such as
+  OpenAI); for Cloud you are told what is sent, and you confirm before an original page or file is sent.
+- **AI suggestions** propose a title, type, dates, number, name, tags and folder. Each shows whether it is **Observed**
+  (printed in the text) or **Inferred**, and the AI's confidence. Nothing changes until you **Accept** it (or **Edit**
+  it first); you can also **Accept selected**, **Accept all** or **Reject all**. A **Conflict** means it differs from a
+  value someone set; you confirm before it replaces that value.
+- Summaries, OCR checks, expiry analyses and Ask AI answers are labelled *AI-generated* and never change the document.
+  **Remove** deletes them; **AI History** shows what ran, with which profile, and what was sent.
 - **Ask AI** answers questions such as "When does my passport expire?" using only documents you can open, and links
   to its sources.
 - **Match meaning** in search finds documents with similar meaning.
 
-AI runs on your family's own server, and normal search, OCR and uploads work without it. It reads a document's text
-only when the administrator allows AI for that document type.
-See [Local AI](guides/local-ai.md).
+AI is optional: search, OCR and uploads work without it. It reads a document's text only when the administrator allows
+AI for that document type. See [AI Document Intelligence](guides/local-ai.md).
 
 ## 9. Search {#search}
 

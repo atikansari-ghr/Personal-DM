@@ -949,7 +949,7 @@ await step("screens for the README (desktop)", async () => {
   await page.waitForSelector(".detail-pane .viewer canvas");
   await snap(page, { path: `${SHOTS}/folders-preview.png` });
   for (const [file, url, wait] of [["settings-security-passkeys.png", "/settings/account?tab=security", "text=Passkeys"],
-    ["local-ai.png", "/settings/ai", "text=Local AI"], ["login-audit.png", "/settings/activity?view=logins", "text=Login audit"],
+    ["local-ai.png", "/settings/ai", "text=AI profiles"], ["login-audit.png", "/settings/activity?view=logins", "text=Login audit"],
     ["security-access.png", "/settings/security?view=access", "text=Geographic access control"]]) {
     await page.goto(BASE + url);
     await page.waitForSelector(wait);

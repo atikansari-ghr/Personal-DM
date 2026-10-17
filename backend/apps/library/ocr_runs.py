@@ -79,7 +79,7 @@ def validate_request(doc: Document, sources: list[dict], languages: list[str], *
             raise OCRError("OCR is disabled for this document. Choose “Enable OCR for this document” first.")
         raise OCRError("Text recognition is disabled for this document type. An administrator can change this in "
                        "Settings → OCR & processing.")
-    if engine not in (None, "", "paddleocr", "tesseract"):
+    if engine not in (None, "", *ocr_engines.ENGINES):
         raise OCRError("Unknown OCR engine.")
     profile = profile or ocr_engines.profile_for(doc)
     if profile not in OCR_PROFILES:
@@ -136,7 +136,7 @@ def validate_request(doc: Document, sources: list[dict], languages: list[str], *
 def request_ocr(*, actor, doc: Document, sources: list[dict] | None = None, languages: list[str] | None = None,
                 rotate: int | None = None, set_primary: bool = True, request=None, automatic: bool = False,
                 engine: str | None = None, profile: str | None = None, reprocess: bool = False) -> Job:
-    """Queue one OCR run. ``engine=None`` uses the configured default (PaddleOCR, with Tesseract fallback if allowed)."""
+    """Queue one OCR run. ``engine=None`` uses the configured engine order (Primary, then Fallbacks in Auto mode)."""
     from .models import OcrRun
 
     sources = sources if sources is not None else default_sources(doc)
@@ -153,7 +153,9 @@ def request_ocr(*, actor, doc: Document, sources: list[dict] | None = None, lang
         if set_primary:
             update["ocr_sources"] = clean
         Document.objects.filter(pk=doc.pk).update(**update)
-        run = OcrRun.objects.create(document=doc, engine=engine or config.get("processing.ocr_engine"), profile=profile,
+        from . import ocr_engines
+
+        run = OcrRun.objects.create(document=doc, engine=engine or ocr_engines.primary_engine(), profile=profile,
                                     languages=langs, sources=clean, reprocess=reprocess,
                                     options={"rotate": rotate, "requested_engine": engine or "", "automatic": automatic},
                                     requested_by=actor if actor and actor.pk else None)
@@ -288,6 +290,22 @@ def _run_paddle(v, original: Path, pages_spec: str, profile: str, timeout: int, 
             "blocks": res.blocks()}
 
 
+def _run_light(v, original: Path, pages_spec: str, profile: str, timeout: int, workdir: Path) -> dict:
+    from . import ocr_engines
+
+    if v.format_class == "image":
+        images = [(ocr_engines.prepare_image(original, workdir / "page-1.png"), 1)]
+        paged = False
+    else:
+        pages = ocr_policy.parse_pages(pages_spec, v.page_count)
+        images = ocr_engines.render_pdf_pages(original, pages, workdir, timeout)
+        paged = True
+    res = ocr_engines.light_ocr_recognise(images, workdir, timeout, profile=profile)
+    return {"text": res.text(paged), "reliable": res.reliable_text(), "quality": {**res.quality(), "languages": res.languages},
+            "staged_pdf": None, "pdfa": False, "engine": "light-ocr", "model": res.model, "version": res.version,
+            "blocks": res.blocks()}
+
+
 def _ai_hook(name: str, doc, **kw):
     """Change Set Y: tell Local AI analyses that wait for this OCR run (never lets AI affect OCR)."""
     try:
@@ -329,8 +347,9 @@ def ocr_run(job):
     langs = job.payload.get("languages") or ocr_engines.TESSERACT_LANGS.get(profile, ["eng"])
     rotate = job.payload.get("rotate")
     timeout = int(config.get("processing.timeout_seconds"))
+    requested = job.payload.get("engine") or None
     try:
-        engine, note = ocr_engines.resolve_engine(job.payload.get("engine") or None)
+        engine, note = ocr_engines.resolve_engine(requested, profile)
     except ocr_engines.EngineError as exc:
         raise jobs.PermanentFailure(str(exc))
     if run:
@@ -349,12 +368,14 @@ def ocr_run(job):
             original = storage.resolve_original(v.storage_path)
             workdir = Path(tempfile.mkdtemp(prefix="ocr-", dir=settings.TMP_DIR))
             workdirs.append(workdir)
-            if engine == "paddleocr":
+            if engine in ("paddleocr", "light-ocr"):
                 try:
-                    result = _run_paddle(v, original, s.get("pages") or "", profile, timeout, workdir)
+                    run_engine = _run_paddle if engine == "paddleocr" else _run_light
+                    result = run_engine(v, original, s.get("pages") or "", profile, timeout, workdir)
                 except ocr_engines.EngineError as exc:
                     # a crash, timeout or memory-limit stop repeats on the same input: fail once (the previous result
-                    # stays), never re-run a heavy job three times; the owner can re-run with other options
+                    # stays), never re-run a heavy job three times; the owner can re-run with another engine. (The
+                    # engine order's fallbacks apply when an engine is unavailable, before any recognition starts.)
                     raise jobs.PermanentFailure(str(exc))
             else:
                 result = _run_tesseract(v, original, s.get("pages") or "", langs, rotate, timeout, workdir)

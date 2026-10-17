@@ -7,8 +7,11 @@ import { Confirm, HelpTip, Icon, Modal, Skeleton, useToast } from "../../compone
  *  Test OCR / Compare Engines. Administrator only; every action is also enforced by the server. */
 
 interface Profile { key: string; label: string; offered: boolean; paddle_models: string[]; paddle_installed: boolean; tesseract_languages: string[] }
+interface EngineRow { engine: string; label: string; position: number | null; role: string; available: boolean; reason: string }
 interface Engines {
   default_engine: string; fallback: boolean; model: string; device: string; threads: number; memory_mb: number;
+  order: string[]; mode: string; engines: EngineRow[];
+  light_ocr: { installed: boolean; home: string; version: string; selftest: any; healthy: boolean; error: string; checked_at: string | null };
   paddle: { installed: boolean; python: string; home: string; paddle: string; paddleocr: string; paddlex: string; cpu_avx: boolean | null; models: string[]; required_models: string[]; missing_models: string[]; selftest: any; healthy: boolean; error: string; checked_at: string | null };
   preprocessing: { orientation: boolean; textline: boolean; unwarping: boolean };
   profiles: Profile[]; tesseract: { version: string; languages: { code: string; name: string; configured: boolean; installed: boolean }[] };
@@ -24,21 +27,42 @@ export function OcrEngineStatus() {
   useEffect(() => { load(); }, []);
   if (!d) return <div className="card"><Skeleton /></div>;
   const p = d.paddle;
+  const lo = d.light_ocr;
+  const loHealth = !lo.installed ? ["Not installed", "danger"] : lo.error ? ["Not working", "danger"] : lo.healthy ? ["Healthy", "ok"] : lo.selftest ? ["Self-test failed", "danger"] : ["Not tested", "soon"];
+  const selftest = async (engine: string) => {
+    setBusy(true);
+    try { const r = await api<any>("ocr/engines/selftest", { method: "POST", body: { engine } }); toast(r.healthy ? `Self-test passed in ${r.seconds ?? r.wall_seconds}s` : `Self-test failed: ${r.message || r.error || "no text recognised"}`, r.healthy ? "ok" : "error"); load(true); }
+    catch (e: any) { toast(e.message, "error"); } finally { setBusy(false); }
+  };
   const health = !p.installed ? ["Not installed", "danger"] : p.missing_models.length ? ["Models missing", "danger"] : p.healthy ? ["Healthy", "ok"] : p.selftest ? ["Self-test failed", "danger"] : ["Not tested", "soon"];
   return (
     <section className="card" aria-labelledby="ocr-eng-h">
-      <div className="row between"><h2 id="ocr-eng-h">OCR engines <HelpTip text="PaddleOCR (PP-OCRv5) is the preferred engine. Tesseract stays available as Legacy / Fallback. Changing the default engine affects new OCR runs only; existing OCR results are never re-processed automatically." link="/help/ocr-engines#engine" /></h2>
+      <div className="row between"><h2 id="ocr-eng-h">OCR engines <HelpTip text="The engine order (OCR engine order setting below) decides the Primary engine and the Fallbacks. In Auto mode an engine that is not installed, fails its self-test or does not read the language profile is skipped and the run records why. Changing the order affects new OCR runs only. AI never changes it." link="/help/ocr-engines#engine-order" /></h2>
         <span className="row">
           <button className="btn small" onClick={() => load(true)}><Icon name="refresh" size={16} /> Refresh</button>
-          <button className="btn small primary" disabled={busy} onClick={async () => {
-            setBusy(true);
-            try { const r = await api<any>("ocr/engines/selftest", { method: "POST" }); toast(r.healthy ? `Self-test passed in ${r.seconds}s` : `Self-test failed: ${r.message || r.error || "no text recognised"}`, r.healthy ? "ok" : "error"); load(true); }
-            catch (e: any) { toast(e.message, "error"); } finally { setBusy(false); }
-          }}>Run self-test</button>
+          <button className="btn small" disabled={busy} onClick={() => selftest("light-ocr")}>Self-test light-ocr</button>
+          <button className="btn small primary" disabled={busy} onClick={() => selftest("paddleocr")}>Run PaddleOCR self-test</button>
         </span></div>
+      <ol className="order-list" aria-label="Current OCR engine order" data-engine-order>
+        {d.engines.map((e) => (
+          <li key={e.engine} className="row" style={{ gap: ".4rem" }} data-engine={e.engine}>
+            <span className={`badge ${e.role === "Primary" ? "ok" : "neutral"}`}>{e.role}</span> <strong>{e.label}</strong>
+            {e.available ? <span className="badge ok">Available</span> : <span className="badge danger" title={e.reason}>Unavailable</span>}
+            {!e.available && <span className="small muted">{e.reason}</span>}
+          </li>
+        ))}
+      </ol>
+      <p className="small muted">Mode: {d.mode === "primary_only" ? "Primary only — no fallback is tried" : "Auto — Primary, then the Fallbacks in order"}. Change the order and mode under “OCR engine order” and “OCR mode” below.</p>
+      <div className="stack" style={{ gap: ".3rem" }}>
+        <h3 style={{ margin: 0 }}>light-ocr (PP-OCRv6 Small) <span className={`badge ${loHealth[1]}`}>{loHealth[0]}</span>{d.default_engine === "light-ocr" && <span className="badge">Primary</span>}</h3>
+        <div className="small">{lo.version || "—"} · ONNX Runtime (CPU) · {lo.home}</div>
+        {lo.selftest && <div className="small muted">Last self-test (real recognition): {lo.selftest.healthy ? "passed" : "failed"}{lo.selftest.wall_seconds ? ` in ${lo.selftest.wall_seconds}s` : ""}{lo.selftest.at ? ` · ${formatDateTime(lo.selftest.at)}` : ""}</div>}
+        {!lo.installed && <div className="alert warn small">light-ocr is not installed. Run <code>sudo personaldocs upgrade</code> (or <code>repair</code>); it needs Node.js 20 or newer.</div>}
+        {lo.error && <div className="small muted">{lo.error}</div>}
+      </div>
       <div className="grid-2">
         <div className="stack" style={{ gap: ".3rem" }}>
-          <h3 style={{ margin: 0 }}>PaddleOCR (PP-OCRv5) <span className={`badge ${health[1]}`}>{health[0]}</span>{d.default_engine === "paddleocr" && <span className="badge">Default</span>}</h3>
+          <h3 style={{ margin: 0 }}>PaddleOCR (PP-OCRv5) <span className={`badge ${health[1]}`}>{health[0]}</span>{d.default_engine === "paddleocr" && <span className="badge">Primary</span>}</h3>
           <div className="small">Versions: PaddlePaddle {p.paddle || "—"} · PaddleOCR {p.paddleocr || "—"} · PaddleX {p.paddlex || "—"}</div>
           <div className="small">Model: {d.model === "server" ? "Server (higher accuracy, slower)" : "Mobile (fast, lower memory)"} · CPU · {d.threads} thread{d.threads > 1 ? "s" : ""} · memory limit {d.memory_mb} MB{p.cpu_avx === false ? " · CPU without AVX" : ""}</div>
           <div className="small">Preprocessing: orientation {d.preprocessing.orientation ? "on" : "off"} · text-line orientation {d.preprocessing.textline ? "on" : "off"} · unwarping {d.preprocessing.unwarping ? "on" : "off"}</div>
@@ -49,7 +73,7 @@ export function OcrEngineStatus() {
           <div className="small muted">Models stored: {formatBytes(d.models_bytes)} · OCR scratch files: {formatBytes(d.temp_bytes)}</div>
         </div>
         <div className="stack" style={{ gap: ".3rem" }}>
-          <h3 style={{ margin: 0 }}>Tesseract (Legacy) {d.default_engine === "tesseract" && <span className="badge">Default</span>}</h3>
+          <h3 style={{ margin: 0 }}>Tesseract {d.default_engine === "tesseract" && <span className="badge">Primary</span>}</h3>
           <div className="small">{d.tesseract.version ? `Version ${d.tesseract.version}` : "Not installed"} · fallback {d.fallback ? "on" : "off"}</div>
           <div className="small">Language packs: {d.tesseract.languages.filter((l) => l.installed).map((l) => l.code).join(", ") || "none"}</div>
           <div className="small muted">Queue: {d.queue.running} running · {d.queue.queued} waiting · {d.queue.concurrency} at a time{d.queue.paused ? " · paused" : ""}</div>
@@ -77,7 +101,7 @@ interface Inventory {
   documents: { id: string; title: string; owner: string; type: string; folder: string; ocr_state: string; disabled: boolean; engines: string[]; profile: string; ocr_at: string | null; text_chars: number; embedded_text_hidden: boolean }[];
   runs: { id: number; document: string; title: string; engine: string; error: string; created_at: string }[];
 }
-const ACTIONS: [string, string][] = [["remove", "Remove OCR data"], ["remove_disable", "Remove and disable OCR"], ["disable", "Disable OCR"], ["enable", "Enable OCR"], ["reprocess", "Re-process with PP-OCRv5"], ["set_profile", "Set language profile"]];
+const ACTIONS: [string, string][] = [["remove", "Remove OCR data"], ["remove_disable", "Remove and disable OCR"], ["disable", "Disable OCR"], ["enable", "Enable OCR"], ["reprocess", "Re-process with the OCR engine order"], ["set_profile", "Set language profile"]];
 
 export function OcrExistingData() {
   const toast = useToast();
@@ -111,7 +135,7 @@ export function OcrExistingData() {
       <p className="small muted">Storage: text {formatBytes(inv.storage.text)} · text blocks {formatBytes(inv.storage.blocks)} · searchable copies {formatBytes(inv.storage.searchable)} · semantic chunks {formatBytes(inv.storage.chunks)} · total {formatBytes(inv.storage.total)}</p>
       <div className="row" style={{ flexWrap: "wrap" }}>
         <select aria-label="Engine filter" value={filters.engine || ""} onChange={(e) => setF("engine", e.target.value)}>
-          <option value="any">Any OCR</option><option value="paddleocr">PaddleOCR</option><option value="tesseract">Tesseract</option><option value="unknown">Unknown engine</option><option value="none">No OCR</option><option value="">All documents</option>
+          <option value="any">Any OCR</option><option value="light-ocr">light-ocr</option><option value="paddleocr">PaddleOCR</option><option value="tesseract">Tesseract</option><option value="unknown">Unknown engine</option><option value="none">No OCR</option><option value="">All documents</option>
         </select>
         <select aria-label="Status filter" value={filters.status || ""} onChange={(e) => setF("status", e.target.value)}>
           <option value="">Any status</option><option value="needs_review">Needs review</option><option value="confirmed">Confirmed</option><option value="failed">Failed</option><option value="removed">Removed</option><option value="disabled">Disabled</option>
@@ -195,6 +219,7 @@ export function OcrTest() {
   const [file, setFile] = useState<File | null>(null);
   const [profile, setProfile] = useState("en");
   const [compare, setCompare] = useState(false);
+  const [engine, setEngine] = useState("paddleocr");
   const [expected, setExpected] = useState("");
   const [pages, setPages] = useState("");
   const [busy, setBusy] = useState(false);
@@ -207,7 +232,7 @@ export function OcrTest() {
         if (!file) return;
         const form = new FormData();
         form.append("file", file);
-        form.append("engines", compare ? "paddleocr,tesseract" : "paddleocr");
+        form.append("engines", compare ? "light-ocr,paddleocr,tesseract" : engine);
         form.append("profile", profile);
         if (expected.trim()) form.append("expected", expected);
         if (pages.trim()) form.append("pages", pages);
@@ -221,7 +246,9 @@ export function OcrTest() {
             {[["en", "English"], ["ar_en", "Arabic + English"], ["hi_en", "Hindi (Devanagari) + English"], ["te_en", "Telugu + English"], ["ta_en", "Tamil + English"]].map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
           <input type="text" aria-label="Pages" placeholder="Pages (PDF), e.g. 1-2" value={pages} onChange={(e) => setPages(e.target.value)} style={{ maxWidth: 180 }} />
-          <label className="check"><input type="checkbox" checked={compare} onChange={(e) => setCompare(e.target.checked)} /> Compare with Tesseract (Legacy)</label>
+          {!compare && <select aria-label="Test engine" value={engine} onChange={(e) => setEngine(e.target.value)}>
+            <option value="light-ocr">light-ocr (PP-OCRv6 Small)</option><option value="paddleocr">PaddleOCR (PP-OCRv5)</option><option value="tesseract">Tesseract</option></select>}
+          <label className="check"><input type="checkbox" checked={compare} onChange={(e) => setCompare(e.target.checked)} /> Compare all engines</label>
         </div>
         <textarea aria-label="Expected text" rows={2} placeholder="Expected text (optional) — gives a character accuracy for each engine" value={expected} onChange={(e) => setExpected(e.target.value)} />
         <div><button className="btn primary" disabled={!file || busy}>{busy ? "Recognising…" : compare ? "Compare engines" : "Test OCR"}</button></div>

@@ -1,4 +1,11 @@
-"""OCR engines (Change Set Q): PaddleOCR / PP-OCRv5 (default) and Tesseract (Legacy / fallback).
+"""OCR engines: light-ocr (PP-OCRv6 Small, Change Set Z), Tesseract and PaddleOCR / PP-OCRv5 (Change Set Q).
+
+The Main Admin sets the order under Settings → OCR → OCR Engines (``processing.ocr_engine_order``): the first engine
+is the Primary, the others are Fallbacks in that order. In Auto mode (``processing.ocr_mode``) an engine that is not
+installed, fails its health check or does not serve the language profile hands the run to the next one, and the run
+records which engine produced the text and why the others were skipped. An engine that crashes on a document fails
+that run safely (the previous result stays), as before. OCR engine priority is
+independent of AI: AI never chooses or changes it.
 
     profile -> engine routing
       English                 PaddleOCR: en_PP-OCRv5_mobile_rec              Tesseract: eng
@@ -32,7 +39,12 @@ WORKER = Path(__file__).with_name("paddle_worker.py")
 PADDLE_LANGS = {"en": ["en"], "ar_en": ["ar", "en"], "hi_en": ["hi", "en"], "te_en": ["te", "en"], "ta_en": ["ta", "en"]}
 TESSERACT_LANGS = {"en": ["eng"], "ar_en": ["ara", "eng"], "hi_en": ["hin", "eng"], "te_en": ["tel", "eng"], "ta_en": ["tam", "eng"]}
 LOW_SCORE = 0.6  # PaddleOCR line score below this is shown as low confidence (and kept out of field extraction)
-ENGINE_LABELS = {"paddleocr": "PaddleOCR PP-OCRv5", "tesseract": "Tesseract (Legacy)", "unknown": "Unknown / Legacy"}
+ENGINE_LABELS = {"light-ocr": "light-ocr (PP-OCRv6 Small)", "paddleocr": "PaddleOCR PP-OCRv5", "tesseract": "Tesseract",
+                 "unknown": "Unknown / Legacy"}
+ENGINES = ("light-ocr", "tesseract", "paddleocr")
+DEFAULT_ORDER = ["light-ocr", "tesseract", "paddleocr"]  # recommended for new installations
+LIGHT_OCR_VERSION = "0.5.9"
+LIGHT_PROFILES = {"en"}  # PP-OCRv6 Small reads Latin script (and Chinese); other profiles go to the next engine
 
 
 class EngineError(Exception):
@@ -207,21 +219,165 @@ def paddle_selftest(actor=None) -> dict:
     return res
 
 
-def resolve_engine(requested: str | None = None) -> tuple[str, str]:
-    """(engine, note). An explicitly requested engine is used as asked; the default may fall back to Tesseract."""
-    engine = requested or config.get("processing.ocr_engine") or "paddleocr"
+# ------------------------------------------------------------------ light-ocr status / health
+
+def light_ocr_cli() -> Path:
+    return Path(settings.LIGHT_OCR_HOME) / "node_modules" / "@arcships" / "light-ocr" / "src" / "cli.cjs"
+
+
+def _light_workdir() -> Path:
+    Path(settings.TMP_DIR).mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix="lightocr-", dir=settings.TMP_DIR))
+
+
+def _light_call(args: list[str], timeout: int, cwd: Path):
+    if not light_ocr_cli().exists():
+        raise EngineError(f"light-ocr is not installed ({light_ocr_cli()} is missing). Run: sudo personaldocs repair",
+                          "unavailable")
+    try:
+        return sandbox.run([settings.NODE_CMD, str(light_ocr_cli()), *args], timeout=timeout, cwd=cwd,
+                           memory_mb=max(2048, int(config.get("processing.paddle_memory_mb"))),
+                           extra_env={"NODE_OPTIONS": "--max-old-space-size=1024"}, cpu_seconds=timeout * 2 + 30)
+    except sandbox.ToolError as exc:
+        raise EngineError(str(exc), "timeout" if "timed out" in str(exc) else "unavailable")
+
+
+def light_ocr_status(refresh: bool = False) -> dict:
+    """Installed? which version? Cheap (no inference); cached for 10 minutes. Health is the self-test below."""
+    from apps.security.models import HealthState
+
+    st = HealthState.get("lightocr_status")
+    fresh = st.get("checked_at") and (timezone.now().timestamp() - st.get("checked_ts", 0)) < 600
+    if refresh or not fresh:
+        info = {"installed": light_ocr_cli().exists(), "home": str(settings.LIGHT_OCR_HOME), "version": "", "error": ""}
+        if info["installed"]:
+            workdir = _light_workdir()
+            try:
+                proc = _light_call(["info", "--version"], timeout=60, cwd=workdir)
+                out = (proc.stdout or b"").decode(errors="replace").strip()
+                try:  # `info --version` prints {"npm": "0.5.9", "core": ..., "model": "ppocrv6-small-..."}
+                    v = json.loads(out)
+                    info["version"] = f"light-ocr {v.get('npm') or v.get('core')} ({v.get('model', '')})".replace(" ()", "")[:80]
+                except (ValueError, AttributeError):
+                    info["version"] = out.splitlines()[0][:80] if out else ""
+                if proc.returncode != 0:
+                    info["error"] = f"light-ocr did not start (exit {proc.returncode}). Is Node.js 20+ installed?"
+            except EngineError as exc:
+                info["error"] = str(exc)
+            finally:
+                shutil.rmtree(workdir, ignore_errors=True)
+        st = HealthState.put("lightocr_status", **info, checked_at=timezone.now().isoformat(),
+                             checked_ts=timezone.now().timestamp())
+    health = HealthState.get("lightocr_health")
+    return {**st, "selftest": health or None, "healthy": bool(st.get("installed") and not st.get("error") and health.get("healthy"))}
+
+
+def light_ocr_selftest(actor=None) -> dict:
+    """Real recognition of a generated sample (never a family document): the only thing that makes light-ocr healthy."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    from apps.core import audit
+    from apps.security.models import HealthState
+
+    expected = "SAMPLE 12345"
+    t0 = time.monotonic()
+    workdir = _light_workdir()
+    try:
+        img = Image.new("RGB", (900, 220), "white")
+        try:
+            font = ImageFont.truetype("DejaVuSans.ttf", 72)
+        except OSError:
+            font = ImageFont.load_default(size=72)
+        ImageDraw.Draw(img).text((40, 60), expected, fill="black", font=font)
+        img.save(workdir / "selftest.png")
+        res = light_ocr_recognise([(workdir / "selftest.png", 1)], workdir, timeout=120)
+        text = res.text(False)
+        ok = expected.replace(" ", "") in text.replace(" ", "").upper()
+        out = {"ok": ok, "healthy": ok, "text": text[:80], "expected": expected, "seconds": res.seconds,
+               "version": res.version, "model": res.model}
+        if not ok:
+            out.update(error="failed", message="light-ocr ran but did not read the sample text.")
+    except EngineError as exc:
+        out = {"ok": False, "healthy": False, "error": exc.category, "message": str(exc)}
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+    out.update(at=timezone.now().isoformat(), wall_seconds=round(time.monotonic() - t0, 1))
+    HealthState.put("lightocr_health", **out)
+    audit.record("ocr.engine_selftest", actor=actor, outcome="success" if out.get("healthy") else "failure", engine="light-ocr")
+    return out
+
+
+# ------------------------------------------------------------------ engine order (Primary / Fallbacks)
+
+def engine_order() -> list[str]:
+    order = [e for e in (config.get("processing.ocr_engine_order") or []) if e in ENGINES]
+    return list(dict.fromkeys(order)) or ["tesseract"]
+
+
+def primary_engine() -> str:
+    return engine_order()[0]
+
+
+def unavailable_reason(engine: str, profile: str | None = None) -> str:
+    """'' when the engine can run now for this language profile; otherwise why not (shown to people and recorded)."""
     if engine == "tesseract":
-        return "tesseract", ""
-    st = paddle_status()
-    usable = st.get("installed") and not st.get("error") and not st.get("missing_models")
-    if usable:
-        return "paddleocr", ""
-    reason = st.get("error") or ("missing models: " + ", ".join(st.get("missing_models") or [])
-                                 if st.get("installed") else "PaddleOCR is not installed")
-    if requested is None and config.get("processing.ocr_engine_fallback"):
-        return "tesseract", f"PaddleOCR unavailable ({reason}); Tesseract fallback used"
-    raise EngineError(f"PaddleOCR is not available: {reason}. Run `sudo personaldocs repair`, or choose Tesseract (Legacy).",
-                      "unavailable")
+        return ""
+    if engine == "light-ocr":
+        if profile and profile not in LIGHT_PROFILES:
+            return f"it does not read the {OCR_PROFILES.get(profile, profile)} profile"
+        st = light_ocr_status()
+        if not st.get("installed"):
+            return "light-ocr is not installed"
+        if st.get("error"):
+            return st["error"]
+        health = st.get("selftest") or {}
+        if health and not health.get("healthy"):
+            return "its self-test failed: " + (health.get("message") or health.get("error") or "unknown error")
+        return ""
+    if engine == "paddleocr":
+        st = paddle_status()
+        if st.get("installed") and not st.get("error") and not st.get("missing_models"):
+            return ""
+        return st.get("error") or ("missing models: " + ", ".join(st.get("missing_models") or [])
+                                   if st.get("installed") else "PaddleOCR is not installed")
+    return "unknown engine"
+
+
+def resolve_engine(requested: str | None = None, profile: str | None = None) -> tuple[str, str]:
+    """(engine, note). An explicitly requested engine is used as asked (or fails); otherwise the configured order is
+    walked: Primary first, then — in Auto mode only — each Fallback in turn. ``note`` says truthfully which engines
+    were skipped and why."""
+    if requested:
+        reason = unavailable_reason(requested, profile)
+        if reason:
+            raise EngineError(f"{ENGINE_LABELS.get(requested, requested)} is not available: {reason}. Run `sudo personaldocs "
+                              "repair`, or choose another engine.", "unavailable")
+        return requested, ""
+    order = engine_order()
+    candidates = order if config.get("processing.ocr_mode") != "primary_only" else order[:1]
+    skipped = []
+    for engine in candidates:
+        reason = unavailable_reason(engine, profile)
+        if not reason:
+            note = "; ".join(skipped) + f"; fallback to {ENGINE_LABELS[engine]} used" if skipped else ""
+            return engine, note
+        skipped.append(f"{ENGINE_LABELS[engine]} unavailable ({reason})")
+    raise EngineError("No OCR engine is available: " + "; ".join(skipped) + (
+        ". OCR mode is “Primary only”, so no fallback engine was tried." if len(candidates) < len(order) else
+        ". Run `sudo personaldocs repair`."), "unavailable")
+
+
+def engines_overview() -> list[dict]:
+    """Settings → OCR → OCR Engines: each engine in the configured order with its availability."""
+    order = engine_order()
+    rest = [e for e in ENGINES if e not in order]
+    out = []
+    for i, e in enumerate(order + rest):
+        reason = unavailable_reason(e)
+        out.append({"engine": e, "label": ENGINE_LABELS[e], "position": i + 1 if e in order else None,
+                    "role": ("Primary" if i == 0 else f"Fallback {i}") if e in order else "Not used",
+                    "available": not reason, "reason": reason})
+    return out
 
 
 # ------------------------------------------------------------------ recognition
@@ -287,6 +443,38 @@ def paddle_recognise(images: list[tuple[Path, int]], profile: str, workdir: Path
                      version=f"PaddleOCR {vers.get('paddleocr')} / PaddlePaddle {vers.get('paddle')}",
                      pages=[PageResult(page=p["page"], lines=p.get("lines") or [], angle=p.get("angle")) for p in res["pages"]],
                      seconds=float(res.get("seconds") or 0))
+
+
+def light_ocr_recognise(images: list[tuple[Path, int]], workdir: Path, timeout: int, profile: str = "en") -> RunResult:
+    """One light-ocr process per page image (JSON output); lines map to the same shape as PaddleOCR's."""
+    t0 = time.monotonic()
+    pages, model, version = [], "", ""
+    for path, n in images:
+        proc = _light_call([str(path), "--format", "json", "--quiet", "--provider", "cpu"], timeout=timeout, cwd=workdir)
+        try:
+            data = json.loads((proc.stdout or b"").decode(errors="replace"))
+        except ValueError:
+            err = (proc.stderr or b"").decode(errors="replace")
+            category = "memory" if ("out of memory" in err.lower() or proc.returncode in (-9, 137)) else "failed"
+            raise EngineError(f"light-ocr stopped without a result (exit {proc.returncode}).", category)
+        for pg in data.get("pages") or []:
+            lines = []
+            for ln in pg.get("lines") or []:
+                text = str(ln.get("text") or "").strip()
+                if not text:
+                    continue
+                pts = [p for p in (ln.get("box") or []) if isinstance(p, dict)]
+                xs, ys = [p.get("x", 0) for p in pts] or [0], [p.get("y", 0) for p in pts] or [0]
+                lines.append({"text": text, "score": round(float(ln.get("confidence") or 0), 4),
+                              "box": [min(xs), min(ys), max(xs), max(ys)], "lang": "en"})
+            pages.append(PageResult(page=n, lines=lines))
+            model = str(pg.get("modelBundleId") or model)
+    version = f"light-ocr {LIGHT_OCR_VERSION}"
+    st = light_ocr_status()
+    if st.get("version"):
+        version = st["version"] if "light-ocr" in st["version"] else f"light-ocr {st['version']}"
+    return RunResult(engine="light-ocr", model=(model or "PP-OCRv6 Small")[:200], version=version[:80], profile=profile,
+                     languages=["en"], pages=pages, seconds=round(time.monotonic() - t0, 2))
 
 
 def tesseract_recognise(images: list[tuple[Path, int]], profile: str | None, langs: list[str] | None, timeout: int,
