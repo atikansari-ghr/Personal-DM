@@ -176,26 +176,28 @@ Guides: [notifications](guides/notifications.md) ([templates](guides/notificatio
 
 ## 6. OCR and processing {#ocr}
 
-- **Engines:** **PaddleOCR (PP-OCRv5)** is the default engine; **Tesseract (Legacy)** stays available as the fallback
-  and as an explicit choice. Both run locally. The **OCR engines** card shows:
+- **Engines:** **light-ocr (PP-OCRv6 Small)**, **Tesseract** and **PaddleOCR (PP-OCRv5)**, in the order you set; Tesseract is always available as a fallback
+  and as an explicit choice. All run locally. The **OCR engines** card shows:
   - the versions, CPU (AVX), model, threads and memory limit;
   - missing models, the last real-inference self-test and the language profiles;
   - Tesseract's version and packs, and the queue.
 
   **Run self-test** recognises a generated image. *Healthy* means that worked, not merely that the library imports.
-  Changing **Default OCR engine** affects new runs only; existing results are never re-processed automatically.
-  See [OCR engines](guides/ocr-engines.md).
+  **OCR engine order** (Change Set Z) sets the Primary engine and the Fallbacks (light-ocr, Tesseract, PaddleOCR; new
+  installations: light-ocr → Tesseract → PaddleOCR) and **OCR mode** (Auto or Primary only). Changing them affects new
+  runs only; existing results are never re-processed automatically. AI never changes the order.
+  See [OCR engines](guides/ocr-engines.md#engine-order).
 - **Language profiles:** English, Arabic + English, Hindi (Devanagari) + English, Telugu + English and Tamil +
   English (`processing.ocr_profiles`; default English, Arabic + English, Hindi + English). Each document type can carry
   its own profile. After offering a new profile run `sudo personaldocs ocr install-models`.
 - **Existing OCR data:**
   - counts by engine (PaddleOCR / Tesseract / Unknown), storage used, filters;
-  - bulk **Remove**, **Remove and disable**, **Disable**, **Enable**, **Re-process with PP-OCRv5** and **Set language
+  - bulk **Remove**, **Remove and disable**, **Disable**, **Enable**, **Re-process with the OCR engine order** and **Set language
     profile**, always with a preview first;
   - **Orphaned OCR data**: Analyze (dry run), then Clean.
 
   See [Existing OCR data](guides/ocr-engines.md#existing-data).
-- **Test OCR / Compare engines** runs a sanitised sample through PP-OCRv5 and Tesseract with character accuracy
+- **Test OCR / Compare engines** runs a sanitised sample through light-ocr, PP-OCRv5 and Tesseract with character accuracy
   against the expected text. Never use a real passport or ID here.
 
 - **Selective OCR:** OCR reads only what is chosen. **OCR policy per document type** sets each type to *Disabled*,
@@ -251,20 +253,28 @@ Guides: [OCR and corrections](guides/ocr-corrections.md#selective), [Office and 
 
 Guide: [document types](guides/document-types.md#manage).
 
-## 7. Local AI (optional) {#ai}
+## 7. AI Document Intelligence (optional) {#ai}
 
-**Settings → Local AI:**
-1. Add a profile for LM Studio (`http://<pc-ip>:1234/v1`) or Ollama (`http://<pc-ip>:11434`).
-2. Set its privacy class (local, private LAN, or external with an explicit warning).
-3. Click **Test connection**.
-4. Switch on the features you want.
+AI is an optional layer **above** OCR, not an OCR engine. **Settings → AI:**
+1. Choose the **AI mode**: *AI on Demand* (default, recommended), *OCR Only* (AI off), *OCR + AI* (every successful
+   OCR is analysed) or *Smart Auto* (only when the chosen conditions apply). Upgrades never start sending existing
+   documents anywhere.
+2. Add a profile: a **Local LLM** (LM Studio `http://<pc-ip>:1234/v1`, Ollama `http://<pc-ip>:11434`) or a **Cloud**
+   provider (OpenAI, Anthropic Claude, Google Gemini, OpenRouter). API keys are stored encrypted and never shown again.
+3. For a Cloud profile, choose exactly what it may receive: OCR text, selected metadata, original images, original
+   files. Images and files are off by default, and people confirm each send.
+4. Click **Test Profile**. The *Last test* line shows only the checks that actually ran.
 
-- AI never changes documents without a person accepting the suggestion.
-- It only sees documents the asking person can open, and only the text of document types where **AI may read
-  text** is allowed (Settings → OCR & processing). There is no cloud fallback.
-- A 2 vCPU/4 GB container cannot run useful models itself; use a LAN PC.
+- AI only **suggests**: suggestions, summaries, OCR checks and answers are labelled AI-generated and change nothing
+  until a person with edit rights accepts them. Values a person set are never silently replaced.
+- AI Actions and Ask AI only work on documents the person can open, and only for document types where **AI may read
+  text** is allowed (Settings → OCR & processing). There is no fallback to another server or to the cloud.
+- Automatic AI (OCR + AI, Smart Auto) never uses a Cloud profile unless **Allow automatic AI with a Cloud profile** is on.
+- `sudo personaldocs doctor` reports the AI mode, the default profile, provider, model, capabilities and whether a key
+  is stored, never the key.
+- A 2 vCPU/4 GB container cannot run useful models itself; use a LAN PC or a Cloud profile.
 
-Guide: [Local AI](guides/local-ai.md).
+Guide: [AI Document Intelligence](guides/local-ai.md).
 
 ## 8. Overview and sign-in page {#overview}
 

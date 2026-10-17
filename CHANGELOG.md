@@ -4,6 +4,26 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-17) — AI Document Intelligence and the OCR engine order (Change Set Z)
+- **OCR engine order.** light-ocr (PP-OCRv6 Small, new), Tesseract and PaddleOCR in any order: Primary first, then the
+  Fallbacks, in **Auto** or **Primary only** mode (Settings → OCR & processing). New installations use light-ocr →
+  Tesseract → PaddleOCR; upgraded installations keep their engine and fallback behaviour. The installer, upgrade and
+  repair install the pinned light-ocr package and self-test it; doctor reports the order and each engine.
+- **AI modes.** AI on Demand (default), OCR Only, OCR + AI and Smart Auto (only when chosen conditions apply).
+  Upgrades never send existing documents to AI.
+- **Local and Cloud AI profiles.** Cloud providers OpenAI, Anthropic Claude, Google Gemini and OpenRouter next to
+  LM Studio / Ollama. Each Cloud profile has its own switches for OCR text, metadata, original images and original
+  files (images and files off by default); sending an original asks for confirmation naming the profile, provider and
+  data. Automatic AI never uses a Cloud profile unless allowed.
+- **AI Actions** in Document Details: Analyze, Extract Metadata, Verify OCR, Summarize, Ask AI, Suggest Document
+  Type, Suggest Filename, Detect Expiry/Renewal — only those the person, the policy and the profile allow.
+- **Suggestion review:** observed/inferred, AI confidence (separate from OCR confidence), conflicts with values a
+  person set, Accept / Edit / Reject, Accept selected, Reject all.
+- **AI History** with profile, provider, model, Local/Cloud, data sent, status, duration and usage; AI outputs can be
+  removed. **Test Profile** and **Last test** in Settings → AI.
+- Documents are untrusted input to the AI (isolated, delimited); AI output can only ever become a reviewable
+  suggestion or a labelled output.
+
 ### Fixed (2026-10-16) — Analyze Document with LM Studio; OCR → AI pipeline (Change Set Y)
 - **Analyze Document failed with HTTP 400 on LM Studio** while the assistant worked. Root cause: analysis asked for
   JSON with `response_format: {"type": "json_object"}`, which LM Studio rejects (it accepts `json_schema` or `text`);

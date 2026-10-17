@@ -14,6 +14,61 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to Change Set Z (AI Document Intelligence and the OCR engine order) {#change-set-z}
+
+```
+sudo personaldocs upgrade     # safety backup, migrations core.0008 and ai.0003, light-ocr install, restart
+sudo personaldocs doctor
+```
+
+(The change prompt numbered its tests AT-416..AT-435, which Change Sets X and Y already use. Here they are
+**AT-441..AT-460**: prompt AT-n = AT-(n+25).)
+
+### What the upgrade does
+
+- **light-ocr is installed** (non-fatal): the pinned `@arcships/light-ocr` 0.5.9 package (PP-OCRv6 Small on ONNX
+  Runtime, CPU, about 130 MB) goes to `/opt/personaldocs/light-ocr` with `npm ci` from a lockfile, and a real
+  recognition self-test runs. It needs Node.js 20+ (installed from Debian if missing). If it cannot be installed,
+  OCR simply uses the next engine. `--without-light-ocr` skips it.
+- **Migration `core.0008`** turns the old *Default OCR engine* / *Fall back to Tesseract* settings into the new
+  **OCR engine order** and **OCR mode**, keeping what you had: PaddleOCR with fallback → *PaddleOCR → Tesseract*
+  (Auto); PaddleOCR without fallback → *PaddleOCR* (Primary only); Tesseract → *Tesseract*. light-ocr is **not** added
+  to an upgraded installation automatically. New installations start with *light-ocr → Tesseract → PaddleOCR*.
+- The same migration turns *Analyse new uploads automatically* into the **AI mode**: AI off → *AI on Demand* (still
+  off); AI on with automatic analysis → *OCR + AI* (new uploads only); AI on without it → *AI on Demand*. **No
+  existing document is queued or sent to AI by the upgrade.**
+- **Migration `ai.0003`** marks every profile **Local** or **Cloud** (an *External endpoint* profile becomes Cloud) and
+  adds the Cloud send controls: an external profile you had already acknowledged keeps sending OCR text and metadata
+  as before; **original images and files are off**. It also adds the provenance fields of AI jobs and the AI outputs
+  (summaries, OCR checks, expiry analysis, answers). Suggestions and OCR results stay as they are.
+- New in Settings → AI: the AI mode, Smart Auto conditions, cloud providers (OpenAI, Anthropic, Gemini, OpenRouter),
+  *Allow automatic AI with a Cloud profile* (off) and *Let people choose the AI profile per action* (off).
+
+### After the upgrade (main administrator)
+
+1. **Settings → OCR & processing → OCR engines**: the card lists the engine order with *Available* / *Unavailable* and
+   the reason. Press **Self-test light-ocr**. If it passes and you want it, tick *light-ocr* in **OCR engine order**,
+   move it to the top and **Save settings** (or leave your order as it is).
+2. **Settings → AI**: check the **AI mode** (AI on Demand is recommended). For each profile press **Test Profile**;
+   *Last test* shows the checks that ran. For a Cloud profile, review *Data this Cloud profile may receive*.
+3. Open a document → **AI Actions**: run *Summarize* or *Verify OCR*, then open **AI History** to see the profile,
+   Local/Cloud, the data sent and the status.
+4. `sudo personaldocs doctor` shows *OCR engine order*, *light-ocr installed / self-test*, *AI mode*, *AI default
+   profile* and its provider/model/capabilities, never a key.
+
+### Rollback
+
+```
+sudo personaldocs manage migrate ai 0002
+sudo personaldocs manage migrate core 0007
+sudo personaldocs rollback
+```
+
+`core 0007` restores *Default OCR engine*, *Fall back to Tesseract* and *Analyse new uploads automatically* from the
+new settings. `ai 0002` removes the Local/Cloud fields, the send controls, the job provenance and the AI outputs
+(summaries, OCR checks, answers). Documents, OCR results and suggestions are kept. `/opt/personaldocs/light-ocr` can be
+removed with `sudo rm -rf /opt/personaldocs/light-ocr`.
+
 ## Upgrading to Change Set Y (Analyze Document: OCR → AI pipeline) {#change-set-y}
 
 ```
@@ -363,8 +418,8 @@ After the upgrade:
 Rollback: `sudo personaldocs rollback` switches back to the previous release; the PaddleOCR environment and models stay
 on disk unused. The new columns are only used by this release. If the previous release refuses to start, restore
 the pre-upgrade database snapshot as described in [Rollback](#rollback). To remove PaddleOCR completely:
-`sudo rm -rf /opt/personaldocs/paddle-venv /var/lib/personaldocs/paddle`, then set **Default OCR engine** to
-Tesseract (Legacy).
+`sudo rm -rf /opt/personaldocs/paddle-venv /var/lib/personaldocs/paddle`, then remove PaddleOCR from the **OCR engine
+order** (since Change Set Z; earlier releases: set **Default OCR engine** to Tesseract (Legacy)).
 
 ## Upgrading to Change Set P (passkey sign-in, password reset, ClamAV repair) {#change-set-p}
 

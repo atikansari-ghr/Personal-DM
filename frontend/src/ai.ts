@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
 
-export type AiStatus = { enabled: boolean; allowed: boolean; ocr_assist: boolean; smart_organization: boolean; semantic_search: boolean; assistant: boolean };
+export type AiStatus = { enabled: boolean; allowed: boolean; ocr_assist: boolean; smart_organization: boolean; semantic_search: boolean; assistant: boolean;
+  mode?: string; actions?: boolean; profile_choice?: boolean; profiles?: { id: number; name: string; location: string }[];
+  profile?: { name: string; location: "local" | "cloud"; capabilities: Record<string, any>; allowed: string[] } | null };
 
 let cached: { at: number; value: AiStatus } | null = null;
 
@@ -45,7 +47,7 @@ export function aiJobText(j: AiJobInfo, time: (iso: string) => string): string {
 export function aiJobFacts(d?: Record<string, any>): string {
   if (!d) return "";
   const out: string[] = [];
-  if (d.ocr_engine) out.push(`OCR: ${d.ocr_engine === "paddleocr" ? "PaddleOCR" : d.ocr_engine === "tesseract" ? "Tesseract" : d.ocr_engine}${d.ocr_reused ? " (existing text)" : ""}`);
+  if (d.ocr_engine) out.push(`OCR: ${d.ocr_engine === "paddleocr" ? "PaddleOCR" : d.ocr_engine === "tesseract" ? "Tesseract" : d.ocr_engine === "light-ocr" ? "light-ocr" : d.ocr_engine}${d.ocr_reused ? " (existing text)" : ""}`);
   if (typeof d.ocr_chars === "number") out.push(`${d.ocr_chars.toLocaleString()} characters`);
   if (d.ocr_pages) out.push(`${d.ocr_pages} page${d.ocr_pages > 1 ? "s" : ""}`);
   if (d.parts > 1) out.push(`analysed in ${d.parts} parts`);

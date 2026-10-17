@@ -131,18 +131,41 @@ class Command(BaseCommand):
 
             for name, good, detail in diagnostics():
                 (report if good else lambda n, g, d: warn(n, d + " (passkeys will not work)"))(f"passkeys: {name}", good, detail)
-        # Local AI
-        if config.get("ai.enabled"):
-            from apps.ai.models import AIJob, AIProfile
+        # AI Document Intelligence (Change Set Z): mode, default profile, provider/model/capabilities/authentication.
+        # Never prints API keys or tokens: only whether one is stored.
+        from apps.ai import service as ai_service
 
-            profiles = AIProfile.objects.filter(enabled=True)
-            report("Local AI default profile", profiles.filter(is_default=True).exists() or profiles.count() == 1,
-                   "Settings → Local AI → Add AI profile")
-            for p in profiles.filter(privacy="external"):
-                warn("Local AI external endpoint", f"profile '{p.name}' may send document text outside your network")
+        info("AI mode", ai_service.MODE_LABELS[ai_service.mode()] + ("" if config.get("ai.enabled") else " (AI features switched off)"))
+        if config.get("ai.enabled") and ai_service.mode() != "ocr_only":
+            from apps.ai.models import AIJob, AIProfile
+            from apps.ai.providers import AIError, provider_for
+
+            p = ai_service.default_profile()
+            report("AI default profile", p is not None, p.name if p else "Settings → AI → Add AI profile")
+            if p is not None:
+                caps = ai_service.profile_capabilities(p)
+                info("AI default profile details",
+                     f"{dict(AIProfile.PROVIDERS).get(p.provider, p.provider)}, {'Cloud' if p.is_cloud else 'Local'}, "
+                     f"text model {p.text_model or '—'}, vision model {p.vision_model or '—'}, "
+                     f"capabilities: {', '.join(k for k, v in caps.items() if v) or 'none'}, "
+                     f"API key {'stored (encrypted)' if p.api_key_enc else 'not set'}")
+                if p.is_cloud:
+                    info("AI Cloud data policy", "sends: " + (", ".join(sorted(ai_service.allowed_categories(p))) or "nothing")
+                         + ("; automatic AI may use it" if config.get("ai.cloud_automatic") else "; automatic AI never uses it"))
+                try:
+                    models = provider_for(p).list_models()
+                    ok = not p.text_model or not models or p.text_model in models
+                    (info if ok else warn)("AI provider reachable and authenticated",
+                                           f"{len(models)} models listed" + ("" if ok else f"; text model “{p.text_model}” not offered"))
+                except AIError as exc:
+                    warn("AI provider reachable and authenticated", f"{exc.category}: {str(exc)[:160]}")
+                if p.last_test:
+                    info("AI profile last test", f"{p.last_test.get('kind')} {'passed' if p.last_test.get('ok') else 'failed'} at {p.last_test.get('at')}")
+            for x in AIProfile.objects.filter(enabled=True, location="cloud"):
+                warn("AI Cloud profile", f"profile '{x.name}' sends permitted document content to a cloud service")
             failed = AIJob.objects.filter(status="failed", created_at__gte=timezone.now() - timedelta(days=1)).count()
             if failed:
-                warn("Local AI jobs", f"{failed} failed in the last 24 hours (Settings → Local AI → AI jobs)")
+                warn("AI jobs", f"{failed} failed in the last 24 hours (Settings → AI → AI jobs)")
 
     def _ocr_checks(self, report, warn, info):
         """Change Set Q: PaddleOCR / PP-OCRv5 — versions, models, a real inference self-test, queue and storage."""
@@ -153,10 +176,24 @@ class Command(BaseCommand):
         if not config.get("processing.ocr_enabled"):
             info("OCR", "turned off in Settings → OCR & processing")
             return
-        engine = config.get("processing.ocr_engine")
-        info("OCR default engine", ocr_engines.ENGINE_LABELS.get(engine, engine))
+        order = ocr_engines.engine_order()
+        engine = order[0]
+        info("OCR engine order", " → ".join(ocr_engines.ENGINE_LABELS.get(e, e) for e in order)
+             + f" (mode: {'Auto' if config.get('processing.ocr_mode') != 'primary_only' else 'Primary only'})")
+        soft = lambda n, ok, d: (info if ok else warn)(n, d)  # noqa: E731 - an engine that is only a fallback
+        lo = ocr_engines.light_ocr_status(refresh=True)
+        if "light-ocr" in order or lo.get("installed"):
+            (report if engine == "light-ocr" else soft)(
+                "light-ocr installed", bool(lo.get("installed") and not lo.get("error")),
+                (f"{lo.get('version') or 'light-ocr'} ({lo.get('home')})" if lo.get("installed") else f"{lo.get('home')} missing")
+                + (f" — {lo.get('error')}" if lo.get("error") else "") + ("" if lo.get("installed") else " → sudo personaldocs repair"))
+            if lo.get("installed") and not lo.get("error"):
+                res = ocr_engines.light_ocr_selftest()
+                (report if engine == "light-ocr" else soft)(
+                    "light-ocr recognition self-test", bool(res.get("healthy")),
+                    f"read “{res.get('text', '')}” in {res.get('wall_seconds', '?')} s" if res.get("ok") else str(res.get("message")))
         st = ocr_engines.paddle_status(refresh=True)
-        (report if engine == "paddleocr" else lambda n, ok, d: (info if ok else warn)(n, d))(
+        (report if engine == "paddleocr" else soft)(
             "PaddleOCR installed", bool(st.get("installed") and not st.get("error")),
             (f"PaddleOCR {st.get('paddleocr')}, PaddlePaddle {st.get('paddle')} ({st.get('python')})" if st.get("installed")
              else f"{st.get('python')} missing") + (f" — {st.get('error')}" if st.get("error") else "")

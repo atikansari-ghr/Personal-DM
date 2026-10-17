@@ -472,6 +472,28 @@ Acceptance tests AT-336…AT-355. The change prompt numbered them AT-311…AT-33
 
 Native apps, scanning enhancement, in-browser Office editing, DICOM viewing.
 
+## Change set Z (2026-10): optional AI Document Intelligence and the OCR engine order {#change-set-z}
+
+Acceptance tests AT-441…AT-460 (prompt AT-416…AT-435 = AT-(n+25)). See [TRACEABILITY.md](TRACEABILITY.md#change-set-z)
+and [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-z).
+
+| ID | Requirement |
+|---|---|
+| ADI-1 | OCR engine order: light-ocr, Tesseract and PaddleOCR in any Main Admin order (Primary, Fallbacks), mode Auto or Primary only; new installations light-ocr → Tesseract → PaddleOCR (Auto); upgrades keep their behaviour. OCR priority is separate from AI and AI never changes it. |
+| ADI-2 | Four provenance layers kept apart: original document, original OCR result, AI interpretation, user-confirmed metadata. AI never rewrites OCR or confirmed metadata. |
+| ADI-3 | AI modes: AI on Demand (default), OCR Only, OCR + AI, Smart Auto (configurable triggers). Upgrades never start sending existing documents to AI. |
+| ADI-4 | Provider abstraction (status/models, capabilities, health check, text and document analysis, usage) for Local LLM (OpenAI-compatible, Ollama), OpenAI, Anthropic, Gemini and OpenRouter; named profiles, a default profile, secrets encrypted and never shown; jobs keep the profile/provider/model actually used. |
+| ADI-5 | Every profile is Local or Cloud; Cloud profiles have independent controls for OCR text, metadata, original images and original files (images/files off by default); automatic AI never uses a Cloud profile unless separately allowed. |
+| ADI-6 | Cloud disclosure: a confirmation naming profile, provider and data categories before an original image/file is sent; text-only sends say so; nothing is sent without it. |
+| ADI-7 | Permission-aware AI Actions in Document Details: Analyze, Extract Metadata, Verify OCR, Summarize, Ask AI, Suggest Type, Suggest Filename, Detect Expiry/Renewal; only actions allowed by permissions, policy and capabilities are offered. |
+| ADI-8 | Suggestions are not authoritative until accepted: accept, reject, edit then accept, accept selected, reject all; conflicts with values a person set need explicit review. |
+| ADI-9 | No fabrication: observed vs inferred, no invented numbers/dates, empty when unsure; structured output validated (schema, types, dates, allowed types, lengths, keys) before it can become a suggestion. |
+| ADI-10 | Prompt-injection isolation: system policy, task and untrusted document content separated; AI cannot act (delete, share, permissions, security, OCR priority, backups, passwords, secrets). |
+| ADI-11 | Ask AI limited to documents the person may open, with provenance; summaries/expiry labelled AI-generated; expiry facts separate from reminder policy. |
+| ADI-12 | Audit and AI History: user, time, document, profile, provider, model, action, Local/Cloud, data categories, status, duration, usage — never keys or document content; disposable AI outputs deletable. |
+| ADI-13 | Statuses Queued, Processing, Completed, Needs Review, Provider Unavailable, Timed Out, Failed, Cancelled; AI failure never impairs documents/OCR; AT-400 throttling and concurrency apply. |
+| ADI-14 | Settings → AI shows status, model, Local/Cloud, privacy and Last Test with Test Profile (only checks actually run); `personaldocs doctor` reports AI mode, default profile and safe provider diagnostics. |
+
 ## Change set Y (2026-10): OCR → AI document analysis pipeline {#change-set-y}
 
 Acceptance tests AT-426…AT-440 (prompt AT-401…AT-415 = AT-(n+25); the prompt called itself "Change Set X", which is

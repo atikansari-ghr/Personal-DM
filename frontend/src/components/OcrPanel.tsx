@@ -15,13 +15,13 @@ export interface OcrStatus {
   job: { status: string } | null; files: OcrFile[]; results: OcrResult[];
   languages_available: { code: string; name: string; installed: boolean }[];
   override: string; profile: string; default_profile: string; embedded_text_hidden: boolean; embedded_text: boolean;
-  type_mode: string; profiles: { key: string; label: string }[]; engine_default: string;
+  type_mode: string; profiles: { key: string; label: string }[]; engine_default: string; engine_order?: string[]; ocr_mode?: string;
 }
 
 export const PROFILE_LABEL: Record<string, string> = { en: "English", ar_en: "Arabic + English", hi_en: "Hindi (Devanagari) + English", te_en: "Telugu + English", ta_en: "Tamil + English" };
-export const ENGINE_LABEL: Record<string, string> = { paddleocr: "PaddleOCR (PP-OCRv5)", tesseract: "Tesseract (Legacy)", unknown: "Unknown (earlier version)" };
+export const ENGINE_LABEL: Record<string, string> = { "light-ocr": "light-ocr (PP-OCRv6 Small)", paddleocr: "PaddleOCR (PP-OCRv5)", tesseract: "Tesseract", unknown: "Unknown (earlier version)" };
 export function EngineBadge({ engine }: { engine: string }) {
-  return <span className={`badge ${engine === "paddleocr" ? "ok" : "neutral"}`} title="OCR engine that produced this text">{ENGINE_LABEL[engine] || engine}</span>;
+  return <span className={`badge ${engine === "paddleocr" || engine === "light-ocr" ? "ok" : "neutral"}`} title="OCR engine that produced this text">{ENGINE_LABEL[engine] || engine}</span>;
 }
 
 export const OCR_STATE_LABEL: Record<string, [string, string]> = {
@@ -41,12 +41,12 @@ function ResultText({ text, quality, result }: { text: string; quality: any; res
     <div className="stack" style={{ gap: ".4rem" }}>
       <div className="row small" style={{ flexWrap: "wrap" }}>
         {result && <EngineBadge engine={result.engine} />}
-        {result?.profile && result.engine === "paddleocr" && <span className="badge neutral" title="Language profile">{PROFILE_LABEL[result.profile] || result.profile}</span>}
+        {result?.profile && result.engine !== "tesseract" && <span className="badge neutral" title="Language profile">{PROFILE_LABEL[result.profile] || result.profile}</span>}
         {result?.model && <span className="small muted" title="Recognition model">{result.model}</span>}
         {result?.ocr_at && <span className="small muted">{formatDateTime(result.ocr_at)}</span>}
         {confidence !== null && <span className={`badge ${level}`} title="Mean word confidence reported by the OCR engine">OCR confidence {Math.round(confidence)}%</span>}
         {quality?.rotation ? <span className="badge neutral">Rotated {quality.rotation}°</span> : null}
-        {result?.engine !== "paddleocr" && quality?.languages?.length ? <span className="badge neutral" title="Tesseract languages">{quality.languages.join(" + ")}</span> : null}
+        {result?.engine === "tesseract" && quality?.languages?.length ? <span className="badge neutral" title="Tesseract languages">{quality.languages.join(" + ")}</span> : null}
         <CopyButton label="Text" getValue={() => text} />
       </div>
       <pre className="preview-text">{text.split("\n").map((ln, i) => low.has(i) ? <span key={i} className="ocr-low" title="Low confidence">{ln}{"\n"}</span> : <span key={i}>{ln}{"\n"}</span>)}</pre>
@@ -55,7 +55,7 @@ function ResultText({ text, quality, result }: { text: string; quality: any; res
 }
 
 export function OcrRunDialog({ docId, status, onClose, onDone }: { docId: string; status: OcrStatus; onClose: () => void; onDone: (s: OcrStatus) => void }) {
-  const [engine, setEngine] = useState<string>(status.engine_default || "paddleocr");
+  const [engine, setEngine] = useState<string>("");  // "" = the configured engine order (Primary, then Fallbacks)
   const [profile, setProfile] = useState<string>(status.profile || status.default_profile || "en");
   const rerun = status.results.length > 0;
   const ocrable = status.files.filter((f) => f.ocrable);
@@ -76,10 +76,10 @@ export function OcrRunDialog({ docId, status, onClose, onDone }: { docId: string
         setBusy(true);
         setErr("");
         const body: any = { sources, rotate: rotate === "auto" ? null : Number(rotate), set_primary: primary, reprocess: rerun };
-        // the default engine is not sent, so the server may fall back to Tesseract when PaddleOCR is unavailable;
-        // an engine the person picked explicitly is sent and never silently replaced
-        if (engine !== status.engine_default) body.engine = engine;
-        if (engine === "paddleocr") body.profile = profile; else body.languages = langs;
+        // the configured order is not sent as an engine, so the server may use a Fallback when the Primary is
+        // unavailable; an engine the person picked explicitly is sent and never silently replaced
+        if (engine) body.engine = engine;
+        if (engine !== "tesseract") body.profile = profile; else body.languages = langs;
         try { onDone(await api<OcrStatus>(`documents/${docId}/ocr`, { body })); }
         catch (x: any) { setErr(x.message); }
         finally { setBusy(false); }
@@ -102,9 +102,10 @@ export function OcrRunDialog({ docId, status, onClose, onDone }: { docId: string
         <div className="row" style={{ flexWrap: "wrap" }}>
           <div className="field grow"><label htmlFor="ocr-engine">OCR engine</label>
             <select id="ocr-engine" value={engine} onChange={(e) => setEngine(e.target.value)}>
-              <option value="paddleocr">PaddleOCR (PP-OCRv5) — recommended</option><option value="tesseract">Tesseract (Legacy)</option>
+              <option value="">Configured order ({(status.engine_order || [status.engine_default]).map((e) => ENGINE_LABEL[e] || e).join(" → ")})</option>
+              <option value="light-ocr">light-ocr (PP-OCRv6 Small)</option><option value="paddleocr">PaddleOCR (PP-OCRv5)</option><option value="tesseract">Tesseract</option>
             </select></div>
-          {engine === "paddleocr" && (
+          {engine !== "tesseract" && (
             <div className="field grow"><label htmlFor="ocr-profile">Language profile</label>
               <select id="ocr-profile" value={profile} onChange={(e) => setProfile(e.target.value)}>
                 {status.profiles.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
@@ -224,7 +225,7 @@ export default function OcrPanel({ docId, onChanged, request }: { docId: string;
           {status.can_edit && status.override === "disabled" && <button className="btn small" onClick={enable}>Enable OCR for this document</button>}
         </div>
       </div>
-      {sourceNames.length > 0 && <p className="small muted">Source: {sourceNames.join(" + ")}{status.results.some((r) => r.engine === "paddleocr") && status.profile ? ` · ${PROFILE_LABEL[status.profile] || status.profile}` : status.languages.length ? ` · ${status.languages.join(" + ")}` : ""}{status.updated_at ? ` · ${formatDateTime(status.updated_at)}` : ""}</p>}
+      {sourceNames.length > 0 && <p className="small muted">Source: {sourceNames.join(" + ")}{status.results.some((r) => r.engine !== "tesseract") && status.profile ? ` · ${PROFILE_LABEL[status.profile] || status.profile}` : status.languages.length ? ` · ${status.languages.join(" + ")}` : ""}{status.updated_at ? ` · ${formatDateTime(status.updated_at)}` : ""}</p>}
       {status.state === "failed" && <div className="alert error">Text recognition failed: {status.error || "unknown error"}. Try another page range, language or orientation.</div>}
       {running && <div className="alert">Text recognition is {status.state === "queued" ? "waiting in the queue" : "running"}…</div>}
       {status.results.length === 0 && !running && (

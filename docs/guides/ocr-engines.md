@@ -1,13 +1,14 @@
 <!-- audience: main_admin -->
-# OCR engines: PaddleOCR (PP-OCRv5) and Tesseract (Legacy)
+# OCR engines: light-ocr, Tesseract and PaddleOCR
 
-Since Change Set Q, text recognition uses **PaddleOCR with the PP-OCRv5 models** by default. **Tesseract** stays
-installed as the *Legacy / Fallback* engine. Both run **locally on your server**. No image, page or text is sent
-to an external OCR service.
+Text recognition runs **locally on your server** with up to three engines: **light-ocr** (PP-OCRv6 Small on ONNX
+Runtime, Change Set Z), **Tesseract** and **PaddleOCR with the PP-OCRv5 models** (Change Set Q). No image, page or text
+is sent to an external OCR service. OCR is independent of AI: it works the same whether AI is on or off, and AI never
+chooses or changes the OCR engines (see [AI Document Intelligence](local-ai.md)).
 
-This guide covers the engines, the language profiles, removing and disabling OCR, the administrator's **Existing
-OCR data** tools, and *Test OCR / Compare engines*. Choosing files and pages, the review queue and suggested details
-are described in [OCR, details and corrections](ocr-corrections.md).
+This guide covers the engines, the engine order, the language profiles, removing and disabling OCR, the
+administrator's **Existing OCR data** tools, and *Test OCR / Compare engines*. Choosing files and pages, the review
+queue and suggested details are described in [OCR, details and corrections](ocr-corrections.md).
 
 ## Engines {#engine}
 
@@ -15,28 +16,49 @@ are described in [OCR, details and corrections](ocr-corrections.md).
 
 | Engine | Use | Notes |
 | --- | --- | --- |
-| **PaddleOCR (PP-OCRv5)** — default | All new OCR runs | Better on photos, skewed or curved pages, mixed scripts and small text. Stores text **positions** (boxes) and a score per line. Runs in its own isolated Python environment (`/opt/personaldocs/paddle-venv`), on CPU, one job at a time. |
-| **Tesseract (Legacy)** | Fallback, explicit choice, comparison | The engine every earlier release used. It also produces the searchable PDF copy for Tesseract runs. |
-
-Set the default engine in **Settings → OCR & processing → Default OCR engine**. Changing it affects **new OCR runs
-only**. Existing results keep their engine label and are never re-processed automatically. Use *Re-process with
-PP-OCRv5* in [Existing OCR data](#existing-data) when you decide to upgrade older results.
+| **light-ocr (PP-OCRv6 Small)** | Recommended Primary for new installations | The [`@arcships/light-ocr`](https://github.com/arcships/light-ocr) Node.js package (Apache-2.0), pinned to 0.5.9, installed in `/opt/personaldocs/light-ocr`. Fast and light on CPU (about 2 s per page), stores text positions and a confidence per line. Reads Latin script (the English profile); other profiles go to the next engine. Needs Node.js 20 or newer (Debian 13 ships it). |
+| **Tesseract** | Always installed; fallback, explicit choice, comparison | The engine every earlier release used. It also produces the searchable PDF copy for Tesseract runs. |
+| **PaddleOCR (PP-OCRv5)** | Best for photos, skewed pages and the Arabic / Devanagari / Telugu / Tamil profiles | Runs in its own isolated Python environment (`/opt/personaldocs/paddle-venv`), on CPU, one job at a time. Stores text **positions** (boxes) and a score per line. |
 
 Every OCR result shows **which engine** produced it (badge in the *Text (OCR)* tab), the model, the language
 profile and when it ran. Results from releases before Change Set Q are labelled *Tesseract (Legacy)* when that is
-known, or *Unknown (earlier version)*. Old results are never relabelled as PaddleOCR.
+known, or *Unknown (earlier version)*. Old results are never relabelled.
+
+## Engine order: Primary and Fallbacks {#engine-order}
+
+**Settings → OCR & processing → OCR engine order** (Main Admin): tick the engines to use and move them up or down.
+The first is the **Primary**; the others are **Fallback 1, Fallback 2** in that order. The *OCR engines* card shows the
+current order and whether each engine is available right now, and why not.
+
+- New installations: **light-ocr → Tesseract → PaddleOCR**, mode **Auto**.
+- Upgraded installations keep what they had: PaddleOCR with fallback becomes *PaddleOCR → Tesseract* (Auto);
+  PaddleOCR without fallback becomes *PaddleOCR* (Primary only); Tesseract stays *Tesseract*. Add light-ocr yourself
+  once its self-test passes.
+- Changing the order affects **new OCR runs only**. Existing results keep their engine and are never re-processed
+  automatically. Use *Re-process with the OCR engine order* in [Existing OCR data](#existing-data) when you decide to
+  upgrade older results.
+- AI never changes the order. AI priority (the AI profiles) is a separate setting under Settings → AI.
+
+### OCR mode {#mode}
+
+| Mode | What happens |
+| --- | --- |
+| **Auto** (default) | The Primary is used when it can run. An engine that is not installed, fails its self-test, is missing a model or does not read the document's language profile is skipped, and the next engine in the order is used. The run records which engine produced the text and why the others were skipped. |
+| **Primary only** | Only the Primary is used. If it cannot run, the OCR job fails with a clear message. |
+
+An engine that **crashes or times out on a document** fails that run safely (the previous result stays, and the
+document stays usable); it is not re-run three times. Re-run OCR and choose another engine if you need to.
 
 ### Fallback {#fallback}
 
-When **Fall back to Tesseract** is on (default) and PaddleOCR is not installed, not healthy or missing a model, a
-run that did not ask for a specific engine uses Tesseract. The run records that it fell back and why. A run that
-explicitly asked for PaddleOCR fails visibly instead. Turn fallback off if you prefer a clear failure over a
-Tesseract result.
+A run that did not ask for a specific engine follows the order (Auto mode). A run that **explicitly** asked for an
+engine (Run OCR → OCR engine) uses that engine or fails visibly; it is never silently replaced.
 
 ### Health and self-test {#health}
 
-*Healthy* means **real inference worked**: the self-test generates a small image, recognises it with the
-installed PP-OCRv5 models and checks the text. A Python import that succeeds is not enough. The *OCR engines* card
+*Healthy* means **real recognition worked**: the self-test generates a small image, recognises it with the
+installed engine (light-ocr, or PaddleOCR with the PP-OCRv5 models) and checks the text. A successful import or
+`--version` is not enough. The *OCR engines* card
 in **Settings → OCR & processing** shows:
 
 - the versions, the CPU (AVX), the model variant, the threads and the memory limit;
@@ -44,8 +66,9 @@ in **Settings → OCR & processing** shows:
 - the Tesseract version and its language packs;
 - the queue and the limits.
 
-**Run self-test** repeats it. On the server: `sudo personaldocs ocr status`, `sudo personaldocs ocr selftest` and
-`sudo personaldocs doctor`.
+**Self-test light-ocr** and **Run PaddleOCR self-test** repeat them. On the server: `sudo personaldocs ocr status`,
+`sudo personaldocs ocr selftest` (PaddleOCR), `sudo personaldocs ocr light-ocr` (light-ocr) and
+`sudo personaldocs doctor`. `sudo personaldocs ocr light-ocr-reinstall` reinstalls the pinned light-ocr package.
 
 ## Language profiles {#profiles}
 
@@ -158,7 +181,7 @@ Filter by engine, status, OCR disabled, and recognition date.
 - Remove and disable OCR
 - Disable OCR
 - Enable OCR
-- Re-process with PP-OCRv5
+- Re-process with the OCR engine order (Primary, then Fallbacks)
 - Set language profile
 
 Every bulk action first shows a **preview**: how many documents are affected, how many have OCR text, the storage

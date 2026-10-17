@@ -1,0 +1,9 @@
+{
+  "name": "personaldocs-light-ocr",
+  "private": true,
+  "description": "Pinned light-ocr runtime (PP-OCRv6 Small on ONNX Runtime, CPU) used as an OCR engine by Personal Documents. Installed by `personaldocs install|upgrade|repair` into /opt/personaldocs/light-ocr.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@arcships/light-ocr": "0.5.9"
+  }
+}

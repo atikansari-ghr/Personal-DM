@@ -22,8 +22,11 @@ def fake_ai():
 
 
 def enable_ai(**overrides):
+    # Change Set Z: "analyse new uploads automatically" is the OCR + AI mode (AI on Demand otherwise)
+    if "ai.auto_analyze" in overrides:
+        overrides["ai.mode"] = "auto" if overrides.pop("ai.auto_analyze") else "on_demand"
     values = {"ai.enabled": True, "ai.ocr_assist": True, "ai.smart_organization": True, "ai.semantic_search": True,
-              "ai.assistant": True, "ai.auto_analyze": True, **overrides}
+              "ai.assistant": True, "ai.mode": "auto", **overrides}
     for k, v in values.items():
         config.set_value(k, v)
 

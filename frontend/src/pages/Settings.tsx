@@ -31,7 +31,7 @@ const PerformancePanel = lazyPage(() => import("./settings/Performance"));
 const ADMIN_TABS: [string, string][] = [
   ["general", "General"], ["family", "Family & access"], ["documents", "Documents & folders"], ["processing", "OCR & processing"],
   ["notifications", "Notifications"], ["connections", "Connections"], ["authentication", "Authentication"], ["backup", "Backup & Recovery"],
-  ["security", "Security"], ["activity", "Activity & health"], ["performance", "Performance"], ["ai", "Local AI"], ["offline", "Offline & PWA"], ["overview", "Overview & sign-in"],
+  ["security", "Security"], ["activity", "Activity & health"], ["performance", "Performance"], ["ai", "AI"], ["offline", "Offline & PWA"], ["overview", "Overview & sign-in"],
 ];
 
 export default function SettingsPage() {

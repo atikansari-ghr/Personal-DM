@@ -508,6 +508,44 @@ numbers. Root causes per defect: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 Not run (needs real accounts or environments, never reported as passed): a real WhatsApp phone scanning a real QR,
 a real Discord server, real OpenStreetMap / MapTiler / Stadia tiles from a production address, Firefox and Safari.
 
+## Change set Z (2026-10): optional AI Document Intelligence and the OCR engine order {#change-set-z}
+
+The change prompt numbered these AT-416…AT-435; those numbers are taken by Change Sets X and Y. Here they are
+**AT-441…AT-460**: prompt AT-n → AT-(n+25). Tests in `tests/test_ai_intelligence.py` and the Change Set Z step in
+`tests/e2e/corrective.mjs`. Requirements: [REQUIREMENTS.md](REQUIREMENTS.md#change-set-z). Evidence:
+[TEST_REPORT.md](TEST_REPORT.md#change-set-z).
+
+| ID (prompt) | Scenario (abridged) | Req | Code | Tests | Docs | Status |
+|---|---|---|---|---|---|---|
+| AT-441 (416) | OCR Only: documents, OCR, search work fully without AI; no AI job or request | ADI-3, ADI-13 | `service.enabled`, `mode` | `test_at441_ocr_only_works_without_ai` | local-ai.md#modes | Passed |
+| AT-442 (417) | AI on Demand: AI runs only after an authorized explicit action | ADI-3, ADI-7 | `jobs.after_processing`, `views.document_action` | `test_at442_on_demand_runs_only_after_an_authorized_action` | local-ai.md#actions | Passed |
+| AT-443 (418) | OCR + AI: normalized OCR feeds AI; original OCR unchanged | ADI-2, ADI-3 | `after_processing`, `run_action` | `test_at443_ocr_plus_ai_feeds_normalized_ocr_without_altering_it` (Tesseract) | local-ai.md#architecture | Passed |
+| AT-444 (419) | Smart Auto: configured triggers invoke AI, others do not; Cloud not invoked automatically | ADI-3, ADI-5 | `jobs.smart_reasons` | `test_at444_smart_auto_triggers` | local-ai.md#smart-auto | Passed |
+| AT-445 (420) | Local AI privacy: content stays on the configured local server; authorization enforced | ADI-5 | `allowed_categories`, `check_privacy` | `test_at445_local_ai_privacy_and_authorization` | local-ai.md#local-cloud | Passed |
+| AT-446 (421) | Cloud text-only: no original image/PDF/file transmitted; metadata left out when not allowed | ADI-5 | `plan_payload`, `run_analysis(metadata=)` | `test_at446_cloud_text_only_never_sends_originals` | local-ai.md#cloud-privacy | Passed (fake cloud endpoint) |
+| AT-447 (422) | Original-document protection: vision/file blocked when cloud originals disabled | ADI-5 | `plan_payload`, `providers.guard_payload` | `test_at447_vision_and_files_blocked_when_cloud_originals_disabled` | local-ai.md#cloud-privacy | Passed |
+| AT-448 (423) | Cloud consent: disclosure and confirmation before an original is sent | ADI-6 | `ConsentRequired`, `disclosure`; `AIActions.tsx` | `test_at448_cloud_original_needs_disclosure_and_confirmation` | local-ai.md#cloud-privacy | Passed |
+| AT-449 (424) | Suggestions separate until accepted; accept selected, edit then accept, reject all | ADI-8 | `suggestion_decide`, `accept`, `AISuggestions.tsx` | `test_at449_suggestions_review_accept_selected_edit_reject` | local-ai.md#suggestions | Passed |
+| AT-450 (425) | Manual metadata protection: no silent overwrite; conflicts need confirmation | ADI-2, ADI-8 | `manual_keys`, `AISuggestion.conflict` | `test_at450_confirmed_manual_metadata_never_silently_overwritten`, `test_at438_*` | local-ai.md#suggestions | Passed |
+| AT-451 (426) | Verify OCR flags problems; original OCR preserved; corrections become suggestions | ADI-2, ADI-7 | `_validate_verify` | `test_at451_verify_ocr_flags_problems_and_preserves_ocr` | local-ai.md#actions | Passed |
+| AT-452 (427) | Ask AI only about authorized documents; answers kept for the asker | ADI-11 | `service.ask`, `views.assistant` | `test_at452_ask_ai_only_about_authorized_documents`, `test_at34_*` | local-ai.md#actions | Passed |
+| AT-453 (428) | Prompt injection cannot override policy, reach other documents, reveal secrets or act | ADI-10 | `build_messages`, `wrap_document`, `SYSTEM_POLICY` | `test_at453_prompt_injection_cannot_override_policy` | local-ai.md#security | Passed |
+| AT-454 (429) | Provider capability: text-only profiles never receive images/PDFs; unsupported actions fail safely | ADI-4, ADI-7 | `profile_capabilities`, `guard_payload` | `test_at454_text_only_profiles_never_receive_images`, `test_cloud_providers_anthropic_gemini_openrouter` | local-ai.md#cloud-providers | Passed (providers emulated) |
+| AT-455 (430) | Malformed AI output rejected without corruption; invented dates/numbers dropped | ADI-9 | `validate_ai_data`, `_store_suggestions`, `_date_in_text` | `test_at455_malformed_ai_output_rejected_without_corruption` | local-ai.md#no-fabrication | Passed |
+| AT-456 (431) | Provenance/history: profile/provider/model/action/Local-Cloud/data/status/duration, no secrets; outputs deletable | ADI-12 | `job_json`, `record_provenance`, `output_delete` | `test_at456_provenance_history_without_secrets` | local-ai.md#provenance | Passed |
+| AT-457 (432) | Provider failure/timeout leaves document, OCR, metadata and browsing functional | ADI-13 | `status_label`, `ai_task` | `test_at457_provider_failure_leaves_documents_usable`, `test_at36_*` | local-ai.md#troubleshooting | Passed |
+| AT-458 (433) | Local AI with OCR/ClamAV/backup keeps AT-400 throttling and concurrency | ADI-13 | `throttle.DEFERRABLE`, `ai.max_parallel` | `test_at458_ai_respects_throttling_and_concurrency`, `tests/test_performance.py` | local-ai.md#resources | Passed (real concurrent load: Not Executed) |
+| AT-459 (434) | Upgrade keeps AI opt-in and OCR behaviour; existing documents not transmitted | ADI-1, ADI-3 | migrations `core.0008`, `ai.0003` | `test_at459_upgrade_keeps_ai_opt_in_and_ocr_behaviour`, `test_ocr_engine_order_defaults_and_primary_fallback` | upgrades.md#change-set-z | Passed |
+| AT-460 (435) | Full release gate: AT-441…AT-459 and AT-1…AT-440 regressions; unexecuted = Blocked/Not Executed | all | — | `test_at460_release_gate_records_every_test_honestly`; full `pytest`; `scripts/e2e.sh` | TEST_REPORT.md#change-set-z | See TEST_REPORT.md#change-set-z |
+
+OCR engine order (ADI-1): `test_ocr_engine_order_defaults_and_primary_fallback`, `test_light_ocr_adapter_selftest_and_runs`
+(CLI stand-in), `test_light_ocr_live_recognition` (the real light-ocr 0.5.9; runs when `PD_TEST_LIGHT_OCR_HOME` is set),
+`test_at213_fallback_and_explicit_engine`, e2e step AT-441…AT-460 — Passed.
+
+Not run (never reported as passed): real OpenAI, Anthropic, Gemini and OpenRouter accounts (emulated by
+`tests/fake_ai_server.py` with the same request and response shapes); a real LM Studio/Ollama model; concurrent real
+OCR, ClamAV and backup load on the target LXC; a real `personaldocs upgrade` on the production container.
+
 ## Change set Y (2026-10): OCR → AI document analysis pipeline {#change-set-y}
 
 The change prompt numbered these AT-401…AT-415 (and called itself "Change Set X"; X is taken). Here they are

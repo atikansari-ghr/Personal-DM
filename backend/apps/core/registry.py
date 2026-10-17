@@ -26,7 +26,7 @@ class SettingDef:
     key: str
     label: str
     description: str
-    type: str  # bool|int|str|choice|choice_list|country_list|overview_layout|int_list|time|secret|email|url|timezone|path|channel_list|widget_list|event_list|event_matrix|json
+    type: str  # bool|int|str|choice|choice_list|order_list|country_list|overview_layout|int_list|time|secret|email|url|timezone|path|channel_list|widget_list|event_list|event_matrix|json
     default: Any
     section: str
     scope: str = GLOBAL
@@ -205,6 +205,11 @@ def template_lines(value: str) -> list[list[str]]:
     return paths
 
 
+def _validate_engine_order(value):
+    if not value:
+        raise SettingError("Keep at least one OCR engine in the order.")
+
+
 def _validate_folder_template(value: str):
     paths = template_lines(value)
     if len(paths) > 100:
@@ -264,17 +269,23 @@ SETTINGS: list[SettingDef] = [
                "Master switch for local OCR (PaddleOCR PP-OCRv5, or Tesseract Legacy). Which documents are recognised is decided per document type below.",
                "bool", True, "processing", effect="When off, nothing is recognised; documents are still stored, previewed and searchable by their details.",
                help="ocr-corrections#selective"),
-    SettingDef("processing.ocr_engine", "OCR engine",
-               "PaddleOCR PP-OCRv5 is the default engine. Tesseract stays available as Legacy while results are compared. "
-               "Changing the engine never re-processes existing documents.",
-               "choice", "paddleocr", "processing", choices=("paddleocr", "tesseract"),
-               choice_labels={"paddleocr": "PaddleOCR PP-OCRv5 (recommended)", "tesseract": "Tesseract (Legacy)"},
+    SettingDef("processing.ocr_engine_order", "OCR engine order",
+               "Primary engine first, then the Fallbacks in the order they are tried. light-ocr (PP-OCRv6 Small, "
+               "ONNX Runtime) is fast and light; Tesseract is always installed; PaddleOCR PP-OCRv5 reads more scripts. "
+               "Changing the order never re-processes existing documents. AI never changes this order.",
+               "order_list", ["light-ocr", "tesseract", "paddleocr"], "processing",
+               choices=("light-ocr", "tesseract", "paddleocr"),
+               choice_labels={"light-ocr": "light-ocr (PP-OCRv6 Small)", "tesseract": "Tesseract",
+                              "paddleocr": "PaddleOCR PP-OCRv5"},
                effect="Applies to OCR runs requested from now on. Existing recognised text keeps its engine label.",
-               help="ocr-engines#engine"),
-    SettingDef("processing.ocr_engine_fallback", "Use Tesseract when PaddleOCR is unavailable",
-               "If PaddleOCR is not installed or fails its health check, run Tesseract instead and record that the "
-               "fallback was used. Off: the OCR job fails with a clear message.",
-               "bool", True, "processing", depends_on=("processing.ocr_engine",), help="ocr-engines#fallback"),
+               help="ocr-engines#engine-order", validator=_validate_engine_order),
+    SettingDef("processing.ocr_mode", "OCR mode",
+               "Auto: when an engine is not installed, fails its health check or does not read the language profile, "
+               "the next engine in the order is used and the run records why. Primary only: "
+               "only the first engine is used; if it cannot run, the OCR job fails with a clear message.",
+               "choice", "auto", "processing", choices=("auto", "primary_only"),
+               choice_labels={"auto": "Auto (Primary, then Fallbacks)", "primary_only": "Primary only"},
+               help="ocr-engines#mode"),
     SettingDef("processing.ocr_profiles", "OCR language profiles offered",
                "Language profiles people can choose when running OCR. Each profile routes to the matching PP-OCRv5 "
                "recognition models (and to the Tesseract language packs for Legacy runs).",
@@ -620,7 +631,7 @@ SETTINGS: list[SettingDef] = [
                "Notify the person (and administrators for admin actions) about passkeys, authenticator app, recovery codes and passwordless sign-in changes.",
                "bool", True, "security", help="security-access#alerts"),
     # ---- Local AI (optional; never required for normal document management)
-    SettingDef("ai.enabled", "Local AI enabled",
+    SettingDef("ai.enabled", "AI features enabled",
                "Master switch for all AI features. Off by default; uploads, OCR, search and reminders never depend on it.",
                "bool", False, "ai", effect="Turning it off stops new AI jobs immediately; existing suggestions stay until reviewed.",
                help="local-ai#enable"),
@@ -635,8 +646,41 @@ SETTINGS: list[SettingDef] = [
                "bool", True, "ai", depends_on=("ai.enabled",), help="local-ai#assistant"),
     SettingDef("ai.allowed_users", "Who may use AI", "Everyone (each person only on their own permitted documents) or administrators only.",
                "choice", "everyone", "ai", choices=("everyone", "admins"), help="local-ai#permissions"),
-    SettingDef("ai.auto_analyze", "Analyse new uploads automatically", "Queue OCR assist / smart organisation / embeddings after each upload is processed.",
-               "bool", True, "ai", depends_on=("ai.enabled",), help="local-ai#ocr-assist"),
+    # Change Set Z: how AI is invoked (Settings → AI → Document Processing). OCR never depends on it.
+    SettingDef("ai.mode", "AI mode",
+               "AI on Demand: AI runs only when an authorized person chooses an AI Action. OCR Only: AI is off. "
+               "OCR + AI: every successful OCR is analysed automatically. Smart Auto: AI runs automatically only when "
+               "one of the conditions below applies. Automatic modes never use a Cloud profile unless allowed below.",
+               "choice", "on_demand", "ai", choices=("on_demand", "ocr_only", "auto", "smart"),
+               choice_labels={"on_demand": "AI on Demand (recommended)", "ocr_only": "OCR Only — AI disabled",
+                              "auto": "OCR + AI — analyse every successful OCR", "smart": "Smart Auto — only when conditions apply"},
+               depends_on=("ai.enabled",), effect="Changing the mode never re-analyses existing documents.",
+               help="local-ai#modes"),
+    SettingDef("ai.smart_triggers", "Smart Auto conditions",
+               "Smart Auto analyses a document after OCR only when at least one chosen condition applies.",
+               "choice_list", ["low_confidence", "missing_metadata", "unknown_type", "missing_expiry"], "ai",
+               choices=("low_confidence", "missing_metadata", "unknown_type", "missing_expiry", "conflicting_fields",
+                        "needs_review", "selected_types"),
+               choice_labels={"low_confidence": "OCR confidence below the threshold",
+                              "missing_metadata": "Important metadata missing (issue date or issuer)",
+                              "unknown_type": "Document Type unknown", "missing_expiry": "Expected expiry date not found",
+                              "conflicting_fields": "Conflicting OCR fields", "needs_review": "OCR needs manual review",
+                              "selected_types": "Document Type is one of the selected types"},
+               depends_on=("ai.mode",), help="local-ai#smart-auto"),
+    SettingDef("ai.smart_confidence", "Smart Auto: OCR confidence threshold (%)",
+               "With “OCR confidence below the threshold”, documents whose OCR confidence is below this value are analysed.",
+               "int", 80, "ai", min=10, max=100, depends_on=("ai.mode",), help="local-ai#smart-auto"),
+    SettingDef("ai.smart_types", "Smart Auto: selected Document Types",
+               "Document Type names, comma separated, for “Document Type is one of the selected types”.",
+               "str", "", "ai", max=1000, depends_on=("ai.mode",), help="local-ai#smart-auto", example="Passport, Residence Permit"),
+    SettingDef("ai.cloud_automatic", "Allow automatic AI with a Cloud profile",
+               "Off (recommended): OCR + AI and Smart Auto only run with a Local profile; with a Cloud default profile, "
+               "automatic analysis is skipped and nothing is sent. AI on Demand actions are not affected.",
+               "bool", False, "ai", help="local-ai#cloud-privacy"),
+    SettingDef("ai.allow_profile_choice", "Let people choose the AI profile per action",
+               "Off: every AI Action uses the system default profile (forced by the Main Admin). On: people may pick "
+               "another enabled profile when running an action.",
+               "bool", False, "ai", help="local-ai#profiles"),
     SettingDef("ai.max_parallel", "Parallel AI jobs", "AI jobs running at the same time. Keep 1 on a 2-CPU container so documents are never delayed.",
                "int", 1, "ai", min=1, max=4, help="local-ai#resources"),
     SettingDef("ai.debug_logging", "AI diagnostic logging", "Log request and response sizes (never their content) for troubleshooting.",
@@ -930,6 +974,10 @@ def coerce(defn: SettingDef, value: Any) -> Any:
     elif t == "choice":
         if value not in defn.choices:
             raise SettingError(f"Choose one of: {', '.join(defn.choices)}.")
+    elif t == "order_list":  # Change Set Z: an ordered subset of the choices (first = primary); order is kept
+        if not isinstance(value, list) or any(v not in defn.choices for v in value):
+            raise SettingError(f"Choose from: {', '.join(defn.choices)}.")
+        value = list(dict.fromkeys(value))
     elif t == "choice_list":
         if not isinstance(value, list) or any(v not in defn.choices for v in value):
             raise SettingError(f"Choose from: {', '.join(defn.choices)}.")

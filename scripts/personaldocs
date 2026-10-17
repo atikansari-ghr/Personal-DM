@@ -2,7 +2,7 @@
 # personaldocs — install, upgrade, rollback, repair and operate Personal Documents Management System on Debian 13 (native, no Docker).
 #
 #   personaldocs install [--public-origin URL] [--bind ADDR:PORT] [--ref REF] [--repo URL] [--build-frontend] [--with-verapdf]
-#                        [--without-antivirus] [--without-paddleocr] [--with-security-tools]
+#                        [--without-antivirus] [--without-paddleocr] [--without-light-ocr] [--with-security-tools]
 #   personaldocs upgrade [--ref REF] [--skip-backup]
 #   personaldocs post-upgrade                  (set up components a new release adds: ClamAV, host helper; safe to repeat)
 #   personaldocs rollback
@@ -152,7 +152,46 @@ install_optional_packages() { # never fatal: the app works without them
   apt-get install -y -q --no-install-recommends goaccess >/dev/null 2>&1 || c_warn "GoAccess could not be installed; traffic analytics will use the built-in summary."
   install_ocr_languages
   install_antivirus
-  if [ -L "$CURRENT" ]; then install_paddleocr "$(readlink -f "$CURRENT")" || true; fi
+  if [ -L "$CURRENT" ]; then install_light_ocr "$(readlink -f "$CURRENT")" || true; install_paddleocr "$(readlink -f "$CURRENT")" || true; fi
+}
+
+LIGHT_OCR_HOME=$PREFIX/light-ocr
+
+install_light_ocr() { # install_light_ocr RELEASE_DIR — pinned @arcships/light-ocr (PP-OCRv6 Small, ONNX Runtime, CPU) + self-test
+  local rel=${1:-$CURRENT} src="${1:-$CURRENT}/backend/light-ocr"
+  if [ "${OPT_NO_LIGHT_OCR:-0}" = 1 ] || [ "${PD_NO_LIGHT_OCR:-0}" = 1 ]; then
+    c_warn "light-ocr skipped (--without-light-ocr): OCR uses the next engine in the order."; env_set PD_NO_LIGHT_OCR 1 2>/dev/null || true; return 0
+  fi
+  [ -f "$src/package-lock.json" ] || return 0
+  command -v node >/dev/null && command -v npm >/dev/null || apt-get install -y -q --no-install-recommends nodejs npm >>"$LOG" 2>&1 || {
+    c_warn "Node.js could not be installed; light-ocr is not available (OCR uses the next engine in the order)."; return 1; }
+  local major; major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+  if [ "$major" -lt 20 ]; then c_warn "light-ocr needs Node.js 20 or newer (found $(node --version 2>/dev/null)); OCR uses the next engine."; return 1; fi
+  local want have; want=$(sha256sum "$src/package-lock.json" | cut -c1-64); have=$(cat "$LIGHT_OCR_HOME/.lock.sha256" 2>/dev/null || true)
+  if [ "$want" != "$have" ] || [ ! -f "$LIGHT_OCR_HOME/node_modules/@arcships/light-ocr/src/cli.cjs" ]; then
+    log "light-ocr (PP-OCRv6 Small) runtime"
+    local tmp="$LIGHT_OCR_HOME.new"; rm -rf "$tmp"; install -d -m 0755 "$tmp"
+    cp "$src/package.json" "$src/package-lock.json" "$tmp/"
+    if (umask 022; cd "$tmp" && timeout 1200 npm ci --omit=dev --ignore-scripts --no-audit --no-fund >>"$LOG" 2>&1); then
+      echo "$want" >"$tmp/.lock.sha256"
+      rm -rf "$LIGHT_OCR_HOME.old"; [ -d "$LIGHT_OCR_HOME" ] && mv "$LIGHT_OCR_HOME" "$LIGHT_OCR_HOME.old"
+      mv "$tmp" "$LIGHT_OCR_HOME"; rm -rf "$LIGHT_OCR_HOME.old"
+    else
+      rm -rf "$tmp"
+      c_warn "light-ocr could not be installed (see $LOG). The previous runtime (if any) is kept; OCR uses the next engine in the order."
+      return 1
+    fi
+  fi
+  chmod -R a+rX "$LIGHT_OCR_HOME"
+  env_set PD_LIGHT_OCR_HOME "$LIGHT_OCR_HOME"
+  light_ocr_selftest "$rel" || true
+}
+
+light_ocr_selftest() { # a real recognition of a generated sample, through the app (same code path as OCR jobs)
+  local rel=${1:-$CURRENT} out
+  out=$(MANAGE_RELEASE=$rel manage shell -c "import json; from apps.library import ocr_engines as e; e.light_ocr_status(refresh=True); r=e.light_ocr_selftest(); e.light_ocr_status(refresh=True); print(json.dumps({'healthy': bool(r.get('healthy')), 'message': r.get('message', '')}))" 2>>"$LOG" | tail -1)
+  if echo "$out" | grep -q '"healthy": true'; then c_ok "light-ocr self-test passed (real PP-OCRv6 Small recognition)."
+  else c_warn "light-ocr self-test failed: ${out:-no output}. OCR uses the next engine in the order until it passes."; return 1; fi
 }
 
 PADDLE_VENV=$PREFIX/paddle-venv
@@ -248,7 +287,7 @@ paddle_selftest() { # real inference on a generated image; importing the library
   else c_warn "PaddleOCR self-test failed: ${out:-no output}. OCR falls back to Tesseract until it passes."; return 1; fi
 }
 
-cmd_ocr() { # ocr status|install-models|selftest|reinstall
+cmd_ocr() { # ocr status|install-models|selftest|reinstall|light-ocr-reinstall
   need_root; load_env
   [ -L "$CURRENT" ] || die "not installed"
   local rel worker; rel=$(readlink -f "$CURRENT"); worker="$rel/backend/apps/library/paddle_worker.py"
@@ -258,7 +297,9 @@ cmd_ocr() { # ocr status|install-models|selftest|reinstall
     install-models) paddle_models "$worker";;
     selftest) paddle_selftest "$worker";;
     reinstall) rm -f "$PADDLE_VENV/.requirements.sha256"; install_paddleocr "$rel" && { for u in personaldocs-worker; do systemctl restart "$u"; done; };;
-    *) die "usage: personaldocs ocr status|install-models|selftest|reinstall";;
+    light-ocr) light_ocr_selftest "$rel";;
+    light-ocr-reinstall) rm -f "$LIGHT_OCR_HOME/.lock.sha256"; install_light_ocr "$rel";;
+    *) die "usage: personaldocs ocr status|install-models|selftest|reinstall|light-ocr|light-ocr-reinstall";;
   esac
 }
 
@@ -691,6 +732,7 @@ cmd_install() {
   install_security_tools "$dir"
   for u in "${UNITS[@]}"; do systemctl enable --now "$u" >/dev/null; systemctl restart "$u"; done
   if [ "${OPT_NO_ANTIVIRUS:-0}" != 1 ] && [ "${PD_NO_ANTIVIRUS:-0}" != 1 ]; then antivirus_repair "$dir" || true; fi
+  install_light_ocr "$dir" || true
   install_paddleocr "$dir" && systemctl restart personaldocs-worker || true
   health || { show_web_failure; die "the web service did not become healthy; see: journalctl -u personaldocs-web -n 50"; }
   prune_releases
@@ -1088,6 +1130,7 @@ while [ $# -gt 0 ]; do
     --with-verapdf) OPT_VERAPDF=1; shift;;
     --without-antivirus) OPT_NO_ANTIVIRUS=1; shift;;
     --without-paddleocr) OPT_NO_PADDLE=1; shift;;
+    --without-light-ocr) OPT_NO_LIGHT_OCR=1; shift;;
     --with-security-tools) OPT_SECURITY_TOOLS=1; shift;;
     *) ARGS+=("$1"); shift;;
   esac

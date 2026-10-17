@@ -29,24 +29,58 @@ def _enqueue(ai_job: AIJob, document, delay_seconds: int = 0) -> None:
                  delay_seconds=delay_seconds, max_attempts=2, priority=150)
 
 
-def active_analysis(document) -> AIJob | None:
-    return AIJob.objects.filter(document=document, kind=AIJob.ANALYZE, status__in=[AIJob.QUEUED, AIJob.RUNNING]).first()
+def active_analysis(document, kind: str = AIJob.ANALYZE) -> AIJob | None:
+    return AIJob.objects.filter(document=document, kind=kind, status__in=[AIJob.QUEUED, AIJob.RUNNING]).first()
 
 
-def queue(kind: str, *, document, user=None, delay_seconds: int = 0, requested: bool = False) -> AIJob:
-    """``requested``: a person asked for it (Analyze Document, Retry). Only then may the analysis start OCR itself;
-    automatic analysis after an upload never runs OCR on a document whose type is set to manual OCR."""
-    if kind == AIJob.ANALYZE:  # one analysis per document at a time: pressing Analyze again never stacks up jobs
-        existing = active_analysis(document)
+def queue(kind: str, *, document, user=None, delay_seconds: int = 0, requested: bool = False, trigger: str = "",
+          options: dict | None = None) -> AIJob:
+    """``requested``: a person asked for it (an AI Action, Retry). Only then may the analysis start OCR itself;
+    automatic analysis after an upload never runs OCR on a document whose type is set to manual OCR. ``trigger``:
+    manual, auto (OCR + AI) or smart (Smart Auto, with the matching conditions in ``options``)."""
+    trigger = trigger or ("manual" if requested else "auto")
+    if kind in AIJob.ACTIONS:  # one job per action and document at a time: pressing it again never stacks up jobs
+        existing = active_analysis(document, kind)
         if existing is not None:
             if requested and not (existing.detail or {}).get("requested"):  # a person now asked for it: OCR may run
-                existing.detail = {**(existing.detail or {}), "requested": True}
-                AIJob.objects.filter(pk=existing.pk).update(detail=existing.detail)
+                existing.detail = {**(existing.detail or {}), "requested": True, **(options or {})}
+                AIJob.objects.filter(pk=existing.pk).update(detail=existing.detail, trigger="manual")
             return existing
-    ai_job = AIJob.objects.create(kind=kind, document=document, requested_by=user, stage="queued",
-                                  detail={"requested": True} if requested else {})
+    detail = {**({"requested": True} if requested else {}), **(options or {})}
+    ai_job = AIJob.objects.create(kind=kind, document=document, requested_by=user, stage="queued", trigger=trigger,
+                                  detail=detail)
     _enqueue(ai_job, document, delay_seconds)
     return ai_job
+
+
+def smart_reasons(document) -> list[str]:
+    """Smart Auto: which configured conditions apply to this document now (empty = AI is not invoked)."""
+    from apps.library.models import DocumentField
+
+    on = set(config.get("ai.smart_triggers") or [])
+    doc = document
+    cv = doc.current_version
+    out = []
+    if "low_confidence" in on and cv is not None and cv.ocr_applied:
+        conf = (cv.ocr_quality or {}).get("confidence")
+        if isinstance(conf, (int, float)) and conf < int(config.get("ai.smart_confidence")):
+            out.append("low_confidence")
+    if "missing_metadata" in on and (doc.issue_date is None or doc.correspondent_id is None):
+        out.append("missing_metadata")
+    if "unknown_type" in on and not doc.doc_type_id:
+        out.append("unknown_type")
+    if "missing_expiry" in on and doc.doc_type_id and doc.doc_type.has_expiry and not doc.expiry_date and not doc.no_expiry:
+        out.append("missing_expiry")
+    if "conflicting_fields" in on and any(f.proposed_value and f.value and f.proposed_value != f.value
+                                          for f in DocumentField.objects.filter(document=doc)):
+        out.append("conflicting_fields")
+    if "needs_review" in on and doc.ocr_state == "needs_review":
+        out.append("needs_review")
+    if "selected_types" in on and doc.doc_type_id:
+        names = {n.strip().lower() for n in (config.get("ai.smart_types") or "").split(",") if n.strip()}
+        if doc.doc_type.name.lower() in names:
+            out.append("selected_types")
+    return out
 
 
 def after_processing(document, *, skip_analyze: bool = False) -> None:
@@ -54,20 +88,26 @@ def after_processing(document, *, skip_analyze: bool = False) -> None:
     from . import service
 
     try:
-        if not config.get("ai.enabled") or not config.get("ai.auto_analyze"):
-            return
+        mode = service.mode()
+        if not service.enabled() or mode in ("on_demand", "ocr_only"):
+            return  # AI on Demand: only an explicit action by an authorized person invokes AI
         user = document.created_by or document.owner
         if not skip_analyze and (service.enabled("ocr_assist") or service.enabled("smart_organization")):
-            queue(AIJob.ANALYZE, document=document, user=user)
-        if service.enabled("semantic_search"):
-            queue(AIJob.EMBED, document=document, user=user)
+            if mode == "auto":
+                queue(AIJob.ANALYZE, document=document, user=user, trigger="auto")
+            else:
+                reasons = smart_reasons(document)
+                if reasons:
+                    queue(AIJob.ANALYZE, document=document, user=user, trigger="smart", options={"smart": reasons})
+        if mode == "auto" and service.enabled("semantic_search"):
+            queue(AIJob.EMBED, document=document, user=user, trigger="auto")
     except Exception:  # noqa: BLE001 - AI must never affect baseline processing
         log.exception("could not queue AI jobs")
 
 
 def ocr_started(document) -> None:
     """OCR picked up a document an analysis is waiting for: show it as running."""
-    AIJob.objects.filter(document=document, kind=AIJob.ANALYZE, status=AIJob.QUEUED, stage="ocr_queued").update(stage="ocr_running")
+    AIJob.objects.filter(document=document, kind__in=AIJob.ACTIONS, status=AIJob.QUEUED, stage="ocr_queued").update(stage="ocr_running")
 
 
 def resume_after_ocr(document, *, ok: bool, error: str = "") -> int:
@@ -76,7 +116,7 @@ def resume_after_ocr(document, *, ok: bool, error: str = "") -> int:
     from . import service
     from .providers import AIError
 
-    waiting = list(AIJob.objects.filter(document=document, kind=AIJob.ANALYZE, status=AIJob.QUEUED,
+    waiting = list(AIJob.objects.filter(document=document, kind__in=AIJob.ACTIONS, status=AIJob.QUEUED,
                                         stage__in=["ocr_queued", "ocr_running"]))
     for j in waiting:
         if ok:
@@ -97,7 +137,7 @@ def ai_task(job):
         return {"skipped": "missing"}
     if ai_job.status in (AIJob.DONE, AIJob.FAILED, AIJob.SKIPPED):  # already finished (a duplicate or late job)
         return {"skipped": ai_job.status}
-    if ai_job.status == "cancelled" or job.payload.get("epoch", 0) != ai_job.document.ocr_epoch:
+    if ai_job.status == AIJob.CANCELLED or job.payload.get("epoch", 0) != ai_job.document.ocr_epoch:
         AIJob.objects.filter(pk=ai_job.pk).update(status="cancelled", finished_at=timezone.now())
         return {"skipped": "OCR data was removed after this job was queued"}
     cv = ai_job.document.current_version
@@ -112,9 +152,9 @@ def ai_task(job):
     ai_job.status, ai_job.started_at, ai_job.attempts, ai_job.next_retry_at = AIJob.RUNNING, timezone.now(), ai_job.attempts + 1, None
     ai_job.save(update_fields=["status", "started_at", "attempts", "next_retry_at"])
     try:
-        if ai_job.kind == AIJob.ANALYZE:
+        if ai_job.kind in AIJob.ACTIONS and ai_job.kind != AIJob.ASK:
             user = ai_job.requested_by or ai_job.document.owner
-            made = service.analyze_document(ai_job.document, user, job=ai_job)
+            made = service.run_action(ai_job.kind, ai_job.document, user, job=ai_job)
             if made is None:  # OCR queued first; the analysis continues when recognition finishes
                 AIJob.objects.filter(pk=ai_job.pk).update(status=AIJob.QUEUED, attempts=ai_job.attempts - 1)
                 return {"waiting": "ocr"}

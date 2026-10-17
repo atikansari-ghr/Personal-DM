@@ -4,6 +4,7 @@ import { api, formatBytes, formatDateTime, upload } from "../api";
 import type { DocDetail, DocRow, Meta } from "../types";
 import PermissionsDialog from "./PermissionsDialog";
 import { Confirm, CopyButton, ExpiryBadge, Icon, Modal, Skeleton, StateBadge, useToast } from "./ui";
+import AIActions from "./AIActions";
 import AISuggestions from "./AISuggestions";
 import DocumentDetails, { DetailsBadge } from "./DocumentDetails";
 import Menu from "./Menu";
@@ -259,7 +260,7 @@ export default function DocumentPanel({ id, full, onChanged }: { id: string; ful
         ))}
         <span className="tabs-aside"><DetailsBadge doc={doc} /></span>
       </div>
-      {tab === "details" && <><DocumentDetails doc={doc} onChange={changed} openTypeDialog={typeReq} /><DocLinks doc={doc} /><AISuggestions docId={doc.id} onChange={changed} />{ai?.assistant && <Link className="btn small ghost" to={`/assistant?document=${doc.id}`}><Icon name="sparkle" size={16} /> Ask AI about this document</Link>}</>}
+      {tab === "details" && <><DocumentDetails doc={doc} onChange={changed} openTypeDialog={typeReq} /><DocLinks doc={doc} /><AISuggestions docId={doc.id} onChange={changed} /><AIActions docId={doc.id} onChange={changed} />{ai?.assistant && <Link className="btn small ghost" to={`/assistant?document=${doc.id}`}><Icon name="sparkle" size={16} /> Ask AI about this document</Link>}</>}
       {tab === "text" && <OcrPanel docId={doc.id} onChanged={changed} request={ocrReq} />}
       {tab === "versions" && (
         <table className="responsive"><thead><tr><th>Version</th><th>File</th><th>Added</th><th /></tr></thead><tbody>

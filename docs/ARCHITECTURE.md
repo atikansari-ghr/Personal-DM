@@ -36,7 +36,7 @@
 - **Suggestions never act alone.** OCR and parsing produce *proposed* values. Only values a person has confirmed can change names or reminders.
 - **Honest integrations.** Unconfigured channels show actionable issues and are recorded as skipped, never as sent. WhatsApp is labelled as a later phase.
 - **Separated security responsibilities.** The access policy (country/IP) decides whether a network may reach the app; the login audit records who authenticated; GoAccess only observes traffic; Local AI only works after authorisation has fixed which documents the person may open. See [ADR-0007](adr/0007-security-access.md).
-- **AI is optional and advisory.** AI output becomes `AISuggestion` rows that a person must accept; retrieval starts from `AccessContext.documents()`. There is no cloud fallback. See [ADR-0008](adr/0008-local-ai.md).
+- **AI is optional and advisory, above OCR.** AI output becomes `AISuggestion` rows that a person must accept, or labelled `AIOutput` rows; retrieval starts from `AccessContext.documents()`. Profiles are Local or Cloud; `service.plan_payload` decides which data categories an action may send and requires confirmation before an original goes to a Cloud profile. There is no fallback to another server or to the cloud. The OCR engine order (light-ocr / Tesseract / PaddleOCR) is a separate, AI-independent setting. See [ADR-0008](adr/0008-local-ai.md) and [ADR-0023](adr/0023-ai-document-intelligence-ocr-engine-order.md).
 
 ## Request flow
 

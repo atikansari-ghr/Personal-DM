@@ -312,13 +312,15 @@ await step("AT-101/106/112 selective OCR: manual by default, chosen pages and la
   await page.click("button:has-text('Run OCR…')");
   await page.waitForSelector(".modal:has-text('Text recognition (OCR)')");
   await page.fill(".modal input[aria-label^='Pages of']", "1");
-  // Change Set Q: PP-OCRv5 is the default engine with language profiles; Tesseract (Legacy) keeps its languages
-  expect(await page.inputValue("#ocr-engine") === "paddleocr", "PaddleOCR is the default engine");
+  // Change Set Z: the configured engine order (Primary, then Fallbacks) is the default, with language profiles;
+  // Tesseract keeps its languages
+  expect(await page.inputValue("#ocr-engine") === "", "the configured OCR engine order is the default");
+  expect(/light-ocr/.test(await page.locator("#ocr-engine option[value='']").innerText()), "order shown in the engine choice");
   const profiles = await page.locator("#ocr-profile option").allTextContents();
   for (const prof of ["English", "Arabic + English", "Hindi (Devanagari) + English"]) expect(profiles.includes(prof), `profile ${prof} offered (${profiles})`);
   await page.selectOption("#ocr-engine", "tesseract");
   for (const lang of ["English", "Arabic", "Hindi"]) expect(await page.locator(`.modal label:has-text('${lang}')`).count() === 1, `Tesseract language ${lang} offered`);
-  await page.selectOption("#ocr-engine", "paddleocr");
+  await page.selectOption("#ocr-engine", "");
   await snap(page, { path: `${SHOTS}/ocr-run.png` });
   await page.click(".modal button:has-text('Run OCR')");
   await page.waitForSelector(".toast:has-text('Text recognition queued')");
@@ -889,9 +891,9 @@ await step("AT-213/217/218 OCR engine label, Remove OCR data and Disable OCR for
   const card = ids["Sample residence card"];
   await page.goto(`${BASE}/documents/${card}`);
   await page.click("[role=tab]:has-text('Text (OCR)')");
-  await page.waitForSelector(".ocr-panel .badge:has-text('PaddleOCR (PP-OCRv5)'), .ocr-panel .badge:has-text('Tesseract (Legacy)')", { timeout: 90000 });
+  await page.waitForSelector(".ocr-panel .badge:has-text('PaddleOCR (PP-OCRv5)'), .ocr-panel .badge:has-text('Tesseract'), .ocr-panel .badge:has-text('light-ocr')", { timeout: 90000 });
   const engine = (await api(page, `/api/documents/${card}/ocr`)).data.results[0]?.engine;
-  expect(["paddleocr", "tesseract"].includes(engine), `engine recorded (${engine})`);
+  expect(["paddleocr", "tesseract", "light-ocr"].includes(engine), `engine recorded (${engine})`);
   await page.locator(".ocr-panel").screenshot({ path: `${SHOTS}/ocr-engine-label.png` });
   expect((await api(page, "/api/documents?q=2345678901")).data.total >= 1, "found by OCR text before removal");
   await page.click("button[aria-label='More actions']");
@@ -917,7 +919,7 @@ await step("AT-211/221/225/226 OCR engines, Existing OCR data, orphans and Test 
   await page.goto(BASE + "/settings/processing");
   await page.waitForSelector("h2:has-text('OCR engines')");
   await page.waitForSelector("text=Language profiles");
-  await page.click("button:has-text('Run self-test')");  // real inference (a successful import alone is not Healthy)
+  await page.click("button:has-text('Run PaddleOCR self-test')");  // real inference (a successful import alone is not Healthy)
   await page.waitForSelector(".toast:has-text('Self-test passed'), .toast:has-text('Self-test failed')", { timeout: 120000 });
   const eng = (await api(page, "/api/ocr/engines")).data;
   expect(eng.paddle.healthy === !!eng.paddle.installed, `health follows the real self-test (installed ${eng.paddle.installed})`);
@@ -935,7 +937,7 @@ await step("AT-211/221/225/226 OCR engines, Existing OCR data, orphans and Test 
   await page.waitForSelector(".modal >> text=Kept:");
   await page.keyboard.press("Escape");
   await page.setInputFiles("input[aria-label='Test file']", `${FIX}/ocr-test-sample.png`);
-  await page.check("label:has-text('Compare with Tesseract (Legacy)') input");
+  await page.check("label:has-text('Compare all engines') input");
   await page.fill("textarea[aria-label='Expected text']", "SAMPLE PERMIT - NOT REAL\nPermit No 4455667788");
   await page.click("button:has-text('Compare engines')");
   await page.waitForSelector("text=Temporary files removed: yes", { timeout: 120000 });
@@ -949,7 +951,7 @@ await step("screens for the README (desktop)", async () => {
   await page.waitForSelector(".detail-pane .viewer canvas");
   await snap(page, { path: `${SHOTS}/folders-preview.png` });
   for (const [file, url, wait] of [["settings-security-passkeys.png", "/settings/account?tab=security", "text=Passkeys"],
-    ["local-ai.png", "/settings/ai", "text=Local AI"], ["login-audit.png", "/settings/activity?view=logins", "text=Login audit"],
+    ["local-ai.png", "/settings/ai", "text=AI profiles"], ["login-audit.png", "/settings/activity?view=logins", "text=Login audit"],
     ["security-access.png", "/settings/security?view=access", "text=Geographic access control"]]) {
     await page.goto(BASE + url);
     await page.waitForSelector(wait);

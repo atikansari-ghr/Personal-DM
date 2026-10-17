@@ -749,6 +749,51 @@ await step("AT-433/AT-440 Local AI diagnostics: separate OCR tests per engine, A
   expect(jobs.status === 200 && "counts" in jobs.data, "AI jobs list");
 });
 
+await step("AT-441..AT-460 Change Set Z: OCR engine order, AI modes, Local/Cloud profiles, AI Actions panel", async () => {
+  // OCR engine order: Primary/Fallbacks shown with availability; the order setting keeps the admin's order
+  await page.goto(BASE + "/settings/processing");
+  await page.waitForSelector("[data-engine-order] [data-engine]");
+  const order = await page.locator("[data-engine-order] [data-engine]").evaluateAll((els) => els.map((e) => e.getAttribute("data-engine")));
+  expect(order.length === 3 && order.includes("light-ocr"), `engine order card: ${order.join(",")}`);
+  await page.waitForSelector("[data-setting-order='processing.ocr_engine_order'] li");
+  const before = (await api(page, "/api/settings?keys=processing.ocr_engine_order")).data.settings[0].value;
+  await page.click("[data-setting-order='processing.ocr_engine_order'] button[aria-label^='Move Tesseract up']");
+  const saved = page.waitForResponse((r) => r.url().includes("/api/settings") && r.request().method() === "PUT");
+  await page.click("button:has-text('Save settings') >> nth=0");
+  expect((await saved).status() === 200, "order saved");
+  const after = (await api(page, "/api/settings?keys=processing.ocr_engine_order")).data.settings[0].value;
+  expect(after.indexOf("tesseract") === before.indexOf("tesseract") - 1, `order not kept: ${after.join(",")}`);
+  expect((await setting(page, { "processing.ocr_engine_order": before })).status === 200, "order restored");
+  // Settings → AI: the mode (AI on Demand by default), Smart Auto conditions only in Smart Auto mode
+  await page.goto(BASE + "/settings/ai");
+  await page.waitForSelector("#s-ai\\.mode");
+  expect(await page.locator("#s-ai\\.mode").inputValue() === "on_demand", "AI on Demand is the default mode");
+  expect(!(await page.locator("text=Smart Auto conditions").count()), "Smart Auto conditions shown outside Smart Auto");
+  // a Cloud profile: Cloud badge, what it may send (originals off), a key that is never shown, Last test after Test Profile
+  const made = await api(page, "/api/ai/profiles", { body: { name: "E2E Cloud", provider: "anthropic", base_url: "http://127.0.0.1:9",
+    text_model: "claude-test", api_key: "sk-e2e-NEVERSHOWN", external_acknowledged: true, cloud_send_ocr_text: true } });
+  expect(made.status === 201 && made.data.location === "cloud" && !made.data.cloud_send_images && !made.data.cloud_send_files, `cloud profile: ${JSON.stringify(made.data).slice(0, 200)}`);
+  await page.reload();
+  const row = page.locator(".list-item", { hasText: "E2E Cloud" });
+  await row.waitFor();
+  expect(await row.locator("[data-location=cloud]").count() === 1, "Cloud badge");
+  expect(/Sends: OCR text/.test(await row.innerText()), "cloud send summary");
+  const tested = page.waitForResponse((r) => r.url().includes(`/api/ai/profiles/${made.data.id}/test`));
+  await row.locator("button:has-text('Test Profile')").click();
+  await tested;
+  await page.waitForFunction(() => /Last test: ✗ failed/.test(document.body.innerText));
+  const html = await page.content();
+  expect(!html.includes("NEVERSHOWN"), "API key shown on the page");
+  expect((await api(page, `/api/ai/profiles/${made.data.id}`, { method: "DELETE" })).status === 204, "profile removed");
+  await page.locator("#settings, main").first().screenshot({ path: `${OUT}/settings-ai-profiles.png` });
+  // a family member without AI profile access; AI status and a document's AI panel answer without errors
+  const son = await session("son1");
+  expect((await api(son.page, "/api/ai/profiles")).status === 403, "family member reached AI profiles");
+  const st = await api(son.page, "/api/ai/status");
+  expect(st.status === 200 && st.data.mode === "on_demand" && st.data.actions === false, `ai status ${JSON.stringify(st.data)}`);
+  await son.ctx.close();
+});
+
 await step("AT-416/AT-417 Admin → Performance: metrics, throttle state, report for the main administrator only", async () => {
   await page.goto(BASE + "/settings/performance");
   await page.waitForSelector("#performance [data-throttle]");

@@ -146,29 +146,29 @@ Master switch for local OCR (PaddleOCR PP-OCRv5, or Tesseract Legacy). Which doc
 - **Restart needed:** no
 - **Learn more:** [ocr-corrections#selective](guides/ocr-corrections.md#selective)
 
-### OCR engine (`processing.ocr_engine`)
+### OCR engine order (`processing.ocr_engine_order`)
 
-PaddleOCR PP-OCRv5 is the default engine. Tesseract stays available as Legacy while results are compared. Changing the engine never re-processes existing documents.
+Primary engine first, then the Fallbacks in the order they are tried. light-ocr (PP-OCRv6 Small, ONNX Runtime) is fast and light; Tesseract is always installed; PaddleOCR PP-OCRv5 reads more scripts. Changing the order never re-processes existing documents. AI never changes this order.
 
-- **Default:** `'paddleocr'`
-- **Allowed values:** paddleocr, tesseract
+- **Default:** `['light-ocr', 'tesseract', 'paddleocr']`
+- **Allowed values:** light-ocr, tesseract, paddleocr
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
 - **Effect of changing:** Applies to OCR runs requested from now on. Existing recognised text keeps its engine label.
 - **Restart needed:** no
-- **Learn more:** [ocr-engines#engine](guides/ocr-engines.md#engine)
+- **Learn more:** [ocr-engines#engine-order](guides/ocr-engines.md#engine-order)
 
-### Use Tesseract when PaddleOCR is unavailable (`processing.ocr_engine_fallback`)
+### OCR mode (`processing.ocr_mode`)
 
-If PaddleOCR is not installed or fails its health check, run Tesseract instead and record that the fallback was used. Off: the OCR job fails with a clear message.
+Auto: when an engine is not installed, fails its health check or does not read the language profile, the next engine in the order is used and the run records why. Primary only: only the first engine is used; if it cannot run, the OCR job fails with a clear message.
 
-- **Default:** `True`
-- **Allowed values:** bool
+- **Default:** `'auto'`
+- **Allowed values:** auto, primary_only
 - **Scope:** global · **Editable by:** main administrator
-- **Depends on:** processing.ocr_engine
+- **Depends on:** nothing
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
-- **Learn more:** [ocr-engines#fallback](guides/ocr-engines.md#fallback)
+- **Learn more:** [ocr-engines#mode](guides/ocr-engines.md#mode)
 
 ### OCR language profiles offered (`processing.ocr_profiles`)
 
@@ -1507,7 +1507,7 @@ Notify the person (and administrators for admin actions) about passkeys, authent
 
 ## Section: ai
 
-### Local AI enabled (`ai.enabled`)
+### AI features enabled (`ai.enabled`)
 
 Master switch for all AI features. Off by default; uploads, OCR, search and reminders never depend on it.
 
@@ -1579,17 +1579,78 @@ Everyone (each person only on their own permitted documents) or administrators o
 - **Restart needed:** no
 - **Learn more:** [local-ai#permissions](guides/local-ai.md#permissions)
 
-### Analyse new uploads automatically (`ai.auto_analyze`)
+### AI mode (`ai.mode`)
 
-Queue OCR assist / smart organisation / embeddings after each upload is processed.
+AI on Demand: AI runs only when an authorized person chooses an AI Action. OCR Only: AI is off. OCR + AI: every successful OCR is analysed automatically. Smart Auto: AI runs automatically only when one of the conditions below applies. Automatic modes never use a Cloud profile unless allowed below.
 
-- **Default:** `True`
-- **Allowed values:** bool
+- **Default:** `'on_demand'`
+- **Allowed values:** on_demand, ocr_only, auto, smart
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** ai.enabled
+- **Effect of changing:** Changing the mode never re-analyses existing documents.
+- **Restart needed:** no
+- **Learn more:** [local-ai#modes](guides/local-ai.md#modes)
+
+### Smart Auto conditions (`ai.smart_triggers`)
+
+Smart Auto analyses a document after OCR only when at least one chosen condition applies.
+
+- **Default:** `['low_confidence', 'missing_metadata', 'unknown_type', 'missing_expiry']`
+- **Allowed values:** low_confidence, missing_metadata, unknown_type, missing_expiry, conflicting_fields, needs_review, selected_types
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** ai.mode
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
-- **Learn more:** [local-ai#ocr-assist](guides/local-ai.md#ocr-assist)
+- **Learn more:** [local-ai#smart-auto](guides/local-ai.md#smart-auto)
+
+### Smart Auto: OCR confidence threshold (%) (`ai.smart_confidence`)
+
+With “OCR confidence below the threshold”, documents whose OCR confidence is below this value are analysed.
+
+- **Default:** `80`
+- **Allowed values:** 10–100
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** ai.mode
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#smart-auto](guides/local-ai.md#smart-auto)
+
+### Smart Auto: selected Document Types (`ai.smart_types`)
+
+Document Type names, comma separated, for “Document Type is one of the selected types”.
+
+- **Default:** `''`
+- **Allowed values:** –1000
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** ai.mode
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#smart-auto](guides/local-ai.md#smart-auto)
+- **Example:** Passport, Residence Permit
+
+### Allow automatic AI with a Cloud profile (`ai.cloud_automatic`)
+
+Off (recommended): OCR + AI and Smart Auto only run with a Local profile; with a Cloud default profile, automatic analysis is skipped and nothing is sent. AI on Demand actions are not affected.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#cloud-privacy](guides/local-ai.md#cloud-privacy)
+
+### Let people choose the AI profile per action (`ai.allow_profile_choice`)
+
+Off: every AI Action uses the system default profile (forced by the Main Admin). On: people may pick another enabled profile when running an action.
+
+- **Default:** `False`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#profiles](guides/local-ai.md#profiles)
 
 ### Parallel AI jobs (`ai.max_parallel`)
 
