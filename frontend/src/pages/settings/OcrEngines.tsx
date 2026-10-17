@@ -82,7 +82,7 @@ export function OcrEngineStatus() {
       </div>
       <h3 style={{ marginTop: "1rem" }}>Language profiles</h3>
       <div style={{ overflowX: "auto" }}>
-        <table className="responsive"><thead><tr><th>Profile</th><th>Offered</th><th>PP-OCRv5 models</th><th>Tesseract (Legacy)</th></tr></thead><tbody>
+        <table className="responsive"><thead><tr><th>Profile</th><th>Offered</th><th>PP-OCRv5 models</th><th>Tesseract</th></tr></thead><tbody>
           {d.profiles.map((pr) => (
             <tr key={pr.key}><td>{pr.label}</td><td>{pr.offered ? "Yes" : "No"}</td>
               <td className="small">{pr.paddle_installed ? <span className="badge ok">Installed</span> : <span className="badge soon">Missing</span>} {pr.paddle_models.join(" + ")}</td>

@@ -56,6 +56,39 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
+## Change set Z: AI Document Intelligence and the OCR engine order {#change-set-z}
+
+**Numbering.** Prompt AT-416…AT-435 → **AT-441…AT-460**. Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md#change-set-z).
+Design and decisions: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-z).
+
+**Environment.** Development container (Ubuntu 24.04, PostgreSQL 16, Python 3.13, Tesseract 5, Node 22, Chromium via
+Playwright), 2026-10-17. Cloud providers (OpenAI, Anthropic, Gemini, OpenRouter) and the local AI server are emulated by
+`tests/fake_ai_server.py` with their request/response shapes; light-ocr ran for real (`@arcships/light-ocr` 0.5.9).
+
+| Command | Result |
+|---|---|
+| `pytest tests/test_ai_intelligence.py` | **24 passed** (AT-441…AT-459, OCR engine order, light-ocr adapter, cloud providers, profile choice) and AT-460 passed after this report was written; with `PD_TEST_LIGHT_OCR_HOME` set, **the live light-ocr test passed**: real self-test and a real upload recognised by light-ocr (`VALID UNTIL 2031-05-20` read back) |
+| Full `pytest` | **603 tests: 596 passed, 6 skipped (ClamAV daemon, real PaddleOCR runtime, live light-ocr), 1 failed: the documentation checker, only because this section did not exist yet; it passes with this report** |
+| `scripts/e2e.sh` (fresh database) | flow, accessibility, parity, layout, offline, PWA, themes, recovery and corrective suites: **162 PASS** incl. the new step *AT-441…AT-460 Change Set Z* (engine order card and order setting kept, AI on Demand default, Cloud profile badge / send summary / Last test / key never shown, family member blocked from profiles); **1 FAIL in this container only**: AT-333 (Chromium here cannot load the real OpenFreeMap tiles through the container proxy certificate — unchanged by this change set, same as Change Set Y) |
+| Migrations `core.0008` + `ai.0003` forwards, backwards (`ai 0002`, `core 0007`), forwards; `makemigrations --check` | OK; an existing database became *PaddleOCR → Tesseract (Auto)* and *AI on Demand* |
+| `manage.py doctor` | AI mode, OCR engine order, light-ocr installed and **real self-test passed (1.6 s)** |
+| `npm run build`, `vitest` (17), `shellcheck -S error scripts/personaldocs`, `scripts/check_docs.py`, settings reference | Passed |
+
+**Per test:** AT-441 Passed · AT-442 Passed · AT-443 Passed · AT-444 Passed · AT-445 Passed · AT-446 Passed
+(emulated cloud) · AT-447 Passed · AT-448 Passed · AT-449 Passed · AT-450 Passed · AT-451 Passed · AT-452 Passed ·
+AT-453 Passed · AT-454 Passed (emulated providers) · AT-455 Passed · AT-456 Passed · AT-457 Passed · AT-458 Passed
+for throttling/concurrency rules (real concurrent load: see below) · AT-459 Passed · AT-460 automated part Passed
+(full `pytest`, `scripts/e2e.sh` with the one container-only AT-333 failure); production upgrade: see below.
+
+**Blocked / Not Executed** (never reported as passed):
+
+- Real **OpenAI, Anthropic, Gemini and OpenRouter** accounts (emulated with the same API shapes; AT-446…AT-448, AT-454).
+- A real **LM Studio / Ollama** model with the new AI Actions (emulated).
+- **Real PaddleOCR** with the engine order (fake worker; live PaddleOCR tests skipped as before).
+- **AT-458** under real concurrent OCR, ClamAV and backup load on the target 2-CPU LXC (throttling and concurrency
+  rules are unit-tested; the load itself was not run).
+- `personaldocs install/upgrade` installing light-ocr with `npm ci` on Debian 13 and a production smoke test (AT-460).
+
 ## Change set Y: OCR → AI document analysis pipeline {#change-set-y}
 
 **Numbering.** Prompt AT-401…AT-415 → **AT-426…AT-440**. Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md#change-set-y).

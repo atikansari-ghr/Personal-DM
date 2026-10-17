@@ -709,7 +709,8 @@ def test_at460_release_gate_records_every_test_honestly():
     root = Path(__file__).resolve().parents[1] / "docs"
     report = (root / "TEST_REPORT.md").read_text()
     trace = (root / "TRACEABILITY.md").read_text()
-    section = report[report.index("## Change Set Z"):]
+    start = report.index("## Change set Z")
+    section = report[start:report.index("\n## ", start + 5)]
     for n in range(441, 461):
         assert f"AT-{n}" in section and f"AT-{n}" in trace, n
     for line in section.splitlines():
