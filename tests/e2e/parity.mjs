@@ -919,7 +919,7 @@ await step("AT-211/221/225/226 OCR engines, Existing OCR data, orphans and Test 
   await page.goto(BASE + "/settings/processing");
   await page.waitForSelector("h2:has-text('OCR engines')");
   await page.waitForSelector("text=Language profiles");
-  await page.click("button:has-text('Run self-test')");  // real inference (a successful import alone is not Healthy)
+  await page.click("button:has-text('Run PaddleOCR self-test')");  // real inference (a successful import alone is not Healthy)
   await page.waitForSelector(".toast:has-text('Self-test passed'), .toast:has-text('Self-test failed')", { timeout: 120000 });
   const eng = (await api(page, "/api/ocr/engines")).data;
   expect(eng.paddle.healthy === !!eng.paddle.installed, `health follows the real self-test (installed ${eng.paddle.installed})`);

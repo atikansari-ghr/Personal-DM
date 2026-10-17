@@ -124,8 +124,9 @@
   "AT-213/217/218 OCR engine label, Remove OCR data and Disable OCR for this document"
  ],
  [
-  "PASS",
-  "AT-211/221/225/226 OCR engines, Existing OCR data, orphans and Test OCR / Compare engines"
+  "FAIL",
+  "AT-211/221/225/226 OCR engines, Existing OCR data, orphans and Test OCR / Compare engines",
+  "TimeoutError: page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button:has-text(\\'Run self-test\\')')\u001b[22m\n"
  ],
  [
   "PASS",
