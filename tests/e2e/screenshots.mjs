@@ -137,7 +137,7 @@ await step("AT-272 security, access, sign-in records and Local AI (previously st
     ["/settings/security", "readme-security.png", "Security Health, antivirus and storage", "h2"],
     ["/settings/security?view=access", "security-access.png", "Country/IP access policy and GeoIP", "h2"],
     ["/settings/activity?view=logins", "login-audit.png", "Login audit", "h2"],
-    ["/settings/ai", "local-ai.png", "Local AI profiles (optional)", "h2"],
+    ["/settings/ai", "local-ai.png", "AI profiles: Local and Cloud (optional)", "h2"],
     ["/settings/account?tab=security", "settings-security-passkeys.png", "Password, authenticator app and passkeys", "h2"],
   ]) {
     await D.page.goto(BASE + path);
