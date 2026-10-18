@@ -123,6 +123,31 @@ def fake_light(settings, tmp_path):
     return home
 
 
+def test_light_ocr_failure_is_explained_and_runs_with_a_safe_memory_setup(family, fake_light, monkeypatch):
+    """Upgrade report: the self-test failed with only "exit 70" (the native addon could not load under a 3 GB
+    address-space cap on a many-core host). light-ocr now runs with a generous address-space cap and two malloc
+    arenas, and a failure carries light-ocr's own explanation."""
+    from apps.library import sandbox
+
+    seen = {}
+    real = sandbox.run
+
+    def spy(cmd, **kw):
+        seen.update(memory_mb=kw.get("memory_mb"), env=kw.get("extra_env") or {})
+        return real(cmd, **kw)
+
+    monkeypatch.setattr(sandbox, "run", spy)
+    assert ocr_engines.light_ocr_selftest()["healthy"]
+    assert seen["memory_mb"] >= 8192 and seen["env"].get("MALLOC_ARENA_MAX") == "2"
+    cli = ocr_engines.light_ocr_cli()
+    cli.write_text("import sys\nif sys.argv[1:3] == ['info', '--version']:\n    print('light-ocr 0.5.9'); sys.exit(0)\n"
+                   "sys.stderr.write('    at load (addon.cjs:12)\\nlight-ocr: Unable to load the verified native addon\\n')\n"
+                   "sys.exit(70)\n")
+    res = ocr_engines.light_ocr_selftest()
+    assert not res["healthy"] and "exit 70" in res["message"] and "Unable to load the verified native addon" in res["message"]
+    assert "Primary" in ocr_engines.unavailable_reason("light-ocr") or "self-test failed" in ocr_engines.unavailable_reason("light-ocr")
+
+
 def test_light_ocr_adapter_selftest_and_runs(family, clients, fake_light):
     st = ocr_engines.light_ocr_status(refresh=True)
     assert st["installed"] and "0.5.9" in st["version"] and not st["error"]
