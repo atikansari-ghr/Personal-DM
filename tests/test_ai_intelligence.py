@@ -117,10 +117,25 @@ def fake_light(settings, tmp_path):
     cli.write_text(FAKE_LIGHT_CLI)
     settings.LIGHT_OCR_HOME = home
     settings.NODE_CMD = sys.executable
+    native = ocr_engines.light_ocr_native_dir()
+    if native is not None:
+        native.mkdir(parents=True)  # the platform package with the native addon
     from apps.security.models import HealthState
 
     HealthState.objects.filter(key__startswith="lightocr").delete()
     return home
+
+
+def test_light_ocr_missing_native_package_is_reported(family, fake_light):
+    """Upgrade report: on Debian 13 (Node.js 20) npm skipped @arcships/light-ocr-linux-x64-gnu (it declares
+    node >= 22), so light-ocr could not start. The status names the missing package and the repair command."""
+    import shutil as sh
+
+    sh.rmtree(ocr_engines.light_ocr_native_dir())
+    st = ocr_engines.light_ocr_status(refresh=True)
+    assert st["installed"] and "native package light-ocr-linux-" in st["error"] and "light-ocr-reinstall" in st["error"]
+    assert "native package" in ocr_engines.unavailable_reason("light-ocr")
+    assert ocr_engines.resolve_engine(None, "en")[0] == "tesseract"  # the next engine is used meanwhile
 
 
 def test_light_ocr_failure_is_explained_and_runs_with_a_safe_memory_setup(family, fake_light, monkeypatch):

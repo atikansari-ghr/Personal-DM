@@ -70,11 +70,19 @@ in **Settings → OCR & processing** shows:
 `sudo personaldocs ocr selftest` (PaddleOCR), `sudo personaldocs ocr light-ocr` (light-ocr) and
 `sudo personaldocs doctor`. `sudo personaldocs ocr light-ocr-reinstall` reinstalls the pinned light-ocr package.
 
-If the light-ocr self-test fails, the message now carries light-ocr's own reason. *Unable to load the verified native
-addon* (exit 70) or *Fatal process out of memory: Failed to reserve virtual memory* meant the process had too little
-virtual address space for ONNX Runtime on a host with many CPU cores; since the 2026-10-18 fix light-ocr runs with an
-8 GB address-space cap (virtual, not RAM — it uses about 300–500 MB) and two malloc arenas. Run
-`sudo personaldocs ocr light-ocr` to repeat the self-test.
+If the light-ocr self-test fails, the message carries light-ocr's own reason.
+
+- *Unable to locate @arcships/light-ocr-linux-x64-gnu* (exit 70): the platform package with the ONNX Runtime native
+  addon is missing. It declares Node.js ≥ 22, and npm silently skips such an optional package on Debian 13's Node.js
+  20 (the addon itself runs fine on Node 20). Since 2026-10-18 the installer adds it explicitly, checked against the
+  version and checksum in `backend/light-ocr/package-lock.json`; `sudo personaldocs upgrade` (or
+  `sudo personaldocs ocr light-ocr-reinstall`) repairs an existing installation. Settings and doctor name the missing
+  package.
+- *Unable to load the verified native addon* or *Fatal process out of memory: Failed to reserve virtual memory*: too
+  little virtual address space for ONNX Runtime. light-ocr runs with an 8 GB address-space cap (virtual, not RAM — it
+  uses about 300–500 MB) and two malloc arenas.
+
+Run `sudo personaldocs ocr light-ocr` to repeat the self-test.
 
 ## Language profiles {#profiles}
 

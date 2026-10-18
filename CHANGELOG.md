@@ -5,11 +5,15 @@
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
 ### Fixed (2026-10-18) — light-ocr self-test failed after the upgrade
-- On hosts with many CPU cores the light-ocr self-test failed with *exit 70* and OCR fell back to the next engine.
-  Root cause: light-ocr ran under the same 3 GB virtual address-space cap as other converters, and ONNX Runtime's
-  native addon (plus one glibc malloc arena per thread) could not reserve its address space ("Unable to load the
-  verified native addon"). light-ocr now runs with an 8 GB address-space cap (virtual, not RAM) and two malloc arenas,
-  and every light-ocr failure includes light-ocr's own explanation.
+- The light-ocr self-test failed with *exit 70* on Debian 13 and OCR fell back to the next engine. Root cause (shown
+  once light-ocr's own message was surfaced): *Unable to locate @arcships/light-ocr-linux-x64-gnu*. That platform
+  package (the ONNX Runtime native addon) declares Node.js ≥ 22, and npm silently skips such an optional dependency on
+  Debian 13's Node.js 20, so `npm ci` installed light-ocr without its engine. The installer now adds the platform
+  package explicitly at the version and sha512 pinned in `package-lock.json` (the addon runs on Node 20), re-runs when
+  it is missing, and Settings/doctor name the missing package.
+- Every light-ocr failure includes light-ocr's own explanation. light-ocr also runs with an 8 GB virtual
+  address-space cap and two malloc arenas: the earlier 3 GB cap was close to what ONNX Runtime reserves on hosts with
+  many cores (reproduced as "Unable to load the verified native addon" under a lower cap).
 
 ### Added (2026-10-17) — AI Document Intelligence and the OCR engine order (Change Set Z)
 - **OCR engine order.** light-ocr (PP-OCRv6 Small, new), Tesseract and PaddleOCR in any order: Primary first, then the
