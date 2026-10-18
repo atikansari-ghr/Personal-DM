@@ -4,6 +4,13 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Fixed (2026-10-18) — light-ocr self-test failed after the upgrade
+- On hosts with many CPU cores the light-ocr self-test failed with *exit 70* and OCR fell back to the next engine.
+  Root cause: light-ocr ran under the same 3 GB virtual address-space cap as other converters, and ONNX Runtime's
+  native addon (plus one glibc malloc arena per thread) could not reserve its address space ("Unable to load the
+  verified native addon"). light-ocr now runs with an 8 GB address-space cap (virtual, not RAM) and two malloc arenas,
+  and every light-ocr failure includes light-ocr's own explanation.
+
 ### Added (2026-10-17) — AI Document Intelligence and the OCR engine order (Change Set Z)
 - **OCR engine order.** light-ocr (PP-OCRv6 Small, new), Tesseract and PaddleOCR in any order: Primary first, then the
   Fallbacks, in **Auto** or **Primary only** mode (Settings → OCR & processing). New installations use light-ocr →

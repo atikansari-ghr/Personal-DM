@@ -44,6 +44,7 @@ ENGINE_LABELS = {"light-ocr": "light-ocr (PP-OCRv6 Small)", "paddleocr": "Paddle
 ENGINES = ("light-ocr", "tesseract", "paddleocr")
 DEFAULT_ORDER = ["light-ocr", "tesseract", "paddleocr"]  # recommended for new installations
 LIGHT_OCR_VERSION = "0.5.9"
+LIGHT_OCR_ADDRESS_SPACE_MB = 8192  # virtual address space for one light-ocr process (see _light_call)
 LIGHT_PROFILES = {"en"}  # PP-OCRv6 Small reads Latin script (and Chinese); other profiles go to the next engine
 
 
@@ -235,11 +236,27 @@ def _light_call(args: list[str], timeout: int, cwd: Path):
         raise EngineError(f"light-ocr is not installed ({light_ocr_cli()} is missing). Run: sudo personaldocs repair",
                           "unavailable")
     try:
+        # The limit is on virtual address space, not RAM: ONNX Runtime and Node reserve far more than they use, and
+        # glibc reserves a malloc arena per thread (more cores, more reservations). With a 3 GB cap the native addon
+        # could not load on hosts with many cores ("Unable to load the verified native addon", exit 70), so light-ocr
+        # gets a generous cap and at most two arenas; its real use stays around 300-500 MB.
         return sandbox.run([settings.NODE_CMD, str(light_ocr_cli()), *args], timeout=timeout, cwd=cwd,
-                           memory_mb=max(2048, int(config.get("processing.paddle_memory_mb"))),
-                           extra_env={"NODE_OPTIONS": "--max-old-space-size=1024"}, cpu_seconds=timeout * 2 + 30)
+                           memory_mb=LIGHT_OCR_ADDRESS_SPACE_MB,
+                           extra_env={"NODE_OPTIONS": "--max-old-space-size=1024", "MALLOC_ARENA_MAX": "2",
+                                      "UV_THREADPOOL_SIZE": "2"}, cpu_seconds=timeout * 4 + 30)
     except sandbox.ToolError as exc:
         raise EngineError(str(exc), "timeout" if "timed out" in str(exc) else "unavailable")
+
+
+def _light_error(proc) -> str:
+    """light-ocr's own explanation (last non-empty stderr line), short and without paths of the documents."""
+    import re
+
+    lines = [ln.strip() for ln in (proc.stderr or b"").decode(errors="replace").splitlines() if ln.strip()]
+    lines = [ln for ln in lines if not re.match(r"^\d+: 0x|^at |^=+|^-+$", ln)]  # stack frames and banners
+    msg = next((ln for ln in reversed(lines) if ln.startswith("light-ocr:")), "") or next(
+        (ln for ln in lines if re.search(r"(?i)error|fatal|unable|cannot|failed", ln)), "") or (lines[-1] if lines else "")
+    return msg.replace("light-ocr:", "").strip()[:160]
 
 
 def light_ocr_status(refresh: bool = False) -> dict:
@@ -261,7 +278,8 @@ def light_ocr_status(refresh: bool = False) -> dict:
                 except (ValueError, AttributeError):
                     info["version"] = out.splitlines()[0][:80] if out else ""
                 if proc.returncode != 0:
-                    info["error"] = f"light-ocr did not start (exit {proc.returncode}). Is Node.js 20+ installed?"
+                    why = _light_error(proc)
+                    info["error"] = f"light-ocr did not start (exit {proc.returncode})" + (f": {why}" if why else ". Is Node.js 20+ installed?")
             except EngineError as exc:
                 info["error"] = str(exc)
             finally:
@@ -456,7 +474,9 @@ def light_ocr_recognise(images: list[tuple[Path, int]], workdir: Path, timeout: 
         except ValueError:
             err = (proc.stderr or b"").decode(errors="replace")
             category = "memory" if ("out of memory" in err.lower() or proc.returncode in (-9, 137)) else "failed"
-            raise EngineError(f"light-ocr stopped without a result (exit {proc.returncode}).", category)
+            why = _light_error(proc)
+            raise EngineError(f"light-ocr stopped without a result (exit {proc.returncode})" + (f": {why}" if why else "")
+                              + ".", category)
         for pg in data.get("pages") or []:
             lines = []
             for ln in pg.get("lines") or []:
