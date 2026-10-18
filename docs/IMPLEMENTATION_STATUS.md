@@ -108,7 +108,14 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - *light-ocr profiles.* The PP-OCRv6 Small bundle reads Latin script; the Arabic, Devanagari, Telugu and Tamil
   profiles go to the next engine with the reason recorded.
 - *Node.js.* light-ocr declares Node ≥ 22 but runs on Debian 13's Node 20 (verified with 0.5.9); the installer
-  requires 20+.
+  requires 20+. Its native platform package `@arcships/light-ocr-linux-{x64,arm64}-gnu` also declares Node ≥ 22,
+  and npm silently skips such an optional dependency, so the installer installs it explicitly (`npm pack`, sha512
+  compared with `package-lock.json`, `npm install --no-save --ignore-scripts`) and re-runs when it is missing;
+  `light_ocr_status` and doctor name the missing package. Confirmed working on the production Debian 13 LXC
+  (2026-10-18).
+- *light-ocr sandbox.* An 8 GB virtual address-space cap (not RAM), `MALLOC_ARENA_MAX=2`,
+  `UV_THREADPOOL_SIZE=2` and a 1 GB V8 heap: ONNX Runtime reserves much virtual memory on many-core hosts. Failures
+  carry light-ocr's own message (stack frames skipped).
 - *Upgrades.* An installation that had AI on with automatic analysis keeps *OCR + AI* (an opt-in already made) for
   new uploads only; nothing existing is queued. Automatic AI never uses a Cloud profile unless allowed (off).
 

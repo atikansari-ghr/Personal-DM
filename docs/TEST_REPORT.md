@@ -78,7 +78,8 @@ Playwright), 2026-10-17. Cloud providers (OpenAI, Anthropic, Gemini, OpenRouter)
 (emulated cloud) · AT-447 Passed · AT-448 Passed · AT-449 Passed · AT-450 Passed · AT-451 Passed · AT-452 Passed ·
 AT-453 Passed · AT-454 Passed (emulated providers) · AT-455 Passed · AT-456 Passed · AT-457 Passed · AT-458 Passed
 for throttling/concurrency rules (real concurrent load: see below) · AT-459 Passed · AT-460 automated part Passed
-(full `pytest`, `scripts/e2e.sh` with the one container-only AT-333 failure); production upgrade: see below.
+(full `pytest`, `scripts/e2e.sh` with the one container-only AT-333 failure); production upgrade with light-ocr:
+Passed after two fixes (see below).
 
 **Blocked / Not Executed** (never reported as passed):
 
@@ -87,7 +88,16 @@ for throttling/concurrency rules (real concurrent load: see below) · AT-459 Pas
 - **Real PaddleOCR** with the engine order (fake worker; live PaddleOCR tests skipped as before).
 - **AT-458** under real concurrent OCR, ClamAV and backup load on the target 2-CPU LXC (throttling and concurrency
   rules are unit-tested; the load itself was not run).
-- `personaldocs install/upgrade` installing light-ocr with `npm ci` on Debian 13 and a production smoke test (AT-460).
+
+**Production upgrade (Debian 13 LXC, Node.js 20), 2026-10-18.** The first `sudo personaldocs upgrade` applied
+`core.0008` and `ai.0003` and completed, but the light-ocr self-test failed (*exit 70*) and OCR used the next engine.
+Two fixes followed: an 8 GB address-space cap and light-ocr's own error message in every failure, which then showed
+the real cause — *Unable to locate @arcships/light-ocr-linux-x64-gnu*, the native platform package that npm skips on
+Node 20 because it declares Node ≥ 22 (reproduced here with Node 20.19.5: `npm ci` omits it, `--force` does not
+help). The installer now installs that package explicitly at the lockfile's version and sha512. After upgrading
+again, the administrator reported **`sudo personaldocs ocr light-ocr` passing and light-ocr working on the production
+server** — AT-460 production smoke test for light-ocr: **Passed** (reported by the administrator, not run from this
+container).
 
 ## Change set Y: OCR → AI document analysis pipeline {#change-set-y}
 

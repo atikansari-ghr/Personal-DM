@@ -42,6 +42,9 @@ already used, so they are AT-441…AT-460, where prompt AT-n = AT-(n+25).)
 ## Consequences
 
 - Upgraded installations behave as before; light-ocr must be added to the order by the administrator.
+- On Node.js 20 (Debian 13) npm skips light-ocr's native platform package because it declares Node ≥ 22; the
+  installer installs it explicitly, checksum-verified against the lockfile. This must be kept in mind when the pin
+  is raised: update `package-lock.json` and re-run the live light-ocr test on Node 20.
 - Cloud providers are tested against a local emulation (`tests/fake_ai_server.py`); real accounts are part of the
   release checklist, not the automated suite.
 - Rolling back `ai` to 0002 removes AI outputs and provenance fields; documents, OCR and suggestions stay.

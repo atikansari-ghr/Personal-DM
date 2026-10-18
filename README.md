@@ -85,8 +85,10 @@ come from the documents themselves, and everything runs on a small server you co
   the files (front and back of a card as one job), the pages or ranges and the languages (English, Arabic, Hindi
   and more) and can remove OCR data again (or disable OCR for a single document) without touching the original. An OCR review queue lists what waits for
   confirmation, and the local AI only reads document types that allow it.
-- Local OCR with **PaddleOCR PP-OCRv5** (default) for photos, curved pages and Arabic/Devanagari/Telugu/Tamil +
-  English, with Tesseract/OCRmyPDF (searchable PDF/A) as Legacy / Fallback. Each result shows its engine. The
+- Local OCR with up to three engines in an **OCR engine order** you choose (Primary, then Fallbacks; Auto or
+  Primary only): **light-ocr (PP-OCRv6 Small)**, fast and light on CPU for Latin script (default for new
+  installations); **Tesseract/OCRmyPDF** (searchable PDF/A); and **PaddleOCR PP-OCRv5** for photos, curved pages and
+  Arabic/Devanagari/Telugu/Tamil + English. Each result shows its engine. The
   administrator sees all existing OCR data and can bulk remove, disable or re-process it, clean orphans, and
   compare engines ([OCR engines](docs/guides/ocr-engines.md)). Tesseract uses measured preprocessing: phone-photo orientation,
   upside-down and sideways scans, deskew, contrast and denoise. On the synthetic benchmark, mean accuracy went from
@@ -146,10 +148,15 @@ come from the documents themselves, and everything runs on a small server you co
   travel access, and trusted/blocked IPs with lock-out protection.
 - Security alerts and privacy-safe traffic analytics (GoAccess).
 
-**Local AI (optional, off by default)**
-- OCR assist, smart organisation suggestions, a document assistant and semantic search, using your own LM Studio or
-  Ollama server.
-- Permission-filtered, suggestions only, and never a cloud fallback.
+**AI Document Intelligence (optional, off by default)**
+- AI Actions per document (Analyze, Extract Metadata, Verify OCR, Summarize, Ask AI, Suggest Type/Filename, Detect
+  Expiry), smart organisation suggestions, a document assistant and semantic search. AI modes: AI on Demand
+  (default), OCR Only, OCR + AI, Smart Auto.
+- **Local** profiles (your own LM Studio or Ollama server) and optional **Cloud** profiles (OpenAI, Anthropic,
+  Gemini, OpenRouter) with per-profile switches for what may be sent; originals only after confirmation, and never
+  a silent cloud fallback.
+- Permission-filtered, suggestions only (Accept / Edit / Reject), with an AI History of what was sent where
+  ([AI Document Intelligence](docs/guides/local-ai.md)).
 
 **Operations**
 - Installable PWA ("Personal DM") with camera upload, offline copies per account and device (whole folders with or without subfolders, or single documents) and streaming ZIP exports.
@@ -292,8 +299,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/atikansari-ghr/Personal-
 **What it does:** it checks the system (Debian 13, root, systemd, CPU, memory, disk, network). It then downloads the
 source to `/root/personaldocs-src` and starts the guided installer, which:
 - asks for the domain, the reverse proxy address, the NAS and the backup time
-- installs PostgreSQL, Tesseract (with orientation detection), OCRmyPDF, LibreOffice, GoAccess, a Python virtualenv
-  and the built web app
+- installs PostgreSQL, Tesseract (with orientation detection), OCRmyPDF, light-ocr (pinned, checksum-verified),
+  LibreOffice, GoAccess, a Python virtualenv and the built web app
 - creates the systemd services, connects the NAS and runs a first backup and health check
 
 It is safe to run again: answers are remembered (never secrets) and finished steps are skipped.

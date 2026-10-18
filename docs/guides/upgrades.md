@@ -28,8 +28,10 @@ sudo personaldocs doctor
 
 - **light-ocr is installed** (non-fatal): the pinned `@arcships/light-ocr` 0.5.9 package (PP-OCRv6 Small on ONNX
   Runtime, CPU, about 130 MB) goes to `/opt/personaldocs/light-ocr` with `npm ci` from a lockfile, and a real
-  recognition self-test runs. It needs Node.js 20+ (installed from Debian if missing). If it cannot be installed,
-  OCR simply uses the next engine. `--without-light-ocr` skips it.
+  recognition self-test runs. It needs Node.js 20+ (installed from Debian if missing). On Node 20 npm skips the
+  native platform package `@arcships/light-ocr-linux-x64-gnu` (it declares Node ≥ 22), so the installer adds it
+  explicitly at the version and sha512 pinned in the lockfile. If light-ocr cannot be installed, OCR simply uses the
+  next engine. `--without-light-ocr` skips it.
 - **Migration `core.0008`** turns the old *Default OCR engine* / *Fall back to Tesseract* settings into the new
   **OCR engine order** and **OCR mode**, keeping what you had: PaddleOCR with fallback → *PaddleOCR → Tesseract*
   (Auto); PaddleOCR without fallback → *PaddleOCR* (Primary only); Tesseract → *Tesseract*. light-ocr is **not** added
@@ -55,6 +57,20 @@ sudo personaldocs doctor
    Local/Cloud, the data sent and the status.
 4. `sudo personaldocs doctor` shows *OCR engine order*, *light-ocr installed / self-test*, *AI mode*, *AI default
    profile* and its provider/model/capabilities, never a key.
+
+### If you upgraded before 2026-10-18 and the light-ocr self-test fails (exit 70)
+
+Earlier builds left out light-ocr's native platform package on Node 20. Upgrade again; it repairs the existing
+installation (no new migrations, your settings stay):
+
+```
+sudo personaldocs upgrade
+ls /opt/personaldocs/light-ocr/node_modules/@arcships/     # light-ocr and light-ocr-linux-x64-gnu
+sudo personaldocs ocr light-ocr                           # self-test must pass
+```
+
+`sudo personaldocs ocr light-ocr-reinstall` reinstalls only light-ocr. Then add light-ocr to the **OCR engine order**
+as in step 1 above. More causes: [OCR engines → troubleshooting](ocr-engines.md).
 
 ### Rollback
 
