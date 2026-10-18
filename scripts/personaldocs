@@ -167,12 +167,15 @@ install_light_ocr() { # install_light_ocr RELEASE_DIR — pinned @arcships/light
     c_warn "Node.js could not be installed; light-ocr is not available (OCR uses the next engine in the order)."; return 1; }
   local major; major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
   if [ "$major" -lt 20 ]; then c_warn "light-ocr needs Node.js 20 or newer (found $(node --version 2>/dev/null)); OCR uses the next engine."; return 1; fi
+  local native; native=$(light_ocr_native_pkg) || { c_warn "light-ocr has no build for this platform ($(uname -m)); OCR uses the next engine."; return 1; }
   local want have; want=$(sha256sum "$src/package-lock.json" | cut -c1-64); have=$(cat "$LIGHT_OCR_HOME/.lock.sha256" 2>/dev/null || true)
-  if [ "$want" != "$have" ] || [ ! -f "$LIGHT_OCR_HOME/node_modules/@arcships/light-ocr/src/cli.cjs" ]; then
+  if [ "$want" != "$have" ] || [ ! -f "$LIGHT_OCR_HOME/node_modules/@arcships/light-ocr/src/cli.cjs" ] \
+     || [ ! -d "$LIGHT_OCR_HOME/node_modules/$native" ]; then
     log "light-ocr (PP-OCRv6 Small) runtime"
     local tmp="$LIGHT_OCR_HOME.new"; rm -rf "$tmp"; install -d -m 0755 "$tmp"
     cp "$src/package.json" "$src/package-lock.json" "$tmp/"
-    if (umask 022; cd "$tmp" && timeout 1200 npm ci --omit=dev --ignore-scripts --no-audit --no-fund >>"$LOG" 2>&1); then
+    if (umask 022; cd "$tmp" && timeout 1200 npm ci --omit=dev --ignore-scripts --no-audit --no-fund >>"$LOG" 2>&1) \
+       && light_ocr_native_install "$tmp" "$native"; then
       echo "$want" >"$tmp/.lock.sha256"
       rm -rf "$LIGHT_OCR_HOME.old"; [ -d "$LIGHT_OCR_HOME" ] && mv "$LIGHT_OCR_HOME" "$LIGHT_OCR_HOME.old"
       mv "$tmp" "$LIGHT_OCR_HOME"; rm -rf "$LIGHT_OCR_HOME.old"
@@ -185,6 +188,36 @@ install_light_ocr() { # install_light_ocr RELEASE_DIR — pinned @arcships/light
   chmod -R a+rX "$LIGHT_OCR_HOME"
   env_set PD_LIGHT_OCR_HOME "$LIGHT_OCR_HOME"
   light_ocr_selftest "$rel" || true
+}
+
+light_ocr_native_pkg() { # the platform package with the ONNX Runtime native addon, e.g. @arcships/light-ocr-linux-x64-gnu
+  case "$(uname -m)" in
+    x86_64|amd64) echo "@arcships/light-ocr-linux-x64-gnu";;
+    aarch64|arm64) echo "@arcships/light-ocr-linux-arm64-gnu";;
+    *) return 1;;
+  esac
+}
+
+light_ocr_native_install() { # light_ocr_native_install DIR PACKAGE — make sure the native addon package is present
+  # The platform packages declare engines.node >= 22, and npm silently skips an optional dependency whose engine
+  # does not match — so on Debian 13 (Node.js 20) `npm ci` leaves it out and light-ocr cannot start ("Unable to
+  # locate @arcships/light-ocr-linux-x64-gnu"). The addon itself runs on Node 20, so install that one package
+  # explicitly, at the version and checksum pinned in our package-lock.json.
+  local dir=$1 pkg=$2 ver integrity tgz got
+  [ -d "$dir/node_modules/$pkg" ] && return 0
+  ver=$(cd "$dir" && node -p "(require('./package-lock.json').packages['node_modules/$pkg']||{}).version||''")
+  integrity=$(cd "$dir" && node -p "(require('./package-lock.json').packages['node_modules/$pkg']||{}).integrity||''")
+  [ -n "$ver" ] && [ -n "$integrity" ] || { echo "light-ocr: $pkg is not in package-lock.json" >>"$LOG"; return 1; }
+  tgz=$(cd "$dir" && npm pack --silent "$pkg@$ver" 2>>"$LOG" | tail -1)
+  [ -n "$tgz" ] && [ -f "$dir/$tgz" ] || { echo "light-ocr: could not download $pkg@$ver" >>"$LOG"; return 1; }
+  got=$(node -e "process.stdout.write('sha512-'+require('crypto').createHash('sha512').update(require('fs').readFileSync(process.argv[1])).digest('base64'))" "$dir/$tgz")
+  if [ "$got" != "$integrity" ]; then
+    echo "light-ocr: checksum mismatch for $pkg@$ver (expected $integrity, got $got)" >>"$LOG"; rm -f "$dir/$tgz"; return 1
+  fi
+  (umask 022; cd "$dir" && npm install --no-save --no-package-lock --omit=dev --ignore-scripts --no-audit --no-fund "./$tgz" >>"$LOG" 2>&1)
+  local rc=$?
+  rm -f "$dir/$tgz"
+  [ $rc -eq 0 ] && [ -d "$dir/node_modules/$pkg" ]
 }
 
 light_ocr_selftest() { # a real recognition of a generated sample, through the app (same code path as OCR jobs)

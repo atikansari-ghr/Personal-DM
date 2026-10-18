@@ -259,6 +259,16 @@ def _light_error(proc) -> str:
     return msg.replace("light-ocr:", "").strip()[:160]
 
 
+def light_ocr_native_dir() -> Path | None:
+    """The platform package that holds the ONNX Runtime native addon (None on an unsupported platform)."""
+    import platform
+
+    arch = {"x86_64": "x64", "amd64": "x64", "aarch64": "arm64", "arm64": "arm64"}.get(platform.machine().lower())
+    if not arch:
+        return None
+    return Path(settings.LIGHT_OCR_HOME) / "node_modules" / "@arcships" / f"light-ocr-linux-{arch}-gnu"
+
+
 def light_ocr_status(refresh: bool = False) -> dict:
     """Installed? which version? Cheap (no inference); cached for 10 minutes. Health is the self-test below."""
     from apps.security.models import HealthState
@@ -267,7 +277,12 @@ def light_ocr_status(refresh: bool = False) -> dict:
     fresh = st.get("checked_at") and (timezone.now().timestamp() - st.get("checked_ts", 0)) < 600
     if refresh or not fresh:
         info = {"installed": light_ocr_cli().exists(), "home": str(settings.LIGHT_OCR_HOME), "version": "", "error": ""}
-        if info["installed"]:
+        native = light_ocr_native_dir()
+        if info["installed"] and (native is None or not native.exists()):
+            # npm skips the platform package on Node.js 20 (it declares node >= 22); the installer adds it explicitly
+            info["error"] = (f"the native package {native.name if native else 'for this platform'} is missing. "
+                             "Run: sudo personaldocs ocr light-ocr-reinstall")
+        if info["installed"] and not info["error"]:
             workdir = _light_workdir()
             try:
                 proc = _light_call(["info", "--version"], timeout=60, cwd=workdir)
