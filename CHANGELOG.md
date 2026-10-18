@@ -10,7 +10,8 @@ The first implementation of the full initial-release scope. See `docs/IMPLEMENTA
   package (the ONNX Runtime native addon) declares Node.js ≥ 22, and npm silently skips such an optional dependency on
   Debian 13's Node.js 20, so `npm ci` installed light-ocr without its engine. The installer now adds the platform
   package explicitly at the version and sha512 pinned in `package-lock.json` (the addon runs on Node 20), re-runs when
-  it is missing, and Settings/doctor name the missing package.
+  it is missing, and Settings/doctor name the missing package. Confirmed working on the production Debian 13 LXC
+  after `sudo personaldocs upgrade`.
 - Every light-ocr failure includes light-ocr's own explanation. light-ocr also runs with an 8 GB virtual
   address-space cap and two malloc arenas: the earlier 3 GB cap was close to what ONNX Runtime reserves on hosts with
   many cores (reproduced as "Unable to load the verified native addon" under a lower cap).

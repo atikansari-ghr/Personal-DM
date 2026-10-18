@@ -16,7 +16,7 @@ queue and suggested details are described in [OCR, details and corrections](ocr-
 
 | Engine | Use | Notes |
 | --- | --- | --- |
-| **light-ocr (PP-OCRv6 Small)** | Recommended Primary for new installations | The [`@arcships/light-ocr`](https://github.com/arcships/light-ocr) Node.js package (Apache-2.0), pinned to 0.5.9, installed in `/opt/personaldocs/light-ocr`. Fast and light on CPU (about 2 s per page), stores text positions and a confidence per line. Reads Latin script (the English profile); other profiles go to the next engine. Needs Node.js 20 or newer (Debian 13 ships it). |
+| **light-ocr (PP-OCRv6 Small)** | Recommended Primary for new installations | The [`@arcships/light-ocr`](https://github.com/arcships/light-ocr) Node.js package (Apache-2.0), pinned to 0.5.9, installed in `/opt/personaldocs/light-ocr`. Fast and light on CPU (about 2 s per page), stores text positions and a confidence per line. Reads Latin script (the English profile); other profiles go to the next engine. Needs Node.js 20 or newer (Debian 13 ships it; on Node 20 the installer adds the native platform package npm would skip — verified on a production Debian 13 LXC). |
 | **Tesseract** | Always installed; fallback, explicit choice, comparison | The engine every earlier release used. It also produces the searchable PDF copy for Tesseract runs. |
 | **PaddleOCR (PP-OCRv5)** | Best for photos, skewed pages and the Arabic / Devanagari / Telugu / Tamil profiles | Runs in its own isolated Python environment (`/opt/personaldocs/paddle-venv`), on CPU, one job at a time. Stores text **positions** (boxes) and a score per line. |
 
