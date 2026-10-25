@@ -116,7 +116,7 @@ export default function FamilyPanel() {
   const patchGroup = async (id: string, body: any) => { try { await api(`family/groups/${id}`, { method: "PATCH", body }); reload(); } catch (e: any) { toast(e.message, "error"); } };
   return (
     <div className="stack">
-      <div className="card">
+      <div className="card cq">
         <h2>Members {admin && <button className="btn small primary" onClick={() => setDialog({ kind: "member" })}>Add member</button>}</h2>
         <table className="responsive"><thead><tr><th>Person</th><th className="hide-mobile">Username</th><th className="hide-mobile">Last sign-in</th><th>Status</th>{administrator && <th />}</tr></thead><tbody>
           {members.data.members.map((m) => (

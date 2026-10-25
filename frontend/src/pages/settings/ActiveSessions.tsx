@@ -107,7 +107,7 @@ export default function ActiveSessions() {
       </div>
       {error && <div className="alert error">{error}</div>}
       {!data ? <Skeleton lines={5} /> : data.sessions.length === 0 ? <div className="empty small">No sessions match.</div> : (
-        <div className="card">
+        <div className="card cq">
           <table className="responsive" data-session-table><thead><tr><th>User</th><th>State</th><th className="hide-mobile">IP address</th><th>Location / trust</th><th className="hide-mobile">Device</th><th className="hide-mobile">Signed in</th><th>Last activity</th><th className="hide-mobile">Method</th><th>Risk</th></tr></thead>
             <tbody>
               {data.sessions.map((r: SessionRow) => (

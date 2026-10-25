@@ -145,7 +145,7 @@ export default function OfflinePage() {
           Keep my offline copies on this device after I sign out
         </label>
         <p className="small muted">{policyClears ? "Your administrator requires offline copies to be removed at sign-out." : "By default your offline copies are deleted when you sign out."} Other accounts on this device never see them. When you reconnect, copies you no longer have access to are removed. {st.policy?.max_days_without_sync ? `Copies lock after ${st.policy.max_days_without_sync} days without a sync.` : ""} The app cannot erase copies from a device that stays offline.</p>
-        {!offline && <button className="btn danger" onClick={() => setConfirm("forget")}><Icon name="x" /> Remove all offline copies from this device</button>}
+        {!offline && <button className="btn danger" onClick={() => setConfirm("forget")}><Icon name="x" /> Remove all offline copies</button>}
       </div>
 
       {!offline && others.length > 0 && (

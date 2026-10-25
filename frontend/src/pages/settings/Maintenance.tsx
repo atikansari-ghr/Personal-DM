@@ -303,12 +303,16 @@ function Caches({ onStart }: { onStart: (op: string, body?: any) => void }) {
   const sel = chosen ?? data.caches.map((c: any) => c.key);
   return (
     <div className="stack small" data-caches>
-      <table className="responsive"><thead><tr><th></th><th>Cache</th><th>Size</th><th>Effect of clearing</th><th>Regeneration</th></tr></thead><tbody>
+      <ul className="mj-cache-list">
         {data.caches.map((c: any) => (
-          <tr key={c.key}><td><input type="checkbox" aria-label={`Clear ${c.label}`} checked={sel.includes(c.key)} onChange={(e) => setChosen(e.target.checked ? [...sel, c.key] : sel.filter((x: string) => x !== c.key))} /></td>
-            <td>{c.label}</td><td>{c.bytes == null ? `${c.items} item(s)` : `${formatBytes(c.bytes)} (${c.items})`}</td><td>{c.effect}</td><td>{c.regeneration}</td></tr>
+          <li key={c.key} data-cache={c.key}>
+            <label className="check"><input type="checkbox" aria-label={`Clear ${c.label}`} checked={sel.includes(c.key)} onChange={(e) => setChosen(e.target.checked ? [...sel, c.key] : sel.filter((x: string) => x !== c.key))} />
+              <span><strong>{c.label}</strong> <span className="muted">· {c.bytes == null ? `${c.items} item(s)` : `${formatBytes(c.bytes)} (${c.items})`}</span></span></label>
+            <div><span className="muted">Effect of clearing:</span> {c.effect}</div>
+            <div><span className="muted">Regeneration:</span> {c.regeneration}</div>
+          </li>
         ))}
-      </tbody></table>
+      </ul>
       <p className="muted">Never cleared: {data.never.join(", ")}.</p>
       <div><button className="btn small" disabled={!sel.length} onClick={() => setConfirm(true)}>Clear selected caches…</button></div>
       {confirm && <Confirm title="Clear safe caches" confirmLabel="Clear caches" onClose={() => setConfirm(false)}

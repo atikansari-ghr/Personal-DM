@@ -1196,9 +1196,29 @@ code.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 .sessions-rows li { gap: 0.6rem; min-width: 0; }
 .sessions-rows .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .mj-cards > *, .mj-panels > * { min-width: 0; }
-.mj-cards > .card { overflow-x: auto; }
-.mj-cards .kv-table, [data-system-info] { table-layout: fixed; width: 100%; }
-.mj-cards .kv-table td, [data-system-info] td { overflow-wrap: anywhere; }
+/* every card fits its column at any width or browser zoom: nothing is clipped or scrolls sideways inside a card */
+[data-maintenance] .card, [data-job], .card.cq { container-type: inline-size; }
+/* wide tables in a narrow card (tablet widths, zoomed-in desktop): stack each row like on a phone instead of scrolling */
+@container (max-width: 56rem) {
+  table.responsive thead { display: none; }
+  table.responsive tr { display: block; border-top: 1px solid var(--line); padding: 0.5rem 0; }
+  table.responsive td { display: block; border-top: 0; padding: 0.2rem 0.6rem; }
+  table.responsive .hide-mobile { display: none !important; }
+}
+[data-maintenance] .kv-table, [data-job] .kv-table { table-layout: fixed; width: 100%; }
+[data-maintenance] .kv-table td, [data-job] .kv-table td, [data-maintenance] code { overflow-wrap: anywhere; word-break: break-word; }
+@container (max-width: 34rem) {
+  .kv-table, .kv-table tbody, .kv-table tr, .kv-table th, .kv-table td { display: block; width: auto !important; }
+  .kv-table tr { padding: 0.35rem 0; border-top: 1px solid var(--line); }
+  .kv-table tr:first-child { border-top: 0; }
+  .kv-table th, .kv-table td { padding: 0.05rem 0; border: 0; }
+}
+.mj-cards > [data-card="caches"] { grid-column: 1 / -1; }
+.mj-cache-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); column-gap: 1.5rem; }
+.mj-cache-list li { display: grid; align-content: start; gap: 0.15rem; padding: 0.5rem 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.mj-cache-list .check { align-items: flex-start; font-weight: 400; }
+.mj-cache-list .check input { flex: none; margin-top: 0.1rem; }
+.mj-cache-list li > div { padding-inline-start: calc(18px + 0.5rem); }
 .filter-row > select, .filter-row > input, .filter-row > label { width: auto; flex: 0 1 13rem; min-width: 9rem; }
 .filter-row > label input { width: auto; }
 .mj-cards .kv-table th { width: 38%; }

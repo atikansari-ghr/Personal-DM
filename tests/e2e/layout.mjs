@@ -9,6 +9,7 @@
 //   overlap    two controls (buttons, links, fields) overlap each other
 //   offscreen  a control sticks out of the viewport without a scrolling container
 //   noname     an icon-only control has no accessible name
+//   clipped    the content of a card or tile is wider than the card (cut off at its edge or scrolled inside it)
 // plus, on the document screen: the reproduced header defect (title squeezed beside the actions), menus and dialogs
 // inside the viewport, keyboard focus visible, and Arabic / very long filenames.
 //
@@ -32,6 +33,9 @@ const VIEWPORTS = [
   ["desktop-1920", 1920, 1080], ["desktop-1440", 1440, 900], ["desktop-1366", 1366, 768],
   ["tablet-landscape", 1180, 820], ["tablet-portrait", 820, 1180], ["mobile-430", 430, 932], ["mobile-390", 390, 844],
 ];
+// browser zoom on a 1440x900 desktop: zooming in or out changes the CSS viewport (and the device pixel ratio) exactly like this
+const ZOOMS = [["zoom-50", 2880, 1800, 0.5], ["zoom-67", 2150, 1343, 0.67], ["zoom-125", 1152, 720, 1.25],
+  ["zoom-150", 960, 600, 1.5], ["zoom-200", 720, 450, 2], ["zoom-300", 480, 300, 3]];
 // synthetic filenames: short, normal, long, very long without spaces, Arabic + digits
 const NAMES = ["Iqama.jpg", "Iqama Renewal Fees 2018-19.JPG",
   "Family residence permit renewal receipt and payment confirmation 2018-19 final copy.JPG",
@@ -96,6 +100,7 @@ const ROUTES = [
   ["security-test", "/settings/security?view=test"], ["security-updates", "/settings/security?view=updates"],
   ["security-firewall", "/settings/security?view=firewall"], ["security-records", "/settings/security?view=records"],
   ["security-storage", "/settings/security?view=storage"], ["security-access", "/settings/security?view=access"],
+  ["security-sessions", "/settings/security?view=sessions"], ["settings-system", "/settings/system"],
   ["help", "/help/getting-started"],
 ];
 
@@ -129,6 +134,12 @@ const audit = () => {
       const d = Math.abs((tr.top + tr.bottom) / 2 - (ir.top + ir.bottom) / 2);
       if (tr.height && d > 3) out.push({ kind: "iconalign", el: label(el), detail: `${d.toFixed(1)}px off` });
     }
+  }
+  // cards and tiles: their content must fit the card (a scroll container inside the card, e.g. a preview, is fine)
+  for (const el of document.querySelectorAll(".card, .widget, [data-widget]")) {
+    if (!vis(el) || el.closest(".viewer-scroll")) continue;
+    const over = el.scrollWidth - el.clientWidth;
+    if (over > 1) out.push({ kind: "clipped", el: (el.querySelector("h2, h3, h4, strong")?.textContent || label(el)).trim().slice(0, 60), detail: `${over}px wider than the card` });
   }
   const ctrls = [...document.querySelectorAll("a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=tab]")].filter(vis);
   for (const el of ctrls) {
@@ -230,6 +241,25 @@ for (const [vname, w, h] of VIEWPORTS) {
     await page.keyboard.press("Tab");
     const f = await page.evaluate(() => { const e = document.activeElement; const cs = getComputedStyle(e); return { name: e.getAttribute("aria-label") || e.textContent.trim(), ring: cs.outlineStyle !== "none" || cs.boxShadow !== "none" }; });
     expect(f.name && f.ring, `focus ring on ${JSON.stringify(f)}`);
+  });
+  await ctx.close();
+}
+
+// AT-237 at browser zoom levels 50 %..300 %: every audited screen still fits (no sideways page scroll, nothing clipped in a tile)
+for (const [zname, w, h, dpr] of ZOOMS) {
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dpr });
+  const page = await signIn(ctx);
+  await step(`AT-237 ${zname}: every audited screen fits the page at this browser zoom`, async () => {
+    const found = [];
+    for (const [rname, url] of ROUTES) {
+      await page.goto(BASE + url);
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(350);
+      for (const d of await page.evaluate(audit)) if (!ALLOW.has(`${rname}:${d.kind}`)) found.push({ vp: zname, route: rname, ...d });
+      if (["overview", "settings-system", "security-sessions"].includes(rname)) await page.screenshot({ path: path.join(OUT, `${zname}-${rname}.png`) });
+    }
+    defects.push(...found);
+    expect(found.length === 0, `${found.length} layout defect(s): ${JSON.stringify(found.slice(0, 8))}`);
   });
   await ctx.close();
 }

@@ -2,8 +2,8 @@
 # UI layout rules (for contributors)
 
 These rules came out of Change Set R (UI alignment and responsive layout). They keep text, icons, badges and actions
-aligned on every screen without per-page pixel nudges. `tests/e2e/layout.mjs` checks them automatically on 27
-screens at seven viewport sizes.
+aligned on every screen without per-page pixel nudges. `tests/e2e/layout.mjs` checks them automatically on 29
+screens at seven viewport sizes and six browser zoom levels (50 %–300 %).
 
 ## The rule behind most alignment bugs {#flex-basis}
 
@@ -35,6 +35,15 @@ same treatment:
 - Below 34 rem, *Share* and *Open full page* become icon buttons. They keep their accessible names (`aria-label`
   and `title`); *Download* keeps its label.
 - Below 34 rem, the viewer toolbar is one row that scrolls sideways instead of several ragged rows.
+
+Cards and tiles follow the same rule, so they fit at any window size **and any browser zoom** (zooming in to 200 % on a
+1440 px screen is the same as a 720 px window):
+
+- Maintenance & Operations cards and the job dialog are size containers: below 34 rem a key/value table
+  (`.kv-table`) shows each label above its value instead of squeezing two columns.
+- Add `cq` to a card that holds a wide `table.responsive` (Active Sessions, Family members). Below 56 rem of card
+  width the rows stack like on a phone, so nothing is cut off at the card edge.
+- Lists with several facts per item (Clear Safe Caches) are stacked lists, not five-column tables.
 
 ## Responsive modes {#responsive}
 
@@ -69,7 +78,10 @@ Settings rows switch to a single column whenever a row is narrower than two 16 r
 - squeezed text and wrapped button labels;
 - misaligned icons;
 - overlapping or off-screen controls;
-- unnamed icon-only controls.
+- unnamed icon-only controls;
+- clipped cards and tiles: content wider than its card (cut off at the edge or scrolling inside the card).
+
+The same screens are then checked at browser zoom 50 %, 67 %, 125 %, 150 %, 200 % and 300 % of a 1440×900 desktop.
 
 It also checks the document header with five synthetic file names (short, normal, long, very long without spaces,
 Arabic), plus menus and dialogs inside the viewport and visible keyboard focus.
