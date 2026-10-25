@@ -194,10 +194,17 @@ def effective_groups(user) -> dict:
         return {"groups": [{"id": GENERAL, "name": "General", "collapsed": False, "widgets": widgets}],
                 "known": list(WIDGETS), "customized": False}
     data = normalize_groups(stored)
-    shown = {w for g in data["groups"] for w in g["widgets"]}
-    new = [w for w in DEFAULT_WIDGETS if w not in data["known"] and w not in shown]
+    # the widget selection (also editable in Settings → Appearance → Overview widgets) decides which tiles are shown;
+    # groups only arrange them: a tile chosen there but not in a group goes to General, a tile removed there leaves
+    chosen = set(widgets)
+    for g in data["groups"]:
+        g["widgets"] = [w for w in g["widgets"] if w in chosen]
+    general = next(g for g in data["groups"] if g["id"] == GENERAL)
+    placed = {w for g in data["groups"] for w in g["widgets"]}
+    general["widgets"].extend(w for w in widgets if w not in placed)
+    new = [w for w in DEFAULT_WIDGETS if w not in data["known"] and w not in chosen]
     if new:
-        next(g for g in data["groups"] if g["id"] == GENERAL)["widgets"].extend(new)
+        general["widgets"].extend(new)
     return {**data, "customized": True}
 
 

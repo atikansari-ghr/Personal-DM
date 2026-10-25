@@ -460,6 +460,10 @@ def test_at471_layouts_are_personal(family, clients):
     son.put("/api/dashboard/layout", {"groups": [{"id": "general", "name": "General", "widgets": ["weather"]}], "layout": {}},
             format="json")
     assert [g["id"] for g in _layout(mom)["groups"]] == ["general", "mine"]
+    # the widget selection in Settings → Appearance still decides what is shown: a tile added there goes to General
+    mom.put("/api/settings", {"values": {"me.dashboard_widgets": ["date", "recent", "security"]}}, format="json")
+    got = {g["id"]: g["widgets"] for g in _layout(mom)["groups"]}
+    assert got == {"general": ["date", "security"], "mine": ["recent"]}
     assert set(UserSetting.objects.filter(key="me.dashboard_groups").values_list("user__username", flat=True)) == {"mom", "son1"}
     # the generic settings API cannot write another person's layout either
     r = mom.put("/api/settings", {"values": {"me.dashboard_groups": {"groups": []}}, "user": str(family["son1"].pk)}, format="json")
