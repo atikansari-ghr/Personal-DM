@@ -135,7 +135,7 @@ def database_health() -> dict:
     return _panel("database", "Database", state,
                   f"{pending} migration(s) pending" if pending else "Reachable; all migrations applied",
                   [("Version", version), ("Size", _fmt_bytes(size)), ("Connections", conns if conns is not None else "—"),
-                   ("Pending migrations", pending)], "/settings/system/maintenance")
+                   ("Pending migrations", pending)], "/settings/system")
 
 
 def ocr_health() -> dict:
@@ -210,7 +210,7 @@ def storage_panel() -> dict:
     return _panel("storage", "Storage", state, f"{h['percent']}% used, {_fmt_bytes(h['free'])} free",
                   [("Total", _fmt_bytes(h["total"])), ("Free", _fmt_bytes(h["free"])),
                    ("Warning / critical at", f"{h['thresholds']['warning']}% / {h['thresholds']['critical']}%")],
-                  "/settings/security/storage")
+                  "/settings/security?view=storage")
 
 
 def health_panels() -> list[dict]:

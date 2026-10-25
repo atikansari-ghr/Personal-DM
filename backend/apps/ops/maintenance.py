@@ -275,7 +275,8 @@ def start(operation: str, user, *, params: dict | None = None, parent: MJ | None
 def retry(job: MJ, user, request=None) -> MJ:
     if job.active:
         raise MaintenanceError("This operation is still running.", "active", 409)
-    params = dict(job.params or {})
+    # only what the person chose (a target version, caches); a repair starts again from a fresh analysis
+    params = {k: v for k, v in (job.params or {}).items() if k in ("ref", "keys")}
     return start(job.operation, user, params=params, parent=job, request=request)
 
 
@@ -565,6 +566,8 @@ def sync(job: MJ) -> MJ:
     if changed:
         job.save()
     if state in ("done", "failed"):
+        if job.operation == "repair" and (job.params or {}).get("verify_queued"):
+            return job  # the helper part is finished; the worker is verifying
         _finalize_root(job, st, meta)
     elif not state and now - job.requested_at > HELPER_START_TIMEOUT:
         _finish(job, MJ.FAILED, "The host helper did not start the operation.", failure_class="helper_unavailable",
@@ -658,6 +661,7 @@ def _finalize_root(job: MJ, st: dict, meta: dict) -> None:
                                f"{job.version_from} → {job.version_to}", severity="success")
         elif op == "repair":
             job.status = MJ.RUNNING
+            job.params = {**(job.params or {}), "verify_queued": True}
             job.save()
             jobs.enqueue("maintenance_task", {"job": str(job.id), "phase": "verify"}, priority=10, max_attempts=1)
         elif op == "rollback":
@@ -737,7 +741,7 @@ def _notify_admins(event: str, job: MJ, title: str, summary: str, *, severity: s
     from apps.accounts.models import User
     from apps.notify import events
 
-    link = f"/settings/system/maintenance?job={job.id}"
+    link = f"/settings/system?job={job.id}"
     for admin in User.objects.filter(is_main_admin=True, is_active=True):
         events.notify(admin, event, key=f"maintenance:{job.id}:{event}", title=title, summary=sanitize.redact(summary)[:300],
                       facts=[("Operation", OP_LABELS.get(job.operation, job.operation)),

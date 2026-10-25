@@ -345,6 +345,21 @@ once and is never trusted again. You are then offered next steps, such as changi
 
 See [sign-in security and map](guides/security-map.md).
 
+### Your sessions: Active and Signed In {#sessions}
+
+**My account → Password & security → Sessions** lists every browser and device where you are signed in. Each one is
+**Active** when you used it within the last few minutes (5 by default) and **Signed In** when it is still signed in but
+idle — background refreshes, such as checking for new notifications, do not count as using it. Sign out a device you
+no longer use with its **Sign out** button, or **Sign out all other sessions**.
+
+Where a session comes from is worked out without asking your browser for its position (no GPS): your home network
+appears by its Trusted Zone name (for example *Home*); elsewhere a place from a local database is shown as
+*approximate* — a country or city, never a street address.
+
+The main administrator can end one of your sessions (for example a forgotten tablet). You then get a notification
+*One of your sessions was ended*, and that device asks you to sign in again; your other devices keep working. If you
+did not expect it, change your password and review your devices.
+
 ### Recovering deleted documents or older versions {#recovery}
 
 Open **Recovery** in the menu. The Recovery Explorer lists what you may recover from the encrypted backups: your own

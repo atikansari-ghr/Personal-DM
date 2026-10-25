@@ -166,7 +166,7 @@ def summary(viewer, *, current: str | None = None, rows: int = 8) -> dict:
     return {"counts": data["counts"], "threshold_minutes": data["threshold_minutes"],
             "sessions": [{k: r[k] for k in ("id", "user", "state", "state_label", "trust", "untrusted", "location", "device",
                                             "last_activity_at", "idle_seconds", "risk", "current")}
-                         for r in data["sessions"][:rows]], "link": "/settings/security/sessions"}
+                         for r in data["sessions"][:rows]], "link": "/settings/security?view=sessions"}
 
 
 def terminate(session, *, actor, request=None) -> None:
@@ -200,7 +200,7 @@ def notify_high_risk(session_row: dict) -> None:
                       title=f"High-risk session: {session_row['user']['name']}",
                       summary="; ".join(session_row["risk_reasons"][:2]) or "A session from an untrusted location is active.",
                       facts=[("Location", session_row["location"]["text"]), ("Trust", session_row["trust"])],
-                      link=f"/settings/security/sessions?session={session_row['id']}")
+                      link=f"/settings/security?view=sessions&session={session_row['id']}")
 
 
 def scan_high_risk() -> int:

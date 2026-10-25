@@ -14,6 +14,84 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrade from the web interface {#webgui-upgrade}
+
+The main administrator can also upgrade from **Settings → System → Maintenance & Operations → Update Application**
+([Maintenance & Operations](maintenance.md#update-application)). It runs the same `personaldocs upgrade` with the same
+steps, lock, verified pre-upgrade backup and health checks, and shows each step live.
+
+How the privileges work: the web application runs as the unprivileged `personaldocs` account and cannot run commands
+as root. It writes a request with a fixed operation name into `/var/lib/personaldocs/host/`; `personaldocs-host.path`
+starts the root helper, which runs exactly one fixed command (`personaldocs upgrade [--ref REF]`, `restart`,
+`repair --only …`, `rollback` or `check-updates`) with validated values only. The helper reports each step to a
+progress file the app reads. It is a separate service, so the upgrade continues while it restarts the web
+application; the page reconnects and shows the result. Every result stays in **Job History**.
+
+Failed upgrades end in one of three states — *Existing Version Remains Operational*, *Rolled Back* (verified healthy)
+or *Recovery Required* ([details](maintenance.md#upgrade-failure)). An automatic rollback is attempted only when the
+database is still compatible with the previous release.
+
+### When the web interface is unavailable {#webgui-unavailable}
+
+Everything works from a terminal on the server, exactly as before:
+
+```
+sudo personaldocs status        # services, version, health
+sudo personaldocs doctor        # the same checks as Doctor in the web interface
+sudo personaldocs repair        # full safe repair
+sudo personaldocs rollback      # previous release, only when the schema is compatible
+sudo personaldocs restart       # restart the Personal DM services and verify them
+sudo personaldocs check-updates # compare with the update source, never installs
+```
+
+To recover from *Recovery Required*, see [Troubleshooting → Maintenance recovery](troubleshooting.md#maintenance-recovery).
+
+## Upgrading to Change Set AB (Maintenance & Operations, Active Sessions) {#change-set-ab}
+
+```
+sudo personaldocs upgrade     # safety backup, migrations ops.0004, accounts.0010 and core.0009, new web app, restart, health checks
+sudo personaldocs doctor
+```
+
+(The change prompt numbered its tests AT-456..AT-475; those are taken. Here they are **AT-481..AT-500**: prompt AT-n =
+AT-(n+25).)
+
+### What the upgrade does
+
+- **Migration `ops.0004`** adds the Maintenance Job table (operations, steps, result, logs reference, recovery state,
+  retries) with a constraint that allows one Upgrade/Repair/Rollback/Restart at a time.
+- **Migration `accounts.0010`** adds the last activity time of each session; existing sessions take their last request
+  time, so nobody appears Active only because of the upgrade.
+- **New CLI commands:** `personaldocs restart`, `personaldocs check-updates [--json]` and `personaldocs repair --only
+  ITEM,...`; `upgrade`, `rollback` and `repair` report their steps for the web interface. Command-line use is
+  unchanged.
+- **Root helper:** new fixed actions for the web interface (check updates, upgrade, restart, repair, rollback).
+  `post-upgrade` reinstalls `personaldocs-host.path`/`.service` as before.
+- **New settings:** *Consider session Active when activity occurred within* (5 minutes), *Maintenance log retention*
+  (90 days) and *Maintenance history retention* (730 days).
+- **Overview:** the **Active Sessions** tile (administrators) is added to each administrator's **General** group; every
+  existing layout, group, size and order is kept. Migration `core.0009` appends it once to administrators who had chosen
+  their widgets before Overview groups existed; family members never get this tile.
+
+### After the upgrade (main administrator)
+
+1. Open **Settings → System**: the installed version, the root helper state, System Status and Job History.
+2. Run **Doctor** once and compare it with `sudo personaldocs doctor`.
+3. **Check for Updates** shows the installed and available versions without installing anything.
+4. Open **Settings → Security → Active Sessions** and adjust the Active threshold if you like.
+
+### Rollback
+
+```
+sudo personaldocs manage migrate core 0008
+sudo personaldocs manage migrate accounts 0009
+sudo personaldocs manage migrate ops 0003
+sudo personaldocs rollback
+```
+
+`accounts 0009` removes the activity time (sessions stay). `ops 0003` removes the Maintenance Job history (logs in
+`/var/lib/personaldocs/host/logs` stay on disk). Settings added by this release are ignored by the previous one.
+
 ## Upgrading to Change Set AA (direct Local AI processing, Overview groups, Document Type fields) {#change-set-aa}
 
 ```

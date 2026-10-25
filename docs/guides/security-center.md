@@ -3,6 +3,25 @@
 
 **Settings → Security** is for the main administrator and for accounts with the **Administrator** role (set in Settings → Family & access → Edit). It has these views: Overview, Antivirus, Security test, OS updates, Firewall, Security records, Storage and (main administrator) Access policy. None of these checks proves the system is free of vulnerabilities.
 
+## Maintenance and session security {#maintenance-security}
+
+- **Step-up:** Update Application, Restart, Rollback and confirming a Repair need the main administrator's password and
+  second factor again (valid 5 minutes, one action). Terminating someone's session needs an explicit confirmation.
+- **Allowlisted operations, no shell:** the web interface can only request the fixed maintenance operations; the root
+  helper runs one fixed `personaldocs` command each and accepts only validated values (a ref pattern, repair items from
+  a fixed list). Nothing typed in the browser becomes part of a shell command. CSRF protection applies to every action.
+- **Log sanitization:** maintenance summaries, technical details, logs and reports are sanitized on the server before
+  display or download: every secret this installation holds and common secret patterns are replaced by `[REDACTED]`.
+  The optional **anonymized** support report also replaces IP addresses, user and host names, document paths and
+  network names; records are never changed.
+- **Auditing:** each maintenance request and result, log view/download, support report, repair confirmation and session
+  termination is in the audit log — without log contents or secrets.
+- **Session visibility:** the main administrator sees all sessions with complete IP addresses (the existing policy);
+  scoped administrators see their delegated members; everyone else only their own sessions. GeoIP locations are
+  labelled approximate; no GPS is used; cookies and tokens are never shown.
+- **Terminate Session** ends one session on the server (refused on its next request) and notifies the person; it is
+  separate from Mark Unrecognized. See [Active Sessions](active-sessions.md) and [Maintenance & Operations](maintenance.md).
+
 ## Internet Ready {#internet-ready}
 
 Set **Deployment exposure** to *LAN only* or *Published on the Internet*. An Internet-facing installation is reported as **Internet Ready** only when all of these pass for its public address (`PD_PUBLIC_ORIGIN`):

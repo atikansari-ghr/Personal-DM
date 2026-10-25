@@ -891,6 +891,128 @@ await step("AT-461..AT-480 Change Set AA: field drag/drop and archive, Overview 
   expect(await page.locator("#s-ai\\.processing_source").inputValue() === "original_fallback", "default processing source");
 });
 
+// ------------------------------------------------------------------ Change Set AB (AT-481..AT-500)
+// Root operations go through tests/e2e/maint_helper.py: the real host helper with a scripted `personaldocs` that uses the
+// real CLI progress functions (the Debian packaging work of a real upgrade is not performed here).
+const SCENARIO = process.env.MAINT_SCENARIO || "";
+const scenario = (name) => fs.writeFileSync(SCENARIO, name);
+const jobOf = async (p, id, done) => {
+  for (let i = 0; i < 120; i++) {
+    const j = (await api(p, `/api/maintenance/jobs/${id}`)).data;
+    if (!done || done(j)) return j;
+    await p.waitForTimeout(500);
+  }
+  throw new Error(`job ${id} did not reach the expected state`);
+};
+const stepUpDialog = async (p) => {
+  await p.waitForSelector(".modal #su-pw");
+  await p.fill(".modal #su-pw", PW);
+  await p.click(".modal button:has-text('Confirm'):not(:has-text('passkey'))");
+};
+if (!SCENARIO) skip("AT-481..AT-500 Change Set AB", "MAINT_SCENARIO not set (run through scripts/e2e.sh)");
+else await step("AT-481..AT-500 Change Set AB: Maintenance & Operations jobs, failures, repair plan, Active Sessions and terminate", async () => {
+  // permissions: a family member has no System tab and the API refuses
+  const son = await session("son1");
+  expect((await api(son.page, "/api/maintenance")).status === 403, "family member reached maintenance");
+  await son.page.goto(BASE + "/settings");
+  expect(!(await son.page.locator("nav.tabs a:has-text('System')").count()), "System tab shown to a family member");
+  // the main administrator's page: cards, health panels, history
+  await page.goto(BASE + "/settings/system");
+  await page.waitForSelector("[data-maintenance] [data-health-panels] [data-panel=database]");
+  for (const c of ["check_updates", "upgrade", "doctor", "repair", "restart", "caches"]) expect(await page.locator(`[data-card=${c}]`).count() === 1, `card ${c}`);
+  // Doctor through the UI → live job → grouped results
+  await page.click("[data-card=doctor] button:has-text('Run Doctor')");
+  await page.waitForSelector(".modal [data-job][data-job-status^=succeeded] [data-doctor]", { timeout: 120000 });
+  expect(await page.locator(".modal [data-component=Database]").count() === 1, "Doctor Database component");
+  await page.keyboard.press("Escape");
+  // Check for Updates (never installs)
+  scenario("ok");
+  await page.click("[data-card=check_updates] button:has-text('Check for Updates')");
+  await page.waitForSelector(".modal [data-job-status=succeeded] [data-update-result=available]", { timeout: 60000 });
+  await page.keyboard.press("Escape");
+  // Update Application: confirm → step-up → live steps → reconnect-safe polling → Succeeded
+  await page.click("[data-card=upgrade] button:has-text('Update Application…')");
+  await page.click(".modal button:has-text('Continue')");
+  await stepUpDialog(page);
+  await page.waitForSelector(".modal [data-job] [data-step=backup][data-step-status=succeeded]", { timeout: 60000 });
+  const running = await page.locator(".modal [data-job]").getAttribute("data-job-status");
+  expect(["running", "queued", "succeeded"].includes(running), `upgrade state ${running}`);
+  await page.waitForSelector(".modal [data-job][data-job-status=succeeded]", { timeout: 90000 });
+  const upId = await page.locator(".modal [data-job]").getAttribute("data-job");
+  // durable: a new sign-in sees the same job and steps
+  const again = await session("admin");
+  const j = await jobOf(again.page, upId);
+  expect(j.status === "succeeded" && j.steps.every((x) => x.status === "succeeded"), "upgrade steps after relogin");
+  await again.ctx.close();
+  await page.keyboard.press("Escape");
+  // a controlled failure: backup fails → Existing Version Remains Operational, technical details, full log
+  scenario("fail-backup");
+  await page.click("[data-card=upgrade] button:has-text('Update Application…')");
+  await page.click(".modal button:has-text('Continue')");
+  await stepUpDialog(page);
+  await page.waitForSelector(".modal [data-job][data-job-status=failed]", { timeout: 90000 });
+  expect((await page.locator(".modal [data-summary]").innerText()).includes("Existing Version Remains Operational"), "failure summary");
+  await page.click(".modal [data-technical]");
+  await page.waitForSelector(".modal [data-technical-details]");
+  const td = await page.locator(".modal [data-technical-details]").innerText();
+  expect(td.includes("Automatic pre-upgrade backup") && td.includes("Backup") && td.includes("pre-upgrade backup failed"), `technical details: ${td.slice(0, 200)}`);
+  await page.click(".modal button:has-text('View Full Log')");
+  await page.waitForSelector("[data-full-log]");
+  expect((await page.locator("[data-full-log]").innerText()).includes("destination 'NAS backups' unreachable"), "full log");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  // concurrency: while one system operation runs, a second is refused
+  scenario("ok");
+  await api(page, "/api/backup/stepup", { body: { password: PW } });
+  const r1 = await api(page, "/api/maintenance/run/restart", { body: { confirm: true } });
+  const r2 = await api(page, "/api/maintenance/run/repair", { body: {} });
+  expect(r1.status === 202 && r2.status === 409, `concurrency ${r1.status}/${r2.status}`);
+  await jobOf(page, r1.data.id, (x) => !x.active);
+  // Repair plan before change: a missing data directory, confirm with step-up, repair, verification
+  const tmpGone = await api(page, "/api/maintenance/system");
+  expect(tmpGone.status === 200, "system info");
+  fs.rmSync(`${process.env.PD_DATA_DIR}/tmp`, { recursive: true, force: true });
+  await page.click("[data-card=repair] button:has-text('Analyze')");
+  await page.waitForSelector(".modal [data-job-status=waiting_confirmation] [data-plan-item=directories]", { timeout: 120000 });
+  for (const item of await page.locator(".modal [data-plan-item]").all()) {  // keep only the repair this test caused
+    if ((await item.getAttribute("data-plan-item")) !== "directories") await item.locator("input[type=checkbox]").uncheck();
+  }
+  await page.click(".modal [data-confirm-repair]");
+  await stepUpDialog(page);
+  await page.waitForSelector(".modal [data-job][data-job-status=succeeded]", { timeout: 180000 });
+  expect(fs.existsSync(`${process.env.PD_DATA_DIR}/tmp`), "directory repaired");
+  await page.keyboard.press("Escape");
+  // Job History with filters
+  await page.selectOption("[data-job-history] select[aria-label=Status]", "failed");
+  await page.waitForSelector("[data-job-history] [data-history-job]");
+  // Active Sessions: the tile, the page, details and Terminate Session
+  await page.goto(BASE + "/");
+  await page.waitForSelector("[data-widget=sessions] [data-sessions-tile]");
+  expect(/\d+ Active/.test(await page.locator("[data-widget=sessions]").innerText()), "tile counts");
+  await page.click("[data-widget=sessions] a:has-text('View All Sessions')");
+  await page.waitForSelector("[data-active-sessions] [data-session-table]");
+  const rows = await api(page, "/api/security/sessions");
+  const target = rows.data.sessions.find((x) => x.user.username === "son1");
+  expect(target && target.ip, "son1 session listed with its address");
+  await page.click(`[data-session="${target.id}"]`);
+  await page.waitForSelector(`.modal [data-session-detail="${target.id}"]`);
+  await page.click(".modal [data-terminate]");
+  await page.click(".modal button.danger:has-text('Terminate Session')");
+  await page.waitForSelector(".toast:has-text('Session terminated')");
+  expect([401, 403].includes((await api(son.page, "/api/dashboard")).status), "terminated session still works");
+  expect((await api(page, "/api/dashboard")).status === 200, "own session affected");
+  await son.ctx.close();
+  // the tile in Edit Layout: resize compact → large, per person
+  await page.goto(BASE + "/");
+  await page.click("button:has-text('Edit Layout')");
+  for (let i = 0; i < 9; i++) { const b = page.locator("button[aria-label='Make Active Sessions wider']"); if (await b.isDisabled()) break; await b.click(); }
+  await page.waitForSelector("[data-sessions-tile=large]");
+  await page.click("button:has-text('Save layout')");
+  await page.waitForSelector(".toast:has-text('Layout saved')");
+  await page.reload();
+  await page.waitForSelector("[data-sessions-tile=large]");
+});
+
 await step("AT-416/AT-417 Admin → Performance: metrics, throttle state, report for the main administrator only", async () => {
   await page.goto(BASE + "/settings/performance");
   await page.waitForSelector("#performance [data-throttle]");

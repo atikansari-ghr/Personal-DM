@@ -15,7 +15,9 @@ function csrf(): string {
   return m ? decodeURIComponent(m[1]) : "";
 }
 
-type ApiOpts = { method?: string; body?: any; form?: FormData; query?: Record<string, any>; signal?: AbortSignal };
+// background: a refresh nobody asked for (polling). It keeps the session alive but does not count as activity for
+// Active Sessions (Change Set AB).
+type ApiOpts = { method?: string; body?: any; form?: FormData; query?: Record<string, any>; signal?: AbortSignal; background?: boolean };
 
 export function apiUrl(path: string, query?: Record<string, any>): string {
   let url = path.startsWith("/") ? path : `/api/${path}`;
@@ -65,6 +67,7 @@ export async function api<T = any>(path: string, opts: ApiOpts = {}): Promise<T>
   const method = opts.method || (opts.body || opts.form ? "POST" : "GET");
   const headers: Record<string, string> = { Accept: "application/json" };
   if (method !== "GET") headers["X-CSRFToken"] = csrf();
+  if (opts.background) headers["X-PD-Background"] = "1";
   let body: BodyInit | undefined;
   if (opts.form) body = opts.form;
   else if (opts.body !== undefined) {
@@ -73,7 +76,7 @@ export async function api<T = any>(path: string, opts: ApiOpts = {}): Promise<T>
   }
   let r: { status: number; ok: boolean; ct: string; text: string };
   try {
-    if (method === "GET" && !opts.signal) {
+    if (method === "GET" && !opts.signal && !opts.background) {
       let p = inflight.get(url);
       if (!p) {
         p = fetch(url, { method, headers, credentials: "same-origin" })

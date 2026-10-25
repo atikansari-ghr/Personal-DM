@@ -16,7 +16,7 @@ export default function NotificationBanners({ userId, onUnread }: { userId: stri
   const write = (id: number) => { try { localStorage.setItem(KEY(userId), String(id)); } catch { /* private mode */ } };
   const poll = async () => {
     try {
-      const r = await api<{ notifications: (Note & { id: number })[]; unread: number }>("notifications", { query: { status: "unread", limit: 5 } });
+      const r = await api<{ notifications: (Note & { id: number })[]; unread: number }>("notifications", { query: { status: "unread", limit: 5 }, background: true });
       onUnread(r.unread);
       const seen = read();
       const dayAgo = Date.now() - 24 * 3600 * 1000;

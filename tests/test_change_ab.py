@@ -281,7 +281,7 @@ die "less than 2 GB free (812 MB); free space before upgrading"
     assert c.get(f"/api/maintenance/jobs/{job_id}").json()["retries"] == [r.json()["id"]]
     # a notification with a deep link, without the log
     n = Notification.objects.filter(user=_main(family), kind="maintenance").first()
-    assert n is not None and f"job={job_id}" in n.link and "df: checking" not in json.dumps([n.body, n.summary, n.data])
+    assert n is not None and f"/settings/system?job={job_id}" == n.link and "df: checking" not in json.dumps([n.body, n.summary, n.data])
 
 
 def test_at483_unreachable_helper_and_worker_are_reported_not_hidden(family, tmp_path, settings):
@@ -300,17 +300,19 @@ def test_at483_unreachable_helper_and_worker_are_reported_not_hidden(family, tmp
 # ================================================================== AT-484 (459) secret redaction
 
 SYNTH = {"smtp": "Synth-Smtp-Pass-7Q2x", "token": "ghp_" + "A" * 36, "sk": "sk-" + "b" * 40,
-         "bot": "123456789:AA" + "c" * 33, "pem": "-----BEGIN PRIVATE KEY-----\nMIIEvQ\n-----END PRIVATE KEY-----"}
+         "bot": "123456789:" + "AA" + "c" * 33,
+         "pem": "-----BEGIN " + "PRIVATE KEY-----\nMIIEvQ\n-----END " + "PRIVATE KEY-----"}  # built at run time: no secret-shaped literal in the repository
+AWS = "AK" + "IA" + "ABCDEFGHIJKLMNOP"
 
 
 def test_at484_sanitizer_patterns_and_known_values(db):
     text = (f"password={SYNTH['smtp']} Authorization: Bearer abcdefghijkl {SYNTH['token']} {SYNTH['sk']} {SYNTH['bot']}\n"
             f"postgres://pd:dbpass123@localhost/x Cookie: sessionid=abc123; pd_csrftoken=zzz\n{SYNTH['pem']}\n"
             "api_key: 'k-123456' NAS_PASSWORD=nas-secret-1 recovery_key=word-word-word "
-            "https://discord.com/api/webhooks/123/abcDEF AKIAABCDEFGHIJKLMNOP")
+            f"https://discord.com/api/webhooks/123/abcDEF {AWS}")
     out = sanitize.redact(text, secrets=[SYNTH["smtp"]])
     for s in (SYNTH["smtp"], SYNTH["token"], SYNTH["sk"], SYNTH["bot"], "dbpass123", "abc123", "zzz", "MIIEvQ", "k-123456",
-              "nas-secret-1", "word-word-word", "abcDEF", "AKIAABCDEFGHIJKLMNOP", "abcdefghijkl"):
+              "nas-secret-1", "word-word-word", "abcDEF", AWS, "abcdefghijkl"):
         assert s not in out, s
     assert "[REDACTED]" in out and "postgres://pd:[REDACTED]@localhost" in out
 
@@ -437,6 +439,10 @@ step health running; step health ok
     assert len(queued) == 1 and json.loads(queued[0].read_text())["params"] == {"items": ["directories"]}
     h.apply()
     tmp.mkdir(parents=True)  # what `personaldocs repair --only directories` does as root (the stand-in CLI cannot)
+    h.apply()
+    for _ in range(3):  # repeated polling while the worker has not verified yet queues the verification once
+        c.get(f"/api/maintenance/jobs/{job_id}")
+    assert Job.objects.filter(kind="maintenance_task", payload__phase="verify", payload__job=job_id).count() == 1
     j = _drive(h, c, job_id)
     assert j["status"] == MJ.SUCCEEDED and "verified" in j["summary"]
     keys = [s["key"] for s in j["steps"]]
@@ -851,7 +857,7 @@ def test_at494_tile_counts_rows_and_view_all(family, geo):
     d = dad.get("/api/dashboard").json()
     tile = d["active_sessions"]
     assert tile["counts"] == {"active": 2, "signed_in": 3, "idle": 1, "untrusted": 1, "high_risk": 0}
-    assert tile["link"] == "/settings/security/sessions"
+    assert tile["link"] == "/settings/security?view=sessions"
     rows = {r["user"]["name"]: r for r in tile["sessions"]}
     assert rows["Alex Sample"]["state_label"] == "Active" and rows["Alex Sample"]["current"] is True
     assert rows["Alex Sample"]["location"]["text"] == "Home" and rows["Alex Sample"]["trust"] == "Trusted"
@@ -1049,3 +1055,97 @@ def test_high_risk_session_notifies_main_admin_once(family):
     tick()
     tick()
     assert Notification.objects.filter(user=family["dad"], event="security.session_high_risk").count() == 1
+
+
+# ================================================================== AT-499 (474) guides and help
+
+REQUIRED_HELP = ["maint.check_updates", "maint.upgrade", "maint.job", "maint.doctor", "maint.repair", "maint.health",
+                 *[f"maint.health.{k}" for k in ("database", "ocr", "ai", "security", "backup", "storage")],
+                 "maint.restart", "maint.caches", "maint.system_info", "maint.history", "maint.technical", "maint.full_log",
+                 "maint.support_report", "maint.retry", "maint.rollback", "maint.recovery_required", "sessions.page",
+                 "sessions.active", "sessions.signed_in", "sessions.trusted_zone", "sessions.approximate", "sessions.risk",
+                 "sessions.terminate"]
+
+
+def test_at499_guides_help_and_tooltips_are_complete_and_permission_aware(family):
+    docs = ROOT / "docs"
+    reg = (ROOT / "frontend" / "src" / "components" / "helpRegistry.ts").read_text()
+    for hid in REQUIRED_HELP:
+        m = re.search(rf'"{re.escape(hid)}": \{{ text: "([^"]+)", link: "(/help/[a-z-]+#[a-z-]+)", audience: "([a-z_]+)"', reg)
+        assert m, f"help entry {hid} missing or without a Learn More link"
+    # high-risk entries are only for the main administrator; Active/Signed In explanations are for everyone
+    for hid in ("maint.upgrade", "maint.repair", "maint.restart", "maint.rollback", "sessions.terminate", "maint.full_log"):
+        assert re.search(rf'"{re.escape(hid)}":.*audience: "main_admin"', reg), hid
+    for hid in ("sessions.active", "sessions.signed_in", "sessions.approximate"):
+        assert re.search(rf'"{re.escape(hid)}":.*audience: "all"', reg), hid
+    guides = {p.stem: p.read_text() for p in (docs / "guides").glob("*.md")}
+    assert guides["maintenance"].startswith("<!-- audience: admin -->") and guides["active-sessions"].startswith("<!-- audience: admin -->")
+    need = {
+        "maintenance": ["{#check-for-updates}", "{#update-application}", "{#upgrade-failure}", "{#technical-details}", "{#full-log}",
+                        "{#support-report}", "{#doctor}", "{#repair}", "{#health-panels}", "{#restart}", "{#safe-caches}",
+                        "{#system-information}", "{#job-history}", "{#rollback}", "{#recovery-required}", "{#permissions}"],
+        "active-sessions": ["{#active-threshold}", "{#location-and-trust}", "{#risk}", "{#terminate-session}", "{#tile}", "{#visibility}"],
+        "upgrades": ["{#webgui-upgrade}", "{#webgui-unavailable}", "{#change-set-ab}"],
+        "troubleshooting": ["{#maintenance}", "{#maintenance-recovery}"],
+        "backup-restore": ["{#pre-upgrade-backup}"],
+        "security-center": ["{#maintenance-security}"],
+    }
+    for g, anchors in need.items():
+        for a in anchors:
+            assert a in guides[g], (g, a)
+    user = (docs / "USER_GUIDE.md").read_text()
+    sessions_part = user[user.index("{#sessions}"):user.index("{#recovery}")]
+    assert "Active" in sessions_part and "Signed In" in sessions_part and "GPS" in sessions_part
+    assert "Repair" not in sessions_part and "Rollback" not in sessions_part  # no Main Admin procedures in the User Guide
+    assert "{#maintenance}" in (docs / "ADMIN_GUIDE.md").read_text()
+    # troubleshooting covers the required topics
+    t = guides["troubleshooting"]
+    for topic in ("Database migrations", "Frontend build", "Restart", "Partially Failed", "pre-upgrade backup", "Rollback",
+                  "Reconnecting", "stays **Running**", "OCR or AI health", "still shows **Active**", "Unknown location", "Trusted Zone"):
+        assert topic in t, topic
+    # Help: both guides are listed in their categories and hidden from family members
+    from apps.core.views import HELP_CATEGORIES
+
+    cats = dict(HELP_CATEGORIES)
+    assert "maintenance" in cats["Installation & operations"] and "active-sessions" in cats["Security & sign-in"]
+    son = client_for(family["son1"])
+    assert son.get("/api/help/maintenance").status_code == 404 and son.get("/api/help/active-sessions").status_code == 404
+    slugs = {g["slug"] for g in client_for(_main(family)).get("/api/help").json()["guides"]}
+    assert {"maintenance", "active-sessions"} <= slugs
+    # the docs checker (links, anchors, help links, screenshots) passes
+    r = subprocess.run([".venv/bin/python" if (ROOT / ".venv").exists() else "python3", "scripts/check_docs.py"], cwd=ROOT,
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout[-2000:]
+
+
+# ================================================================== AT-500 (475) release gate
+
+def test_at500_release_gate_records_every_test_honestly():
+    docs = ROOT / "docs"
+    report = (docs / "TEST_REPORT.md").read_text()
+    trace = (docs / "TRACEABILITY.md").read_text()
+    start = report.index("## Change set AB")
+    section = report[start:report.index("\n## ", start + 5)]
+    for n in range(481, 501):
+        assert f"AT-{n}" in section and f"AT-{n}" in trace, n
+    for line in section.splitlines():
+        if "Not Executed" in line or "Blocked" in line or "BLOCKED" in line:
+            assert "| Passed" not in line and "PASS |" not in line, line  # an unexecuted test is never reported as passed
+    assert "AT-488" in section and "BLOCKED" in section[section.index("AT-488"):section.index("AT-488") + 600]
+
+
+def test_at495_upgrade_adds_the_tile_without_touching_custom_selections(family):
+    """The data migration: administrators with an explicit widget list get the tile appended; members do not."""
+    import importlib
+
+    from django.apps import apps as django_apps
+
+    from apps.core.models import UserSetting
+
+    UserSetting.objects.update_or_create(user=_main(family), key="me.dashboard_widgets", defaults={"value": ["recent", "date"]})
+    UserSetting.objects.update_or_create(user=family["son1"], key="me.dashboard_widgets", defaults={"value": ["recent"]})
+    mig = importlib.import_module("apps.core.migrations.0009_active_sessions_tile")
+    mig.add_tile(django_apps, None)
+    mig.add_tile(django_apps, None)  # idempotent
+    assert UserSetting.objects.get(user=_main(family), key="me.dashboard_widgets").value == ["recent", "date", "sessions"]
+    assert UserSetting.objects.get(user=family["son1"], key="me.dashboard_widgets").value == ["recent"]
