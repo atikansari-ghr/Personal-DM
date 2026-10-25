@@ -8,7 +8,7 @@ from apps.library import permissions as P
 from apps.library.models import Folder
 
 from . import imap
-from .models import EmailAccount, EmailRule, ImportedAttachment
+from .models import EmailAccount, EmailRule
 
 
 def _acc_json(a: EmailAccount, include_rules=True):

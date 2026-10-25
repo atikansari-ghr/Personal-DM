@@ -149,7 +149,7 @@ The first signature download can take a few minutes; `clamav-freshclam` then che
 
 ## Host helper {#host-helper}
 
-`personaldocs-host.path` watches `/var/lib/personaldocs/host/request.json` and runs `personaldocs host-apply` as root. It accepts only fixed actions: inspect (firewall and listening services), check updates, install Debian security updates, update ClamAV signatures and reboot. The web app itself never runs `sudo`. Without the helper, Settings → Security → OS updates shows the commands to run by hand. See [OS updates](security-center.md#updates).
+`personaldocs-host.path` watches `/var/lib/personaldocs/host/request.json` and runs `personaldocs host-apply` as root. It accepts only fixed actions: inspect (firewall and listening services), check updates, install Debian security updates, update ClamAV signatures and reboot, and — for Settings → System → Maintenance & Operations — check for application updates, upgrade, restart the Personal DM services, repair selected items and roll back, each one fixed `personaldocs` command ([WebGUI upgrade](upgrades.md#webgui-upgrade)). The web app itself never runs `sudo`. Without the helper, Settings → Security → OS updates shows the commands to run by hand. See [OS updates](security-center.md#updates).
 
 ## After installing {#after}
 
@@ -168,7 +168,9 @@ The first signature download can take a few minutes; `clamav-freshclam` then che
 | `personaldocs doctor` | Read-only diagnostics (redacted), starting with the root ClamAV diagnosis, then missing OCR language packs, ClamAV and signature age, files pending scan, host helper, HTTPS for Internet deployments, storage thresholds and a pending reboot |
 | `personaldocs upgrade [--ref TAG]` | Back up, update, migrate, restart, verify |
 | `personaldocs rollback` | Return to the previous release when the schema is compatible |
-| `personaldocs repair` | Safe repairs (packages, permissions, services, migrations, stuck jobs, ClamAV repair) |
+| `personaldocs repair [--only ITEM,...]` | Safe repairs (packages, permissions, services, migrations, stuck jobs, ClamAV repair); `--only` runs selected items |
+| `personaldocs restart` | Restart the Personal DM services and verify their health |
+| `personaldocs check-updates [--json]` | Compare the installed release with the update source (never installs) |
 | `personaldocs antivirus status\|repair\|selftest` | ClamAV diagnosis as root, safe repair with self-test, clean + EICAR self-test. See [antivirus](antivirus.md#cli) |
 | `personaldocs backup` | Application backup now |
 | `personaldocs restore PATH` | Verify and restore a backup (stops services) |

@@ -6,6 +6,7 @@ import { Confirm, HelpTip, Icon, Modal, Skeleton, useAsync, useToast } from "../
 import { useSession } from "../../session";
 import { SecurityPanel } from "./Security";
 import { IntegrityCard } from "./Admin";
+import ActiveSessions from "./ActiveSessions";
 
 /** Settings → Security: overview and score, antivirus, Internet security test, OS updates, firewall, records, storage. */
 
@@ -482,7 +483,7 @@ function StorageView() {
   );
 }
 
-const VIEWS: [string, string][] = [["overview", "Overview"], ["antivirus", "Antivirus"], ["test", "Security test"], ["updates", "OS updates"],
+const VIEWS: [string, string][] = [["overview", "Overview"], ["sessions", "Active Sessions"], ["antivirus", "Antivirus"], ["test", "Security test"], ["updates", "OS updates"],
   ["firewall", "Firewall"], ["records", "Security records"], ["storage", "Storage"], ["access", "Access policy"]];
 
 export default function SecurityCenter() {
@@ -497,6 +498,7 @@ export default function SecurityCenter() {
         {views.map(([k, l]) => <button key={k} type="button" className={view === k ? "active" : ""} aria-current={view === k ? "page" : undefined} onClick={() => setParams(k === "overview" ? {} : { view: k })}>{l}</button>)}
       </nav>
       {view === "overview" && <OverviewView />}
+      {view === "sessions" && <ActiveSessions />}
       {view === "antivirus" && <AntivirusView />}
       {view === "test" && <SecurityTestView />}
       {view === "updates" && <UpdatesView />}

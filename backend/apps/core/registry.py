@@ -106,10 +106,11 @@ WIDGETS = {
     "shared": "Shared with me",
     "activity": "Recent activity",
     "security": "Security Health (administrators)",
+    "sessions": "Active Sessions (administrators)",
 }
 # What a new account sees first (existing accounts keep the widgets they chose).
 DEFAULT_WIDGETS = ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity",
-                   "review_queue", "backup", "my_recovery", "security"]
+                   "review_queue", "backup", "my_recovery", "security", "sessions"]
 STAT_WIDGETS = ("documents", "members", "expiring", "storage", "review")
 
 
@@ -594,6 +595,18 @@ SETTINGS: list[SettingDef] = [
                validator=lambda v: _validate_tiles(v), help="security-map#tiles", example="https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
     SettingDef("security.map_attribution", "Custom map attribution", "Credit line required by your custom tile server (the presets show their own).", "str",
                "© OpenStreetMap contributors", "security", depends_on=("security.map_enabled",), max=200, help="security-map#tiles"),
+    # Change Set AB: Active Sessions and WebGUI maintenance
+    SettingDef("security.session_active_minutes", "Consider session Active when activity occurred within (minutes)",
+               "A signed-in session counts as Active when its last request was within this many minutes; older ones are "
+               "Signed In (idle). Background refreshes do not count as activity.", "int", 5, "sessions", min=2, max=120,
+               effect="Applies at once to the Active Sessions page and tile.", help="active-sessions#active-threshold"),
+    SettingDef("maintenance.log_retention_days", "Maintenance log retention (days)",
+               "Full logs of maintenance operations (upgrade, repair, restart, Doctor …) older than this are deleted by "
+               "the nightly maintenance. Separate from the audit log retention.", "int", 90, "maintenance", min=7, max=3650,
+               effect="Applies at the next nightly maintenance run.", help="maintenance#retention"),
+    SettingDef("maintenance.history_days", "Maintenance history retention (days)",
+               "Maintenance Job History entries (status, steps, sanitised summary) older than this are deleted.", "int", 730,
+               "maintenance", min=30, max=3650, effect="Applies at the next nightly maintenance run.", help="maintenance#retention"),
     SettingDef("security.login_audit_retention_days", "Login audit retention (days)",
                "Sign-in records older than this are deleted by the nightly maintenance. 0 keeps them forever.",
                "int", 365, "security", min=0, max=3650, effect="Applies at the next nightly maintenance run.",

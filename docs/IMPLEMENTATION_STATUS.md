@@ -81,6 +81,32 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
 - Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
 
+## Change set AB: WebGUI maintenance operations, persistent diagnostics, Active Sessions {#change-set-ab}
+
+**Numbering.** Prompt AT-456…AT-475 → **AT-481…AT-500**; see [TRACEABILITY.md](TRACEABILITY.md#change-set-ab).
+Requirements MNT-1…15, SES-1…6, DOC-AB in [REQUIREMENTS.md](REQUIREMENTS.md#change-set-ab). **Migrations:**
+`ops.0004_maintenance_jobs` (new table), `accounts.0010_session_activity` (additive; backfilled from the last request
+time) and `core.0009_active_sessions_tile` (appends the tile once to administrators' explicit widget lists). Upgrade notes: [upgrades.md](guides/upgrades.md#change-set-ab). Decision record:
+[ADR 0025](adr/0025-webgui-maintenance-jobs-active-sessions.md).
+
+| Area | What was built | Files |
+| --- | --- | --- |
+| Durable jobs | `MaintenanceJob` (steps, details, result, log, versions, backup, recovery state, retry parent, verification), one-active-system-operation constraint, sync from helper files, scheduler sync, retention purge | `ops/models.py`, `ops/maintenance.py`, `notify/.../scheduler.py` |
+| Root operations | Host helper actions `app_check_updates/upgrade/restart/repair/rollback` (fixed commands, validated ref/items, per-job queue, owned log/progress files) | `ops/host_helper.py` |
+| CLI | `step`/`meta`/`progress_fail` progress protocol (redacted JSON lines), instrumented `upgrade` with verified-rollback outcomes and snapshot read-back, `rollback` with steps, `repair --only`, new `restart` and `check-updates [--json]` | `scripts/personaldocs` |
+| Doctor | Sink-based checks shared by CLI and web; component sections; NOT CONFIGURED / NOT APPLICABLE / NOT TESTED; structured results; critical-finding notification | `ops/management/commands/doctor.py`, `ops/diagnostics.py` |
+| Repair | Analyze → plan (rules from Doctor findings), confirm with step-up, pre-change backup when needed, helper repair, Doctor verification (Partially Failed when checks still fail) | `ops/maintenance.py` |
+| Errors and logs | Failure analysis (failed step, component, exit code, error, log context, known conditions), sanitized Full Log view/download, Sanitized and anonymized Support Report | `ops/maintenance.py`, `ops/sanitize.py`, `ops/views_maint.py` |
+| Health, info, caches | Six health panels, System Information without secrets, safe cache list and clearing | `ops/diagnostics.py` |
+| API | `/api/maintenance…` (overview, health, system, caches, jobs, run, doctor, job detail/log/report/actions) with Main Admin / Administrator permissions, step-up and confirmation | `ops/views_maint.py`, `personaldocs/urls.py` |
+| Active Sessions | `last_activity_at` with bounded writes and background exclusion; listing with Trusted Zone → private → approximate GeoIP, risk, filters; details; Terminate Session; tile summary; high-risk notification | `accounts/sessions.py`, `security/active_sessions.py`, `security/views_sessions.py`, `library/views.py` |
+| Frontend | Settings → System (Maintenance & Operations, job detail with live steps and reconnect, technical details, logs, repair plan, history), Security → Active Sessions (page, details, terminate), Overview tile (compact/medium/large), help registry | `pages/settings/Maintenance.tsx`, `pages/settings/ActiveSessions.tsx`, `pages/Dashboard.tsx`, `components/helpRegistry.ts`, `api.ts` |
+| Docs | New guides maintenance.md and active-sessions.md; upgrades, installation, troubleshooting, backup-restore, security-center, User and Admin guides; Help index | `docs/` |
+
+**Not verified here:** a real `personaldocs upgrade` from the web interface on a Debian 13 host (AT-488 is BLOCKED: no
+such host in this environment; the orchestration is tested with the real helper and a scripted CLI), real systemd
+restarts, and real GeoIP city databases (emulated).
+
 ## Change set AA: direct Local AI processing, custom Overview layouts, Document Type field management {#change-set-aa}
 
 **Numbering.** Prompt AT-436…AT-455 → **AT-461…AT-480** (the prompt's "Change Set X" name and test numbers are taken);

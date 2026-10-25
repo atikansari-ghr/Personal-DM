@@ -90,6 +90,51 @@
 | Folder tree rows look shifted after an upgrade | Reload the page once (or close and reopen the installed app) so the browser loads the new web app |
 <!-- /audience-section -->
 
+## Maintenance, upgrades and sessions {#maintenance}
+
+<!-- audience-section: admin -->
+| Problem | What to do |
+|---|---|
+| Update Application, Restart or Repair is unavailable: "host helper is not installed" | On the server: `sudo personaldocs repair`, then `systemctl status personaldocs-host.path`. The same operations work in a terminal meanwhile |
+| A job stays **Queued** and then fails with "The host helper did not start the operation" | `personaldocs-host.path` is not running: `sudo systemctl enable --now personaldocs-host.path`; check `journalctl -u personaldocs-host` |
+| The page says **Reconnecting…** during an upgrade or restart | Normal: the web service restarts. The job continues on the server; the page reconnects by itself. Closing the browser does not stop or fail the job |
+| A job stays **Running** for over an hour, then "stopped reporting progress" | The host restarted during the operation. Run Doctor; read the Full Log; for an upgrade follow [maintenance recovery](#maintenance-recovery) |
+| Upgrade failed at **Disk space** | Free space (Settings → Security → Storage, or old files outside Personal DM), then Retry |
+| Upgrade failed at **Automatic pre-upgrade backup** or **Backup verification** | Nothing was changed. Fix the backup destination (Settings → Backup & Recovery → Destinations → Test), then Retry |
+| Upgrade failed at **Target version validation** or *could not reach the update source* | Check the network and `/etc/personaldocs/github-token`, and that the branch/tag exists |
+| Upgrade failed at **Install dependencies** or **Frontend build** | Usually network or memory. Retry; on small hosts use a tagged release with a prebuilt frontend |
+| Upgrade failed at **Database migrations** | The database was restored from the snapshot when possible; the result says whether the existing version remains operational. Send the Sanitized Support Report |
+| Upgrade failed at **Health checks** | Rolled back automatically when the schema is compatible (the result says *verified healthy*), otherwise *Recovery Required* |
+| **Rollback** refused: "migrations unknown to …" | A code-only rollback is not safe after those migrations. Restore the pre-upgrade recovery point instead ([Backup & Recovery](backup-restore.md#pre-upgrade-backup)) |
+| Doctor shows **NOT TESTED** for a component | That check could not run (for example a service is down); the detail says why. Run it again after Repair |
+| Repair ended **Partially Failed** | The listed checks still fail after the repair. Open Technical Details; some problems need a manual fix (see the plan's "without an automatic repair" list) |
+| OCR or AI health shows **Attention** | Settings → OCR & processing / Settings → AI: test the engines and profiles; Doctor lists the failing check |
+| A session still shows **Active** long after the person left | Activity counts until the Active threshold passes (default 5 minutes); background refreshes do not count. Check the threshold in Settings → Security → Active Sessions |
+| A session shows the wrong place or *Unknown location* | Add the network as a Trusted Zone (Settings → Activity & health → Sign-in map & Trusted Zones); GeoIP is approximate and needs the GeoIP database (Settings → Security → Access policy) |
+| A home device shows **Untrusted** | Its address is public and no Trusted Zone covers it, for example behind a reverse proxy that is not trusted (`PD_TRUSTED_PROXIES`) so every session shows the proxy address. Add the zone or fix the proxy setting |
+<!-- /audience-section -->
+
+<!-- audience-section: main_admin -->
+### Maintenance recovery {#maintenance-recovery}
+
+When a job ends with **Recovery Required**:
+
+1. Open the job and download the **Sanitized Support Report**. Note the failed step and the backup reference
+   (a database snapshot under `/var/lib/personaldocs/pre-upgrade/` and, with a backup destination, a verified recovery
+   point).
+2. On the server, check the state: `sudo personaldocs status` and `sudo personaldocs doctor`.
+3. If the schema is still compatible, `sudo personaldocs rollback` returns to the previous release and verifies it.
+4. Otherwise restore the database snapshot with the previous release active:
+   ```
+   sudo systemctl stop personaldocs-web personaldocs-worker personaldocs-scheduler
+   sudo -u personaldocs pg_restore --clean --if-exists --no-owner -h /var/run/postgresql -d personaldocs /var/lib/personaldocs/pre-upgrade/db-YYYYMMDD-HHMMSS.pgdump
+   sudo personaldocs rollback   # now allowed: the schema matches the previous release again
+   ```
+   or recover the whole application from the verified pre-upgrade recovery point with `sudo personaldocs recover`
+   ([Disaster recovery](disaster-recovery.md)).
+5. Run Doctor again and keep the support report with your notes.
+<!-- /audience-section -->
+
 ## Reporting a bug {#report}
 
 Include the output of `personaldocs doctor` and the app version (Help page). Never send real documents, database dumps or tokens to anyone.

@@ -8,6 +8,7 @@ import FileTypeIcon from "../components/FileTypeIcon";
 import { ActivityWidget, CalendarWidget, DateWidget, DocList, HolidaysWidget, SummaryWidget, WeatherWidget } from "../components/OverviewWidgets";
 import { HealthSummary } from "./settings/SecurityCenter";
 import { HealthBadge } from "../components/HealthBadge";
+import { SessionsTile } from "./settings/ActiveSessions";
 import type { DocRow, OvGroup, User, WidgetCfg } from "../types";
 
 function greeting() {
@@ -47,18 +48,19 @@ export const WIDGET_LABELS: Record<string, string> = {
   activity: "Recent activity", review_queue: "Review queue", backup: "Backup & Recovery Health", my_recovery: "My Recovery", family: "Family library",
   saved_views: "Saved views", documents: "Documents (count)", members: "Family members (count)",
   expiring: "Expiring in 90 days (count)", storage: "Storage used", review: "Needs review (count)",
-  security: "Security Health",
+  security: "Security Health", sessions: "Active Sessions",
 };
-export const DEFAULT_WIDGETS = ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity", "review_queue", "backup", "my_recovery", "security"];
+export const DEFAULT_WIDGETS = ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity", "review_queue", "backup", "my_recovery", "security", "sessions"];
 const STYLE_LABELS: Record<string, string> = { rect: "Rectangular", compact: "Compact rectangular", circle: "Circular", compact_circle: "Compact circular" };
 const WIDGET_ICON: Record<string, string> = {
   date: "calendar", weather: "cloud-sun", summary: "grid", calendar: "calendar", holidays: "gift", upcoming: "clock", shared: "share",
   recent: "file", activity: "list", review_queue: "eye", backup: "db", my_recovery: "refresh", family: "users", saved_views: "list",
-  documents: "file", members: "users", expiring: "clock", storage: "db", review: "eye", security: "shield",
+  documents: "file", members: "users", expiring: "clock", storage: "db", review: "eye", security: "shield", sessions: "users",
 };
 const LINKS: Record<string, [string, string]> = {
   upcoming: ["/search?expiring_days=90", "View all"], recent: ["/search", "View all"], shared: ["/shared", "View all"],
   holidays: ["", ""], review_queue: ["/ocr-review", "Open"], security: ["/settings/security", "Open"],
+  sessions: ["/settings/security?view=sessions", "View all"],
 };
 type Limits = Record<string, { min: number; default: number; max: number; circle: boolean; options: string[]; cols_min: number; cols_max: number; h_min: number; h_max: number }>;
 interface LayoutPayload { groups: OvGroup[]; known: string[]; layout: Record<string, WidgetCfg>; limits: Limits; customized: boolean }
@@ -230,6 +232,7 @@ export default function Dashboard() {
     ) : <div className="ov-empty small">Mark a saved view “Show on Overview” to see it here.</div>,
     review_queue: () => data.review.length > 0 ? <DocTable docs={data.review} empty="" /> : (editing ? <div className="ov-empty small">Nothing waits for review.</div> : null),
     security: () => data.security_health ? <HealthSummary h={data.security_health} compact /> : null,
+    sessions: (c) => data.active_sessions_tile ? <SessionsTile cols={c.cols} /> : null,
     backup: () => data.admin ? (data.admin.backup_health ? (
       <div className="stack backup-widget" data-health={data.admin.backup_health.state}>
         <div className="row between"><HealthBadge state={data.admin.backup_health.state} label={data.admin.backup_health.label} />
@@ -247,7 +250,7 @@ export default function Dashboard() {
       </div>
     ) : null,
   };
-  const hidden = Object.keys(WIDGET_LABELS).filter((id) => !shownIds.includes(id) && body[id] && (id !== "backup" || data.admin) && (id !== "security" || data.security_health !== undefined));
+  const hidden = Object.keys(WIDGET_LABELS).filter((id) => !shownIds.includes(id) && body[id] && (id !== "backup" || data.admin) && (id !== "security" || data.security_health !== undefined) && (id !== "sessions" || !!data.active_sessions_tile));
   const single = groups.length === 1 && groups[0].id === "general";
   const tile = (id: string, g: OvGroup, i: number) => {
     const c = cfgOf(id);

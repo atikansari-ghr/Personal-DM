@@ -27,11 +27,12 @@ const SettingsForm = lazyPage(() => import("../components/SettingsForm"));
 const BackupPanel = lazyPage(() => import("./settings/Backup"));
 const SigninAdmin = lazyPage(() => import("./settings/Signins").then((m) => ({ default: m.SigninAdmin })));
 const PerformancePanel = lazyPage(() => import("./settings/Performance"));
+const MaintenancePanel = lazyPage(() => import("./settings/Maintenance"));
 
 const ADMIN_TABS: [string, string][] = [
   ["general", "General"], ["family", "Family & access"], ["documents", "Documents & folders"], ["processing", "OCR & processing"],
   ["notifications", "Notifications"], ["connections", "Connections"], ["authentication", "Authentication"], ["backup", "Backup & Recovery"],
-  ["security", "Security"], ["activity", "Activity & health"], ["performance", "Performance"], ["ai", "AI"], ["offline", "Offline & PWA"], ["overview", "Overview & sign-in"],
+  ["security", "Security"], ["activity", "Activity & health"], ["performance", "Performance"], ["system", "System"], ["ai", "AI"], ["offline", "Offline & PWA"], ["overview", "Overview & sign-in"],
 ];
 
 export default function SettingsPage() {
@@ -40,7 +41,7 @@ export default function SettingsPage() {
   const admin = !!session?.user?.is_main_admin;
   const delegate = (session?.delegations || []).length > 0;
   const secAdmin = !admin && !!session?.user?.is_admin;  // Administrator role: security and operations only
-  const tabs: [string, string][] = [["account", "My account"], ...(admin ? ADMIN_TABS : [...(delegate || secAdmin ? [["family", secAdmin && !delegate ? "Users" : "Family & access"] as [string, string]] : []), ...(secAdmin ? [["security", "Security"] as [string, string], ["performance", "Performance"] as [string, string]] : [])]), ["help", "Help & documentation"]];
+  const tabs: [string, string][] = [["account", "My account"], ...(admin ? ADMIN_TABS : [...(delegate || secAdmin ? [["family", secAdmin && !delegate ? "Users" : "Family & access"] as [string, string]] : []), ...(secAdmin ? [["security", "Security"] as [string, string], ["performance", "Performance"] as [string, string], ["system", "System"] as [string, string]] : [])]), ["help", "Help & documentation"]];
   const active = section || (admin ? "general" : "account");
   // Change Set V: the former Storage & NAS page is now Backup & Recovery → Destinations (old links still arrive)
   if (section === "storage") return <Navigate to="/settings/backup?view=destinations" replace />;
@@ -66,6 +67,7 @@ export default function SettingsPage() {
       {active === "offline" && admin && <OfflineAdminPanel />}
       {active === "overview" && admin && <OverviewAdminPanel />}
       {active === "performance" && (admin || secAdmin) && <PerformancePanel />}
+      {active === "system" && (admin || secAdmin) && <MaintenancePanel />}
       </Suspense>
     </div>
   );

@@ -217,9 +217,9 @@ HELP_CATEGORIES = [
                    "ocr-corrections", "ocr-engines", "office-dicom", "expiry-rules", "extended-family", "local-ai"]),
     ("Backup & Recovery", ["backup-restore", "disaster-recovery"]),
     ("Security & sign-in", ["security-map", "passkeys", "totp-recovery", "password-reset", "security-access", "security-center",
-                            "antivirus", "google", "authentik", "login-designs"]),
+                            "active-sessions", "antivirus", "google", "authentik", "login-designs"]),
     ("Notifications", ["notifications", "smtp", "telegram", "discord", "whatsapp-personal"]),
-    ("Installation & operations", ["installation", "upgrades", "performance", "reverse-proxy", "settings", "troubleshooting", "private-github"]),
+    ("Installation & operations", ["installation", "upgrades", "maintenance", "performance", "reverse-proxy", "settings", "troubleshooting", "private-github"]),
     ("For contributors", ["architecture", "testing", "screenshots", "documentation"]),
 ]
 

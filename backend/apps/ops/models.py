@@ -192,3 +192,57 @@ class RestoreRun(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class MaintenanceJob(models.Model):
+    """Change Set AB: one WebGUI maintenance operation (Settings → System → Maintenance & Operations).
+
+    Persistent, so its steps, result, error and log survive a browser refresh, sign-out and an application or service
+    restart (an upgrade restarts the web app while the root helper keeps working). Never stores secrets: summaries,
+    details and logs are sanitised before they are shown or downloaded (apps/ops/sanitize.py)."""
+
+    QUEUED, RUNNING, CONFIRM = "queued", "running", "waiting_confirmation"
+    SUCCEEDED, WARNINGS, PARTIAL, FAILED = "succeeded", "succeeded_warnings", "partially_failed", "failed"
+    RECOVERY, ROLLED_BACK, CANCELLED = "recovery_required", "rolled_back", "cancelled"
+    STATUSES = (QUEUED, RUNNING, CONFIRM, SUCCEEDED, WARNINGS, PARTIAL, FAILED, RECOVERY, ROLLED_BACK, CANCELLED)
+    ACTIVE = (QUEUED, RUNNING, CONFIRM)
+    OPERATIONS = ("check_updates", "upgrade", "doctor", "repair", "restart", "rollback", "clear_caches")
+    # recovery state of an upgrade/rollback: none | remains_operational | rolled_back | recovery_required
+    RECOVERY_STATES = ("", "remains_operational", "rolled_back", "recovery_required")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    operation = models.CharField(max_length=20, db_index=True)
+    status = models.CharField(max_length=24, default=QUEUED, db_index=True)
+    # "system" for operations that must never overlap (upgrade, repair, rollback, restart); enforced by a constraint
+    lock_group = models.CharField(max_length=10, null=True, blank=True)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    requested_by_label = models.CharField(max_length=80, blank=True)
+    requested_at = models.DateTimeField(default=timezone.now, db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    current_step = models.CharField(max_length=40, blank=True)
+    steps = models.JSONField(default=list, blank=True)  # [{key, label, status, started_at, finished_at, detail}]
+    summary = models.CharField(max_length=300, blank=True)
+    details = models.JSONField(default=dict, blank=True)  # failed step, component, exit code, error, context, cause …
+    result = models.JSONField(default=dict, blank=True)  # doctor results, repair plan, update check, health …
+    params = models.JSONField(default=dict, blank=True)
+    log_name = models.CharField(max_length=80, blank=True)
+    exit_code = models.IntegerField(null=True, blank=True)
+    version_from = models.CharField(max_length=80, blank=True)
+    version_to = models.CharField(max_length=80, blank=True)
+    backup_ref = models.CharField(max_length=200, blank=True)
+    recovery_state = models.CharField(max_length=20, blank=True)
+    parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="retries")
+    failure_class = models.CharField(max_length=40, blank=True)
+    verification = models.JSONField(default=dict, blank=True)
+    helper_request = models.CharField(max_length=40, blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        indexes = [models.Index(fields=["operation", "-requested_at"]), models.Index(fields=["status", "-requested_at"])]
+        constraints = [models.UniqueConstraint(fields=["lock_group"], condition=models.Q(status__in=("queued", "running", "waiting_confirmation")),
+                                               name="one_active_system_maintenance")]
+
+    @property
+    def active(self) -> bool:
+        return self.status in self.ACTIVE

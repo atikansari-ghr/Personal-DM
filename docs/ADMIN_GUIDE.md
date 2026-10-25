@@ -604,6 +604,33 @@ in with Passkey** on each device. See [Change Set P](guides/upgrades.md#change-s
 
 Guide: [upgrades](guides/upgrades.md#change-set-m) (with notes for each change set).
 
+## 15a. Maintenance & Operations and Active Sessions {#maintenance}
+
+**Settings → System → Maintenance & Operations** (main administrator; Administrators read-only) runs maintenance from the
+browser as durable **Maintenance Jobs** with live steps: **Check for Updates** (never installs), **Update Application**
+(preflight → automatic verified pre-upgrade backup → update → dependencies → migrations → frontend → restart → health
+checks → report; a failed backup stops it), **Doctor** (the same read-only checks as `personaldocs doctor`, PASS /
+WARNING / FAIL / NOT CONFIGURED / NOT APPLICABLE / NOT TESTED per component, downloadable report), **Repair** (Analyze →
+Repair Plan with problem, proposed repair, affected files/services, restart, backup and risk → confirm with step-up →
+backup if needed → repair → verification), the **health panels** (Database, OCR, AI, Security, Backup, Storage),
+**Restart Personal DM Services**, **Clear Safe Caches**, **System Information** and **Job History** with filters.
+
+A failed job shows its **Summary**, **Technical Details** (failed step, component, time, exit code, exact sanitized
+error, log context, detected condition and probable cause when known, recommended action) and the sanitized **Full
+Log**, with Copy Error, Download Full Log, Sanitized Support Report (optionally anonymized), Retry, Run Doctor, Repair,
+Rollback and the Recovery Guide. Failed upgrades say whether the existing version remains operational, was rolled back
+(only after verified health checks) or needs recovery. Step-up is required for Update, Restart, Rollback and confirming
+a Repair. There is no shell in the web interface. Logs are kept 90 days, history 730 days (Settings → System, separate
+from the audit retention). Guide: [Maintenance & Operations](guides/maintenance.md).
+
+**Settings → Security → Active Sessions** lists the sessions in your scope — user, Active or Signed In (threshold
+*Consider session Active when activity occurred within* 5 minutes), complete IP address, Trusted Zone and trust,
+approximate location, device, OS, browser, sign-in time, last activity, method, recognized device and risk — with
+filters and details. The main administrator can **Terminate Session** (confirmed, audited, the person is notified,
+other sessions unaffected; not the same as Mark Unrecognized). The **Active Sessions** Overview tile shows *N Active · M
+Signed In · K Untrusted* in compact, medium or large form and works with Edit Layout like every tile. Guide:
+[Active Sessions](guides/active-sessions.md).
+
 ## 16. Public deployment considerations {#public}
 
 - Expose only HTTPS through the proxy, and keep port 8000 firewalled to the proxy (the installer does this when it

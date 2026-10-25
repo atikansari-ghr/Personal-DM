@@ -4,6 +4,25 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-25) — Maintenance & Operations in the web interface, Active Sessions (Change Set AB)
+- **Settings → System → Maintenance & Operations** (main administrator; Administrators read-only): Check for Updates
+  (never installs), Update Application with preflight, an automatic verified pre-upgrade backup that blocks on failure,
+  dependencies, migrations, frontend, restart and health checks; Doctor (the same checks as `personaldocs doctor`,
+  grouped, PASS/WARNING/FAIL/NOT CONFIGURED/NOT APPLICABLE/NOT TESTED); Repair with a reviewed plan, step-up, backup
+  when needed and verification; health panels; Restart Personal DM Services; Clear Safe Caches; System Information;
+  Job History with filters.
+- Every operation is a **durable Maintenance Job** with live steps that survives refresh, sign-out and restarts.
+  Failures show a summary, **Technical Details** and the sanitized **Full Log**, with Copy Error, Sanitized (and
+  anonymized) Support Report, Retry, Doctor, Repair, Rollback and the Recovery Guide. Failed upgrades say whether the
+  existing version remains operational, was rolled back (verified) or needs recovery.
+- Root work runs through the host helper's new fixed actions; nothing typed in the browser reaches a shell. New CLI
+  commands `personaldocs restart`, `personaldocs check-updates [--json]` and `personaldocs repair --only ITEM,...`.
+- **Active Sessions:** Active vs Signed In (threshold, default 5 minutes; background refreshes do not count), Trusted
+  Zone / approximate GeoIP location, device, method and risk; Settings → Security → Active Sessions with filters and
+  details; **Terminate Session** for the main administrator; an Overview tile in compact, medium and large sizes.
+- Notifications for upgrade completed/failed, recovery required, rollback, repair failed, critical Doctor findings,
+  session terminated and high-risk sessions.
+
 ### Added (2026-10-25) — direct Local AI processing, Overview groups, Document Type field management (Change Set AA)
 - **Processing Source** for AI Actions: *Original Document — Local AI + OCR Fallback* (new default), *Original
   Document — Local AI* and *OCR Text*. A Local vision model reads the original PDF, JPEG, PNG, TIFF or WEBP (pages

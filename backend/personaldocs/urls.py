@@ -18,8 +18,9 @@ from apps.library import offline as offl
 from apps.library import export, ocr_views as ocrv, views as lib, views_import as imp, views_share as share, views_types as vt
 from apps.mailimport import views as mail
 from apps.notify import views as notify, views_rich as nrich
-from apps.ops import bk_views as bk, views as ops
+from apps.ops import bk_views as bk, views as ops, views_maint as maint
 from apps.security import views as sec
+from apps.security import views_sessions as sess
 from apps.security import views_signins as signin
 
 
@@ -289,6 +290,19 @@ api = [
     path("backup/nas", ops.nas_api),
     # Backup & Recovery (Change Set T)
     path("backup/overview", bk.overview),
+    # Change Set AB: Settings → System → Maintenance & Operations
+    path("maintenance", maint.overview),
+    path("maintenance/health", maint.health),
+    path("maintenance/system", maint.system_info),
+    path("maintenance/caches", maint.caches),
+    path("maintenance/jobs", maint.jobs_list),
+    path("maintenance/doctor", maint.doctor_readonly),
+    path("maintenance/run/<str:operation>", maint.run),
+    path("maintenance/jobs/<uuid:pk>", maint.job_detail),
+    path("maintenance/jobs/<uuid:pk>/log", maint.job_log),
+    path("maintenance/jobs/<uuid:pk>/report", maint.job_report),
+    path("maintenance/jobs/<uuid:pk>/doctor-report", maint.doctor_report),
+    path("maintenance/jobs/<uuid:pk>/<str:action>", maint.job_action),
     path("backup/stepup", bk.stepup),
     path("backup/stepup/options", bk.stepup_options),
     path("backup/policies", bk.policies),
@@ -321,6 +335,10 @@ api = [
     path("security/zones/test", signin.zone_test),
     path("security/map", signin.signin_map),
     path("security/map/test", signin.map_test),
+    path("security/sessions", sess.sessions),
+    path("security/sessions/summary", sess.summary),
+    path("security/sessions/<uuid:pk>", sess.session_detail),
+    path("security/sessions/<uuid:pk>/terminate", sess.terminate),
     path("security/devices", signin.devices),
     path("security/devices/<uuid:pk>/unrecognize", signin.device_unrecognize),
     path("admin/security/policy", sec.access_policy),

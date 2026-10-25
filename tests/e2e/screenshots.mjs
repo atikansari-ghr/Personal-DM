@@ -17,7 +17,10 @@ fs.mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const manifest = [];
 let failed = 0;
+// E2E_ONLY=text runs only the steps whose name contains it (re-running one change set's steps during development)
+const ONLY = process.env.E2E_ONLY || "";
 const step = async (name, fn) => {
+  if (ONLY && !name.includes(ONLY)) return;
   try { await fn(); results.push(["PASS", name]); console.log("PASS", name); }
   catch (e) { failed++; results.push(["FAIL", name, String(e).slice(0, 800)]); console.log("FAIL", name, String(e).slice(0, 800)); }
 };
@@ -353,6 +356,65 @@ await step("AT-354 Change Set U documentation screenshots (folder tree, map prov
     await capture(P, "settings-login-design-editor.png", "Design editor: focal point, overlay, colour mode and palette with the device preview");
     await P.keyboard.press("Escape");
   }
+});
+
+await step("AT-499 Change Set AB documentation screenshots (Maintenance & Operations, jobs, repair plan, Active Sessions)", async () => {
+  const SC = process.env.MAINT_SCENARIO;
+  expect(SC, "MAINT_SCENARIO not set (run through scripts/e2e.sh)");
+  const p = D.page;
+  const jobs = async (q) => (await api(p, `/api/maintenance/jobs?${q}`)).data.jobs;
+  await p.goto(BASE + "/settings/system");
+  await p.waitForSelector("[data-maintenance] [data-panel=storage]");
+  await capture(p, "maintenance-operations.png", "Settings → System → Maintenance & Operations: update check, Update Application, Doctor, Repair, restart and caches");
+  // a running upgrade: the live steps while it runs (scripted root command, see tests/e2e/maint_helper.py)
+  fs.writeFileSync(SC, "slow");
+  await api(p, "/api/backup/stepup", { body: { password: PW } });
+  const up = await api(p, "/api/maintenance/run/upgrade", { body: { confirm: true } });
+  expect(up.status === 202, `upgrade start ${up.status}`);
+  await p.goto(`${BASE}/settings/system?job=${up.data.id}`);
+  await p.waitForSelector(".modal [data-step=backup][data-step-status=succeeded] ~ [data-step-status=running], .modal [data-step=backup_verify][data-step-status=running], .modal [data-step=fetch][data-step-status=running]", { timeout: 90000 });
+  await capture(p, "maintenance-upgrade-running.png", "A running upgrade: each step with its status and duration, live");
+  await p.waitForSelector(".modal [data-job][data-job-status=succeeded]", { timeout: 120000 });
+  // a failed upgrade with Technical Details
+  fs.writeFileSync(SC, "fail-disk");
+  await api(p, "/api/backup/stepup", { body: { password: PW } });
+  const bad = await api(p, "/api/maintenance/run/upgrade", { body: { confirm: true } });
+  await p.goto(`${BASE}/settings/system?job=${bad.data.id}`);
+  await p.waitForSelector(".modal [data-job][data-job-status=failed]", { timeout: 60000 });
+  await p.click(".modal [data-technical]");
+  await p.waitForSelector(".modal [data-technical-details]");
+  await capture(p, "maintenance-upgrade-failed.png", "Upgrade Failed — Existing Version Remains Operational, with Technical Details");
+  fs.writeFileSync(SC, "ok");
+  // Doctor results
+  const doc = (await jobs("operation=doctor"))[0] || (await api(p, "/api/maintenance/doctor", { method: "POST" })).data;
+  await p.goto(`${BASE}/settings/system?job=${doc.id}`);
+  await p.waitForSelector(".modal [data-doctor] [data-component]", { timeout: 120000 });
+  await capture(p, "maintenance-doctor.png", "Doctor: read-only checks grouped by component, PASS / WARNING / FAIL / NOT CONFIGURED");
+  // Repair Plan waiting for confirmation (a missing data directory), then cancelled
+  fs.rmSync(`${process.env.PD_DATA_DIR}/tmp`, { recursive: true, force: true });
+  const rep = await api(p, "/api/maintenance/run/repair", { body: {} });
+  await p.goto(`${BASE}/settings/system?job=${rep.data.id}`);
+  await p.waitForSelector(".modal [data-job-status=waiting_confirmation] [data-plan-item=directories]", { timeout: 120000 });
+  await capture(p, "maintenance-repair-plan.png", "Repair Plan: problem, proposed repair, affected files and services, restart, backup and risk — before any change");
+  await api(p, `/api/maintenance/jobs/${rep.data.id}/cancel`, { method: "POST" });
+  fs.mkdirSync(`${process.env.PD_DATA_DIR}/tmp`, { recursive: true });
+  // Job History
+  await p.goto(BASE + "/settings/system");
+  await p.locator("[data-job-history]").scrollIntoViewIfNeeded();
+  await p.waitForSelector("[data-job-history] [data-history-job]");
+  await capture(p, "maintenance-history.png", "Maintenance Job History with operation, status and date filters");
+  // Active Sessions (the sessions the earlier suites signed in)
+  await p.goto(BASE + "/");
+  await p.locator("[data-widget=sessions]").scrollIntoViewIfNeeded();
+  await p.waitForSelector("[data-widget=sessions] [data-sessions-tile]");
+  await capture(p, "active-sessions-tile.png", "The Active Sessions tile on the Overview: Active, Signed In and Untrusted counts and recent sessions");
+  await p.goto(BASE + "/settings/security?view=sessions");
+  await p.waitForSelector("[data-active-sessions] [data-session-table]");
+  await capture(p, "active-sessions.png", "Settings → Security → Active Sessions: state, address, trust, approximate location, device and risk, with filters");
+  await p.locator("[data-session-table] tbody tr").first().click();
+  await p.waitForSelector(".modal [data-session-detail]");
+  await capture(p, "active-sessions-detail.png", "Session details with Terminate Session (main administrator)");
+  await p.keyboard.press("Escape");
 });
 
 await step("AT-334 guide screenshots load in Help (after capture)", async () => {

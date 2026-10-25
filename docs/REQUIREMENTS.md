@@ -472,6 +472,36 @@ Acceptance tests AT-336…AT-355. The change prompt numbered them AT-311…AT-33
 
 Native apps, scanning enhancement, in-browser Office editing, DICOM viewing.
 
+## Change set AB (2026-10): WebGUI maintenance operations, persistent diagnostics, Active Sessions {#change-set-ab}
+
+Acceptance tests AT-481…AT-500 (prompt AT-456…AT-475 = AT-(n+25)). See [TRACEABILITY.md](TRACEABILITY.md#change-set-ab)
+and [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-ab).
+
+| ID | Requirement |
+|---|---|
+| MNT-1 | Settings → System → Maintenance & Operations: Check for Updates, Update Application, System Status, Doctor, Repair, health panels, Restart Personal DM Services, Clear Safe Caches, System Information, Job History. Main Admin: all; scoped Administrator: read-only Status, Doctor and Health; family members: none. |
+| MNT-2 | Durable Maintenance Jobs (operation, requester, timestamps, status, current step, ordered steps with times/status, sanitized summary/details/log reference, exit code, versions, backup reference, recovery state, retry link, failure class, verification) with the ten statuses; survive refresh, relogin, app and service restart. |
+| MNT-3 | Live step progress by polling (no per-second traffic), reconnecting after a restart; a browser disconnect is not a failure. |
+| MNT-4 | Errors at three levels — Summary, Technical Details (failed step, component, timestamp, exit code, exact sanitized error, log context, detected condition and probable cause only when supported, recommended action), Full Log view/download — with Copy Error, support report, Retry, Run Doctor, Repair, Rollback and Recovery Guide. |
+| MNT-5 | Server-side sanitization of passwords, API keys, cookies, database/OAuth/OIDC/SMTP/NAS credentials, AI keys, notification tokens, backup/recovery and private keys; optional anonymized support report (IPs, user/host names, document paths and names, network names) without changing records; internal Main Admin views keep complete IPs. |
+| MNT-6 | Job History with operation/status/date filters; maintenance log and history retention separate from the audit retention. |
+| MNT-7 | Check for Updates: installed vs available version, trusted source and channel, release information, preflight warnings, last checked; never installs. |
+| MNT-8 | WebGUI upgrade: authorization/step-up, lock, preflight, target validation, disk, automatic pre-upgrade backup, verification (a failed backup blocks), fetch, dependencies, migrations, frontend, restart, health, release lock, report; no concurrent Upgrade/Repair/Rollback/Restart. |
+| MNT-9 | Failure states *Existing Version Remains Operational* / *Rolled Back* / *Recovery Required* with previous/attempted version, failed step, backup, rollback-required and health; rollback only when schema-compatible and reported only after verification. |
+| MNT-10 | Doctor: diagnostic only, shared with the CLI, component statuses PASS/WARNING/FAIL/NOT CONFIGURED/NOT APPLICABLE/NOT TESTED, expandable, downloadable sanitized report. |
+| MNT-11 | Repair: Analyze → plan (problem, repair, affected files/services, restart, backup, risk) → review → confirm with step-up → backup if required → repair (allowlisted only) → verify → report. |
+| MNT-12 | Health panels: Database, OCR, AI, Security, Backup, Storage. |
+| MNT-13 | Restart Personal DM services only (confirmation, step-up, reconnect, verification); Clear Safe Caches of rebuildable data only, with type, size, effect and regeneration. |
+| MNT-14 | System Information without secrets: version/commit, OS, uptime, CPU/load, memory/swap, storage, DB, OCR, safe AI information, workers. |
+| MNT-15 | Security: step-up for high-risk actions, CSRF, allowlisted operations, no user input in shell commands, no generic shell, audit without secrets; notifications (upgrade completed/failed, repair failed, recovery required, rollback, critical Doctor finding) with deep links and no logs. |
+| SES-1 | Active Sessions Overview tile (administrators) integrated with Edit Layout (drag, resize, groups, per-user, responsive), compact/medium/large content, View All. |
+| SES-2 | Active = recent authenticated activity within a configurable threshold (default 5 minutes, safe bounds); Signed In = valid but idle; bounded activity writes, background refreshes excluded. |
+| SES-3 | Location: Trusted Zone first, then existing network information, then GeoIP labelled Approximate; no GPS. |
+| SES-4 | Security → Active Sessions page: user, state, complete IP (existing policy), trust, approximate location, device, OS, browser, sign-in time, last activity, method, recognized device, risk; filters; never cookies or tokens. |
+| SES-5 | Session details and Terminate Session (Main Admin): confirmation, server-side invalidation, audit, notification, unrelated sessions unaffected; distinct from Mark Unrecognized. |
+| SES-6 | Privacy and performance: own sessions for members, delegated scope for scoped administrators; no N+1 or remote GeoIP; high-risk session notification under the existing policy. |
+| DOC-AB | User, Admin, Installation/Upgrade, Troubleshooting, Security and Backup & Recovery guides, Help index and tooltips (with Learn More, permission-aware) updated; sanitized screenshots. |
+
 ## Change set AA (2026-10): direct Local AI processing, custom Overview layouts, Document Type field management {#change-set-aa}
 
 Acceptance tests AT-461…AT-480 (prompt AT-436…AT-455 = AT-(n+25); the prompt called itself "Change Set X", which is

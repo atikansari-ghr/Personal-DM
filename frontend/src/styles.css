@@ -1172,3 +1172,33 @@ tr.risk-high td { background: var(--danger-bg); }
 .perf-area { fill: var(--brand); fill-opacity: 0.12; stroke: none; }
 .perf-axis { stroke: var(--line); stroke-width: 1; }
 .perf-cursor { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+
+/* Change Set AB: Maintenance & Operations, Active Sessions */
+.mj-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: 1rem; }
+.mj-cards > .card h3 { margin-top: 0; }
+.mj-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 0.8rem; }
+.mj-panel { display: flex; flex-direction: column; gap: 0.35rem; }
+.mj-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
+.mj-step { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.4rem 0.2rem; border-top: 1px solid var(--line); }
+.mj-step:first-child { border-top: 0; }
+.mj-step.pending, .mj-step.not_run { opacity: 0.6; }
+.mj-dot { display: inline-flex; width: 1.5rem; height: 1.5rem; border-radius: 999px; align-items: center; justify-content: center; flex: none; background: var(--surface-2); }
+.mj-dot.ok { background: var(--ok-bg); color: var(--ok-ink); }
+.mj-dot.danger { background: var(--danger-bg); color: var(--danger-ink); }
+.mj-dot.soon { background: var(--warn-bg); color: var(--warn-ink); }
+.mj-step.running .mj-dot svg { animation: mj-spin 1.2s linear infinite; }
+@keyframes mj-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .mj-step.running .mj-dot svg { animation: none; } }
+.mj-expander { width: 100%; background: none; border: 0; color: inherit; cursor: pointer; padding: 0.2rem 0; text-align: start; }
+code.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+.warn-ink { color: var(--warn-ink); font-weight: 600; }
+.sessions-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; }
+.sessions-rows li { gap: 0.6rem; min-width: 0; }
+.sessions-rows .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.mj-cards > *, .mj-panels > * { min-width: 0; }
+.mj-cards > .card { overflow-x: auto; }
+.mj-cards .kv-table, [data-system-info] { table-layout: fixed; width: 100%; }
+.mj-cards .kv-table td, [data-system-info] td { overflow-wrap: anywhere; }
+.filter-row > select, .filter-row > input, .filter-row > label { width: auto; flex: 0 1 13rem; min-width: 9rem; }
+.filter-row > label input { width: auto; }
+.mj-cards .kv-table th { width: 38%; }

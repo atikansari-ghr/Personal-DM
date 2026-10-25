@@ -1284,7 +1284,6 @@ def _expiry_window(question: str) -> int | None:
 def retrieve(ctx, question: str, *, document=None, limit: int = 8) -> list:
     """Candidate documents for a question: all from ctx (permission-filtered) via full-text, semantic and date intents."""
     from apps.library import search as searchlib
-    from apps.library.models import Document
 
     visible = ctx.documents()
     if document is not None:

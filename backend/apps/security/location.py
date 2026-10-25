@@ -65,8 +65,9 @@ def clean_cidrs(values) -> list[str]:
     return sorted(set(out), key=out.index)
 
 
-def match_zone(ip):
-    """Most specific matching network wins (longest prefix), ties by zone id: deterministic."""
+def match_zone(ip, zones=None):
+    """Most specific matching network wins (longest prefix), ties by zone id: deterministic. ``zones`` lets a caller
+    that resolves many addresses load the zones once."""
     from .models import TrustedZone
 
     if isinstance(ip, str):
@@ -74,7 +75,7 @@ def match_zone(ip):
     if ip is None:
         return None
     best = None
-    for z in TrustedZone.objects.all().order_by("id"):
+    for z in (zones if zones is not None else TrustedZone.objects.all().order_by("id")):
         for c in z.cidrs or []:
             try:
                 net = ipaddress.ip_network(c, strict=False)
@@ -112,11 +113,11 @@ def geo_detail(ip) -> dict | None:
     return out
 
 
-def resolve(ip_text: str | None) -> dict:
+def resolve(ip_text: str | None, zones=None) -> dict:
     ip = netutil.parse_ip(ip_text) if ip_text else None
     if ip is None:
         return {"network": "unknown", "location": "Unknown", "country": "", "country_name": ""}
-    zone = match_zone(ip)
+    zone = match_zone(ip, zones)
     if zone is not None:
         out = {"network": "trusted_zone", "zone": zone, "zone_name": zone.name, "location": zone.name, "country": "", "country_name": ""}
         if zone.pin_lat is not None and zone.pin_lon is not None:

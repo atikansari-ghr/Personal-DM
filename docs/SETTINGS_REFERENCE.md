@@ -479,8 +479,8 @@ Channels people cannot turn off for expiry reminders. In-app is always on.
 
 Events people cannot turn off. They always arrive in-app and on the critical channels below.
 
-- **Default:** `['security.password_reset_requested', 'security.password_admin_reset', 'security.temporary_password', 'security.password_changed', 'security.account_locked', 'security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.risky_signin', 'security.device_unrecognized', 'security.failed_logins', 'security.authentik', 'security.google', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'antivirus.threat', 'antivirus.released', 'antivirus.unavailable', 'antivirus.definitions', 'security.operations', 'backup.failed', 'backup.partial', 'backup.verification', 'backup.destination', 'backup.pre_change_blocked', 'backup.config_changed', 'backup.deleted', 'backup.downloaded', 'recovery.key_revealed', 'recovery.key_rotated', 'recovery.emergency', 'recovery.full', 'recovery.compromise', 'whatsapp.relink_required', 'whatsapp.incompatible', 'integrity.failed']`
-- **Allowed values:** security.password_reset_requested, security.password_admin_reset, security.temporary_password, security.password_changed, security.account_locked, security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, security.risky_signin, security.device_unrecognized, account.login, security.failed_logins, security.authentik, security.google, security.policy_exception, security.policy_change, security.auth_policy, security.health, antivirus.threat, antivirus.released, antivirus.unavailable, antivirus.definitions, security.operations, backup.failed, backup.succeeded, backup.partial, backup.verification, backup.destination, backup.retention, backup.pre_change, backup.pre_change_blocked, backup.config_changed, backup.deleted, backup.downloaded, recovery.key_revealed, recovery.key_rotated, recovery.emergency, recovery.restore, recovery.full, recovery.compromise, recovery.validation, whatsapp.relink_required, whatsapp.incompatible, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, document.changed, import.finished, processing.completed, processing.failed
+- **Default:** `['security.password_reset_requested', 'security.password_admin_reset', 'security.temporary_password', 'security.password_changed', 'security.account_locked', 'security.passkey_added', 'security.passkey_removed', 'security.totp_enabled', 'security.totp_disabled', 'security.recovery_codes', 'security.passwordless', 'security.admin_recovery', 'security.new_country', 'security.risky_signin', 'security.device_unrecognized', 'security.failed_logins', 'security.authentik', 'security.google', 'security.policy_exception', 'security.policy_change', 'security.auth_policy', 'antivirus.threat', 'antivirus.released', 'antivirus.unavailable', 'antivirus.definitions', 'security.operations', 'backup.failed', 'backup.partial', 'backup.verification', 'backup.destination', 'backup.pre_change_blocked', 'backup.config_changed', 'backup.deleted', 'backup.downloaded', 'recovery.key_revealed', 'recovery.key_rotated', 'recovery.emergency', 'recovery.full', 'recovery.compromise', 'whatsapp.relink_required', 'whatsapp.incompatible', 'maintenance.upgrade_failed', 'maintenance.recovery_required', 'maintenance.rollback', 'maintenance.repair_failed', 'maintenance.doctor_critical', 'security.session_terminated', 'security.session_high_risk', 'integrity.failed']`
+- **Allowed values:** security.password_reset_requested, security.password_admin_reset, security.temporary_password, security.password_changed, security.account_locked, security.passkey_added, security.passkey_removed, security.totp_enabled, security.totp_disabled, security.recovery_codes, security.passwordless, security.admin_recovery, security.new_country, security.new_ip, security.risky_signin, security.device_unrecognized, account.login, security.failed_logins, security.authentik, security.google, security.policy_exception, security.policy_change, security.auth_policy, security.health, antivirus.threat, antivirus.released, antivirus.unavailable, antivirus.definitions, security.operations, backup.failed, backup.succeeded, backup.partial, backup.verification, backup.destination, backup.retention, backup.pre_change, backup.pre_change_blocked, backup.config_changed, backup.deleted, backup.downloaded, recovery.key_revealed, recovery.key_rotated, recovery.emergency, recovery.restore, recovery.full, recovery.compromise, recovery.validation, whatsapp.relink_required, whatsapp.incompatible, maintenance.upgrade_completed, maintenance.upgrade_failed, maintenance.recovery_required, maintenance.rollback, maintenance.repair_failed, maintenance.doctor_critical, security.session_terminated, security.session_high_risk, integrity.failed, expiry.reminder, document.added, document.archived, document.shared, document.changed, import.finished, processing.completed, processing.failed
 - **Scope:** global · **Editable by:** main administrator
 - **Depends on:** nothing
 - **Effect of changing:** Applies to the next notification; people see these locked on.
@@ -1323,6 +1323,48 @@ Credit line required by your custom tile server (the presets show their own).
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
 - **Learn more:** [security-map#tiles](guides/security-map.md#tiles)
+
+## Section: sessions
+
+### Consider session Active when activity occurred within (minutes) (`security.session_active_minutes`)
+
+A signed-in session counts as Active when its last request was within this many minutes; older ones are Signed In (idle). Background refreshes do not count as activity.
+
+- **Default:** `5`
+- **Allowed values:** 2–120
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Applies at once to the Active Sessions page and tile.
+- **Restart needed:** no
+- **Learn more:** [active-sessions#active-threshold](guides/active-sessions.md#active-threshold)
+
+## Section: maintenance
+
+### Maintenance log retention (days) (`maintenance.log_retention_days`)
+
+Full logs of maintenance operations (upgrade, repair, restart, Doctor …) older than this are deleted by the nightly maintenance. Separate from the audit log retention.
+
+- **Default:** `90`
+- **Allowed values:** 7–3650
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Applies at the next nightly maintenance run.
+- **Restart needed:** no
+- **Learn more:** [maintenance#retention](guides/maintenance.md#retention)
+
+### Maintenance history retention (days) (`maintenance.history_days`)
+
+Maintenance Job History entries (status, steps, sanitised summary) older than this are deleted.
+
+- **Default:** `730`
+- **Allowed values:** 30–3650
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** nothing
+- **Effect of changing:** Applies at the next nightly maintenance run.
+- **Restart needed:** no
+- **Learn more:** [maintenance#retention](guides/maintenance.md#retention)
+
+## Section: security
 
 ### Login audit retention (days) (`security.login_audit_retention_days`)
 
@@ -2516,8 +2558,8 @@ Also send access, import and (for administrators) backup and integrity alerts to
 
 Choose what your Overview shows and in which order. Saved to your account, so every device shows the same. Use Customize Overview for sizes and styles.
 
-- **Default:** `['date', 'weather', 'summary', 'calendar', 'holidays', 'upcoming', 'shared', 'recent', 'activity', 'review_queue', 'backup', 'my_recovery', 'security']`
-- **Allowed values:** documents, members, expiring, storage, review, family, saved_views, recent, upcoming, review_queue, backup, my_recovery, date, weather, summary, calendar, holidays, shared, activity, security
+- **Default:** `['date', 'weather', 'summary', 'calendar', 'holidays', 'upcoming', 'shared', 'recent', 'activity', 'review_queue', 'backup', 'my_recovery', 'security', 'sessions']`
+- **Allowed values:** documents, members, expiring, storage, review, family, saved_views, recent, upcoming, review_queue, backup, my_recovery, date, weather, summary, calendar, holidays, shared, activity, security, sessions
 - **Scope:** user · **Editable by:** each user
 - **Depends on:** nothing
 - **Effect of changing:** Applies on all your devices.

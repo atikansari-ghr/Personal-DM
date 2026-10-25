@@ -67,6 +67,27 @@ Not included:
 >
 > A destination only ever holds ciphertext and a small header with no document names.
 
+## Pre-upgrade backup {#pre-upgrade-backup}
+
+Every upgrade — from the command line or from **Settings → System → Maintenance & Operations** — makes a safety backup
+first and checks it before anything changes:
+
+- with a backup destination configured, a **verified recovery point** (the same deep verification as any recovery
+  point), and always a local **database snapshot** (`/var/lib/personaldocs/pre-upgrade/`, the last three are kept)
+  that is read back before continuing;
+- **a failed or unverifiable backup blocks the upgrade**: the job ends with *Upgrade Failed — Existing Version Remains
+  Operational* at the backup step, and nothing was changed;
+- the job keeps the **backup reference**, so a later *Recovery Required* says exactly what to restore.
+
+Database compatibility decides how to go back. As long as no new migration was applied, the previous release keeps
+running (or is switched back to automatically, verified by health checks). After migrations the previous release is
+not compatible any more, so a code-only rollback is refused; recover with the database snapshot or the verified
+recovery point ([Maintenance recovery](troubleshooting.md#maintenance-recovery), or `sudo personaldocs recover` when
+the web interface is unavailable).
+
+The pre-upgrade backup is a regular recovery point protected by your Recovery Key, so the **Emergency Recovery
+Package** you exported still opens it; no new package is needed for an upgrade (only after a key rotation).
+
 ## Health and Overview {#health}
 
 The **Backup & Recovery Health** badge is calculated from verified recovery points and destination checks. A running

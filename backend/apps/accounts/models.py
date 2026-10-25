@@ -145,6 +145,8 @@ class UserSession(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="device_sessions")
     created_at = models.DateTimeField(auto_now_add=True)
     last_seen_at = models.DateTimeField(default=timezone.now)
+    # Change Set AB: the last request the person made (background refreshes excluded); Active vs Signed In
+    last_activity_at = models.DateTimeField(default=timezone.now, db_index=True)
     ip = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.CharField(max_length=300, blank=True)
     method = models.CharField(max_length=40, blank=True)

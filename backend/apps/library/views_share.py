@@ -19,7 +19,7 @@ from apps.core import audit, config, crypto, ratelimit
 from . import permissions as P
 from . import storage
 from .models import ShareLink
-from .views import _ctx, _err, _stream, get_doc
+from .views import _err, _stream, get_doc
 
 MAX_DAYS = 90
 

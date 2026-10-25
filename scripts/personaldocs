@@ -6,7 +6,10 @@
 #   personaldocs upgrade [--ref REF] [--skip-backup]
 #   personaldocs post-upgrade                  (set up components a new release adds: ClamAV, host helper; safe to repeat)
 #   personaldocs rollback
-#   personaldocs repair
+#   personaldocs repair [--only ITEM,...]      (items: packages directories units migrations jobs search services
+#                                               antivirus ocr_languages; default: the full repair)
+#   personaldocs restart                       (restart the Personal DM services and verify they are healthy)
+#   personaldocs check-updates [--json]        (compare the installed release with the update source; never installs)
 #   personaldocs status | doctor | integrity [...] | logs [web|worker|scheduler|whatsapp]
 #   personaldocs backup [--incremental] | backup list | backup health | backup verify POINT
 #                                               (encrypted full-system recovery points, Settings → Backup & Recovery)
@@ -67,9 +70,41 @@ c_warn() { printf '\033[33m%s\033[0m\n' "$*" >&2; }
 c_err() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 redact() { sed -E 's/(gh[pousr]_[A-Za-z0-9_]{10,}|github_pat_[A-Za-z0-9_]{20,})/[REDACTED]/g; s/(password|token|secret)=[^ ]*/\1=[REDACTED]/Ig'; }
 log() { local m="[$(date -Is)] $*"; echo "$m" | redact; [ -d "$LOG_DIR" ] && echo "$m" | redact >>"$LOG" || true; }
-die() { c_err "ERROR: $*"; log "ERROR: $*"; c_err "Details: $LOG. Fix the problem and run the same command again; completed steps are skipped safely."; exit 1; }
+die() {
+  c_err "ERROR: $*"; log "ERROR: $*"
+  progress_fail "$*"
+  c_err "Details: $LOG. Fix the problem and run the same command again; completed steps are skipped safely."; exit 1
+}
 need_root() { [ "$(id -u)" -eq 0 ] || die "run as root (sudo personaldocs $CMD)"; }
-trap 'c_err "Failed at line $LINENO: $BASH_COMMAND"; log "failed at line $LINENO"' ERR
+trap 'c_err "Failed at line $LINENO: $BASH_COMMAND"; log "failed at line $LINENO"; progress_fail "failed at line $LINENO: $BASH_COMMAND"' ERR
+
+# WebGUI progress (Change Set AB). The root host helper sets PD_PROGRESS_FILE for operations started in
+# Settings → System → Maintenance & Operations; each step then appends one JSON line (redacted). Without it the
+# steps are only logged. FAIL_OUTCOME says what a failure means for the installation: remains_operational
+# (nothing changed), rolled_back (verified) or recovery_required.
+CUR_STEP=""
+FAIL_OUTCOME=""
+progress() { # progress TYPE KEY VALUE [MESSAGE]
+  [ -n "${PD_PROGRESS_FILE:-}" ] || return 0
+  jq -cn --arg t "$1" --arg k "$2" --arg v "$3" --arg m "${4:-}" --arg at "$(date -Is)" \
+    '{t:$t,key:$k,value:$v,msg:$m,at:$at}' >>"$PD_PROGRESS_FILE" 2>/dev/null || true
+}
+step() { # step KEY running|ok|failed|skipped|warning [MESSAGE]
+  local key=$1 state=$2; shift 2
+  local msg; msg=$(printf '%s' "$*" | redact)
+  if [ "$state" = running ]; then CUR_STEP=$key; elif [ "$CUR_STEP" = "$key" ]; then CUR_STEP=""; fi
+  log "step $key: $state${msg:+ - $msg}"
+  progress step "$key" "$state" "$msg"
+}
+meta() { progress meta "$1" "$(printf '%s' "$2" | redact)"; }
+progress_fail() { # mark the running step failed and record what the failure means (called by die and the ERR trap)
+  [ -n "${PD_PROGRESS_FILE:-}" ] || return 0
+  local msg; msg=$(printf '%s' "$1" | redact)
+  if [ -n "$CUR_STEP" ]; then progress step "$CUR_STEP" failed "$msg"; CUR_STEP=""; fi
+  [ -n "$FAIL_OUTCOME" ] && progress meta outcome "$FAIL_OUTCOME"
+  progress meta error "$msg"
+}
+units_active() { local u; for u in "${UNITS[@]}"; do systemctl is-active --quiet "$u" || return 1; done; }
 
 with_lock() {
   exec 9>"$LOCK"
@@ -543,8 +578,11 @@ build_release() { # creates $RELEASES/$REL_ID with venv and frontend
   # directory must never be renamed afterwards. ".complete" marks a finished build; anything else is redone.
   local dir=$RELEASES/$REL_ID
   if [ -f "$dir/.complete" ] && head -1 "$dir/.venv/bin/gunicorn" 2>/dev/null | grep -qF "$dir/.venv/"; then
-    log "release $REL_ID already built"; echo "$dir"; return
+    log "release $REL_ID already built"
+    step fetch ok "already built"; step dependencies ok "already built"; step frontend ok "already built"
+    echo "$dir"; return
   fi
+  step fetch running "$REL_ID"
   rm -rf "$dir" "$dir.tmp"
   mkdir -p "$dir"
   if [ -n "${SRC_DIR:-}" ]; then
@@ -553,14 +591,19 @@ build_release() { # creates $RELEASES/$REL_ID with venv and frontend
     git --git-dir="$MIRROR" archive "$REV" | tar -x -C "$dir"
   fi
   echo "$REV" >"$dir/REVISION"
+  step fetch ok
+  step dependencies running "Python environment"
   log "creating Python environment for $REL_ID"
   python3 -m venv "$dir/.venv"
   "$dir/.venv/bin/python" -m pip install --quiet --upgrade pip >/dev/null
   "$dir/.venv/bin/python" -m pip install --quiet --no-cache-dir -r "$dir/backend/requirements.txt" || die "Python dependency installation failed"
+  step dependencies ok
+  step frontend running
   if [ ! -f "$dir/frontend/dist/index.html" ]; then
     fetch_frontend_asset "$dir" || build_frontend "$dir"
   fi
   [ -f "$dir/frontend/dist/index.html" ] || die "frontend assets missing"
+  step frontend ok
   rm -rf "$dir/frontend/node_modules"
   chown -R root:$APP "$dir"
   chmod -R g+rX,o-rwx "$dir"
@@ -782,56 +825,104 @@ cmd_install() {
 }
 
 cmd_upgrade() {
-  need_root; with_lock; load_env
+  need_root
+  FAIL_OUTCOME=remains_operational   # until the database is migrated nothing has changed
+  step lock running "no other personaldocs operation may run"
+  with_lock; step lock ok
+  load_env
+  step preflight running
   [ -L "$CURRENT" ] || die "not installed (run personaldocs install)"
-  local old new snap
+  local old new snap disk
   old=$(readlink -f "$CURRENT")
+  meta version_from "$(basename "$old")"
   log "=== upgrade started from $(basename "$old")"
-  local disk; disk=$(df -Pm "$DATA_DIR" | awk 'NR==2 {print $4}')
-  [ "$disk" -ge 2048 ] || die "less than 2 GB free; free space before upgrading"
   fix_tool_permissions
   install_optional_packages
   ensure_access_log
+  step preflight ok "installed release $(basename "$old")"
+  step target running "${OPT_REF:-${PD_BRANCH:-main}}"
   fetch_source
-  new=$(build_release | tail -1)
-  if [ "$new" = "$old" ]; then c_ok "Already at $(basename "$new")."; return; fi
-  if [ "${OPT_SKIP_BACKUP:-0}" != 1 ]; then
-    if manage shell -c "from apps.core import config; import sys; sys.exit(0 if config.get('backup.target') else 1)" 2>/dev/null \
-       || manage shell -c "from apps.ops.models import BackupPolicy; import sys; sys.exit(0 if BackupPolicy.objects.filter(enabled=True).exists() else 1)" 2>/dev/null; then
-      log "pre-upgrade safety backup (verified before the upgrade continues)"
-      manage backup --pre-change "Before upgrading to $(basename "$new")" || die "pre-upgrade backup failed or could not be verified (fix the destination, or rerun with --skip-backup if you have a verified backup)"
-    else
-      c_warn "No backup destination configured: only a local database snapshot is taken."
-    fi
+  meta version_to "$REL_ID"
+  step target ok "$REL_ID"
+  if [ "$RELEASES/$REL_ID" = "$old" ]; then
+    meta outcome current; FAIL_OUTCOME=""
+    c_ok "Already at $(basename "$old")."; return
   fi
-  snap=$(db_snapshot)
+  step disk running
+  disk=$(df -Pm "$DATA_DIR" | awk 'NR==2 {print $4}')
+  [ "$disk" -ge 2048 ] || die "less than 2 GB free ($disk MB); free space before upgrading"
+  step disk ok "$disk MB free"
+  step backup running
+  if [ "${OPT_SKIP_BACKUP:-0}" = 1 ]; then
+    step backup skipped "--skip-backup given on the command line (a local database snapshot is still taken)"
+  elif manage shell -c "from apps.core import config; import sys; sys.exit(0 if config.get('backup.target') else 1)" 2>/dev/null \
+     || manage shell -c "from apps.ops.models import BackupPolicy; import sys; sys.exit(0 if BackupPolicy.objects.filter(enabled=True).exists() else 1)" 2>/dev/null; then
+    log "pre-upgrade safety backup (verified before the upgrade continues)"
+    manage backup --pre-change "Before upgrading to $REL_ID" || die "pre-upgrade backup failed or could not be verified (fix the destination, or rerun with --skip-backup if you have a verified backup)"
+    meta backup_ref "verified pre-upgrade recovery point (Settings → Backup & Recovery)"
+    step backup ok "verified recovery point created"
+  else
+    c_warn "No backup destination configured: only a local database snapshot is taken."
+    step backup warning "No backup destination configured: only a local database snapshot is taken"
+  fi
+  step backup_verify running "database snapshot"
+  snap=$(db_snapshot | tail -1)
+  runuser -u $APP -- pg_restore --list "$snap" >/dev/null 2>&1 || die "the pre-upgrade database snapshot could not be read back; nothing was changed"
+  meta backup_ref "$snap"
   log "database snapshot: $snap"
+  step backup_verify ok "database snapshot readable"
+  new=$(build_release | tail -1)
+  step migrations running
   MANAGE_RELEASE=$new manage check >/dev/null || die "new release failed its checks; nothing was changed"
   systemctl stop personaldocs-scheduler personaldocs-worker
+  FAIL_OUTCOME=recovery_required
   if ! MANAGE_RELEASE=$new manage migrate --noinput; then
+    step migrations failed "migration failed; restoring the database snapshot and the previous release"
     c_err "Migration failed. Restoring the database snapshot and restarting the previous release."
-    runuser -u $APP -- pg_restore --clean --if-exists --no-owner -h /var/run/postgresql -d personaldocs "$snap" || true
-    systemctl start personaldocs-worker personaldocs-scheduler
+    local restored=0
+    runuser -u $APP -- pg_restore --clean --if-exists --no-owner -h /var/run/postgresql -d personaldocs "$snap" && restored=1
+    systemctl start personaldocs-worker personaldocs-scheduler || true
+    if [ "$restored" = 1 ] && health && units_active; then
+      FAIL_OUTCOME=remains_operational; meta verification "database restored from the snapshot; previous release healthy"
+    else
+      meta verification "database restore or health check failed after the migration failure"
+    fi
     die "upgrade aborted; previous release still active"
   fi
+  step migrations ok
+  step restart running
   activate "$new"
   install -m 0755 "$new/scripts/personaldocs" /usr/local/bin/personaldocs
   install_units "$new"
   install_security_tools "$new"
   # finish with the NEW release's own setup steps (this function is still the old script's code)
-  PD_LOCK_HELD=1 PD_NO_RESTART=1 /usr/local/bin/personaldocs post-upgrade || c_warn "post-upgrade steps reported a problem; run: sudo personaldocs repair"
+  PD_LOCK_HELD=1 PD_NO_RESTART=1 PD_PROGRESS_FILE="" /usr/local/bin/personaldocs post-upgrade || c_warn "post-upgrade steps reported a problem; run: sudo personaldocs repair"
   for u in "${UNITS[@]}"; do systemctl restart "$u"; done
-  if ! health; then
+  step restart ok
+  step health running "web, worker and scheduler"
+  if ! health || ! units_active; then
+    step health failed "the new release did not become healthy"
     c_err "Health check failed after upgrade."; show_web_failure
     if schema_compatible "$old"; then
+      step rollback running "returning to $(basename "$old") (schema compatible)"
       activate "$old"; install_units "$old"; for u in "${UNITS[@]}"; do systemctl restart "$u"; done
-      die "rolled back to $(basename "$old") (schema compatible)"
+      if health && units_active; then
+        step rollback ok "previous release healthy"
+        FAIL_OUTCOME=rolled_back; meta verification "rolled back to $(basename "$old"); health checks passed"
+        die "rolled back to $(basename "$old") (schema compatible, verified healthy)"
+      fi
+      step rollback failed "the previous release is not healthy either"
+      meta verification "rollback attempted; health checks failed"
+      die "rolled back to $(basename "$old"), but it is not healthy; restore from $snap or a recovery point (personaldocs recover)"
     fi
+    meta verification "no automatic rollback: the migrated database is not compatible with $(basename "$old")"
     die "the new schema is not compatible with $(basename "$old"); restore with: pg_restore from $snap or personaldocs restore <backup>"
   fi
+  step health ok "all services active; /api/health OK"
   prune_releases
+  FAIL_OUTCOME=""; meta outcome succeeded
   log "=== upgrade complete: $(basename "$old") -> $(basename "$new")"
-  c_ok "Upgraded $(version_of "$old") -> $(version_of "$new") ($(cat "$new/REVISION" | cut -c1-10))."
+  c_ok "Upgraded $(version_of "$old") -> $(version_of "$new") ($(cut -c1-10 "$new/REVISION"))."
 }
 
 cmd_post_upgrade() { # setup steps a new release adds (ClamAV, host helper, units); safe to run again
@@ -856,19 +947,69 @@ cmd_post_upgrade() { # setup steps a new release adds (ClamAV, host helper, unit
 }
 
 cmd_rollback() {
-  need_root; with_lock; load_env
-  local prev; prev=$(cat "$STATE/previous" 2>/dev/null || true)
+  need_root
+  FAIL_OUTCOME=remains_operational
+  step lock running; with_lock; step lock ok
+  load_env
+  step preflight running
+  local prev cur; prev=$(cat "$STATE/previous" 2>/dev/null || true)
   [ -n "$prev" ] && [ -d "$prev" ] || die "no previous release recorded"
-  schema_compatible "$prev" || die "database contains migrations unknown to $(basename "$prev"); restore the pre-upgrade backup instead"
-  local cur; cur=$(readlink -f "$CURRENT")
+  cur=$(readlink -f "$CURRENT")
+  meta version_from "$(basename "$cur")"; meta version_to "$(basename "$prev")"
+  step preflight ok "$(basename "$cur") -> $(basename "$prev")"
+  step compatibility running "database schema"
+  schema_compatible "$prev" || die "database contains migrations unknown to $(basename "$prev"); a code-only rollback is not safe. Restore the pre-upgrade recovery point instead"
+  step compatibility ok
+  step restart running
+  FAIL_OUTCOME=recovery_required
   activate "$prev"; install_units "$prev"
   for u in "${UNITS[@]}"; do systemctl restart "$u"; done
-  health || { show_web_failure; die "previous release is not healthy"; }
+  step restart ok
+  step health running
+  { health && units_active; } || { show_web_failure; die "previous release is not healthy"; }
+  step health ok "all services active; /api/health OK"
+  FAIL_OUTCOME=""; meta outcome rolled_back; meta verification "health checks passed on $(basename "$prev")"
   c_ok "Rolled back $(basename "$cur") -> $(basename "$prev")."
 }
 
+REPAIR_ITEMS=(packages directories units migrations jobs search services antivirus ocr_languages)
+repair_only() { # repair_only ITEM,... — only the named repairs, in a fixed order (Settings → Maintenance → Repair)
+  local list=$1 item
+  local -a items
+  IFS=, read -ra items <<<"$list"
+  [ ${#items[@]} -gt 0 ] || die "no repair items given"
+  for item in "${items[@]}"; do [[ " ${REPAIR_ITEMS[*]} " == *" $item "* ]] || die "unknown repair item: $item"; done
+  step lock running; with_lock; step lock ok
+  load_env
+  [ -L "$CURRENT" ] || die "no active release; run personaldocs install"
+  log "=== repair started (only: $list)"
+  for item in "${REPAIR_ITEMS[@]}"; do
+    [[ ",$list," == *",$item,"* ]] || continue
+    step "repair_$item" running
+    case $item in
+      packages) install_packages;;
+      directories) ensure_user_dirs; chown -R $APP:$APP "$DATA_DIR"
+                   find "$DATA_DIR/storage/originals" -type f -exec chmod 0440 {} + 2>/dev/null || true;;
+      units) install_units;;
+      migrations) manage migrate --noinput;;
+      jobs) manage shell -c "from apps.core.models import Job; from django.utils import timezone; print('requeued', Job.objects.filter(status='running', locked_until__lt=timezone.now()).update(status='queued'))";;
+      search) manage reindex;;
+      services) for u in "${UNITS[@]}"; do systemctl enable "$u" >/dev/null; systemctl restart "$u"; done;;
+      antivirus) antivirus_repair || die "ClamAV is still not working (sudo personaldocs antivirus status)";;
+      ocr_languages) install_ocr_languages;;
+    esac
+    step "repair_$item" ok
+  done
+  step health running
+  health || { show_web_failure; die "web service unhealthy after the repair; see journalctl -u personaldocs-web"; }
+  step health ok
+  c_ok "Repair complete ($list). No data, keys or accounts were reset."
+}
+
 cmd_repair() {
-  need_root; with_lock; load_env
+  need_root
+  if [ -n "${OPT_ONLY:-}" ]; then repair_only "$OPT_ONLY"; return; fi
+  with_lock; load_env
   log "=== repair started"
   echo "Diagnosis before repair:"; cmd_doctor_inner || true
   install_packages
@@ -889,6 +1030,72 @@ cmd_repair() {
   for u in "${UNITS[@]}"; do systemctl enable "$u" >/dev/null; systemctl restart "$u"; done
   health || { show_web_failure; die "web service still unhealthy; see journalctl -u personaldocs-web"; }
   c_ok "Repair complete. No data, keys or accounts were reset."
+}
+
+cmd_restart() { # restart the Personal DM services only (web, worker, scheduler) and verify them
+  need_root
+  step lock running; with_lock; step lock ok
+  load_env
+  [ -L "$CURRENT" ] || die "not installed"
+  step restart running "${UNITS[*]}"
+  local u
+  for u in "${UNITS[@]}"; do systemctl restart "$u" || die "could not restart $u"; done
+  step restart ok
+  step health running
+  { health && units_active; } || { show_web_failure; die "the services did not become healthy after the restart"; }
+  step health ok "all services active; /api/health OK"
+  c_ok "Personal DM services restarted and healthy."
+}
+
+cmd_check_updates() { # check-updates [--json] — compare the installed release with the update source; never installs
+  need_root; load_env
+  local json=0 a cur cur_rev cur_ver ref src rev ver behind=0 state disk tag="" warnings=()
+  for a in "${ARGS[@]}"; do [ "$a" = --json ] && json=1; done
+  cur=$(readlink -f "$CURRENT" 2>/dev/null || true)
+  cur_rev=$(cat "$cur/REVISION" 2>/dev/null || echo unknown); cur_ver=$(version_of "$cur")
+  ref=${OPT_REF:-${PD_BRANCH:-main}}
+  src=$(printf '%s' "${PD_REPO_URL:-}" | sed -E 's#://[^/@]*@#://#')
+  disk=$(df -Pm "$DATA_DIR" 2>/dev/null | awk 'NR==2 {print $4}'); disk=${disk:-0}
+  [ "$disk" -ge 2048 ] || warnings+=("less than 2 GB free ($disk MB): an upgrade would stop at the disk check")
+  [ -f /run/reboot-required ] && warnings+=("the host needs a reboot for operating-system updates")
+  step source running "${src:-no source} ($ref)"
+  if [ -z "${PD_REPO_URL:-}" ] || [ ! -d "$MIRROR" ]; then
+    step source warning "no update source configured (installed from a local copy)"
+    state=no_source; rev=""; ver=""
+  else
+    git_auth --git-dir="$MIRROR" fetch --quiet --prune origin '+refs/*:refs/*' || die "could not reach the update source; check the network and the repository credentials"
+    step source ok
+    step compare running
+    rev=$(git --git-dir="$MIRROR" rev-parse --verify "$ref^{commit}" 2>/dev/null) || die "branch or tag $ref not found at the update source"
+    ver=$(git --git-dir="$MIRROR" show "$rev:VERSION" 2>/dev/null | tr -d '\n' || echo unknown)
+    tag=$(git --git-dir="$MIRROR" describe --tags --exact-match "$rev" 2>/dev/null || true)
+    if [ "$rev" = "$cur_rev" ]; then state=current
+    elif git --git-dir="$MIRROR" merge-base --is-ancestor "$cur_rev" "$rev" 2>/dev/null; then
+      state=available; behind=$(git --git-dir="$MIRROR" rev-list --count "$cur_rev..$rev")
+    elif git --git-dir="$MIRROR" cat-file -e "$cur_rev^{commit}" 2>/dev/null; then
+      state=diverged; warnings+=("the installed release is not an ancestor of $ref (a different branch or a local build)")
+    else state=unknown_installed; warnings+=("the installed revision is not known to the update source")
+    fi
+    step compare ok "$state"
+  fi
+  if [ "$json" = 1 ]; then
+    local commits="[]"
+    if [ "$state" = available ]; then
+      commits=$(git --git-dir="$MIRROR" log --format='%h %s' -n 30 "$cur_rev..$rev" | redact | jq -R . | jq -sc .)
+    fi
+    local wj; wj=$(printf '%s\n' "${warnings[@]}" | jq -R . | jq -sc 'map(select(length > 0))')
+    jq -cn --arg state "$state" --arg installed_version "$cur_ver" --arg installed_revision "$cur_rev" \
+      --arg available_version "$ver" --arg available_revision "$rev" --arg channel "$ref" --arg source "$src" \
+      --arg tag "$tag" --argjson behind "$behind" --argjson commits "$commits" --argjson warnings "$wj" \
+      --arg checked_at "$(date -Is)" \
+      '{state:$state,installed_version:$installed_version,installed_revision:$installed_revision,available_version:$available_version,
+        available_revision:$available_revision,channel:$channel,source:$source,tag:$tag,behind:$behind,commits:$commits,
+        warnings:$warnings,checked_at:$checked_at}'
+  else
+    echo "Installed: $cur_ver (${cur_rev:0:10})"
+    echo "Available: ${ver:-—} (${rev:0:10}) on $ref from ${src:-no source}: $state${behind:+, $behind commit(s) newer}"
+    for a in "${warnings[@]}"; do c_warn "Warning: $a"; done
+  fi
 }
 
 cmd_status() {
@@ -1159,6 +1366,7 @@ while [ $# -gt 0 ]; do
     --repo) OPT_REPO=$2; PD_REPO_URL=$2; shift 2;;
     --branch) OPT_BRANCH=$2; shift 2;;
     --skip-backup) OPT_SKIP_BACKUP=1; shift;;
+    --only) OPT_ONLY=$2; shift 2;;
     --build-frontend) OPT_BUILD_FRONTEND=1; shift;;
     --with-verapdf) OPT_VERAPDF=1; shift;;
     --without-antivirus) OPT_NO_ANTIVIRUS=1; shift;;
@@ -1175,6 +1383,8 @@ case "$CMD" in
   rollback) cmd_rollback;;
   post-upgrade) cmd_post_upgrade;;
   repair) cmd_repair;;
+  restart) cmd_restart;;
+  check-updates) cmd_check_updates;;
   status) cmd_status;;
   doctor) need_root; load_env
           if [ "${PD_NO_ANTIVIRUS:-0}" != 1 ] && script=$(clamav_script); then echo "== ClamAV (as root: services, socket, service-account access, self-test)"; python3 "$script" status || true; echo; fi

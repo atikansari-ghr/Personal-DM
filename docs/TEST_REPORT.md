@@ -56,6 +56,53 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
+## Change set AB: Maintenance & Operations in the web interface, Active Sessions {#change-set-ab}
+
+**Numbering.** Prompt AT-456…AT-475 → **AT-481…AT-500** (the prompt's numbers are taken). Per-scenario status:
+[TRACEABILITY.md](TRACEABILITY.md#change-set-ab). Design: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-ab).
+
+**Environment.** Development container (Ubuntu 24.04, PostgreSQL 16, Python 3.13, Node 22, Chromium via Playwright, jq,
+shellcheck), 2026-10-25. No Debian 13 host, no systemd. Root operations ran through the **real** host helper
+(`host_helper.py`) and the **real** CLI progress functions (`step`/`meta`/`die` from `scripts/personaldocs`) with a
+scripted `personaldocs` command (`_fake_cli` in the tests, `tests/e2e/maint_helper.py` in the browser tests); the
+Debian packaging work of a real upgrade, rollback, repair or service restart was **not** performed. GeoIP city
+results were emulated. All data is synthetic.
+
+| Command | Result |
+|---|---|
+| `pytest tests/test_change_ab.py` | **38 passed** (AT-481…AT-500 backend scenarios, CLI progress protocol, shellcheck, health/system info/caches) |
+| Final: `pytest tests/test_change_ab.py tests/test_ops.py tests/test_corrective_v.py tests/test_sessions.py tests/test_overview.py tests/test_rich_notifications.py` (after the screenshots) | **128 passed, 0 failed** — incl. the documentation checker; earlier in this change: `test_signin_security`, `test_security`, `test_change_aa`, `test_templates` passed (sessions, sign-in security, Trusted Zones, tooltips/help, docs checker, Overview layouts, notifications) |
+| Full `pytest` (run before the final screenshots and report existed) | **655 tests: 647 passed, 6 skipped (ClamAV daemon, real PaddleOCR/light-ocr runtimes), 2 failed**: `test_at309_backup_health_from_verified_state_admin_only` — container disk about 10 % free, fails identically on `main` (environmental); `test_at332_at334_documentation_checker_passes` — failed only because the Change Set AB screenshots were not captured yet; passes after capture (re-run below) |
+| `scripts/e2e.sh` (fresh database `e2e_ab`) | flow, accessibility, parity, layout, offline, PWA, themes, recovery: all PASS; corrective: 38 PASS, 1 FAIL — the new AB step failed on a **test selector** (the step-up "Confirm" locator also matched "Confirm and repair"); everything before it (Doctor, Check for Updates, successful and failed upgrade, relogin, concurrency) had passed |
+| Corrective AB step re-run (`E2E_ONLY="Change Set AB"`, same database) after the selector fixes | **PASS** *AT-481…AT-500 Change Set AB*: family member refused; Doctor via the UI with grouped results; Check for Updates; Update Application with confirmation, step-up, live steps and Succeeded; the same job and steps after a new sign-in; forced failed backup → *Existing Version Remains Operational*, Technical Details and Full Log; second system operation refused (409); repair of a deleted data directory: plan → confirm with step-up → repaired and verified; Job History filter; Active Sessions tile → View All → details → **Terminate Session** (that browser refused at once, the administrator's session unaffected); the tile resized to large and kept after reload |
+| Screenshot step re-run (`E2E_ONLY="Change Set AB"`) | **PASS** *AT-499*: 9 captures with the quality and privacy gates (maintenance-operations, upgrade running, upgrade failed with Technical Details, Doctor, Repair Plan, Job History, Active Sessions tile, page, details) |
+| Migrations `ops.0004`, `accounts.0010`, `core.0009` forwards, backwards (`core 0008`, `accounts 0009`, `ops 0003`), forwards; `makemigrations --check` | OK |
+| `shellcheck -S error scripts/personaldocs`; `manage.py doctor` (sections, NOT CONFIGURED/NOT APPLICABLE) | Passed |
+| `npm run build`, `tsc`, `vitest` (17), `scripts/check_docs.py`, `scripts/privacy_check.sh`, settings reference | Passed |
+
+| ID (prompt) | Result |
+|---|---|
+| AT-481 (456) Permissions | PASS |
+| AT-482 (457) Durable jobs | PASS (refresh, relogin, app restart simulated by a new process state; scheduler sync) |
+| AT-483 (458) Error visibility | PASS |
+| AT-484 (459) Secret redaction and anonymized report | PASS |
+| AT-485 (460) Doctor | PASS |
+| AT-486 (461) Repair plan | PASS (repair action by the scripted CLI) |
+| AT-487 (462) Update check | PASS (scripted CLI); a real `git fetch` from a source: NOT EXECUTED |
+| AT-488 (463) Successful WebGUI upgrade | **BLOCKED** — no safe Debian 13 test host in this environment; the orchestration (steps, backup, report, notification, reconnect polling) passed with the scripted CLI |
+| AT-489 (464) Upgrade failure | PASS |
+| AT-490 (465) Rollback safety | PASS (CLI branches and outcomes; a real rollback on a host: NOT EXECUTED) |
+| AT-491 (466) Restart | PASS (scripted CLI; a real systemd restart: NOT EXECUTED) |
+| AT-492 (467) Concurrency | PASS |
+| AT-493 (468) Active vs Signed In | PASS |
+| AT-494 (469) Active Sessions tile | PASS |
+| AT-495 (470) Dashboard integration | PASS |
+| AT-496 (471) Location/trust | PASS (GeoIP emulated) |
+| AT-497 (472) Full Active Sessions | PASS |
+| AT-498 (473) Terminate Session | PASS |
+| AT-499 (474) Guides/help | PASS |
+| AT-500 (475) Release gate | PASS with the exceptions recorded above (AT-488 BLOCKED; environmental `test_at309`) |
+
 ## Change set AA: direct Local AI processing, Overview groups and free resize, Document Type field management {#change-set-aa}
 
 **Numbering.** Prompt AT-436…AT-455 → **AT-461…AT-480** (the prompt's "Change Set X" name and numbers are taken).

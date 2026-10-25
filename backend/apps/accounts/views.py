@@ -10,7 +10,7 @@ from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
@@ -425,11 +425,18 @@ def my_sessions(request):
     from . import sessions
 
     current = request.session.get("device")
+    from django.utils import timezone as tz
+
+    from apps.security.active_sessions import threshold
+
     rows = sessions.active_for(request.user, int(config.get("auth.session_days")))
+    since = tz.now() - threshold()
     return Response({"sessions": [{
         "id": str(r.id), "device": sessions.describe(r.user_agent), "ip": r.ip, "method": r.method,
         "created_at": r.created_at, "last_seen_at": r.last_seen_at, "current": str(r.id) == current,
-    } for r in rows], "current_tracked": bool(current)})
+        "last_activity_at": r.last_activity_at,
+        "state": "active" if (r.last_activity_at or r.last_seen_at) >= since else "signed_in",
+    } for r in rows], "current_tracked": bool(current), "active_minutes": int(config.get("security.session_active_minutes"))})
 
 
 @api_view(["DELETE"])
