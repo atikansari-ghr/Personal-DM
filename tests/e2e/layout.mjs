@@ -10,6 +10,7 @@
 //   offscreen  a control sticks out of the viewport without a scrolling container
 //   noname     an icon-only control has no accessible name
 //   clipped    the content of a card or tile is wider than the card (cut off at its edge or scrolled inside it)
+//   unsafe     installed app (PWA): a control lies under the notch, rounded corners or home indicator
 // plus, on the document screen: the reproduced header defect (title squeezed beside the actions), menus and dialogs
 // inside the viewport, keyboard focus visible, and Arabic / very long filenames.
 //
@@ -36,6 +37,11 @@ const VIEWPORTS = [
 // browser zoom on a 1440x900 desktop: zooming in or out changes the CSS viewport (and the device pixel ratio) exactly like this
 const ZOOMS = [["zoom-50", 2880, 1800, 0.5], ["zoom-67", 2150, 1343, 0.67], ["zoom-125", 1152, 720, 1.25],
   ["zoom-150", 960, 600, 1.5], ["zoom-200", 720, 450, 2], ["zoom-300", 480, 300, 3]];
+// installed app (display-mode standalone) on devices with unsafe areas; insets are what iOS/Android report in that mode
+const PWA_DEVICES = [["pwa-iphone-portrait", 390, 844, { top: 47, right: 0, bottom: 34, left: 0 }],
+  ["pwa-iphone-landscape", 844, 390, { top: 0, right: 47, bottom: 21, left: 47 }],
+  ["pwa-ipad-portrait", 820, 1180, { top: 24, right: 0, bottom: 20, left: 0 }],
+  ["pwa-android", 412, 915, { top: 0, right: 0, bottom: 0, left: 0 }]];
 // synthetic filenames: short, normal, long, very long without spaces, Arabic + digits
 const NAMES = ["Iqama.jpg", "Iqama Renewal Fees 2018-19.JPG",
   "Family residence permit renewal receipt and payment confirmation 2018-19 final copy.JPG",
@@ -257,6 +263,88 @@ for (const [zname, w, h, dpr] of ZOOMS) {
       await page.waitForTimeout(350);
       for (const d of await page.evaluate(audit)) if (!ALLOW.has(`${rname}:${d.kind}`)) found.push({ vp: zname, route: rname, ...d });
       if (["overview", "settings-system", "security-sessions"].includes(rname)) await page.screenshot({ path: path.join(OUT, `${zname}-${rname}.png`) });
+    }
+    defects.push(...found);
+    expect(found.length === 0, `${found.length} layout defect(s): ${JSON.stringify(found.slice(0, 8))}`);
+  });
+  await ctx.close();
+}
+
+// controls must stay inside the safe area: fixed and sticky ones (top bar, sidebar, dialogs, toasts) on every side,
+// page content left and right, and the end of the page must scroll clear of the home indicator
+const unsafe = (ins) => {
+  const out = [];
+  const W = innerWidth, H = innerHeight, L = ins.left, R = W - ins.right, T = ins.top, B = H - ins.bottom;
+  // "fixed" pins to any edge; a sticky element only pins to the edge it sticks to (here always the top)
+  const pinned = (e) => { let st = null; for (let n = e; n && n !== document.body; n = n.parentElement) { const p = getComputedStyle(n).position; if (p === "fixed") return "fixed"; if (p === "sticky") st = "sticky"; } return st; };
+  const vis = (el) => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none" && !el.closest("[aria-hidden=true], .sr-only"); };
+  const name = (el) => (el.getAttribute("aria-label") || el.textContent || el.tagName).trim().replace(/\s+/g, " ").slice(0, 50);
+  for (const el of document.querySelectorAll("a[href], button, input:not([type=hidden]), select, textarea, h1, h2")) {
+    if (!vis(el)) continue;
+    let sc = el.parentElement, scrolls = false;
+    while (sc && sc !== document.body) { const o = getComputedStyle(sc).overflowX; if ((o === "auto" || o === "scroll") && sc.scrollWidth > sc.clientWidth) { scrolls = true; break; } sc = sc.parentElement; }
+    const r = el.getBoundingClientRect();
+    if (!scrolls && (r.left < L - 1 || r.right > R + 1)) out.push({ kind: "unsafe", el: name(el), detail: `x ${Math.round(r.left)}..${Math.round(r.right)} outside ${L}..${R}` });
+    // inside a pinned panel that scrolls by itself (the sidebar on a short landscape screen) items may scroll past the
+    // edges; that panel's scroll end is checked below instead
+    let vs = el.parentElement, vscroll = null;
+    while (vs && vs !== document.body) { const o = getComputedStyle(vs).overflowY; if ((o === "auto" || o === "scroll") && vs.scrollHeight > vs.clientHeight + 1) { vscroll = vs; break; } vs = vs.parentElement; }
+    if (vscroll && pinned(vscroll)) {
+      if (vscroll.getBoundingClientRect().bottom > B + 1 && parseFloat(getComputedStyle(vscroll).paddingBottom) < ins.bottom && !vscroll.dataset.unsafeReported) {
+        vscroll.dataset.unsafeReported = "1";
+        out.push({ kind: "unsafe", el: `${vscroll.className} scroll end`, detail: `${getComputedStyle(vscroll).paddingBottom} bottom padding for a ${ins.bottom}px home indicator` });
+      }
+      continue;
+    }
+    const pin = pinned(el);
+    if (pin && r.bottom > 0 && r.top < H && (r.top < T - 1 || (pin === "fixed" && r.bottom > B + 1))) out.push({ kind: "unsafe", el: name(el), detail: `y ${Math.round(r.top)}..${Math.round(r.bottom)} outside ${T}..${B}` });
+  }
+  const main = document.querySelector("main#main");
+  if (main && document.documentElement.scrollHeight > H) {
+    const pb = parseFloat(getComputedStyle(main).paddingBottom);
+    if (pb < ins.bottom) out.push({ kind: "unsafe", el: "end of page", detail: `${pb}px bottom padding for a ${ins.bottom}px home indicator` });
+  }
+  return out;
+};
+
+for (const [pname, w, h, ins] of PWA_DEVICES) {
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: w < 900 && h > w || w < 500, hasTouch: true, deviceScaleFactor: 2 });
+  // the installed app: display-mode standalone (and iOS navigator.standalone) as the app's own detection sees it
+  await ctx.addInitScript(() => {
+    const mm = window.matchMedia.bind(window);
+    window.matchMedia = (q) => (/display-mode:\s*standalone/.test(q) ? { matches: true, media: q, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => false } : mm(q));
+    Object.defineProperty(navigator, "standalone", { get: () => true });
+  });
+  const page = await signIn(ctx);
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: ins });
+  await step(`AT-237 ${pname}: installed app keeps every screen inside the safe area (notch, corners, home indicator)`, async () => {
+    const found = [];
+    expect(await page.evaluate(() => matchMedia("(display-mode: standalone)").matches), "runs as the installed app");
+    const got = await page.evaluate(() => { const d = document.createElement("div"); d.style.cssText = "position:fixed;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)"; document.body.append(d); const cs = getComputedStyle(d); const v = [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].map(parseFloat); d.remove(); return v; });
+    expect(JSON.stringify(got) === JSON.stringify([ins.top, ins.right, ins.bottom, ins.left]), `safe-area insets applied ${got}`);
+    for (const [rname, url] of ROUTES) {
+      await page.goto(BASE + url);
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(350);
+      for (const d of [...await page.evaluate(audit), ...await page.evaluate(unsafe, ins)]) if (!ALLOW.has(`${rname}:${d.kind}`)) found.push({ vp: pname, route: rname, ...d });
+      if (["overview", "settings-system", "folders"].includes(rname)) await page.screenshot({ path: path.join(OUT, `${pname}-${rname}.png`) });
+    }
+    // a dialog and the mobile menu are pinned to the screen and must stay inside the safe area too
+    await page.goto(`${BASE}/folders/${root.id}/${DOC}`);
+    await page.waitForSelector(".doc-actions button[aria-label='Share']");
+    await page.click(".doc-actions button[aria-label='Share']");
+    await page.waitForSelector(".modal");
+    await page.waitForTimeout(300); // after the 140 ms pop-in animation (it starts 6 px lower)
+    for (const d of await page.evaluate(unsafe, ins)) found.push({ vp: pname, route: "share-dialog", ...d });
+    await page.screenshot({ path: path.join(OUT, `${pname}-dialog.png`) });
+    await page.keyboard.press("Escape");
+    if (await page.locator(".menu-btn").isVisible()) {
+      await page.click(".menu-btn");
+      await page.waitForSelector(".sidebar.open");
+      await page.waitForTimeout(300);
+      for (const d of await page.evaluate(unsafe, ins)) found.push({ vp: pname, route: "menu", ...d });
+      await page.screenshot({ path: path.join(OUT, `${pname}-menu.png`) });
     }
     defects.push(...found);
     expect(found.length === 0, `${found.length} layout defect(s): ${JSON.stringify(found.slice(0, 8))}`);

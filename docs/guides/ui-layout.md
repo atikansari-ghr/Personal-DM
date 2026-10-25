@@ -3,7 +3,7 @@
 
 These rules came out of Change Set R (UI alignment and responsive layout). They keep text, icons, badges and actions
 aligned on every screen without per-page pixel nudges. `tests/e2e/layout.mjs` checks them automatically on 29
-screens at seven viewport sizes and six browser zoom levels (50 %–300 %).
+screens at seven viewport sizes, six browser zoom levels (50 %–300 %) and as the installed app on phones and tablets.
 
 ## The rule behind most alignment bugs {#flex-basis}
 
@@ -45,6 +45,19 @@ Cards and tiles follow the same rule, so they fit at any window size **and any b
   width the rows stack like on a phone, so nothing is cut off at the card edge.
 - Lists with several facts per item (Clear Safe Caches) are stacked lists, not five-column tables.
 
+## Installed app: notch, rounded corners and home indicator {#safe-area}
+
+The page uses `viewport-fit=cover`, so the installed app (PWA) draws behind the status bar, the notch and the home
+indicator. The shell keeps text and controls out of those areas with the `--sa-t/-r/-b/-l` tokens
+(`env(safe-area-inset-*)`, 0 in a normal browser tab):
+
+- the top bar adds the top inset (and the side insets on phones), the sidebar all four, so its last item scrolls clear
+  of the home indicator;
+- page content adds the side and bottom insets, so the end of every page can be scrolled above the home indicator;
+- dialogs, toasts, the upload progress panel and the full-screen viewer stay inside the safe area.
+
+Anything new that is `position: fixed` or `sticky` at a screen edge must use these tokens as well.
+
 ## Responsive modes {#responsive}
 
 | Width | Folders screen |
@@ -81,7 +94,11 @@ Settings rows switch to a single column whenever a row is narrower than two 16 r
 - unnamed icon-only controls;
 - clipped cards and tiles: content wider than its card (cut off at the edge or scrolling inside the card).
 
-The same screens are then checked at browser zoom 50 %, 67 %, 125 %, 150 %, 200 % and 300 % of a 1440×900 desktop.
+The same screens are then checked at browser zoom 50 %, 67 %, 125 %, 150 %, 200 % and 300 % of a 1440×900 desktop,
+and as the installed app (`display-mode: standalone`) with the safe-area insets of an iPhone in portrait and landscape,
+an iPad and an Android phone (Chromium's safe-area emulation). There every control must stay out of the notch and
+corners, pinned controls (top bar, sidebar, dialog, menu) out of the status bar and home indicator, and the end of each
+page and of the scrolling sidebar must clear the home indicator.
 
 It also checks the document header with five synthetic file names (short, normal, long, very long without spaces,
 Arabic), plus menus and dialogs inside the viewport and visible keyboard focus.
