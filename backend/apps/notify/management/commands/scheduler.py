@@ -2,7 +2,7 @@
 import logging
 import signal
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections
@@ -94,6 +94,15 @@ def tick() -> dict:
         out["security"] = security_tick(now_local, _due_daily, _mark)
     except Exception:  # noqa: BLE001 - security housekeeping must not stop reminders/backups
         log.exception("security maintenance failed")
+    try:  # Change Set AB: maintenance jobs progress even when no browser is watching; logs follow their own retention
+        from apps.ops import maintenance
+
+        out["maintenance_jobs"] = maintenance.sync_active()
+        if _due_daily("maintenance_purge", "03:50", now_local):
+            out["maintenance_purged"] = maintenance.purge()
+            _mark("maintenance_purge", now_local)
+    except Exception:  # noqa: BLE001 - must never stop reminders/backups
+        log.exception("maintenance job sync failed")
     try:
         from apps.core import rotation
 

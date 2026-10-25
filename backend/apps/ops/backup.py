@@ -129,7 +129,6 @@ def run_backup(actor=None, request=None) -> dict:
 
 
 def _do_backup(target: Path) -> dict:
-    from apps.library.models import DocumentVersion
 
     t0 = timezone.now()
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")

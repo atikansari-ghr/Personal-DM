@@ -8,23 +8,55 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 
 
+class CliSink:
+    """Prints one line per check, as `personaldocs doctor` always did: [OK] / [FAIL] / [WARN] / [INFO], plus the
+    explicit statuses NOT CONFIGURED, NOT APPLICABLE and NOT TESTED (Change Set AB)."""
+
+    def __init__(self, out):
+        self.out, self.ok = out, True
+
+    def section(self, name):
+        pass
+
+    def report(self, name, good, detail=""):
+        self.ok = self.ok and good
+        self.out.write(f"[{'OK' if good else 'FAIL'}] {name}{(' - ' + detail) if detail else ''}")
+
+    def warn(self, name, detail=""):
+        self.out.write(f"[WARN] {name}{(' - ' + detail) if detail else ''}")
+
+    def info(self, name, detail=""):
+        self.out.write(f"[INFO] {name}{(' - ' + detail) if detail else ''}")
+
+    def status(self, name, state, detail=""):
+        self.out.write(f"[{state}] {name}{(' - ' + detail) if detail else ''}")
+
+
 class Command(BaseCommand):
     help = "Diagnose configuration, services, tools, storage and database state (read-only)."
 
     def handle(self, *args, **opts):
-        ok = True
+        sink = CliSink(self.stdout)
+        self.run_checks(sink)
+        raise SystemExit(0 if sink.ok else 1)
 
-        def report(name, good, detail=""):
-            nonlocal ok
-            ok = ok and good
-            self.stdout.write(f"[{'OK' if good else 'FAIL'}] {name}{(' - ' + detail) if detail else ''}")
+    def _section(self, name):
+        sink = getattr(self, "_sink", None)
+        if sink is not None:
+            sink.section(name)
 
-        def warn(name, detail=""):
-            self.stdout.write(f"[WARN] {name}{(' - ' + detail) if detail else ''}")
+    def _status(self, name, state, detail=""):
+        sink = getattr(self, "_sink", None)
+        if sink is not None:
+            sink.status(name, state, detail)
 
-        def info(name, detail=""):
-            self.stdout.write(f"[INFO] {name}{(' - ' + detail) if detail else ''}")
-
+    def run_checks(self, sink):
+        """Every diagnostic, written to ``sink``. Shared by the CLI and Settings → System → Maintenance & Operations →
+        Doctor (apps/ops/diagnostics.py), so both always run the same checks. Read-only: only the ClamAV self-test
+        writes temporary files, and removes them."""
+        self._sink = sink
+        report, warn, info = sink.report, sink.warn, sink.info
+        sink.section("Database")
         try:
             with connection.cursor() as cur:
                 cur.execute("SELECT version()")
@@ -33,12 +65,14 @@ class Command(BaseCommand):
             report("migrations applied", not pending, f"{len(pending)} pending" if pending else "")
         except Exception as exc:  # noqa: BLE001
             report("database reachable", False, exc.__class__.__name__)
+        sink.section("Filesystem")
         for d in (settings.DATA_DIR, settings.ORIGINALS_DIR, settings.DERIVATIVES_DIR, settings.STAGING_DIR, settings.TMP_DIR):
             p = Path(d)
             report(f"directory {p}", p.is_dir() and shutil.os.access(p, shutil.os.W_OK))
         from apps.core import crypto
 
         report("encryption key present", crypto.key_path().exists(), str(crypto.key_path()))
+        sink.section("Required packages")
         for name, cmd in (("ocrmypdf", settings.OCRMYPDF_CMD[0]), ("tesseract", settings.TESSERACT_CMD), ("libreoffice", settings.SOFFICE_CMD),
                           ("pdftoppm", settings.PDFTOPPM_CMD), ("pg_dump", settings.PG_DUMP_CMD)):
             report(f"tool {name}", shutil.which(cmd) is not None)
@@ -47,36 +81,71 @@ class Command(BaseCommand):
         missing = ocr_policy.missing_languages()
         report("OCR language packs installed", not missing,
                f"missing: {', '.join(missing)} (run `sudo personaldocs repair`)" if missing else ", ".join(ocr_policy.installed_languages()))
+        sink.section("Storage")
         du = shutil.disk_usage(settings.DATA_DIR if Path(settings.DATA_DIR).exists() else "/")
         report("free disk > 2 GB", du.free > 2 * 1024 ** 3, f"{du.free // 1024 ** 2} MB free")
+        sink.section("HTTPS & security")
         report("public origin uses HTTPS", settings.PUBLIC_ORIGIN.startswith("https://"), settings.PUBLIC_ORIGIN)
+        sink.section("Application")
         report("frontend built", (settings.FRONTEND_DIST / "index.html").exists())
         icons = ["manifest.webmanifest", "apple-touch-icon.png", "icon-192.png", "icon-512.png", "icon-maskable-512.png",
                  "favicon.ico", "favicon-32.png"]
         missing = [f for f in icons if not (settings.FRONTEND_DIST / f).exists()]
         report("app icons and manifest (PWA identity)", not missing,
                ("missing: " + ", ".join(missing)) if missing else "served without sign-in; check the proxy with: sudo personaldocs check-access")
+        sink.section("Services & workers")
+        try:
+            self._service_checks(report, warn, info)
+        except Exception as exc:  # noqa: BLE001
+            sink.status("service checks", "NOT TESTED", f"could not run ({exc.__class__.__name__})")
+        sink.section("Backup & recovery")
         try:
             self._recovery_checks(report, warn, info)
         except Exception as exc:  # noqa: BLE001 - diagnostics must not crash
-            warn("backup & recovery checks could not run", exc.__class__.__name__)
+            sink.status("backup & recovery checks", "NOT TESTED", f"could not run ({exc.__class__.__name__})")
+        sink.section("Services & workers")
         from apps.core.models import Job
 
         failed = Job.objects.filter(status="failed").count()
         report("no failed jobs", failed == 0, f"{failed} failed" if failed else "")
+        sink.section("Security & authentication")
         try:
             self._security_checks(report, warn, info)
         except Exception as exc:  # noqa: BLE001 - diagnostics must not crash
-            warn("security checks could not run", exc.__class__.__name__)
+            sink.status("security checks", "NOT TESTED", f"could not run ({exc.__class__.__name__})")
+        sink.section("Antivirus & host")
         try:
             self._operations_checks(report, warn, info)
         except Exception as exc:  # noqa: BLE001
-            warn("antivirus/host checks could not run", exc.__class__.__name__)
+            sink.status("antivirus/host checks", "NOT TESTED", f"could not run ({exc.__class__.__name__})")
+        sink.section("OCR engines")
         try:
             self._ocr_checks(report, warn, info)
         except Exception as exc:  # noqa: BLE001
-            warn("OCR engine checks could not run", exc.__class__.__name__)
-        raise SystemExit(0 if ok else 1)
+            sink.status("OCR engine checks", "NOT TESTED", f"could not run ({exc.__class__.__name__})")
+
+    def _service_checks(self, report, warn, info):
+        """Change Set AB: the Personal DM services under systemd (read only) and the worker/scheduler heartbeats."""
+        import subprocess
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.notify.models import SchedulerRun
+
+        if shutil.which("systemctl") and Path("/run/systemd/system").is_dir():
+            for unit in ("personaldocs-web", "personaldocs-worker", "personaldocs-scheduler"):
+                try:
+                    state = subprocess.run(["systemctl", "is-active", unit], capture_output=True, text=True, timeout=10).stdout.strip()
+                except (OSError, subprocess.SubprocessError):
+                    state = "unknown"
+                report(f"service {unit}", state == "active", state or "unknown")
+        else:
+            self._status("Personal DM services (systemd)", "NOT APPLICABLE", "not running under systemd here")
+        hb = SchedulerRun.objects.filter(name="worker_heartbeat").first()
+        alive = bool(hb and hb.last_run_at and timezone.now() - hb.last_run_at < timedelta(minutes=5))
+        report("worker running (processes background jobs)", alive,
+               f"last heartbeat {hb.last_run_at:%Y-%m-%d %H:%M} UTC" if hb and hb.last_run_at else "no heartbeat (systemctl status personaldocs-worker)")
 
     def _security_checks(self, report, warn, info):
         import os
@@ -88,6 +157,7 @@ class Command(BaseCommand):
         from apps.security import geoip, netutil, traffic
         from apps.security.models import GeoPolicy, LoginEvent
 
+        self._section("Security & authentication")
         # Real client IP behind NPM / Pangolin
         info("trusted proxies", ", ".join(str(n) for n in netutil.trusted_networks()) or "none")
         recent = list(LoginEvent.objects.filter(at__gte=timezone.now() - timedelta(days=14)).values_list("ip", flat=True)[:30])
@@ -135,7 +205,10 @@ class Command(BaseCommand):
         # Never prints API keys or tokens: only whether one is stored.
         from apps.ai import service as ai_service
 
+        self._section("AI providers")
         info("AI mode", ai_service.MODE_LABELS[ai_service.mode()] + ("" if config.get("ai.enabled") else " (AI features switched off)"))
+        if not config.get("ai.enabled") or ai_service.mode() == "ocr_only":
+            self._status("AI providers", "NOT CONFIGURED", "AI is switched off (Settings → AI); nothing to check")
         if config.get("ai.enabled") and ai_service.mode() != "ocr_only":
             from apps.ai.models import AIJob, AIProfile
             from apps.ai.providers import AIError, provider_for
@@ -196,6 +269,7 @@ class Command(BaseCommand):
 
         if not config.get("processing.ocr_enabled"):
             info("OCR", "turned off in Settings → OCR & processing")
+            self._status("OCR engines", "NOT CONFIGURED", "OCR is switched off")
             return
         order = ocr_engines.engine_order()
         engine = order[0]
@@ -285,6 +359,7 @@ class Command(BaseCommand):
             info("Backup Recovery Key", "created with the first encrypted backup")
         if bk_engine.legacy_backups():
             info("legacy folder backups (format 1)", f"{len(bk_engine.legacy_backups())} kept; restorable with personaldocs restore")
+        self._section("Notifications")
         from apps.notify import whatsapp
 
         svc = whatsapp.service_status()
@@ -300,6 +375,7 @@ class Command(BaseCommand):
         info("Discord", f"{'on' if config.get('discord.enabled') else 'off'}; {DiscordWebhook.objects.count()} webhook(s) configured")
         stuck = OutboxMessage.objects.filter(status="pending", created_at__lt=timezone.now() - timedelta(hours=6)).exclude(hold="quiet_hours").count()
         report("notification queue moving", stuck == 0, f"{stuck} message(s) waiting more than 6 hours" if stuck else "")
+        self._section("Security & authentication")
         from apps.security import geoip
 
         report("GeoIP database available", geoip.db_path().exists(), str(geoip.db_path()) if geoip.db_path().exists() else
@@ -347,6 +423,8 @@ class Command(BaseCommand):
                 info("files waiting for an antivirus scan", str(stuck))
         else:
             warn("antivirus scanning", "turned off in Settings → Security → Antivirus")
+            self._status("ClamAV scanner", "NOT CONFIGURED", "antivirus scanning is off")
+        self._section("Antivirus & host")
         if host.installed():
             info("host helper", "installed (Settings → Security can check updates, firewall and reboot)")
         else:

@@ -20,7 +20,6 @@ import logging
 import zoneinfo
 from datetime import date, datetime, timedelta
 
-from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
