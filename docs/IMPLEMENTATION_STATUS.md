@@ -81,6 +81,40 @@ are not reported as passed. AT-194 is counted from the parity steps of the brows
 - New migrations: `security.0001_initial`, `ai.0001_initial`, `accounts.0003_profile_photo`, `accounts.0004_passkeys`, `library.0004_ocr_quality_no_expiry`, `library.0005_subfolder_default_icon` (data: automatic sub-folder icons → 📁), `core.0002_public_title` (data: old default name → new title), `library.0006_selective_ocr`, `library.0007_selective_ocr_defaults` (data: existing installations keep automatic OCR with AI allowed; new installations Manual), `core.0003_overview` (weather cache, holiday corrections), `accounts.0005_administrator_role`, `accounts.0006_external_identity` (authentik links), `library.0008_antivirus` (data: existing files marked Not scanned), `security.0002_antivirus`, `security.0003_security_center`, `library.0009_document_type_templates` (data: templates for every type, typed documents confirmed as migrated), `notify.0002_rich_notifications` (data: existing in-app notifications classified by kind, text unchanged), `accounts.0007_passkey_mode` (data: explicit passwordless choice kept, passwordless on for discoverable passkeys), `notify.0003_template_brand_footer` — applied by `personaldocs upgrade`.
 - Documentation: 38 bundled guides (new in change set P: password reset; in change set O: notifications; in change set N: document types; in change set M: antivirus, authentik, security center), `docs/USER_GUIDE.md`, `docs/ADMIN_GUIDE.md`, README, CONTRIBUTING, SECURITY (`docs/guides/`), requirements, traceability, architecture and 15 ADRs, generated settings reference, test report, release checklist, changelog.
 
+## Change set AA: direct Local AI processing, custom Overview layouts, Document Type field management {#change-set-aa}
+
+**Numbering.** Prompt AT-436…AT-455 → **AT-461…AT-480** (the prompt's "Change Set X" name and test numbers are taken);
+see [TRACEABILITY.md](TRACEABILITY.md#change-set-aa). Requirements PRS-1…6, DSH-1…5, FLD-1…5 in
+[REQUIREMENTS.md](REQUIREMENTS.md#change-set-aa). **Migrations:** `library.0013_field_archive` (additive; fields that
+were switched off become archived, values untouched) and `ai.0004_processing_source` (additive provenance fields).
+Upgrade notes: [upgrades.md](guides/upgrades.md#change-set-aa). Decision record: [ADR 0024](adr/0024-processing-source-overview-groups-field-archive.md).
+
+| Area | What was built | Files |
+| --- | --- | --- |
+| Processing Source | `ai.processing_source` (default *Original Document — Local AI + OCR Fallback*), `ai.source_override`, `ai.direct_max_pages`, `ai.direct_max_mb`; `direct.resolve` (Local only, refusal for explicit Cloud originals, OCR text for the Cloud default); per-action choice in the AI Actions panel | `ai/direct.py`, `ai/service.py` `run_action`, `ai/views.py`, `core/registry.py`, `AIActions.tsx` |
+| Direct Local AI | Eligibility (Local, working vision model, real format by content, size), local conversion to PNG pages (PDF via sandboxed pdftoppm, TIFF/WEBP via Pillow, bounded pages/pixels, private temp dir always removed), multi-image requests for OpenAI-compatible/Ollama, schema-aware prompt with printed evidence and page | `ai/direct.py`, `ai/providers.py` |
+| Fallback | Direct failure categories (not eligible, provider error, time-out, conversion, malformed, unusable) → the configured OCR chain (request_ocr, resume after OCR) → the same Local AI on OCR text; a fallback job never retries the original; *original* mode never reaches OCR (retries stay direct) | `ai/service.py`, `ai/jobs.py` |
+| Provenance | `AIJob.processing_source / final_source / fallback_used / fallback_reason` + content-free detail (file type, pages, conversion, OCR engine/order); `AISuggestion.source / page`; audit `ai.direct_processing` | `ai/models.py`, `ai/direct.py`, `ai/views.py` |
+| Schema mapping | Active Document Type fields beyond the dedicated ones become `detail:<key>` suggestions (OCR Text and Original modes), validated by field type, dates/numbers only with evidence; accept/edit through `set_field` | `ai/service.py` `_detail_rows`, `accept`; `AISuggestions.tsx` |
+| Capabilities | Test Profile reads a synthetic page (vision) and two pages in one request (multi-page); remembered on the profile; doctor reports source, eligible profile, capabilities, OCR chain | `ai/views.py` `_vision_checks`, `ops/.../doctor.py` |
+| Overview layout | 12-column grid with `cols` and `h` (rows) per tile and limits; groups (`me.dashboard_groups`) with protected General; `GET/PUT /api/dashboard/layout`, `POST /api/dashboard/layout/reset`; Edit Layout with corner-handle resize, size controls, group controls, Reset Layout | `core/overview.py`, `core/overview_views.py`, `Dashboard.tsx`, `styles.css` |
+| Document Type fields | Drag-and-drop ordering (pointer + keyboard, `Sortable.tsx`), Archive/Restore, Archived Fields with counts, Show archived metadata, Main Admin permanent deletion with count, typed confirmation and step-up | `library/doctypes.py`, `library/views_types.py`, `library/serializers.py`, `DocumentTypes.tsx`, `DocumentDetails.tsx` |
+
+**Decisions.**
+- *Local AI and files.* Local servers (LM Studio, Ollama, OpenAI-compatible) take images, not PDF/TIFF files, so
+  originals are rendered/converted to PNG pages on this server. Formats are claimed only for a profile whose vision
+  model passed Test Profile (or was not tested yet, but has a vision model).
+- *Evidence instead of confidence.* The direct prompt asks for the printed words and page per value; values without
+  them (dates, numbers, names) are dropped and an answer with nothing usable triggers the fallback. AI confidence is
+  never the criterion.
+- *Automatic analysis* (OCR + AI, Smart Auto) runs after OCR, so it reads that OCR text instead of a second, direct
+  attempt.
+- *Archive = the old "Shown" switch.* A field switched off already kept its values and left OCR/AI; it is now
+  labelled Archived (with date, by and previous position). A type whose fields are all archived never falls back to
+  the "any field" behaviour of untyped documents.
+- *Group removal on the server.* Tiles of a group that disappears from a saved layout move to General even if the
+  client did not move them, so a tile can never be orphaned.
+
 ## Change set Z: optional AI Document Intelligence and the OCR engine order {#change-set-z}
 
 **Numbering.** Prompt AT-416…AT-435 → **AT-441…AT-460** (AT-416…AT-440 belong to Change Sets X and Y); see

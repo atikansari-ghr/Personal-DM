@@ -97,7 +97,10 @@ def _classification(ctx: P.AccessContext, d: Document) -> dict:
     template = doctypes.active_fields(d.doc_type) if d.doc_type_id else []
     labels = {f.key: f.label for f in template}
     labels.update({f"custom:{c.key}": c.label for c in CustomFieldDef.objects.all()})
+    hidden = doctypes.archived_keys(d.doc_type) if d.doc_type_id else set()
     fields = list(d.fields.select_related("confirmed_by").order_by("key"))
+    archived_count = sum(1 for f in fields if f.key in hidden and f.scope == DocumentField.TYPE and f.value)
+    fields = [f for f in fields if not (f.key in hidden and f.scope == DocumentField.TYPE)]  # Show archived metadata
     tkeys = {f.key for f in template}
     out_fields = []
     for f in fields:
@@ -120,6 +123,7 @@ def _classification(ctx: P.AccessContext, d: Document) -> dict:
         "type_info": {"source": d.type_source, "source_label": doctypes.SOURCE_LABELS.get(d.type_source, ""),
                       "confirmed": d.type_confirmed, "suggestions": doctypes.suggestions_json(d)},
         "details_status": doctypes.details_status(d),
+        "archived_values": archived_count,
         "can_manage_types": is_admin,
     }
 

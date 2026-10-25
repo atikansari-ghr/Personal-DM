@@ -56,6 +56,47 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
+## Change set AA: direct Local AI processing, Overview groups and free resize, Document Type field management {#change-set-aa}
+
+**Numbering.** Prompt AT-436…AT-455 → **AT-461…AT-480** (the prompt's "Change Set X" name and numbers are taken).
+Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md#change-set-aa). Design and decisions:
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-aa).
+
+**Environment.** Development container (Ubuntu 24.04, PostgreSQL 16, Python 3.13, Tesseract 5, pdftoppm, Node 22,
+Chromium via Playwright), 2026-10-25. The Local AI server is emulated by `tests/fake_ai_server.py` (OpenAI-compatible
+chat API with `image_url` parts — the request LM Studio receives — plus scripted vision, multi-page and failure
+answers). The OCR fallback used the real Tesseract. All files are generated synthetic samples.
+
+| Command | Result |
+|---|---|
+| `pytest tests/test_change_aa.py` | **21 passed** (AT-461…AT-480, incl. the real Tesseract fallback) |
+| `pytest tests/test_ai_intelligence.py tests/test_ai.py tests/test_ai_pipeline.py tests/test_document_types.py tests/test_overview.py tests/test_preferences.py tests/test_corrective_v.py` | Passed (Change Set Y/Z AI behaviour, document types, Overview, help registry unchanged) |
+| Full `pytest` | **620 tests: 613 passed, 6 skipped (ClamAV daemon, real PaddleOCR runtime, live light-ocr), 1 failed in this container only**: `test_at309_backup_health_from_verified_state_admin_only` — the container disk has about 10 % free space, so the test backup destination is rated critical ("only 10.0 % free space"); it fails the same way on unmodified `main` and passed when run alone after freeing space. Not caused by this change set. |
+| `scripts/e2e.sh` (fresh database) | flow, accessibility, parity, layout (7 viewports), offline, PWA, themes, recovery, corrective and screenshot suites: **163 PASS** incl. the new step *AT-461…AT-480 Change Set AA* (field drag with the mouse and with the keyboard, Archive → Archived Fields → permanent-delete dialog guarded → Restore, Overview group created and a tile moved into it, corner-handle resize persisted after reload, no overlapping tiles, other account unaffected, phone 390 px one column without sideways scrolling and the desktop layout unchanged, Reset Layout, default processing source); **1 FAIL in this container only**: AT-333 (Chromium here cannot load the real OpenFreeMap tiles through the container proxy certificate — unchanged, same as Change Sets Y and Z) |
+| Migrations `library.0013` + `ai.0004` forwards, backwards (`library 0012`, `ai 0003`), forwards; `makemigrations --check` | OK |
+| `manage.py doctor` (Local profile with a vision model) | *AI default processing source*, *AI Local profile for original documents*, document capabilities and *AI OCR fallback chain* reported, no key |
+| `npm run build`, `vitest` (17), `scripts/check_docs.py`, `scripts/privacy_check.sh`, settings reference | Passed |
+
+Found and fixed during the runs (not shipped): the widget selection in Settings → Appearance no longer showed a tile
+once groups were saved (now authoritative, with a regression test); tablets showed half-width calendars after the
+12-column change (tablet reflow restored to the previous rule, layout audit green); permanent deletion used
+`SELECT … FOR UPDATE` with `DISTINCT`; a group left out of a save could drop General's tiles.
+
+**Per test:** AT-461 Passed · AT-462 Passed (Local AI emulated) · AT-463 Passed (Local AI emulated; JPEG, PNG, PDF
+single and two pages, TIFF three pages bounded to two, WEBP; TXT refused) · AT-464 Passed (real Tesseract fallback;
+malformed and unusable answers) · AT-465 Passed · AT-466 Passed · AT-467 Passed · AT-468 automated rules Passed
+(background priority, AI concurrency slot, page and size limits, temporary files removed) · AT-469 Passed · AT-470
+Passed · AT-471 Passed · AT-472 Passed · AT-473 Passed · AT-474 Passed · AT-475 Passed · AT-476 Passed · AT-477 Passed
+· AT-478 Passed · AT-479 Passed · AT-480 automated part Passed (full `pytest`, `scripts/e2e.sh` with the one
+container-only AT-333 failure).
+
+**Blocked / Not Executed** (never reported as passed):
+
+- A **real LM Studio / Ollama vision model** reading documents directly (emulated with the same request shape; which
+  formats and page counts a real model handles depends on the model — Test Profile checks it on the server).
+- **AT-468** under real concurrent load (direct Local AI + browsing + OCR/ClamAV/backup) on the target 6 GB LXC.
+- `personaldocs upgrade` of the production LXC to this release (migrations were run forwards/backwards here).
+
 ## Change set Z: AI Document Intelligence and the OCR engine order {#change-set-z}
 
 **Numbering.** Prompt AT-416…AT-435 → **AT-441…AT-460**. Per-scenario status: [TRACEABILITY.md](TRACEABILITY.md#change-set-z).

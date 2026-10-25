@@ -177,3 +177,64 @@ def holiday_override_detail(request, pk):
     audit.record("settings.holiday_override", request=request, target_type="holiday", target_id=str(o.id),
                  country=o.country, date=o.date.isoformat())
     return Response(_override_json(o))
+
+
+# ------------------------------------------------------------------ Overview layout and groups (Change Set AA)
+
+LAYOUT_KEYS = ("me.dashboard_groups", "me.dashboard_widgets", "me.overview_layout")
+
+
+def _layout_payload(user) -> dict:
+    from .registry import DEFAULT_WIDGETS
+
+    return {**overview.effective_groups(user), "layout": config.get_user(user, "me.overview_layout") or {},
+            "limits": overview.layout_limits(), "default_widgets": DEFAULT_WIDGETS}
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsActiveAuthenticated])
+def dashboard_layout(request):
+    """The signed-in person's own Overview layout (never anyone else's): groups with their tiles in order, tile sizes
+    and styles. PUT saves groups and sizes together. A group that disappears never takes its tiles with it: tiles
+    that are no longer in any group because their group was removed go to General."""
+    from django.db import transaction
+
+    from .registry import SettingError, normalize_widgets
+
+    user = request.user
+    if request.method == "GET":
+        return Response(_layout_payload(user))
+    d = request.data if isinstance(request.data, dict) else {}
+    try:
+        groups = overview.normalize_groups({"groups": d.get("groups"), "known": d.get("known") or []})
+        layout = overview.normalize_layout(d.get("layout") or {})
+    except SettingError as exc:
+        return _err(str(exc))
+    before = overview.effective_groups(user)
+    # groups the person removed: their ids are not in what was sent (General is always re-added, so it counts too)
+    ids = {str(g.get("id") or "").strip().lower() for g in d.get("groups") or [] if isinstance(g, dict)}
+    shown = {w for g in groups["groups"] for w in g["widgets"]}
+    general = next(g for g in groups["groups"] if g["id"] == overview.GENERAL)
+    for g in before["groups"]:
+        if g["id"] not in ids:
+            general["widgets"].extend(w for w in g["widgets"] if w not in shown)
+    groups["known"] = list(dict.fromkeys(groups["known"] + [w for g in before["groups"] for w in g["widgets"]]))
+    order = normalize_widgets([w for g in groups["groups"] for w in g["widgets"]])
+    with transaction.atomic():
+        config.set_user(user, "me.dashboard_groups", groups)
+        config.set_user(user, "me.dashboard_widgets", order)
+        config.set_user(user, "me.overview_layout", {k: v for k, v in layout.items() if k in order})
+    return Response(_layout_payload(user))
+
+
+@api_view(["POST"])
+@permission_classes([IsActiveAuthenticated])
+def dashboard_layout_reset(request):
+    """Reset Layout: only this person's tiles, sizes and groups go back to the defaults. No document or other
+    setting is touched."""
+    from .models import UserSetting
+
+    UserSetting.objects.filter(user=request.user, key__in=LAYOUT_KEYS).delete()
+    config._invalidate(request.user)
+    audit.record("overview.layout_reset", request=request)
+    return Response(_layout_payload(request.user))

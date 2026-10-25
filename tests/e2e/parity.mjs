@@ -499,7 +499,7 @@ await step("AT-116..121/125/127 Overview: customize, weather city, calendar and 
   await page.waitForTimeout(400);
   await snap(page, { path: `${SHOTS}/overview.png` });
   // edit layout: style, size, keyboard reorder, remove, add; then save
-  await page.click("button:has-text('Customize Overview')");
+  await page.click("button:has-text('Edit Layout')");
   await page.waitForSelector(".ov-editbar");
   await page.selectOption("select[aria-label='Today (Gregorian + Hijri) style']", "circle");
   expect(await page.locator("select[aria-label='Month calendar style'] option[value=circle]").count() === 0, "lists and calendars stay rectangular");
@@ -514,7 +514,7 @@ await step("AT-116..121/125/127 Overview: customize, weather city, calendar and 
   await page.waitForTimeout(300);
   await snap(page, { path: `${SHOTS}/overview-customize.png` });
   await page.click("button:has-text('Save layout')");
-  await page.waitForSelector(".toast:has-text('Overview saved')");
+  await page.waitForSelector(".toast:has-text('Layout saved')");
   await page.reload();
   await page.waitForSelector("[data-widget=date] .ov-card.circle");
   const order = await page.evaluate(() => [...document.querySelectorAll(".ov-grid [data-widget]")].map((h) => h.dataset.widget));
@@ -736,13 +736,16 @@ await step("AT-161..175 document types: set from Details, suggestion, safe chang
   await page.fill("#fc", "A, B, AB, O");
   await page.click(".modal button:has-text('Save field')");
   await page.waitForSelector(".tfields :text('Blood group')");
-  await page.click(".modal button[aria-label='Move Blood group up']");
+  await page.focus(".modal [data-field=blood_group] .sortable-handle");  // keyboard alternative to drag and drop
+  const moved = page.waitForResponse((r) => r.url().includes(`/api/document-types/${pid}/fields`) && r.request().method() === "POST");
+  await page.keyboard.press("ArrowUp");
+  await moved;
   await page.waitForTimeout(400);
   await snap(page, { path: `${SHOTS}/settings-document-types.png` });
   const t = (await api(page, "/api/document-types/admin")).data.types.find((x) => x.id === pid);
   const bg = t.fields.find((f) => f.key === "blood_group");
   expect(t.fields.sort((a, b) => a.order - b.order).findIndex((f) => f.key === "blood_group") < t.fields.length - 1, "reordered");
-  await api(page, `/api/document-types/${pid}/fields/${bg.id}`, { method: "DELETE" });
+  await api(page, `/api/document-types/${pid}/fields/${bg.id}/archive`, { method: "POST" });  // Archive keeps values
   await page.keyboard.press("Escape");
   // AT-166 folder suggestion preselects the type in the upload dialog
   await api(page, `/api/folders/${ids.visa}`, { method: "PATCH", body: { suggested_type: (await api(page, "/api/document-types")).data.types.find((x) => x.name === "Visa").id } });

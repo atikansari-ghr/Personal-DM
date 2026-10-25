@@ -177,6 +177,31 @@ function AddDetail({ doc, custom, typed, onSaved }: { doc: DocDetail; custom: Me
   );
 }
 
+/** Show archived metadata (Change Set AA): values kept for fields the administrator archived. Hidden by default,
+ *  loaded on request, read-only and labelled Archived. The server checks that the person may open the document. */
+function ArchivedMetadata({ doc }: { doc: DocDetail }) {
+  const toast = useToast();
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const toggle = async () => {
+    if (!open && rows === null) {
+      try { setRows((await api<any>(`documents/${doc.id}/archived-metadata`)).values); } catch (e: any) { toast(e.message, "error"); return; }
+    }
+    setOpen(!open);
+  };
+  return (
+    <section className="archived-meta" data-archived-metadata>
+      <label className="check small"><input type="checkbox" checked={open} onChange={toggle} /> Show archived metadata ({doc.archived_values}) <HelpTip id="metadata.archived" /></label>
+      {open && rows && (
+        <div className="kv">{rows.map((r) => (
+          <div key={r.key} style={{ display: "contents" }}><div className="k">{r.label} <span className="badge neutral">Archived</span></div>
+            <div className="v">{r.value}<span className="prov-src">{r.source_label}{r.status === "confirmed" ? "" : " · suggested"}</span></div><div className="c" /></div>
+        ))}</div>
+      )}
+    </section>
+  );
+}
+
 export default function DocumentDetails({ doc, onChange, openTypeDialog }: { doc: DocDetail; onChange: () => void; openTypeDialog?: number }) {
   const canEdit = doc.caps.includes("edit");
   const toast = useToast();
@@ -261,6 +286,8 @@ export default function DocumentDetails({ doc, onChange, openTypeDialog }: { doc
         </div>
       )}
       {canEdit && <AddDetail doc={doc} custom={custom} typed={!!doc.type} onSaved={onChange} />}
+
+      {(doc.archived_values || 0) > 0 && <ArchivedMetadata doc={doc} />}
 
       {unmapped.length > 0 && (
         <section className="unmapped" aria-labelledby={`unm-${doc.id}`}>

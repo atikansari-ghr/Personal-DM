@@ -143,6 +143,7 @@ export interface DocDetail extends DocRow {
   template: TemplateField[];
   type_info: { source: string; source_label: string; confirmed: boolean; suggestions: TypeSuggestion[] };
   details_status: DetailsStatus;
+  archived_values?: number;
   can_manage_types: boolean;
   versions: Version[];
   current_version: Version | null;
@@ -185,4 +186,5 @@ export interface Meta {
   standard_fields: string[];
 }
 
-export interface WidgetCfg { w?: number; style?: "rect" | "compact" | "circle" | "compact_circle"; settings?: Record<string, any> }
+export interface WidgetCfg { w?: number; cols?: number; h?: number; style?: "rect" | "compact" | "circle" | "compact_circle"; settings?: Record<string, any> }
+export interface OvGroup { id: string; name: string; collapsed: boolean; widgets: string[] }

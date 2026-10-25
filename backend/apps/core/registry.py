@@ -26,7 +26,7 @@ class SettingDef:
     key: str
     label: str
     description: str
-    type: str  # bool|int|str|choice|choice_list|order_list|country_list|overview_layout|int_list|time|secret|email|url|timezone|path|channel_list|widget_list|event_list|event_matrix|json
+    type: str  # bool|int|str|choice|choice_list|order_list|country_list|overview_layout|dashboard_groups|int_list|time|secret|email|url|timezone|path|channel_list|widget_list|event_list|event_matrix|json
     default: Any
     section: str
     scope: str = GLOBAL
@@ -681,6 +681,29 @@ SETTINGS: list[SettingDef] = [
                "Off: every AI Action uses the system default profile (forced by the Main Admin). On: people may pick "
                "another enabled profile when running an action.",
                "bool", False, "ai", help="local-ai#profiles"),
+    # Change Set AA: Processing Source (Settings → AI → Document Processing)
+    SettingDef("ai.processing_source", "Default processing source",
+               "What AI Actions read. OCR Text: the OCR engines read the document and only their text goes to the AI. "
+               "Original Document — Local AI: the PDF or image goes straight to a Local AI that can read it; OCR is not "
+               "run. Original Document — Local AI + OCR Fallback: the Local AI reads the original first; if it cannot, "
+               "the OCR engines run in the configured order and the AI reads their text. Original documents are never "
+               "sent to a Cloud profile by these modes.",
+               "choice", "original_fallback", "ai", choices=("original_fallback", "original", "ocr_text"),
+               choice_labels={"original_fallback": "Original Document — Local AI + OCR Fallback (recommended)",
+                              "original": "Original Document — Local AI", "ocr_text": "OCR Text"},
+               depends_on=("ai.enabled",), effect="Affects future processing only; nothing is re-analysed.",
+               help="local-ai#processing-source"),
+    SettingDef("ai.source_override", "Let people choose the processing source per action",
+               "On: people who may run an AI Action can pick another processing source for that action. Off: every "
+               "action uses the default above.",
+               "bool", True, "ai", depends_on=("ai.enabled",), help="local-ai#processing-source"),
+    SettingDef("ai.direct_max_pages", "Original Document: pages sent at most",
+               "Pages of a PDF or multi-page TIFF given to the Local AI in one request (the first pages, in order). "
+               "A model that reads one image at a time only gets the first page.",
+               "int", 4, "ai", min=1, max=20, depends_on=("ai.enabled",), help="local-ai#direct-formats"),
+    SettingDef("ai.direct_max_mb", "Original Document: largest file (MB)",
+               "Larger originals are not given to the Local AI directly (with OCR fallback, OCR reads them instead).",
+               "int", 20, "ai", min=1, max=100, depends_on=("ai.enabled",), help="local-ai#direct-formats"),
     SettingDef("ai.max_parallel", "Parallel AI jobs", "AI jobs running at the same time. Keep 1 on a 2-CPU container so documents are never delayed.",
                "int", 1, "ai", min=1, max=4, help="local-ai#resources"),
     SettingDef("ai.debug_logging", "AI diagnostic logging", "Log request and response sizes (never their content) for troubleshooting.",
@@ -885,6 +908,8 @@ SETTINGS: list[SettingDef] = [
                effect="Applies on all your devices.", help="overview#customize"),
     SettingDef("me.overview_layout", "Overview layout", "Size, style and options of each Overview widget.", "overview_layout",
                {}, "appearance_hidden", scope=USER, editable_by=SELF, help="overview#customize"),
+    SettingDef("me.dashboard_groups", "Overview groups", "Your own groups of Overview tiles (Change Set AA).",
+               "dashboard_groups", None, "appearance_hidden", scope=USER, editable_by=SELF, help="overview#groups"),
     SettingDef("me.weather_city", "Weather city", "City for your weather widget.", "json", None, "appearance_hidden",
                scope=USER, editable_by=SELF, help="overview#weather"),
     # Change Set T: routing, fallback, quiet hours and digests (per person)
@@ -1022,6 +1047,10 @@ def coerce(defn: SettingDef, value: Any) -> Any:
         from .overview import normalize_layout
 
         value = normalize_layout(value)
+    elif t == "dashboard_groups":
+        from .overview import normalize_groups
+
+        value = normalize_groups(value)
     elif t == "json" and defn.key in ("me.weather_city", "weather.default_city"):
         from .overview import normalize_city
 

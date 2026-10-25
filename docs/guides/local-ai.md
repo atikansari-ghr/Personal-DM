@@ -241,8 +241,72 @@ Needs Review, Provider Unavailable, Timed Out, Failed, Cancelled* (or *Skipped* 
 | Suggest Filename | A title following the Personal DM naming standard (*Owner Type (issue–expiry years)*), only applied when accepted. |
 | Detect Expiry/Renewal | The expiry date **as printed** (a document fact, with the printed words), kept apart from the *reminder policy* (Settings → Notifications), which is not a document fact. A guessed renewal date is never presented as a fact. |
 
-For Analyze, Extract and Verify you can choose what the AI reads: *OCR text* (default), *Page image* (vision model) or
-*Original PDF*, when the profile allows it.
+What the AI reads is the **Processing Source** (next section). Verify OCR always checks the OCR text. With a Cloud
+profile, Analyze, Extract and Verify can also send the *Page image* or *Original PDF* when the profile allows it, and only
+after you confirm.
+
+## Processing Source {#processing-source}
+
+AI Actions that read a document (Analyze, Extract Metadata, Summarize, Suggest Document Type, Suggest Filename,
+Detect Expiry) have a **Processing Source**:
+
+| Processing Source | What happens |
+|---|---|
+| **Original Document — Local AI + OCR Fallback** (default, recommended) | The original PDF or image goes to a **Local** AI profile that can read images. If it cannot (see below), the OCR engines run in the order set in Settings → OCR & processing and the same Local AI reads their text instead. |
+| **Original Document — Local AI** | Only the Local AI reads the original. OCR is **not** run. If the AI cannot read it, the action fails, says why, and offers **Retry with OCR fallback** in AI History. |
+| **OCR Text** | The OCR engines read the document first; only the recognised text goes to the AI. The original file is never sent. |
+
+The Main Admin sets the default in **Settings → AI → Document Processing → Default processing source**. With *Let
+people choose the processing source per action* on, anyone who may run an action can pick another source for it in
+the document's AI Actions panel. Changing the default only affects future actions; nothing is re-analysed.
+Automatic analysis (OCR + AI, Smart Auto) runs after OCR has finished and therefore reads that OCR text.
+
+The original modes are **Local only**. A Cloud profile never receives an original through them: choosing an original
+mode with a Cloud profile is refused before anything is sent, and the default simply reads OCR text with a Cloud
+profile (the Cloud send switches and the confirmation for originals from Change Set Z still apply).
+
+### When the OCR fallback runs {#ocr-fallback}
+
+With *Original Document — Local AI + OCR Fallback*, OCR runs when the Local AI:
+
+- is not eligible: no Local profile with a vision model, a vision model that failed **Test Profile**, a file type it
+  cannot take, a file larger than the limit, a file in antivirus quarantine;
+- fails: server unavailable, time-out, an error, a page that could not be prepared;
+- answers with something unusable: not JSON, not the requested fields, or no field that can be pointed to on the page.
+
+AI confidence alone never triggers the fallback. The fallback follows the Main Admin's OCR engine order (light-ocr,
+Tesseract and PaddleOCR in any order, Auto or Primary only); nothing is hard-coded. **AI History** shows, for every
+action: the selected source, what the result really came from (*Original document (Local AI)* or *OCR text*), whether
+the fallback ran and why, the file type and pages sent, and the OCR engine and order used.
+
+### Direct formats {#direct-formats}
+
+Local AI servers (LM Studio, Ollama and other OpenAI-compatible servers) accept **images**. Whether a model can read
+them depends on the model you load, which is why the profile needs a *vision model* and **Test Profile** checks it
+with a generated sample page (it also checks whether the model reads two pages in one request).
+
+| Original | Given to the Local AI as |
+|---|---|
+| JPEG, PNG | The image, upright and at most 1600 px on its long side (PNG). |
+| WEBP | Converted to PNG on this server. |
+| TIFF / TIF (also multi-page) | Each page converted to PNG on this server. |
+| PDF (also multi-page) | Each page rendered to PNG on this server (pdftoppm, sandboxed). |
+| Other formats (Office, text, e-mail, DICOM …) | Not given directly: with OCR fallback, OCR reads them; with *Original Document — Local AI* the action is refused. |
+
+Conversion happens locally in a private temporary directory that is always removed; the stored original is only read,
+never changed. Pages (*Original Document: pages sent at most*, default 4), file size (*largest file*, default 20 MB),
+image size and rendering time are bounded. A model that reads only one image at a time gets the first page. These
+formats are only claimed when the profile can really take them — a profile without a working vision model offers none.
+
+### Document Type fields {#schema}
+
+When the document has a Document Type, the AI receives that type's **active** fields (for example, for *Exit Re-Entry
+Visa*: Visa Number, Visa Type, Issuer, Issue Date, Expiry Date) by their stable keys. Archived fields are never sent.
+For an original document the model must quote the printed words and page for each value: a date, number or name that
+it cannot point to is dropped, so nothing is invented to fill a required field. Values may be normalised (dates as
+YYYY-MM-DD, spacing), but the original file, the OCR text and confirmed values are never changed; everything arrives
+as a suggestion to review (field, current value, AI suggestion, source and page, evidence, conflict, Accept / Edit /
+Reject).
 
 ## Reviewing suggestions {#suggestions}
 
@@ -359,6 +423,14 @@ Settings → AI has four separate tests, so you can tell whether OCR or AI is fa
 | The endpoint is EXTERNAL but the profile is marked LAN | The URL resolves to a public address. Use the LAN address, or change the class deliberately. |
 | The model did not return JSON | Use a larger or instruction-tuned model, then **Retry**. |
 | The AI server did not answer in time | Increase the profile timeout or use a smaller model. |
+| AI History: *OCR fallback* — … cannot read document images (it has no vision model) | Add a vision model to the Local profile and run **Test Profile**; until then the AI reads OCR text. |
+| AI History: *OCR fallback* — The AI server rejected the request (HTTP 400) — … images … | The loaded model does not accept images. Load a vision model (VLM) in LM Studio / Ollama, then **Test Profile**. |
+| AI History: *OCR fallback* — The Local AI answer contained no usable field | The model read the page but could not point to printed values (blurry photo, very small text). OCR was used instead; try a better scan or a larger vision model. |
+| Local AI could not process the original document: … OCR was not run | *Original Document — Local AI* never runs OCR. Choose **Retry with OCR fallback** in AI History, or fix the cause shown. |
+| “Original Document — …” needs a Local AI profile | The action used a Cloud profile; originals are never sent to Cloud through these modes. Choose a Local profile or *OCR Text*. |
+| DOCX / TXT files cannot be given to the Local AI directly | Only PDF, JPEG, PNG, TIFF and WEBP are given directly; with OCR fallback the text is read instead. |
+| The original is larger than … MB | Raise *Original Document: largest file* (Settings → AI) or use OCR fallback. |
+| Only the first page was read | The model reads one image per request (Test Profile: *one page*), or the document has more pages than *pages sent at most*. |
 
 **Settings → AI → AI jobs** shows each job's type, who requested it, profile/model, status, the stage it reached or failed
 at, the OCR engine and character count, and the HTTP status, without document content. *AI diagnostic logging* logs request

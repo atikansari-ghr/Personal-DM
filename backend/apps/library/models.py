@@ -109,12 +109,21 @@ class DocumentTypeField(models.Model):
     role = models.CharField(max_length=10, blank=True, help_text="expiry | issue | no_expiry: drives dates and reminders")
     choices = models.JSONField(default=list, blank=True)
     validation = models.JSONField(default=dict, blank=True, help_text="pattern / min / max / max_length")
+    # Change Set AA: archiving a field (enabled=False) keeps its definition and every stored value; restoring it
+    # brings the same field (same key) back, at its previous position when that is still free.
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    archived_order = models.IntegerField(null=True, blank=True, help_text="Position before it was archived")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["order", "id"]
         unique_together = [("doc_type", "key")]
+
+    @property
+    def archived(self) -> bool:
+        return not self.enabled
 
     def __str__(self):
         return f"{self.doc_type.name}: {self.label}"

@@ -78,10 +78,13 @@ The **Overview** is your start page (it replaces the former dashboard). It shows
 
 - **Widgets:** Today (Gregorian and Hijri date), Weather, Documents summary, Month calendar with holidays, Upcoming
   holidays, Expiring soon, Shared with me, Recent documents, Recent activity, Review queue and more.
-- **Customize Overview:** add (**Add widget…**) or remove (**×**) widgets, reorder by dragging or with **‹ / ›**,
-  resize with **− / +**, choose a style (rectangular, compact, circular for single-value widgets) and open **⚙** for
-  widget settings. **Save layout** stores it for your account on every device; **Cancel** and **Reset to default**
-  are always available. The selection and order can also be changed in My account → Appearance → Overview widgets.
+- **Edit Layout:** add (**Add widget…**) or remove (**×**) tiles, move them by dragging or with **‹ / ›**, resize
+  them freely with the **corner handle** (width and height; or **− / +** and the *Height* list), choose a style
+  (rectangular, compact, circular for single-value tiles) and open **⚙** for tile settings. Create your own **groups**
+  (for example *Renewals* or *Travel*), rename, reorder, collapse and remove them — removing a group moves its tiles,
+  never deletes them. **Save layout** stores it for your account on every device; **Reset Layout…** returns *your*
+  Overview to the default. Phones and tablets show the same groups in fewer columns without changing your desktop
+  layout. The selection and order can also be changed in My account → Appearance → Overview widgets.
 - **Hijri date:** Umm al-Qura calendar, following the installation timezone. The administrator may shift it by up to
   two days to match the local moon sighting.
 - **Holidays:** public holidays of the countries chosen by the administrator (Saudi Arabia and India by default).
@@ -89,8 +92,8 @@ The **Overview** is your start page (it replaces the former dashboard). It shows
 - **Weather** (only if the administrator enabled it): choose your own city in the widget. Only the city's
   coordinates are sent to the weather provider.
 
-If you had chosen your widgets before an upgrade, your choice is kept; add the new widgets with **Customize
-Overview**. See [Overview](guides/overview.md).
+If you had chosen your widgets before an upgrade, your choice is kept (in the *General* group); add new widgets with
+**Edit Layout**. See [Overview](guides/overview.md).
 
 ## 4. Folders and file types {#folders}
 
@@ -211,6 +214,8 @@ Moving a document never changes its type, and changing the type never moves it.
   already recognised, without a new scan.
 - **Additional details:** **Add a detail… → New detail for this document…** adds a one-off detail (name and value)
   to this document only.
+- **Show archived metadata:** values of fields the administrator archived are kept; tick *Show archived metadata* to
+  see them (labelled *Archived*, read-only).
 - **Several documents:** tick them and choose **Set type…**. Documents with another confirmed type are skipped unless
   you tick *Also change documents with a confirmed type*.
 
@@ -222,7 +227,11 @@ See [document types and details](guides/document-types.md).
   *Suggest Document Type*, *Suggest Filename* and *Detect Expiry/Renewal*. You only see the actions you may use on
   that document. A badge shows whether the AI is **Local** (your family's server) or **Cloud** (a provider such as
   OpenAI); for Cloud you are told what is sent, and you confirm before an original page or file is sent.
-- **AI suggestions** propose a title, type, dates, number, name, tags and folder. Each shows whether it is **Observed**
+- **Processing Source** (above the actions): *Original Document — Local AI + OCR Fallback* (usually the default) lets
+  your family's Local AI read the scan or PDF itself and uses OCR only if it cannot; *Original Document — Local AI*
+  never runs OCR; *OCR Text* sends only the recognised text. Originals never go to a Cloud AI this way.
+- **AI suggestions** propose a title, type, dates, number, name, tags, folder and the fields of the document's type
+  (for example *Visa Number*), and show what they were read from (*Original document · page 1* or *OCR text*). Each shows whether it is **Observed**
   (printed in the text) or **Inferred**, and the AI's confidence. Nothing changes until you **Accept** it (or **Edit**
   it first); you can also **Accept selected**, **Accept all** or **Reject all**. A **Conflict** means it differs from a
   value someone set; you confirm before it replaces that value.

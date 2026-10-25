@@ -592,9 +592,23 @@ table.responsive td.row, table.responsive td > .row { flex-wrap: wrap; }
 .drop-progress ul { margin: 0.4rem 0 0; padding-left: 1.1rem; font-size: 0.86rem; }
 
 /* ---------- Overview (customizable widgets: 4 columns desktop, 2 tablet, 1 phone; widgets never overlap or overflow) */
-.ov-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; align-items: stretch; grid-auto-flow: row dense; }
+/* Change Set AA: 12-column desktop grid (tablet 2 columns, phone 1); width "cN" = N columns, fixed height in 90 px rows */
+.ov-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 1rem; align-items: start; grid-auto-flow: row dense; }
 .ov-cell { position: relative; min-width: 0; display: flex; flex-direction: column; }
-.ov-cell.w1 { grid-column: span 1; } .ov-cell.w2 { grid-column: span 2; } .ov-cell.w3 { grid-column: span 3; } .ov-cell.w4 { grid-column: span 4; }
+.ov-cell.c1 { grid-column: span 1; } .ov-cell.c2 { grid-column: span 2; } .ov-cell.c3 { grid-column: span 3; } .ov-cell.c4 { grid-column: span 4; }
+.ov-cell.c5 { grid-column: span 5; } .ov-cell.c6 { grid-column: span 6; } .ov-cell.c7 { grid-column: span 7; } .ov-cell.c8 { grid-column: span 8; }
+.ov-cell.c9 { grid-column: span 9; } .ov-cell.c10 { grid-column: span 10; } .ov-cell.c11 { grid-column: span 11; } .ov-cell.c12 { grid-column: span 12; }
+.ov-cell.fixed-h { height: var(--tile-h); }
+.ov-cell.fixed-h .ov-card { overflow: auto; }
+.ov-resize { position: absolute; right: -4px; bottom: -4px; width: 22px; height: 22px; border-radius: 6px; background: var(--brand); color: #fff; cursor: nwse-resize; touch-action: none; display: flex; align-items: center; justify-content: center; z-index: 2; box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.25)); }
+.ov-resize:focus-visible { outline: 3px solid var(--focus, var(--brand)); outline-offset: 2px; }
+.ov-group { display: flex; flex-direction: column; gap: 0.6rem; }
+.ov-group + .ov-group { margin-top: 0.6rem; }
+.ov-group-head { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.ov-group-head h2 { font-size: 1rem; margin: 0; }
+.ov-group-head input { width: auto; min-width: 10rem; min-height: 34px; }
+.ov-group.drop-target > .ov-grid { outline: 2px dashed var(--brand); outline-offset: 4px; border-radius: var(--radius); }
+.ov-group-empty { grid-column: 1 / -1; padding: 0.8rem; border: 1px dashed var(--line); border-radius: var(--radius); }
 .ov-card { flex: 1; display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; overflow: hidden; }
 .ov-title { display: flex; align-items: center; gap: 0.45rem; font-size: 1rem; margin: 0; }
 .ov-title a { margin-left: auto; font-weight: 500; }
@@ -677,12 +691,16 @@ i.c0 { background: #1f8a4c; } i.c1 { background: #e07b00; } i.c2 { background: #
 .ov-activity li:first-child { border-top: 0; }
 .btn-reset { border: 0; background: none; font: inherit; width: 100%; text-align: left; cursor: pointer; color: inherit; }
 @media (max-width: 1100px) {
+  /* reflow only: the saved desktop sizes are not changed by viewing on a smaller screen */
   .ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ov-cell.w3, .ov-cell.w4 { grid-column: span 2; }
+  /* as before: single-value tiles (up to a quarter of the desktop width) take half a row, everything else a full row */
+  .ov-cell.c1, .ov-cell.c2, .ov-cell.c3 { grid-column: span 1; }
+  .ov-cell.c4, .ov-cell.c5, .ov-cell.c6, .ov-cell.c7, .ov-cell.c8, .ov-cell.c9, .ov-cell.c10, .ov-cell.c11, .ov-cell.c12 { grid-column: span 2; }
 }
 @media (max-width: 640px) {
   .ov-grid { grid-template-columns: minmax(0, 1fr); }
-  .ov-cell.w1, .ov-cell.w2, .ov-cell.w3, .ov-cell.w4 { grid-column: 1 / -1; }
+  .ov-cell[class*=" c"] { grid-column: 1 / -1; }
+  .ov-cell.fixed-h { height: auto; max-height: 70vh; }
   .ov-card.circle { width: min(100%, 200px); }
 }
 .chip { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--line); background: var(--brand-softer); border-radius: 999px; padding: 0.2rem 0.3rem 0.2rem 0.6rem; font-size: 0.88rem; }

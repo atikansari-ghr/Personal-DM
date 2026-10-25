@@ -212,14 +212,52 @@ Insured person, Start date and End date.
 | Role | **Expiry** (drives the expiry date and reminders), **Issue** (issue date) or **No expiry** ("Does not expire"). |
 | Choices | For *Select*. |
 | Help text | Shown under the field. |
-| Shown | Turn a field off instead of deleting it; values stay stored. |
 | Required | Empty required fields make the status *Incomplete*. |
 | OCR / Local AI may suggest | Whether OCR and the AI may propose this field. |
 | Searchable | Whether the value is found by search. Identifiers such as document numbers are not searchable by default. |
 | Format | A regular expression the value must match, and a maximum length; numbers can have a minimum and maximum. |
 
-Reorder fields with the **↑ / ↓** buttons (they work with the keyboard). The **preview** shows how the Details panel
-will look. A field that already has values cannot be deleted; turn it off instead.
+The **preview** shows how the Details panel will look.
+
+### Field order {#field-order}
+
+Drag a field by its **handle** (⠿) to a new position; it works with a mouse and on touch screens. With the keyboard,
+focus the handle and press **↑ / ↓**; each move is saved and announced. Fields keep their identity (their key), so
+changing the order never changes a stored value, and OCR / AI map values by key, never by position.
+
+### Archive a field {#archive-fields}
+
+**Archive** is the standard way to remove a field. An archived field:
+
+- keeps its definition and **every value already stored**, with its provenance and history;
+- is hidden from new documents, from the Details panel and from editing;
+- is no longer suggested by OCR or the AI (it is not part of the schema the AI receives) and is not counted as a
+  missing required field.
+
+If the archived field was the expiry date, its values no longer drive expiry dates or reminders while it is archived.
+
+### Archived fields {#archived-fields}
+
+The **Archived fields** section of a type lists each archived field with its type, when and by whom it was archived,
+and **how many documents hold a value** for it (a count only — no content). Choose **Restore** to bring back the same
+field (same key): its stored values show again, OCR and AI may suggest it again, and nothing is duplicated. It returns
+to its previous position when that position is still free; otherwise it is added at the end.
+
+### Show archived metadata {#archived-metadata}
+
+In a document's Details, **Show archived metadata** displays values kept for archived fields, labelled *Archived*.
+They are hidden by default, read-only, and only shown to people who may open the document.
+
+### Permanent deletion (main administrator) {#permanent-deletion}
+
+Only the **main administrator** can delete a field permanently, and only an archived one. Before anything is deleted
+the dialog shows how many documents hold a value — for example *"This field contains stored values in 14 documents.
+Permanent deletion will remove these values from the live application. Archive is recommended if historical data
+should be retained."* — then asks you to type **DELETE**, optionally a reason, and to confirm it is you (password plus
+authenticator code or passkey, valid for one action). The deletion, the number of affected documents and the reason
+are recorded in the audit log (never the values). Backups taken earlier keep the values they contained, under their
+normal retention: permanent deletion changes the live application only. Administrators and members cannot delete
+fields permanently.
 
 ### Review untyped documents {#review-untyped}
 

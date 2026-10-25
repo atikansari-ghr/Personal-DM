@@ -9,6 +9,8 @@ import { HelpTip, Icon, Modal, useAsync, useToast } from "./ui";
 
 const SOURCE_LABEL: Record<string, string> = { ocr: "OCR text", image: "Page image", file: "Original PDF" };
 const SENT_LABEL: Record<string, string> = { ocr_text: "OCR text", metadata: "metadata", image: "page image", file: "original file" };
+const SOURCE_HELP: Record<string, string> = { original_fallback: "ai.source.original_fallback", original: "ai.source.original", ocr_text: "ai.source.ocr_text" };
+const FINAL_LABEL: Record<string, string> = { original: "Original document (Local AI)", ocr_text: "OCR text", image: "Page image", file: "Original PDF" };
 
 type Disclosure = { profile: string; provider: string; location: string; categories: string[]; category_labels: string[]; message: string };
 
@@ -23,6 +25,7 @@ export default function AIActions({ docId, onChange }: { docId: string; onChange
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [psource, setPsource] = useState<string>("");  // "" = the default processing source
   const active = (data.data?.history || []).some((h: any) => ["queued", "running"].includes(h.status));
   const [wasActive, setWasActive] = useState(false);
   useEffect(() => {  // while an action runs, look again every 5 s (only on this open document)
@@ -37,9 +40,19 @@ export default function AIActions({ docId, onChange }: { docId: string; onChange
   if (!ai || !data.data) return null;
   const { actions, history, outputs } = data.data;
   if (!actions.length && !history.length && !outputs.length) return null;
-  const run = async (kind: string, src: string, confirm = false) => {
+  // Change Set AA: Processing Source (applies to the actions that read the document; Verify OCR checks the OCR text)
+  const choices: { value: string; label: string; enabled: boolean; reason: string; direct?: boolean }[] = actions.find((a: any) => a.processing_sources)?.processing_sources || [];
+  const dflt = ai.processing?.default || "original_fallback";
+  const dfltChoice = choices.find((c) => c.value === dflt);
+  const effectiveDefault = dfltChoice && dfltChoice.enabled ? dflt : "ocr_text";
+  const chosen = psource || effectiveDefault;
+  const chosenInfo = choices.find((c) => c.value === chosen);
+  const isCloud = ai.profile?.location === "cloud";
+  const run = async (kind: string, src: string, confirm = false, sourceOverride?: string) => {
+    const applicable = actions.find((a: any) => a.kind === kind)?.processing_sources;
+    const ps = sourceOverride || (applicable && psource && psource !== dflt ? psource : "");
     try {
-      const r = await api<any>(`documents/${docId}/ai/action`, { body: { action: kind, source: src, confirm_cloud: confirm, ...(profile ? { profile: Number(profile) } : {}) } });
+      const r = await api<any>(`documents/${docId}/ai/action`, { body: { action: kind, source: src, confirm_cloud: confirm, ...(ps ? { processing_source: ps } : {}), ...(profile ? { profile: Number(profile) } : {}) } });
       toast(`${actions.find((a: any) => a.kind === kind)?.label || kind} queued — ${r.disclosure?.message || ""}`);
       setConsent(null);
       data.reload();
@@ -71,13 +84,28 @@ export default function AIActions({ docId, onChange }: { docId: string; onChange
             {ai.profiles!.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.location === "cloud" ? "Cloud" : "Local"})</option>)}
           </select></div>
       )}
+      {choices.length > 0 && (
+        <div className="field" data-processing-source>
+          <label htmlFor={`ps-${docId}`}>Processing Source <HelpTip id="ai.source" /></label>
+          <select id={`ps-${docId}`} value={chosen} disabled={!ai.processing?.override} onChange={(e) => setPsource(e.target.value)}>
+            {choices.map((c) => <option key={c.value} value={c.value} disabled={!c.enabled}>{c.label}{c.value === dflt ? " — default" : ""}{!c.enabled ? " (not available)" : ""}</option>)}
+          </select>
+          <div className="hint small">
+            {chosen === "original_fallback" && (chosenInfo?.direct ? "The Local AI reads the original PDF or image first; if it cannot, the OCR engines run in the configured order and the AI reads their text." : `The Local AI cannot read this original (${chosenInfo?.reason || "not eligible"}), so OCR text will be used.`)}
+            {chosen === "original" && "Only the Local AI reads the original. OCR is not run; if the AI cannot read it, the action fails and you can retry with OCR fallback."}
+            {chosen === "ocr_text" && (isCloud && dflt !== "ocr_text" ? "Cloud profiles never receive original documents through these modes: only OCR text is used." : "The OCR engines read the document; only the recognised text goes to the AI.")}
+            {" "}<HelpTip id={SOURCE_HELP[chosen] || "ai.source"} />
+          </div>
+          {!ai.processing?.override && <div className="hint small muted">The Main Admin set the processing source for every action.</div>}
+        </div>
+      )}
       {actions.length > 0 && (
         <div className="row" style={{ gap: ".35rem", flexWrap: "wrap" }}>
           {actions.filter((a: any) => a.kind !== "ask").map((a: any) => (
             <span key={a.kind} className="row" style={{ gap: ".2rem" }}>
               <button className="btn small" data-ai-action={a.kind} disabled={history.some((h: any) => h.kind === a.kind && ["queued", "running"].includes(h.status))}
                 onClick={() => run(a.kind, source[a.kind] || "ocr")}>{a.label}</button>
-              {a.sources.length > 1 && <select aria-label={`${a.label}: what the AI reads`} value={source[a.kind] || "ocr"} onChange={(e) => setSource({ ...source, [a.kind]: e.target.value })}>
+              {a.sources.length > 1 && isCloud && <select aria-label={`${a.label}: what the AI reads`} value={source[a.kind] || "ocr"} onChange={(e) => setSource({ ...source, [a.kind]: e.target.value })}>
                 {a.sources.map((s: string) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}</select>}
             </span>
           ))}
@@ -94,10 +122,15 @@ export default function AIActions({ docId, onChange }: { docId: string; onChange
       {history.length > 0 && <button className="btn small ghost" aria-expanded={showHistory} onClick={() => setShowHistory(!showHistory)}>AI History ({history.length})</button>}
       {showHistory && (
         <div style={{ overflowX: "auto" }}>
-          <table className="responsive" data-ai-history><thead><tr><th>Action</th><th>Profile</th><th>Sent</th><th>Status</th><th>When</th></tr></thead><tbody>
+          <table className="responsive" data-ai-history><thead><tr><th>Action</th><th>Profile</th><th>Source</th><th>Sent</th><th>Status</th><th>When</th></tr></thead><tbody>
             {history.map((h: any) => (
               <tr key={h.id}><td>{h.action}{h.trigger && h.trigger !== "manual" && <div className="small muted">{h.trigger === "smart" ? "Smart Auto" : "OCR + AI"}</div>}<div className="small muted">{h.requested_by || ""}</div></td>
                 <td className="small">{h.profile || "—"}{h.model ? ` · ${h.model}` : ""}{h.location && <div><span className={`badge ${h.location === "cloud" ? "danger" : "ok"}`}>{h.location === "cloud" ? "Cloud" : "Local"}</span></div>}</td>
+                <td className="small" data-final-source={h.final_source || undefined}>{h.final_source ? FINAL_LABEL[h.final_source] || h.final_source : "—"}
+                  {h.fallback_used && <div><span className="badge soon" title={h.fallback_reason}>OCR fallback</span> <span className="muted">{h.fallback_reason}</span></div>}
+                  {h.detail?.file_type && <div className="muted">{h.detail.file_type}{h.detail.pages_sent ? ` · ${h.detail.pages_sent} page${h.detail.pages_sent > 1 ? "s" : ""}` : ""}{h.detail.truncated ? ` of ${h.detail.pages_total}` : ""}</div>}
+                  {h.fallback_used && h.detail?.ocr_engine && <div className="muted">OCR: {h.detail.ocr_engine}{h.detail.ocr_order ? ` (order: ${h.detail.ocr_order.join(" → ")})` : ""}</div>}
+                  {h.status_key === "failed" && h.processing_source === "original" && <div><button className="btn small ghost" onClick={() => run(h.kind, "ocr", false, "original_fallback")}>Retry with OCR fallback</button></div>}</td>
                 <td className="small">{(h.data_sent || []).map((c: string) => SENT_LABEL[c] || c).join(", ") || "nothing"}{h.usage?.input_tokens != null ? <div className="muted">{h.usage.input_tokens} in / {h.usage.output_tokens} out tokens</div> : null}</td>
                 <td><span className={`badge ${["failed", "provider_unavailable", "timed_out"].includes(h.status_key) ? "danger" : h.status_key === "completed" ? "ok" : h.status_key === "needs_review" ? "soon" : "neutral"}`} data-status={h.status_key}>{h.status_label}</span>
                   {h.error && <div className="small muted">{h.error}</div>}</td>

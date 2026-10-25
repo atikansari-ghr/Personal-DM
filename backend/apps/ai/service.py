@@ -25,7 +25,7 @@ from datetime import date, timedelta
 from django.db import transaction
 from django.utils import timezone
 
-from apps.core import config
+from apps.core import audit, config
 
 from .models import AIJob, AIOutput, AIProfile, AISuggestion, DocumentChunk
 from .providers import AIError, parse_json_object, provider_for, strip_reasoning
@@ -187,13 +187,13 @@ def wrap_document(text: str) -> tuple[str, str, str]:
     return f"{open_m}\n{body}\n{close_m}", open_m, close_m
 
 
-def build_messages(task: str, text: str, *, json_only: bool = True) -> list[dict]:
+def build_messages(task: str, text: str, *, json_only: bool = True, label: str = "OCR TEXT") -> list[dict]:
     """System policy, then the Personal DM task, then the document — three separate parts, the document last and
     delimited. The task never contains document text."""
     block, open_m, close_m = wrap_document(text)
     system = SYSTEM_POLICY.format(open=open_m, close=close_m) + ("\nReturn only one JSON object." if json_only else "")
     return [{"role": "system", "content": system},
-            {"role": "user", "content": f"{task}\n\nOCR TEXT:\n{block}"}]
+            {"role": "user", "content": f"{task}\n\n{label}:\n{block}"}]
 
 
 def model_for(profile: AIProfile, kind: str) -> str:
@@ -213,11 +213,29 @@ def status_for(user) -> dict:
     p = default_profile() if out["actions"] else None
     out["profile"] = {"name": p.name, "location": "cloud" if p.is_cloud else "local", "capabilities": profile_capabilities(p),
                       "allowed": sorted(allowed_categories(p))} if p else None
+    if p:
+        from . import direct
+
+        out["profile"]["direct"] = direct.capabilities(p)
+    out["processing"] = {"default": _default_source(), "override": bool(config.get("ai.source_override")) or
+                         bool(getattr(user, "is_main_admin", False)), "labels": _source_labels()}
     out["profile_choice"] = bool(config.get("ai.allow_profile_choice")) and out["actions"]
     if out["profile_choice"]:
         out["profiles"] = [{"id": x.id, "name": x.name, "location": "cloud" if x.is_cloud else "local"}
                            for x in AIProfile.objects.filter(enabled=True)]
     return out
+
+
+def _default_source() -> str:
+    from . import direct
+
+    return direct.default_source()
+
+
+def _source_labels() -> dict:
+    from . import direct
+
+    return dict(direct.LABELS)
 
 
 # ------------------------------------------------------------------ jobs
@@ -431,11 +449,16 @@ def _clean(value, limit: int = 300) -> str:
     return "".join(ch for ch in str(value) if ch.isprintable() or ch in " ")[:limit].strip()
 
 
-def validate_ai_data(data) -> dict:
+def validate_ai_data(data, detail_keys=()) -> dict:
     """Stage 'validating_ai': keep only the requested keys with the right types; reject an answer with none of them."""
     if not isinstance(data, dict):
         raise AIError("The model's answer is not a JSON object.", "bad_response")
     out = {}
+    raw_details = data.get("details") if isinstance(data.get("details"), dict) else {}
+    details = {k: {"value": _clean(v)} for k, v in raw_details.items()
+               if k in detail_keys and isinstance(v, (str, int, float)) and not isinstance(v, bool) and _clean(v)}
+    if details:
+        out["_details"] = details
     for key, spec in FIELD_SCHEMA.items():
         if key not in data or data[key] in (None, "", []):
             continue
@@ -454,7 +477,7 @@ def validate_ai_data(data) -> dict:
                 v = _date(v) or ""
             if v:
                 out[key] = v
-    if not out and not any(k in data for k in FIELD_SCHEMA):
+    if not out and not any(k in data for k in FIELD_SCHEMA) and "details" not in data:
         raise AIError("The model's answer did not contain any of the requested fields.", "bad_response")
     ev, conf = data.get("evidence"), data.get("confidence")
     if out and isinstance(ev, dict):
@@ -476,7 +499,7 @@ def merge_parts(results: list[dict]) -> dict:
     merged: dict = {}
     for r in results:
         for k, v in r.items():
-            if k in ("_evidence", "_confidence"):
+            if k in ("_evidence", "_confidence", "_details", "_pages"):
                 merged[k] = {**v, **(merged.get(k) or {})}
             elif k == "tags":
                 merged["tags"] = list(dict.fromkeys((merged.get("tags") or []) + v))[:8]
@@ -487,7 +510,7 @@ def merge_parts(results: list[dict]) -> dict:
 
 def run_analysis(profile: AIProfile, text: str, *, keys: list[str], vocab: dict, folders: dict, title: str,
                  job: AIJob | None = None, metadata: bool = True, task: str = "analyze", extra: str = "",
-                 provider=None) -> tuple[dict, dict]:
+                 provider=None, details: list[dict] | None = None) -> tuple[dict, dict]:
     """Stage 2 (AI): send the OCR text (never a file or image) to the profile's TEXT model and return validated data.
     Shared by Analyze Document, the other AI Actions and Settings → Test AI analysis, so all use the same compatibility
     path. ``metadata=False`` (a Cloud profile not allowed to receive metadata) leaves the family's titles, tags, issuers
@@ -499,7 +522,11 @@ def run_analysis(profile: AIProfile, text: str, *, keys: list[str], vocab: dict,
     used = parts[:ANALYSIS_PARTS]
     info = {"parts": len(used), "total_chars": len(text), "analyzed_chars": sum(len(p) for p in used),
             "truncated": len(parts) > len(used)}
+    details = details or []
     schema = {"type": "object", "properties": {**{k: FIELD_SCHEMA[k] for k in keys}, **META_SCHEMA}}
+    if details:  # Change Set AA: the active Document Type schema (stable field keys; archived fields excluded)
+        schema["properties"]["details"] = {"type": "object",
+                                           "properties": {d["key"]: {"type": "string"} for d in details}}
     key_lines = {"title": '"title": short descriptive title', "issue_date": '"issue_date"', "expiry_date": '"expiry_date"',
                  "document_number": '"document_number": as printed', "summary": '"summary": one sentence',
                  "document_type": '"document_type"', "correspondent": '"correspondent": issuing organisation or authority',
@@ -515,8 +542,12 @@ def run_analysis(profile: AIProfile, text: str, *, keys: list[str], vocab: dict,
     prov = provider or provider_for(profile)
     results = []
     for i, part in enumerate(used):
+        lines = [key_lines[k] for k in keys]
+        if details:
+            lines.append('"details": {' + ", ".join(f'"{d["key"]}": {d["label"]} ({d["type"]}), as printed'
+                                                     for d in details) + "} — only fields printed in the text")
         prompt = ANALYZE_PROMPT.format(
-            task=task, keys="\n".join(key_lines[k] for k in keys), types=", ".join(vocab.get("types") or []) or "-",
+            task=task, keys="\n".join(lines), types=", ".join(vocab.get("types") or []) or "-",
             context=context, part=f"(Part {i + 1} of {len(used)} of a longer document, in page order.)\n" if len(used) > 1 else "")
         set_stage(job, "ai_running", model=model, **info)
         reply, how = prov.structured(build_messages(prompt, part), model, schema)
@@ -525,7 +556,7 @@ def run_analysis(profile: AIProfile, text: str, *, keys: list[str], vocab: dict,
             info["rejected_capability"] = "response_format"
         _debug(task, len(prompt) + len(part), len(reply))
         set_stage(job, "validating_ai", **info)
-        results.append(validate_ai_data(parse_json_object(reply)))
+        results.append(validate_ai_data(parse_json_object(reply), detail_keys=[d["key"] for d in details]))
     info["usage"] = dict(prov.last_usage)
     return merge_parts(results), info
 
@@ -634,22 +665,60 @@ def run_action(kind: str, doc, user, *, job: AIJob | None = None):
         raise AIError("Skipped: automatic AI never uses a Cloud profile unless “Allow automatic AI with a Cloud profile” "
                       "is on. Nothing was sent.", "disabled")
     source = detail.get("source") if detail.get("source") in SOURCES else "ocr"
+    vocab = _vocab(doc)
+    prov = provider_for(profile)
+    # Change Set AA: Processing Source. Automatic analysis runs after OCR finished, so it reads that text.
+    from . import direct
+
+    psource = "ocr_text"
+    if source == "ocr" and kind in direct.APPLICABLE and not (job is not None and job.trigger in ("auto", "smart")):
+        psource, why = direct.resolve(detail.get("processing_source") or None, profile, kind, user=user)
+        if why:
+            direct.note(job, source_note=why)
+    direct.note(job, processing_source=psource)
+    # a fallback job resumed after its OCR run does not try the original again; "original" never reaches OCR
+    if psource == "original" or (psource == "original_fallback" and detail.get("direct_status") != "failed"):
+        try:
+            made = direct.run(kind, doc, user, profile, prov, job, vocab=vocab,
+                              metadata="metadata" in allowed_categories(profile))
+            record_provenance(job, profile, usage=prov.last_usage)
+            audit.record("ai.direct_processing", actor=user if getattr(user, "pk", None) else None, target=doc,
+                         subject_user=doc.owner, ai_action=kind, profile=profile.name,
+                         file_type=(job.detail or {}).get("file_type") if job else None)
+            return made
+        except AIError as exc:
+            if exc.category == "privacy":
+                raise
+            reason = str(exc)[:300]
+            direct.note(job, direct_status="failed", direct_error_category=exc.category)
+            audit.record("ai.direct_processing", actor=user if getattr(user, "pk", None) else None, target=doc,
+                         subject_user=doc.owner, outcome="failure", ai_action=kind, profile=profile.name,
+                         category=exc.category, fallback=psource == "original_fallback")
+            if psource == "original":
+                raise AIError(f"Local AI could not process the original document: {reason} OCR was not run. You can "
+                              "retry with “Original Document — Local AI + OCR Fallback”.", exc.category)
+            log.info("direct Local AI processing fell back to OCR (%s)", exc.category)
+            direct.note(job, fallback_used=True, fallback_reason=reason)
+            prov = provider_for(profile)  # fresh usage counters for the OCR-text attempt
     sent = plan_for(profile, source, confirmed=bool(detail.get("cloud_confirmed")))
+    if job is not None and (job.detail or {}).get("bytes_sent") and "image" not in sent:
+        sent = ["image", *sent]  # the failed direct attempt had already sent page images to the Local AI
     record_provenance(job, profile, model=profile.vision_model if source == "image" else profile.text_model, data_sent=sent)
+    direct.note(job, final_source="ocr_text" if source == "ocr" else source)
     set_stage(job, "preparing")
     if source == "ocr":
         info = prepare_text(doc, user, job)
         if info is None:
             return None
         text = info["text"]
+        if job is not None and job.fallback_used:
+            direct.note(job, **direct.ocr_chain_facts(doc))
     else:
         info = ocr_text(doc)
         text = info["text"] if "ocr_text" in sent else ""
         set_stage(job, "validating_ocr", ocr_engine=info["engine"], ocr_chars=info["chars"], ocr_reused=True)
     original = _original_payload(doc, source)
     metadata = "metadata" in sent
-    vocab = _vocab(doc)
-    prov = provider_for(profile)
     try:
         if kind in (AIJob.ANALYZE, AIJob.EXTRACT, AIJob.SUGGEST_TYPE, AIJob.FILENAME):
             return _suggestion_action(kind, doc, user, profile, prov, text, vocab, metadata, job, source, original)
@@ -658,10 +727,11 @@ def run_action(kind: str, doc, user, *, job: AIJob | None = None):
         record_provenance(job, profile, usage=prov.last_usage)
 
 
-def _analyse(profile, prov, text, keys, vocab, folders, title, job, metadata, task, source, original, extra=""):
+def _analyse(profile, prov, text, keys, vocab, folders, title, job, metadata, task, source, original, extra="",
+             details=None):
     if source == "ocr":
         return run_analysis(profile, text, keys=keys, vocab=vocab, folders=folders, title=title, job=job,
-                            metadata=metadata, task=task, extra=extra, provider=prov)
+                            metadata=metadata, task=task, extra=extra, provider=prov, details=details)
     model = model_for(profile, "vision" if source == "image" else "text")
     prompt = ANALYZE_PROMPT.format(task=task, keys="\n".join(f'"{k}"' for k in keys), types=", ".join(vocab.get("types") or []) or "-",
                                    context=(f"Current title: {title}\n" if metadata else "") + (extra + "\n" if extra else ""),
@@ -685,7 +755,11 @@ def _suggestion_action(kind, doc, user, profile, prov, text, vocab, metadata, jo
     else:  # filename: what the Personal DM naming standard needs
         keys, ocr, organize = ["document_type", "issue_date", "expiry_date", "title"], True, False
     folders = _folder_options(user, doc) if organize and kind == AIJob.ANALYZE else {}
-    data, _how = _analyse(profile, prov, text, keys, vocab, folders, doc.title, job, metadata, kind, source, original)
+    from .direct import template_details
+
+    details = template_details(doc) if kind in (AIJob.ANALYZE, AIJob.EXTRACT) and source == "ocr" else []
+    data, _how = _analyse(profile, prov, text, keys, vocab, folders, doc.title, job, metadata, kind, source, original,
+                          details=details)
     set_stage(job, "saving")
     if kind == AIJob.FILENAME:
         return _store_filename(doc, data, vocab, job, text)
@@ -862,11 +936,13 @@ def _store_filename(doc, data: dict, vocab: dict, job, text: str) -> list[AISugg
 
 
 def _save_rows(doc, rows: list, job) -> list[AISuggestion]:
+    source = (job.final_source if job is not None else "") or ""
     with transaction.atomic():
         AISuggestion.objects.filter(document=doc, status=AISuggestion.PENDING, field__in=[r[0] for r in rows]).delete()
         return [AISuggestion.objects.create(document=doc, field=f, value=v, display=str(d)[:300], current=str(c)[:300], job=job,
                                             evidence=(m.get("evidence") or "")[:10], confidence=m.get("confidence"),
-                                            note=(m.get("note") or "")[:300], conflict=bool(m.get("conflict")))
+                                            note=(m.get("note") or "")[:300], conflict=bool(m.get("conflict")),
+                                            source=source, page=m.get("page"))
                 for f, v, d, c, m in rows]
 
 
@@ -885,6 +961,45 @@ def _observed(value: str, text: str) -> bool:
     return bool(value) and " ".join(str(value).split()).lower() in hay
 
 
+def _detail_rows(doc, details: dict, text: str, confirmed: dict, manual: set) -> list[tuple]:
+    """Change Set AA: values for the active fields of the document's type, as "detail:<key>" suggestions. Mapped by the
+    field's stable key; archived or unknown fields are ignored. Dates must show their year in the text, numbers and
+    identifiers must appear in it; other text is proposed as observed or inferred. Never applied without a person."""
+    from apps.library import doctypes
+    from apps.library.models import DocumentField
+
+    if not details or not doc.doc_type_id:
+        return []
+    active = {f.key: f for f in doctypes.active_fields(doc.doc_type) if f.extract}
+    rows = []
+    for key, entry in details.items():
+        tf = active.get(key)
+        if tf is None or key in manual:
+            continue
+        raw = entry.get("value") if isinstance(entry, dict) else entry
+        try:
+            value = doctypes.validate_value(str(raw or ""), tf.field_type, label=tf.label, choices=tf.choices,
+                                            validation=tf.validation)
+        except doctypes.TypeError_:
+            continue  # not a valid value for this field: never proposed
+        if not value:
+            continue
+        if tf.field_type == "date" and not _date_in_text(value, text):
+            continue
+        if tf.field_type in ("number", "identifier") and \
+                "".join(c for c in value if c.isalnum()).lower() not in "".join(c for c in text if c.isalnum()).lower():
+            continue
+        cur = confirmed.get(key)
+        current = cur.value if cur else (DocumentField.objects.filter(document=doc, key=key).values_list("value", flat=True).first() or "")
+        if value == current:
+            continue
+        observed = _observed(value, text) or (isinstance(entry, dict) and bool(entry.get("printed")))
+        rows.append((f"detail:{key}", value, value, current,
+                     {"evidence": "observed" if observed else "inferred", "conflict": bool(cur and cur.value != value),
+                      "page": entry.get("page") if isinstance(entry, dict) else None, "note": tf.label}))
+    return rows
+
+
 def _store_suggestions(doc, data: dict, vocab: dict, folders: dict, job, *, ocr: bool, organize: bool, text: str = "",
                        extract: bool = False, only: set | None = None) -> list[AISuggestion]:
     """Validated AI data → pending suggestions (never applied). Each carries its evidence — observed (printed in the
@@ -896,19 +1011,20 @@ def _store_suggestions(doc, data: dict, vocab: dict, folders: dict, job, *, ocr:
     text = text or ((doc.current_version.text if doc.current_version else "") or "")
     claimed = data.get("_evidence") or {}
     conf = data.get("_confidence") or {}
+    pages = data.get("_pages") or {}
     out: list[tuple] = []
 
     def meta(key, observed: bool, **extra):
         ev = "observed" if observed and claimed.get(key, "observed") == "observed" else "inferred"
-        return {"evidence": ev, "confidence": conf.get(key), **extra}
+        return {"evidence": ev, "confidence": conf.get(key), "page": pages.get(key), **extra}
 
     confirmed = {f.key: f for f in DocumentField.objects.filter(document=doc, status=DocumentField.CONFIRMED)}
+    manual = manual_keys(doc)  # details a person entered or corrected are never proposed for replacement
     if ocr:
         title = str(data.get("title") or "").strip()[:255]
         if title and title != doc.title and not extract:
             out.append(("title", title, title, doc.title, meta("title", False, conflict=bool(doc.title_is_custom))))
         allowed = doctypes.allowed_extract_keys(doc)  # a typed document only gets its own template's fields
-        manual = manual_keys(doc)  # details a person entered or corrected are never proposed for replacement
         for key in ("issue_date", "expiry_date"):
             if (allowed is not None and key not in allowed) or key in manual:
                 continue
@@ -933,6 +1049,7 @@ def _store_suggestions(doc, data: dict, vocab: dict, folders: dict, job, *, ocr:
         summary = str(data.get("summary") or "").strip()[:300]
         if summary and not extract:
             out.append(("summary", summary, summary, "", meta("summary", False)))
+        out.extend(_detail_rows(doc, data.get("_details") or {}, text, confirmed, manual))
     if extract or organize:
         c = str(data.get("correspondent") or "").strip()[:120]
         if c and (not doc.correspondent or doc.correspondent.name.lower() != c.lower()):
@@ -976,6 +1093,11 @@ def _edited_value(suggestion: AISuggestion, value):
     from apps.library.models import DocumentType
 
     f = suggestion.field
+    if f.startswith("detail:"):  # a field of the document's type: validated exactly like a manual entry
+        v = doctypes_check(suggestion.document, f.removeprefix("detail:"), value)
+        if not v:
+            raise S.DomainError("Enter a value.")
+        return v
     if f not in EDITABLE:
         raise S.DomainError("This suggestion cannot be edited.")
     if f in ("issue_date", "expiry_date"):
@@ -998,6 +1120,16 @@ def _edited_value(suggestion: AISuggestion, value):
     if not v:
         raise S.DomainError("Enter a value.")
     return v
+
+
+def doctypes_check(doc, key: str, value) -> str:
+    from apps.library import doctypes
+
+    return doctypes.check_value(doc, key, str(value or ""))
+
+
+def is_editable(field: str) -> bool:
+    return field in EDITABLE or field.startswith("detail:")
 
 
 def accept(suggestion: AISuggestion, *, user, request=None, value=None, confirm_conflict: bool = False) -> None:
@@ -1036,6 +1168,9 @@ def accept(suggestion: AISuggestion, *, user, request=None, value=None, confirm_
         elif f in ("issue_date", "expiry_date", "document_number", "full_name"):
             # confirmed by the person accepting it; an edited value is the person's own (manual)
             S.set_field(actor=user, doc=doc, key=f, value=str(v), confirm=True, source="manual" if edited else "ai")
+        elif f.startswith("detail:"):  # a Document Type field, by its stable key
+            S.set_field(actor=user, doc=doc, key=f.removeprefix("detail:"), value=str(v), confirm=True,
+                        source="manual" if edited else "ai")
         elif f == "summary":
             pass  # informational only
         S._history(doc, user, "ai_suggestion_edited" if edited else "ai_suggestion_accepted", field=f,

@@ -508,6 +508,39 @@ numbers. Root causes per defect: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATU
 Not run (needs real accounts or environments, never reported as passed): a real WhatsApp phone scanning a real QR,
 a real Discord server, real OpenStreetMap / MapTiler / Stadia tiles from a production address, Firefox and Safari.
 
+## Change set AA (2026-10): direct Local AI processing, custom Overview layouts, Document Type field management {#change-set-aa}
+
+The change prompt numbered these AT-436…AT-455 (and called itself "Change Set X"); those are taken. Here they are
+**AT-461…AT-480**: prompt AT-n → AT-(n+25). Tests in `tests/test_change_aa.py` and the Change Set AA step in
+`tests/e2e/corrective.mjs`. Requirements: [REQUIREMENTS.md](REQUIREMENTS.md#change-set-aa). Evidence:
+[TEST_REPORT.md](TEST_REPORT.md#change-set-aa).
+
+| ID (prompt) | Scenario (abridged) | Req | Code | Tests | Docs | Status |
+|---|---|---|---|---|---|---|
+| AT-461 (436) | Processing Source: three choices, Original Document — Local AI + OCR Fallback is the default | PRS-1 | `direct.resolve`, `available_actions`, `AIActions.tsx` | `test_at461_processing_source_choices_and_default`; e2e AT-461…AT-480 | local-ai.md#processing-source | Passed |
+| AT-462 (437) | Direct Local AI reads an original PDF/image without OCR first | PRS-2, PRS-6 | `direct.run`, `run_action` | `test_at462_direct_local_ai_reads_original_without_ocr` | local-ai.md#processing-source | Passed (Local AI emulated) |
+| AT-463 (438) | JPEG, PNG, PDF, TIFF (and WEBP, multi-page) where supported; unsupported formats refused, never claimed | PRS-4 | `direct.file_kind`, `eligibility`, `prepare`, `capabilities`; Test Profile vision checks | `test_at463_formats_and_capabilities` | local-ai.md#direct-formats | Passed (Local AI emulated) |
+| AT-464 (439) | Direct failure/unusable output: configured OCR chain runs, OCR text returns to Local AI, provenance records the fallback | PRS-2, PRS-6 | `run_action` fallback, `direct.ocr_chain_facts` | `test_at464_direct_failure_falls_back_to_the_configured_ocr_chain` (Tesseract), `test_at464_malformed_or_unusable_answers_fall_back` | local-ai.md#ocr-fallback | Passed |
+| AT-465 (440) | Original Document — Local AI: forced failure, OCR not invoked | PRS-2 | `run_action` (no fallback) | `test_at465_original_only_never_runs_ocr` | local-ai.md#processing-source | Passed |
+| AT-466 (441) | Schema-aware mapping: only active fields, validated, nothing invented, review required | PRS-5 | `direct.template_details`, `convert_answer`, `_detail_rows`, `accept` | `test_at466_schema_aware_mapping_and_review` | local-ai.md#schema | Passed |
+| AT-467 (442) | Cloud profile with an original mode: blocked, nothing transmitted | PRS-3 | `direct.resolve`, `eligibility`, `document_action` | `test_at467_cloud_profiles_never_receive_originals` | local-ai.md#processing-source | Passed |
+| AT-468 (443) | Direct Local AI while browsing keeps AT-400 throttling and interactive priority (6 GB LXC) | PRS-4 | job priority, `ai.max_parallel`, page/size limits | `test_at468_resource_protection_rules` | local-ai.md#direct-formats | Passed (rules); real 6 GB LXC load: Blocked / Not Executed |
+| AT-469 (444) | Tiles resize freely; persist across reload and new sessions; clamped, no overlap | DSH-1, DSH-3 | `overview.normalize_layout`, `dashboard_layout`, `Dashboard.tsx` | `test_at469_tiles_resize_and_persist`; e2e (corner-handle drag, overlap check) | overview.md#edit-layout | Passed |
+| AT-470 (445) | Groups: create/rename/reorder/collapse/remove; removing a populated group never deletes or orphans tiles | DSH-2 | `normalize_groups`, `dashboard_layout` | `test_at470_groups_create_rename_reorder_collapse_remove`; e2e | overview.md#groups | Passed |
+| AT-471 (446) | Two users' layouts are independent | DSH-3 | per-user `me.*` settings | `test_at471_layouts_are_personal`; e2e | overview.md#customize | Passed |
+| AT-472 (447) | Desktop/tablet/mobile/PWA reflow never destroys the desktop layout | DSH-4 | `styles.css` grid rules | `test_at472_reflow_never_changes_the_saved_layout`; e2e phone 390 px; `layout.mjs`, `parity.mjs` | overview.md#edit-layout | Passed |
+| AT-473 (448) | Reset Layout resets only that person | DSH-4 | `dashboard_layout_reset` | `test_at473_reset_layout_only_for_that_person`; e2e | overview.md#reset-layout | Passed |
+| AT-474 (449) | Field drag and drop: order persists, ids and values unchanged | FLD-1 | `type_fields` reorder, `Sortable.tsx` | `test_at474_field_reorder_keeps_identity_and_values`; e2e mouse drag + keyboard | document-types.md#field-order | Passed |
+| AT-475 (450) | Archive a populated field: values kept, excluded from forms/AI/OCR/required, listed as archived | FLD-2, FLD-3 | `archive_field`, `active_fields`, `allowed_extract_keys` | `test_at475_archive_keeps_values_and_leaves_active_use`; e2e | document-types.md#archive-fields | Passed |
+| AT-476 (451) | Archived metadata hidden by default, shown on request to authorized users only | FLD-3 | `archived_values`, `document_archived_metadata` | `test_at476_archived_metadata_only_on_request_and_for_viewers` | document-types.md#archived-metadata | Passed |
+| AT-477 (452) | Restore: values back, mapping eligible again, no duplicates | FLD-4 | `restore_field` | `test_at477_restore_brings_back_the_same_field_without_duplicates`; e2e | document-types.md#archived-fields | Passed |
+| AT-478 (453) | Permanent deletion: not for Administrators/members; count, warning, confirmation, step-up, removal, audit | FLD-5 | `type_field_detail` DELETE, `delete_field_permanently` | `test_at478_permanent_deletion_is_protected`; e2e dialog | document-types.md#permanent-deletion | Passed |
+| AT-479 (454) | Upgrade with users, layouts, typed documents, OCR and AI history: no data loss, no AI transmission | PRS-1, DSH-5, FLD-2 | migrations `library.0013`, `ai.0004` | `test_at479_upgrade_preserves_data_and_sends_nothing`; migrate forwards/backwards | upgrades.md#change-set-aa | Passed |
+| AT-480 (455) | Full release gate: AT-461…AT-479 and AT-1…AT-460 regressions; unexecuted = Blocked/Not Executed | all | — | `test_at480_release_gate_records_every_test_honestly`; full `pytest`; `scripts/e2e.sh` | TEST_REPORT.md#change-set-aa | See TEST_REPORT.md#change-set-aa |
+
+Not run (never reported as passed): a real LM Studio / Ollama vision model reading real-looking documents (emulated by
+`tests/fake_ai_server.py` with the OpenAI-compatible image request shape), and AT-468 on a real 6 GB LXC under load.
+
 ## Change set Z (2026-10): optional AI Document Intelligence and the OCR engine order {#change-set-z}
 
 The change prompt numbered these AT-416…AT-435; those numbers are taken by Change Sets X and Y. Here they are

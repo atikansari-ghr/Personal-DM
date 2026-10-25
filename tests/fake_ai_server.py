@@ -41,6 +41,19 @@ class FakeAI:
         # Change Set Z: answers for the other AI Actions (None = a default built from the document text), the
         # request headers seen (to prove keys travel only in headers) and the cloud provider APIs
         self.action_replies: dict = {}
+        # Change Set AA: answers when the ORIGINAL document (page images) is sent; None = no vision support claimed
+        # (the request fails like a text-only model would); a str is sent as it is (e.g. malformed)
+        self.direct_reply = {"fields": {
+            "expiry_date": {"value": "2031-05-20", "printed": "VALID UNTIL 20/05/2031", "page": 1},
+            "issue_date": {"value": "2021-05-21", "printed": "ISSUED 21/05/2021", "page": 1},
+            "document_number": {"value": "X1234567", "printed": "No. X1234567", "page": 1},
+            "title": {"value": "Visa - Sample"},
+            "document_type": {"value": "Passport"},
+        }}
+        self.direct_fail: int | None = None  # HTTP status to answer image requests with (e.g. 400 "no vision")
+        self.images_seen: list[int] = []      # number of images in each request that carried images
+        self.vision_ok = True                 # Test Profile: the synthetic page is read correctly
+        self.multipage_ok = True
         self.headers: list[dict] = []
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -91,10 +104,35 @@ class FakeAI:
                                "no_expiry_stated": False, "evidence": "observed"})
         return None
 
+    @staticmethod
+    def image_count(messages) -> int:
+        last = messages[-1] if messages else {}
+        n = len(last.get("images") or [])
+        if isinstance(last.get("content"), list):
+            n += sum(1 for part in last["content"] if isinstance(part, dict) and part.get("type") in ("image_url", "image"))
+        return n
+
     def _chat_text(self, messages) -> str:
         last = messages[-1]["content"]
         if isinstance(last, list):
             last = " ".join(part.get("text", "") for part in last if isinstance(part, dict))
+        if "TEST VISION PAGES" in last:
+            return "A7K Q4M" if self.multipage_ok else "A7K"
+        if "TEST VISION" in last:
+            return "2031-05-20" if self.vision_ok else "I cannot see any image."
+        if "ORIGINAL DOCUMENT ATTACHED" in last:
+            m = re.search(r"TASK: (\w+)", last)
+            task = m.group(1) if m else ""
+            if task in ("summarize", "expiry") and task in self.action_replies:
+                r = self.action_replies[task]
+                return r if isinstance(r, str) else json.dumps(r)
+            if task == "summarize":
+                return json.dumps({"summary": "A synthetic document read from its page images.", "key_points": [], "uncertain": []})
+            if task == "expiry":
+                return json.dumps({"expiry_date": "2031-05-20", "expiry_excerpt": "VALID UNTIL 20/05/2031", "issue_date": "",
+                                   "no_expiry_stated": False, "evidence": "observed"})
+            r = self.direct_reply
+            return r if isinstance(r, str) else json.dumps(r)
         action = self._action(last) if "TASK: " in last else None
         if action is not None:
             return action
@@ -171,6 +209,11 @@ class FakeAI:
                         start = last.find("OCR TEXT:") + 10
                         return self._send(400, {"error": {"message": "Invalid request near: " + last[start:start + 60]
                                                           + " (Authorization: Bearer sk-local-SECRETKEY)"}})
+                    n_img = fake.image_count(body["messages"])
+                    if n_img:
+                        fake.images_seen.append(n_img)
+                        if fake.direct_fail:
+                            return self._send(fake.direct_fail, {"error": {"message": "Model does not support images"}})
                     content = fake._chat_text(body["messages"])
                     if rf and rf.get("type") == "json_schema" and "OCR TEXT" in json.dumps(body) and fake.raw_reply is None \
                             and not any(f"TASK: {t}" in json.dumps(body) for t in fake.action_replies):
@@ -181,6 +224,11 @@ class FakeAI:
                     inputs = body["input"] if isinstance(body["input"], list) else [body["input"]]
                     return self._send(200, {"data": [{"index": i, "embedding": embed(t)} for i, t in enumerate(inputs)]})
                 if self.path.endswith("/api/chat"):
+                    n_img = fake.image_count(body["messages"])
+                    if n_img:
+                        fake.images_seen.append(n_img)
+                        if fake.direct_fail:
+                            return self._send(fake.direct_fail, {"error": "model does not support images"})
                     return self._send(200, {"message": {"content": fake._chat_text(body["messages"])}})
                 if self.path.endswith("/api/embed"):
                     return self._send(200, {"embeddings": [embed(t) for t in body["input"]]})

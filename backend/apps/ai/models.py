@@ -93,6 +93,13 @@ class AIJob(models.Model):
     location = models.CharField(max_length=10, blank=True)  # local | cloud
     data_sent = models.JSONField(default=list, blank=True)
     usage = models.JSONField(default=dict, blank=True)  # {input_tokens, output_tokens} when the provider reports them
+    # Change Set AA: Processing Source. processing_source is what was selected (ocr_text | original |
+    # original_fallback), final_source what the suggestions really came from (ocr_text | original); fallback_used and
+    # fallback_reason say why the OCR chain ran after a direct Local AI attempt. Never document content.
+    processing_source = models.CharField(max_length=20, blank=True)
+    final_source = models.CharField(max_length=20, blank=True)
+    fallback_used = models.BooleanField(default=False)
+    fallback_reason = models.CharField(max_length=300, blank=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
@@ -124,6 +131,10 @@ class AISuggestion(models.Model):
     confidence = models.FloatField(null=True, blank=True)
     note = models.CharField(max_length=300, blank=True)
     conflict = models.BooleanField(default=False)
+    # Change Set AA: what the value was read from (ocr_text | original) and, for the original, the page it was on.
+    # Fields of a document type template are stored as "detail:<field key>" (the stable key, never a position).
+    source = models.CharField(max_length=20, blank=True)
+    page = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta:
         ordering = ["field", "-created_at"]
