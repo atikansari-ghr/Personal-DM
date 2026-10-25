@@ -14,6 +14,59 @@ Steps: take an exclusive lock; check free disk; run a **verified application bac
 
 If anything fails **before** migrations, the old release keeps running untouched. If health checks fail **after** switching, the previous release is restored automatically when the migrations are backwards-compatible; otherwise you are told to restore the pre-upgrade backup.
 
+## Upgrading to Change Set AA (direct Local AI processing, Overview groups, Document Type fields) {#change-set-aa}
+
+```
+sudo personaldocs upgrade     # safety backup, migrations library.0013 and ai.0004, new web app, restart, health checks
+sudo personaldocs doctor
+```
+
+(The change prompt called itself "Change Set X" and numbered its tests AT-436..AT-455; both are taken. Here they are
+**AT-461..AT-480**: prompt AT-n = AT-(n+25).)
+
+### What the upgrade does
+
+- **Migration `library.0013`** adds the archive state of Document Type fields. A field that was switched off before
+  (*Shown* unchecked) becomes an **archived** field — it already kept its values and stayed out of the Details panel
+  and OCR/AI; now it is listed under **Archived fields** and can be restored. No value is changed or removed.
+- **Migration `ai.0004`** adds empty provenance fields to AI jobs and suggestions (selected and final processing
+  source, OCR fallback and reason, source and page of a suggestion). Existing jobs and suggestions are unchanged.
+- **New setting:** *Default processing source* = **Original Document — Local AI + OCR Fallback**. Without a Local
+  profile that has a working vision model it behaves exactly like before (the AI reads OCR text), and AI History says
+  why. Nothing is re-analysed and **no document is sent to AI by the upgrade**.
+- **Overview:** every account keeps its tiles and order, now in a **General** group; sizes chosen before are kept
+  (a 4-column width becomes the same width on the new 12-column grid). Layouts stay personal.
+- The web app is rebuilt; no new system packages are needed (PDF pages are rendered with the pdftoppm already used
+  by OCR; TIFF/WEBP conversion uses Pillow from the virtualenv).
+
+### After the upgrade (main administrator)
+
+1. **Settings → AI → profile → Test Profile** on the Local profile you want to read originals (it needs a *vision
+   model*, for example a Qwen2.5-VL / Gemma 3 / LLaVA model loaded in LM Studio or Ollama). *Last test* shows *Vision
+   model reads a synthetic page* and how many pages it reads per request.
+2. **Settings → AI → Document Processing**: keep *Original Document — Local AI + OCR Fallback* (recommended) or choose
+   *OCR Text* to keep the previous behaviour; decide whether people may choose the source per action; adjust *pages
+   sent at most* (default 4) and *largest file* (default 20 MB).
+3. Open a document → **AI Actions** → *Analyze Document*. **AI History** shows *Original document (Local AI)*, the file
+   type and pages — or *OCR fallback* with the reason and the OCR engine used.
+4. **Settings → Documents & folders → Document types**: reorder fields by dragging the handle; remove fields with
+   **Archive** (values are kept); check **Archived fields** for fields that were switched off before.
+5. `sudo personaldocs doctor` shows *AI default processing source*, *AI Local profile for original documents*, the
+   default profile's document capabilities and *AI OCR fallback chain*.
+
+### Rollback
+
+```
+sudo personaldocs manage migrate ai 0003
+sudo personaldocs manage migrate library 0012
+sudo personaldocs rollback
+```
+
+`ai 0003` removes the provenance fields (jobs and suggestions stay). `library 0012` removes the archive date/by/position
+of fields; archived fields stay switched off with all their values, as before the upgrade. Overview groups are stored
+as a personal setting that the previous release ignores (tiles and order stay). A field deleted permanently cannot be
+brought back by a rollback — restore it from a backup taken before the deletion if needed.
+
 ## Upgrading to Change Set Z (AI Document Intelligence and the OCR engine order) {#change-set-z}
 
 ```

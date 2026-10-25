@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, formatBytes, formatDate, formatDateTime } from "../api";
 import UploadDialog from "../components/UploadDialog";
-import { Avatar, Icon, Modal, Skeleton, StateBadge, useAsync, useToast } from "../components/ui";
+import { Avatar, Confirm, HelpTip, Icon, Modal, Skeleton, StateBadge, useAsync, useToast } from "../components/ui";
 import { useSession } from "../session";
 import FileTypeIcon from "../components/FileTypeIcon";
 import { ActivityWidget, CalendarWidget, DateWidget, DocList, HolidaysWidget, SummaryWidget, WeatherWidget } from "../components/OverviewWidgets";
 import { HealthSummary } from "./settings/SecurityCenter";
 import { HealthBadge } from "../components/HealthBadge";
-import type { DocRow, User, WidgetCfg } from "../types";
+import type { DocRow, OvGroup, User, WidgetCfg } from "../types";
 
 function greeting() {
   const h = new Date().getHours();
@@ -60,7 +60,9 @@ const LINKS: Record<string, [string, string]> = {
   upcoming: ["/search?expiring_days=90", "View all"], recent: ["/search", "View all"], shared: ["/shared", "View all"],
   holidays: ["", ""], review_queue: ["/ocr-review", "Open"], security: ["/settings/security", "Open"],
 };
-type Limits = Record<string, { min: number; default: number; max: number; circle: boolean; options: string[] }>;
+type Limits = Record<string, { min: number; default: number; max: number; circle: boolean; options: string[]; cols_min: number; cols_max: number; h_min: number; h_max: number }>;
+interface LayoutPayload { groups: OvGroup[]; known: string[]; layout: Record<string, WidgetCfg>; limits: Limits; customized: boolean }
+const ROW_PX = 90, GAP_PX = 16;  // a height row; matches the 1rem grid gap
 
 function WidgetSettingsDialog({ id, cfg, countries, onClose, onSave }: { id: string; cfg: WidgetCfg; countries: { code: string; name: string; flag: string }[]; onClose: () => void; onSave: (s: Record<string, any>) => void }) {
   const [s, setS] = useState<Record<string, any>>({ ...(cfg.settings || {}) });
@@ -92,47 +94,106 @@ export default function Dashboard() {
   const { session, refresh } = useSession();
   const toast = useToast();
   const { data, loading, error, reload } = useAsync(() => api<any>("dashboard"), []);
+  // Change Set AA: the person's own layout — groups of tiles, sizes and styles — kept on the server
+  const lay = useAsync(() => api<LayoutPayload>("dashboard/layout"), []);
   const [uploading, setUploading] = useState(false);
-  const pref = session?.preferences?.dashboard_widgets;
-  const saved: string[] = Array.isArray(pref) ? pref : DEFAULT_WIDGETS;
-  const savedLayout: Record<string, WidgetCfg> = session?.preferences?.overview_layout || {};
   const [editing, setEditing] = useState(false);
-  const [order, setOrder] = useState<string[]>(saved);
-  const [layout, setLayout] = useState<Record<string, WidgetCfg>>(savedLayout);
+  const [groups, setGroups] = useState<OvGroup[]>([]);
+  const [layout, setLayout] = useState<Record<string, WidgetCfg>>({});
+  const [known, setKnown] = useState<string[]>([]);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [dropGroup, setDropGroup] = useState<string | null>(null);
   const [settingsFor, setSettingsFor] = useState<string | null>(null);
   const [adding, setAdding] = useState("");
-  useEffect(() => { if (!editing) { setOrder(saved); setLayout(savedLayout); } }, [JSON.stringify(saved), JSON.stringify(savedLayout), editing]);
-  if (loading && !data) return <Skeleton lines={6} />;
+  const [newGroup, setNewGroup] = useState("");
+  const [removing, setRemoving] = useState<OvGroup | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const apply = (p: LayoutPayload) => { setGroups(p.groups); setLayout(p.layout || {}); setKnown(p.known || []); };
+  useEffect(() => { if (lay.data && !editing) apply(lay.data); }, [lay.data, editing]);
+  if ((loading && !data) || (!lay.data && !lay.error)) return <Skeleton lines={6} />;
   if (error) return <div className="alert error">{error}</div>;
-  const limits: Limits = data.layout_limits || {};
-  const lim = (id: string) => limits[id] || { min: 1, default: 2, max: 4, circle: false, options: [] };
-  const cfgOf = (id: string): Required<Pick<WidgetCfg, "w" | "style">> & WidgetCfg => {
+  const limits: Limits = lay.data?.limits || data.layout_limits || {};
+  const lim = (id: string) => limits[id] || { min: 1, default: 2, max: 4, circle: false, options: [], cols_min: 2, cols_max: 12, h_min: 1, h_max: 8 };
+  const cfgOf = (id: string) => {
     const c = layout[id] || {};
     const l = lim(id);
     const style = c.style && (!c.style.endsWith("circle") || l.circle) ? c.style : "rect";
-    return { ...c, w: Math.max(l.min, Math.min(l.max, c.w || l.default)), style };
+    const cols = Math.max(l.cols_min, Math.min(l.cols_max, c.cols || (c.w || l.default) * 3));
+    const h = c.h ? Math.max(l.h_min, Math.min(l.h_max, c.h)) : 0;
+    return { ...c, cols, h, w: Math.max(l.min, Math.min(l.max, Math.round(cols / 3) || 1)), style };
   };
   const setCfg = (id: string, patch: Partial<WidgetCfg>) => setLayout((x) => ({ ...x, [id]: { ...cfgOf(id), ...x[id], ...patch } }));
-  const move = (id: string, delta: number) => setOrder((o) => {
-    const i = o.indexOf(id), j = i + delta;
-    if (i < 0 || j < 0 || j >= o.length) return o;
-    const n = [...o];
+  const persist = async (gs: OvGroup[], lo: Record<string, WidgetCfg>, msg?: string) => {
+    setSaving(true);
+    try {
+      const all = gs.flatMap((g) => g.widgets);
+      const r = await api<LayoutPayload>("dashboard/layout", { method: "PUT", body: { groups: gs, known: Array.from(new Set([...known, ...all])), layout: Object.fromEntries(all.map((id) => [id, { ...lo[id], ...cfgOf(id), ...(lo[id] || {}) }])) } });
+      lay.reload();
+      apply(r);
+      refresh();
+      if (msg) toast(msg);
+      return true;
+    } catch (e: any) { toast(e.message, "error"); return false; } finally { setSaving(false); }
+  };
+  const save = async () => { if (await persist(groups, layout, "Layout saved on all your devices")) setEditing(false); };
+  const shownIds = groups.flatMap((g) => g.widgets);
+  const moveWithin = (id: string, delta: number) => setGroups((gs) => gs.map((g) => {
+    const i = g.widgets.indexOf(id), j = i + delta;
+    if (i < 0 || j < 0 || j >= g.widgets.length) return g;
+    const w = [...g.widgets];
+    [w[i], w[j]] = [w[j], w[i]];
+    return { ...g, widgets: w };
+  }));
+  const moveTo = (id: string, gid: string, before?: string) => setGroups((gs) => gs.map((g) => {
+    const w = g.widgets.filter((x) => x !== id);
+    if (g.id !== gid) return { ...g, widgets: w };
+    const at = before && w.includes(before) ? w.indexOf(before) : w.length;
+    w.splice(at, 0, id);
+    return { ...g, widgets: w };
+  }));
+  const moveGroup = (gid: string, delta: number) => setGroups((gs) => {
+    const i = gs.findIndex((g) => g.id === gid), j = i + delta;
+    if (i < 0 || j < 0 || j >= gs.length) return gs;
+    const n = [...gs];
     [n[i], n[j]] = [n[j], n[i]];
     return n;
   });
-  const dropOn = (target: string) => {
-    if (!dragging || dragging === target) return;
-    setOrder((o) => { const n = o.filter((x) => x !== dragging); n.splice(n.indexOf(target), 0, dragging); return n; });
-    setDragging(null);
+  const addGroup = () => {
+    const name = newGroup.trim().replace(/\s+/g, " ");
+    if (!name || name.length > 40 || /[<>]/.test(name)) { toast("A group name needs 1 to 40 characters (no < or >).", "error"); return; }
+    if (groups.some((g) => g.name.toLowerCase() === name.toLowerCase())) { toast(`There is already a group called “${name}”.`, "error"); return; }
+    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30) || "group";
+    let id = base, n = 2;
+    while (groups.some((g) => g.id === id)) id = `${base}-${n++}`;
+    setGroups([...groups, { id, name, collapsed: false, widgets: [] }]);
+    setNewGroup("");
   };
-  const save = async () => {
-    try {
-      await api("settings", { method: "PUT", body: { values: { "me.dashboard_widgets": order, "me.overview_layout": Object.fromEntries(order.map((id) => [id, cfgOf(id)])) } }, query: { brief: 1 } });
-      await refresh();
-      setEditing(false);
-      toast("Overview saved on all your devices");
-    } catch (e: any) { toast(e.message, "error"); }
+  const toggleCollapse = (g: OvGroup) => {
+    const next = groups.map((x) => (x.id === g.id ? { ...x, collapsed: !x.collapsed } : x));
+    setGroups(next);
+    if (!editing) persist(next, layout);  // a collapsed group stays collapsed on every device
+  };
+  const startResize = (id: string, e: React.PointerEvent<HTMLElement>) => {
+    const cell = (e.currentTarget as HTMLElement).closest(".ov-cell") as HTMLElement | null;
+    const grid = cell?.parentElement;
+    if (!cell || !grid) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const c = cfgOf(id), l = lim(id);
+    const colW = grid.clientWidth / 12, rowH = ROW_PX + GAP_PX;
+    const x0 = e.clientX, y0 = e.clientY;
+    const h0 = c.h || Math.max(l.h_min, Math.round((cell.offsetHeight + GAP_PX) / rowH));
+    const target = e.currentTarget as HTMLElement;
+    const move = (ev: PointerEvent) => {
+      const cols = Math.max(l.cols_min, Math.min(l.cols_max, c.cols + Math.round((ev.clientX - x0) / colW)));
+      const h = Math.max(l.h_min, Math.min(l.h_max, h0 + Math.round((ev.clientY - y0) / rowH)));
+      setCfg(id, { cols, h });
+    };
+    const up = () => { target.removeEventListener("pointermove", move); target.removeEventListener("pointerup", up); target.removeEventListener("pointercancel", up); };
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", up);
+    target.addEventListener("pointercancel", up);
   };
   const s = data.stats;
   const counter = (icon: string, label: string, value: any, cls = "") => (style: string) => (
@@ -186,74 +247,138 @@ export default function Dashboard() {
       </div>
     ) : null,
   };
-  const shown = order.filter((id) => body[id]);
-  const hidden = Object.keys(WIDGET_LABELS).filter((id) => !shown.includes(id) && body[id] && (id !== "backup" || data.admin) && (id !== "security" || data.security_health !== undefined));
+  const hidden = Object.keys(WIDGET_LABELS).filter((id) => !shownIds.includes(id) && body[id] && (id !== "backup" || data.admin) && (id !== "security" || data.security_health !== undefined));
+  const single = groups.length === 1 && groups[0].id === "general";
+  const tile = (id: string, g: OvGroup, i: number) => {
+    const c = cfgOf(id);
+    const l = lim(id);
+    const el = body[id](c);
+    if (!el && !editing) return null;
+    const isCircle = c.style.endsWith("circle");
+    const link = LINKS[id];
+    return (
+      <section key={id} aria-label={WIDGET_LABELS[id]} data-widget={id} data-cols={c.cols} data-h={c.h || undefined}
+        className={`ov-cell c${c.cols} ov-${c.style}${c.h ? " fixed-h" : ""}${dragging === id ? " dragging" : ""}`}
+        style={c.h ? ({ "--tile-h": `${c.h * ROW_PX + (c.h - 1) * GAP_PX}px` } as React.CSSProperties) : undefined}
+        draggable={editing} onDragStart={(e) => { setDragging(id); e.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => { setDragging(null); setDropGroup(null); }}
+        onDragOver={(e) => { if (editing && dragging) e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (dragging && dragging !== id) moveTo(dragging, g.id, id); setDragging(null); setDropGroup(null); }}>
+        {editing && (
+          <div className="ov-tools">
+            <span className="drag-handle" title="Drag to move" aria-hidden="true"><Icon name="drag" size={16} /></span>
+            <strong className="grow small">{WIDGET_LABELS[id]}</strong>
+            <button className="btn small ghost icon-only" aria-label={`Move ${WIDGET_LABELS[id]} earlier`} disabled={i === 0} onClick={() => moveWithin(id, -1)}><Icon name="left" size={14} /></button>
+            <button className="btn small ghost icon-only" aria-label={`Move ${WIDGET_LABELS[id]} later`} disabled={i === g.widgets.length - 1} onClick={() => moveWithin(id, 1)}><Icon name="right" size={14} /></button>
+            <button className="btn small ghost icon-only" aria-label={`Make ${WIDGET_LABELS[id]} narrower`} disabled={c.cols <= l.cols_min} onClick={() => setCfg(id, { cols: c.cols - 1 })}><Icon name="minus" size={14} /></button>
+            <button className="btn small ghost icon-only" aria-label={`Make ${WIDGET_LABELS[id]} wider`} disabled={c.cols >= l.cols_max} onClick={() => setCfg(id, { cols: c.cols + 1 })}><Icon name="plus" size={14} /></button>
+            <select aria-label={`${WIDGET_LABELS[id]} height`} value={c.h || 0} onChange={(e) => setCfg(id, { h: Number(e.target.value) || undefined })}>
+              <option value={0}>Height: fit content</option>
+              {Array.from({ length: l.h_max - l.h_min + 1 }, (_x, k) => l.h_min + k).map((h) => <option key={h} value={h}>Height: {h} row{h > 1 ? "s" : ""}</option>)}
+            </select>
+            <select aria-label={`${WIDGET_LABELS[id]} style`} value={c.style} onChange={(e) => setCfg(id, { style: e.target.value as any })}>
+              {Object.entries(STYLE_LABELS).filter(([k]) => l.circle || !k.endsWith("circle")).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            {!single && <select aria-label={`Group of ${WIDGET_LABELS[id]}`} value={g.id} onChange={(e) => moveTo(id, e.target.value)}>
+              {groups.map((x) => <option key={x.id} value={x.id}>Group: {x.name}</option>)}</select>}
+            {l.options.length > 0 && <button className="btn small ghost icon-only" aria-label={`${WIDGET_LABELS[id]} settings`} onClick={() => setSettingsFor(id)}><Icon name="settings" size={14} /></button>}
+            <button className="btn small ghost icon-only" aria-label={`Remove ${WIDGET_LABELS[id]}`} onClick={() => setGroups((gs) => gs.map((x) => ({ ...x, widgets: x.widgets.filter((w) => w !== id) })))}><Icon name="x" size={14} /></button>
+          </div>
+        )}
+        <div className={`ov-card card${isCircle ? " circle" : ""}`}>
+          {!isCircle && id !== "date" && (
+            <h2 className="ov-title"><Icon name={WIDGET_ICON[id] || "file"} size={18} /> {WIDGET_LABELS[id].replace(/ \(count\)$/, "")}
+              {link && link[0] && <Link to={link[0]} className="small">{link[1]} ›</Link>}</h2>
+          )}
+          {el || <div className="ov-empty small">Nothing to show right now.</div>}
+        </div>
+        {editing && <span className="ov-resize" role="presentation" title={`Drag to resize ${WIDGET_LABELS[id]}`} data-resize={id}
+          onPointerDown={(e) => startResize(id, e)}><Icon name="drag" size={12} /></span>}
+      </section>
+    );
+  };
   return (
     <div className="stack" style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
       <div className="page-head">
         <div><h1>{greeting()}, {session?.user?.display_name}</h1><p className="muted" style={{ fontSize: "1.1rem" }}>Your family documents, in one place.</p></div>
         {!editing && <div className="row">
-          <button className="btn ghost small" onClick={() => setEditing(true)}><Icon name="grid" size={16} /> Customize Overview</button>
+          <button className="btn ghost small" onClick={() => setEditing(true)} data-edit-layout><Icon name="grid" size={16} /> Edit Layout</button>
           <button className="btn primary" onClick={() => setUploading(true)}><Icon name="upload" /> Upload documents</button>
         </div>}
       </div>
       {editing && (
         <div className="card ov-editbar" role="region" aria-label="Edit layout">
-          <div className="grow"><strong>Edit layout</strong><div className="small muted">Drag widgets or use the arrow buttons to reorder. Changes apply when you save.</div></div>
+          <div className="grow"><strong>Edit Layout <HelpTip id="dashboard.edit" /></strong><div className="small muted">Drag tiles, resize them with the corner handle or the size controls, and arrange them in groups. Changes apply when you save.</div></div>
           <div className="row">
-            <select aria-label="Add widget" value={adding} onChange={(e) => { const id = e.target.value; if (id) { setOrder((o) => [...o, id]); setAdding(""); } }} disabled={!hidden.length}>
+            <select aria-label="Add widget" value={adding} onChange={(e) => { const id = e.target.value; if (id) { setGroups((gs) => gs.map((g) => (g.id === "general" ? { ...g, widgets: [...g.widgets, id] } : g))); setAdding(""); } }} disabled={!hidden.length}>
               <option value="">{hidden.length ? "Add widget…" : "All widgets are shown"}</option>
               {hidden.map((id) => <option key={id} value={id}>{WIDGET_LABELS[id]}</option>)}
             </select>
-            <button className="btn small" onClick={() => { setOrder(DEFAULT_WIDGETS); setLayout({}); }}>Reset to default</button>
-            <button className="btn small" onClick={() => setEditing(false)}>Cancel</button>
-            <button className="btn small primary" onClick={save}>Save layout</button>
+            <form className="row" style={{ gap: ".3rem" }} onSubmit={(e) => { e.preventDefault(); addGroup(); }}>
+              <input type="text" aria-label="New group name" placeholder="New group, e.g. Renewals" maxLength={40} value={newGroup} onChange={(e) => setNewGroup(e.target.value)} style={{ width: "13rem" }} />
+              <button className="btn small" disabled={!newGroup.trim()}><Icon name="plus" size={14} /> Add group</button>
+              <HelpTip id="dashboard.groups" />
+            </form>
+            <button className="btn small" onClick={() => setResetting(true)}>Reset Layout…</button>
+            <button className="btn small" onClick={() => { setEditing(false); if (lay.data) apply(lay.data); }}>Cancel</button>
+            <button className="btn small primary" onClick={save} disabled={saving}>Save layout</button>
           </div>
         </div>
       )}
-      <div className={`ov-grid${editing ? " editing" : ""}`}>
-        {shown.map((id, i) => {
-          const c = cfgOf(id);
-          const l = lim(id);
-          const el = body[id](c);
-          if (!el && !editing) return null;
-          const isCircle = c.style.endsWith("circle");
-          const link = LINKS[id];
-          return (
-            <section key={id} aria-label={WIDGET_LABELS[id]} data-widget={id}
-              className={`ov-cell w${c.w} ov-${c.style}${dragging === id ? " dragging" : ""}`}
-              draggable={editing} onDragStart={(e) => { setDragging(id); e.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => setDragging(null)}
-              onDragOver={(e) => { if (editing && dragging) e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); dropOn(id); }}>
-              {editing && (
-                <div className="ov-tools">
-                  <span className="drag-handle" title="Drag to move" aria-hidden="true"><Icon name="drag" size={16} /></span>
-                  <strong className="grow small">{WIDGET_LABELS[id]}</strong>
-                  <button className="btn small ghost icon-only" aria-label={`Move ${WIDGET_LABELS[id]} earlier`} disabled={i === 0} onClick={() => move(id, -1)}><Icon name="left" size={14} /></button>
-                  <button className="btn small ghost icon-only" aria-label={`Move ${WIDGET_LABELS[id]} later`} disabled={i === shown.length - 1} onClick={() => move(id, 1)}><Icon name="right" size={14} /></button>
-                  <button className="btn small ghost icon-only" aria-label={`Make ${WIDGET_LABELS[id]} narrower`} disabled={c.w <= l.min} onClick={() => setCfg(id, { w: c.w - 1 })}><Icon name="minus" size={14} /></button>
-                  <button className="btn small ghost icon-only" aria-label={`Make ${WIDGET_LABELS[id]} wider`} disabled={c.w >= l.max} onClick={() => setCfg(id, { w: c.w + 1 })}><Icon name="plus" size={14} /></button>
-                  <select aria-label={`${WIDGET_LABELS[id]} style`} value={c.style} onChange={(e) => setCfg(id, { style: e.target.value as any })}>
-                    {Object.entries(STYLE_LABELS).filter(([k]) => l.circle || !k.endsWith("circle")).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                  {l.options.length > 0 && <button className="btn small ghost icon-only" aria-label={`${WIDGET_LABELS[id]} settings`} onClick={() => setSettingsFor(id)}><Icon name="settings" size={14} /></button>}
-                  <button className="btn small ghost icon-only" aria-label={`Remove ${WIDGET_LABELS[id]}`} onClick={() => setOrder((o) => o.filter((x) => x !== id))}><Icon name="x" size={14} /></button>
-                </div>
-              )}
-              <div className={`ov-card card${isCircle ? " circle" : ""}`}>
-                {!isCircle && id !== "date" && (
-                  <h2 className="ov-title"><Icon name={WIDGET_ICON[id] || "file"} size={18} /> {WIDGET_LABELS[id].replace(/ \(count\)$/, "")}
-                    {link && link[0] && <Link to={link[0]} className="small">{link[1]} ›</Link>}</h2>
-                )}
-                {el || <div className="ov-empty small">Nothing to show right now.</div>}
+      {groups.map((g, gi) => {
+        const visible = g.widgets.filter((id) => body[id]);
+        if (!editing && !visible.some((id) => body[id](cfgOf(id))) && g.id === "general" && !single) return null;
+        return (
+          <div key={g.id} className={`ov-group${dropGroup === g.id ? " drop-target" : ""}`} data-group={g.id}
+            onDragOver={(e) => { if (editing && dragging) { e.preventDefault(); setDropGroup(g.id); } }}
+            onDrop={(e) => { e.preventDefault(); if (dragging) moveTo(dragging, g.id); setDragging(null); setDropGroup(null); }}>
+            {(!single || editing) && (
+              <div className="ov-group-head">
+                <button className="btn small ghost icon-only" aria-expanded={!g.collapsed} aria-label={`${g.collapsed ? "Expand" : "Collapse"} ${g.name}`} onClick={() => toggleCollapse(g)}><Icon name={g.collapsed ? "right" : "down"} size={14} /></button>
+                {editing ? <input type="text" aria-label={`Name of group ${g.name}`} value={g.name} maxLength={40} onChange={(e) => setGroups((gs) => gs.map((x) => (x.id === g.id ? { ...x, name: e.target.value } : x)))} />
+                  : <h2>{g.name}</h2>}
+                {g.collapsed && <span className="small muted">{visible.length} tile{visible.length === 1 ? "" : "s"}</span>}
+                {editing && <>
+                  <button className="btn small ghost icon-only" aria-label={`Move group ${g.name} up`} disabled={gi === 0} onClick={() => moveGroup(g.id, -1)}><Icon name="up" size={14} /></button>
+                  <button className="btn small ghost icon-only" aria-label={`Move group ${g.name} down`} disabled={gi === groups.length - 1} onClick={() => moveGroup(g.id, 1)}><Icon name="down" size={14} /></button>
+                  {g.id !== "general" ? <button className="btn small ghost" onClick={() => (g.widgets.length ? setRemoving(g) : setGroups(groups.filter((x) => x.id !== g.id)))}>Remove group…</button>
+                    : <span className="small muted">Default group</span>}
+                </>}
               </div>
-            </section>
-          );
-        })}
-      </div>
-      {shown.length === 0 && <div className="empty">Your Overview is empty. Choose Customize Overview to add widgets.</div>}
+            )}
+            {!g.collapsed && (
+              <div className={`ov-grid${editing ? " editing" : ""}`}>
+                {visible.map((id, i) => tile(id, g, i))}
+                {editing && visible.length === 0 && <div className="ov-group-empty small muted">Drag tiles here, or choose this group in a tile's Group list.</div>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {shownIds.length === 0 && <div className="empty">Your Overview is empty. Choose Edit Layout to add widgets.</div>}
       {settingsFor && <WidgetSettingsDialog id={settingsFor} cfg={cfgOf(settingsFor)} countries={data.holiday_countries} onClose={() => setSettingsFor(null)}
         onSave={(st) => { setCfg(settingsFor, { settings: st }); setSettingsFor(null); }} />}
+      {removing && <RemoveGroupDialog group={removing} groups={groups} onClose={() => setRemoving(null)} onConfirm={(dest) => {
+        setGroups((gs) => gs.filter((x) => x.id !== removing.id).map((x) => (x.id === dest ? { ...x, widgets: [...x.widgets, ...removing.widgets] } : x)));
+        setRemoving(null);
+      }} />}
+      {resetting && <Confirm title="Reset Layout" confirmLabel="Reset my layout" onClose={() => setResetting(false)}
+        message={<p>Your Overview goes back to the default tiles, sizes and groups. Only your own layout changes; documents and settings are not touched. <HelpTip id="dashboard.reset" /></p>}
+        onConfirm={async () => { try { const r = await api<LayoutPayload>("dashboard/layout/reset", { method: "POST" }); apply(r); lay.reload(); refresh(); setResetting(false); setEditing(false); toast("Layout reset to the default"); } catch (e: any) { toast(e.message, "error"); } }} />}
       {uploading && <UploadDialog onClose={() => setUploading(false)} onDone={() => { setUploading(false); reload(); }} />}
     </div>
+  );
+}
+
+/** Removing a group never removes its tiles: they move to the group chosen here (General by default). */
+function RemoveGroupDialog({ group, groups, onClose, onConfirm }: { group: OvGroup; groups: OvGroup[]; onClose: () => void; onConfirm: (dest: string) => void }) {
+  const [dest, setDest] = useState("general");
+  return (
+    <Modal title={`Remove group “${group.name}”`} onClose={onClose}>
+      <div className="stack">
+        <p>{group.widgets.length} tile{group.widgets.length === 1 ? "" : "s"} in this group will move to the group you choose. No tile is removed.</p>
+        <div className="field"><label htmlFor="rg-dest">Move its tiles to</label>
+          <select id="rg-dest" value={dest} onChange={(e) => setDest(e.target.value)}>{groups.filter((g) => g.id !== group.id).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+        <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" onClick={onClose}>Cancel</button><button className="btn primary" onClick={() => onConfirm(dest)}>Move tiles and remove group</button></div>
+      </div>
+    </Modal>
   );
 }

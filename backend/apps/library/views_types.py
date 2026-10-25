@@ -243,12 +243,17 @@ def type_fields(request, pk):
     d = request.data
     try:
         if "reorder" in d:
+            # stable ids, explicit order: values stay attached to the field key, whatever its position
             ids = [int(x) for x in d["reorder"] if str(x).isdigit()]
+            active = set(t.template_fields.filter(enabled=True).values_list("id", flat=True))
+            if not ids or set(ids) != active or len(ids) != len(active):
+                return _err("Send every active field of this type once, in the new order.")
             with transaction.atomic():
                 for i, fid in enumerate(ids):
                     DocumentTypeField.objects.filter(doc_type=t, pk=fid).update(order=(i + 1) * 10)
+            keys = dict(t.template_fields.values_list("id", "key"))
             audit.record("settings.document_type_fields_reorder", request=request, target_type="document_type",
-                         target_id=str(t.pk))
+                         target_id=str(t.pk), order=[keys[i] for i in ids])
             return Response(doctypes.type_json(t, admin=True))
         if d.get("promote"):
             doc = get_doc(request, d.get("document"), P.VIEW)
@@ -271,27 +276,62 @@ def type_fields(request, pk):
     return Response(doctypes.type_json(t, admin=True), status=201)
 
 
-@api_view(["PATCH", "DELETE"])
+DELETE_CONFIRM = "DELETE"
+
+
+def _delete_preview(f: DocumentTypeField) -> dict:
+    n = doctypes.value_counts(f.doc_type, [f.key]).get(f.key, 0)
+    msg = (f"This field contains stored values in {n} document{'' if n == 1 else 's'}. Permanent deletion will remove "
+           "these values from the live application. Archive is recommended if historical data should be retained."
+           if n else "No document holds a value for this field. Archive remains the standard action; permanent "
+           "deletion removes the field definition.")
+    return {"key": f.key, "label": f.label, "documents_with_values": n, "message": msg, "confirm_text": DELETE_CONFIRM,
+            "backups_note": "Backups that were already taken keep the values they contained, under their normal "
+                            "retention."}
+
+
+@api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([IsMainAdmin])
 def type_field_detail(request, pk, fid):
+    """PATCH edits a field. DELETE is permanent deletion (Change Set AA): Main Admin only, only for an archived
+    field, with the affected-document count shown first (GET), the typed confirmation and step-up authentication."""
+    from apps.ops.bk_views import _needs_stepup, stepup_ok
+
     f = DocumentTypeField.objects.filter(doc_type_id=pk, pk=fid).select_related("doc_type").first()
     if f is None:
         return _err("Unknown field.", 404)
     t = f.doc_type
+    if request.method == "GET":
+        return Response(_delete_preview(f))
     if request.method == "DELETE":
-        used = DocumentField.objects.filter(document__doc_type=t, key=f.key).exclude(value="").count()
-        if used:
-            return _err(f"{used} document(s) have a value for this field. Turn the field off instead; the values "
-                        "are kept.", 409, code="in_use", documents=used)
-        audit.record("settings.document_type_field_delete", request=request, target_type="document_type",
-                     target_id=str(t.pk), key=f.key)
-        f.delete()
-        doctypes.sync_ocr_fields(t)
-        return Response(doctypes.type_json(t, admin=True))
+        if f.enabled:
+            return _err("Archive the field first. Archive keeps its values; permanent deletion removes them.", 409,
+                        code="not_archived")
+        preview = _delete_preview(f)
+        if (request.data.get("confirm") or "").strip() != DELETE_CONFIRM:
+            return _err(f"Type {DELETE_CONFIRM} to confirm the permanent deletion.", 400, code="confirm_required",
+                        **preview)
+        if not stepup_ok(request):
+            return _needs_stepup()
+        try:
+            n = doctypes.delete_field_permanently(actor=request.user, field=f, reason=request.data.get("reason") or "",
+                                                  request=request)
+        except S.DomainError as exc:
+            return _err(str(exc))
+        request.session.pop("recovery_stepup_at", None)  # one destructive action per step-up
+        return Response({**doctypes.type_json(t, admin=True), "deleted_values": n})
     try:
         clean = doctypes.validate_template_field(request.data, existing=f)
     except S.DomainError as exc:
         return _err(str(exc))
+    if "enabled" in clean and clean["enabled"] != f.enabled:  # the old "Shown" switch: archive / restore instead
+        try:
+            (doctypes.restore_field if clean.pop("enabled") else doctypes.archive_field)(
+                actor=request.user, field=f, request=request)
+        except S.DomainError as exc:
+            return _err(str(exc))
+        f.refresh_from_db()
+    clean.pop("enabled", None)
     for k, v in clean.items():
         setattr(f, k, v)
     f.save()
@@ -303,6 +343,31 @@ def type_field_detail(request, pk, fid):
     audit.record("settings.document_type_field_update", request=request, target_type="document_type",
                  target_id=str(t.pk), key=f.key, fields=sorted(clean.keys()))
     return Response(doctypes.type_json(t, admin=True))
+
+
+@api_view(["POST"])
+@permission_classes([IsMainAdmin])
+def type_field_archive(request, pk, fid, action):
+    """Archive (the safe, standard way to remove a field) or restore it. Values are kept either way."""
+    f = DocumentTypeField.objects.filter(doc_type_id=pk, pk=fid).select_related("doc_type").first()
+    if f is None or action not in ("archive", "restore"):
+        return _err("Unknown field.", 404)
+    try:
+        if action == "archive":
+            doctypes.archive_field(actor=request.user, field=f, request=request)
+        else:
+            doctypes.restore_field(actor=request.user, field=f, request=request)
+    except S.DomainError as exc:
+        return _err(str(exc))
+    return Response(doctypes.type_json(f.doc_type, admin=True))
+
+
+@api_view(["GET"])
+@permission_classes([IsActiveAuthenticated])
+def document_archived_metadata(request, pk):
+    """Show archived metadata: values kept for archived fields, for anyone who may open the document."""
+    doc = get_doc(request, pk, P.VIEW)
+    return Response({"values": doctypes.archived_values(doc)})
 
 
 @api_view(["GET", "POST"])

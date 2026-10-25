@@ -794,6 +794,103 @@ await step("AT-441..AT-460 Change Set Z: OCR engine order, AI modes, Local/Cloud
   await son.ctx.close();
 });
 
+await step("AT-461..AT-480 Change Set AA: field drag/drop and archive, Overview groups and free resize, processing source", async () => {
+  // Document Type fields: drag handles (keyboard alternative), Archive → Archived Fields → Restore
+  const types = (await api(page, "/api/document-types/admin")).data.types;
+  const visa = types.find((x) => x.name === "Visa") || types[0];
+  await page.goto(`${BASE}/settings/documents?type=${visa.id}`);
+  await page.waitForSelector(".modal [data-sortable-fields] .sortable-handle");
+  const first = await page.locator(".modal [data-sortable-fields] tbody tr").first().getAttribute("data-field");
+  const second = await page.locator(".modal [data-sortable-fields] tbody tr").nth(1).getAttribute("data-field");
+  expect(!(await page.locator(".modal button[aria-label^='Move '][aria-label$=' up']").count()), "old ↑ buttons still shown");
+  // mouse drag: the second row's handle onto the first row
+  const h2 = await page.locator(`.modal [data-field=${second}] .sortable-handle`).boundingBox();
+  const r1 = await page.locator(`.modal [data-field=${first}]`).boundingBox();
+  const reordered = page.waitForResponse((r) => r.url().includes(`/api/document-types/${visa.id}/fields`) && r.request().method() === "POST");
+  await page.mouse.move(h2.x + h2.width / 2, h2.y + h2.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(h2.x + h2.width / 2, r1.y + 4, { steps: 8 });
+  await page.mouse.up();
+  await reordered;
+  let fields = (await api(page, "/api/document-types/admin")).data.types.find((x) => x.id === visa.id).fields.filter((f) => f.enabled).sort((a, b) => a.order - b.order);
+  expect(fields[0].key === second, `drag and drop order: ${fields.map((f) => f.key).join(",")}`);
+  await page.focus(`.modal [data-field=${second}] .sortable-handle`);
+  const back = page.waitForResponse((r) => r.url().includes(`/api/document-types/${visa.id}/fields`) && r.request().method() === "POST");
+  await page.keyboard.press("ArrowDown");
+  await back;
+  fields = (await api(page, "/api/document-types/admin")).data.types.find((x) => x.id === visa.id).fields.filter((f) => f.enabled).sort((a, b) => a.order - b.order);
+  expect(fields[0].key === first, "keyboard reorder");
+  const victim = fields[fields.length - 1];
+  await page.click(`.modal button[aria-label='Archive ${victim.label}']`);
+  await page.click(".modal button:has-text('Archive field')");
+  await page.waitForSelector(`.modal [data-archived-field=${victim.key}]`);
+  await page.locator(".modal").first().screenshot({ path: `${OUT}/document-type-archived-fields.png` });
+  expect(await page.locator(`.modal button[aria-label='Permanently delete ${victim.label}']`).count() === 1, "Main Admin sees permanent delete");
+  await page.click(`.modal button[aria-label='Permanently delete ${victim.label}']`);
+  await page.waitForSelector(".modal [data-delete-field] [data-affected]");
+  expect(await page.locator(".modal button:has-text('Delete permanently')").isDisabled(), "delete enabled before typing DELETE");
+  await page.click(".modal button:has-text('Cancel — keep it archived')");
+  await page.click(`.modal button[aria-label='Restore ${victim.label}']`);
+  await page.waitForSelector(`.modal [data-field=${victim.key}]`);
+  await page.keyboard.press("Escape");
+  // Overview: Edit Layout, a custom group, a tile moved into it, free resize with the corner handle; saved per person
+  const son = await session("son1");
+  await son.page.goto(BASE + "/");
+  await son.page.click("button:has-text('Edit Layout')");
+  await son.page.waitForSelector(".ov-editbar");
+  await son.page.fill("input[aria-label='New group name']", "Renewals");
+  await son.page.click("button:has-text('Add group')");
+  await son.page.waitForSelector("[data-group=renewals]");
+  await son.page.selectOption("select[aria-label='Group of Expiring soon']", "renewals");
+  await son.page.waitForSelector("[data-group=renewals] [data-widget=upcoming]");
+  const cell = son.page.locator("[data-widget=summary]");
+  const cols0 = Number(await cell.getAttribute("data-cols"));
+  const hb = await son.page.locator("[data-resize=summary]").boundingBox();
+  const gridW = await son.page.locator("[data-group=general] .ov-grid").evaluate((g) => g.clientWidth);
+  await son.page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await son.page.mouse.down();
+  await son.page.mouse.move(hb.x + hb.width / 2 + gridW / 6, hb.y + hb.height / 2 + 200, { steps: 10 });
+  await son.page.mouse.up();
+  const cols1 = Number(await cell.getAttribute("data-cols")), h1 = Number(await cell.getAttribute("data-h"));
+  expect(cols1 === cols0 + 2 && h1 >= 2, `resize: ${cols0} → ${cols1} cols, h ${h1}`);
+  await son.page.screenshot({ path: `${OUT}/overview-edit-layout.png` });
+  await son.page.click("button:has-text('Save layout')");
+  await son.page.waitForSelector(".toast:has-text('Layout saved')");
+  await son.page.reload();
+  await son.page.waitForSelector("[data-group=renewals] [data-widget=upcoming]");
+  expect(Number(await son.page.locator("[data-widget=summary]").getAttribute("data-cols")) === cols1, "size kept after reload");
+  // tiles never overlap
+  const overlap = await son.page.evaluate(() => {
+    const r = [...document.querySelectorAll(".ov-cell")].map((c) => c.getBoundingClientRect()).filter((b) => b.width);
+    return r.some((a, i) => r.some((b, j) => j > i && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1));
+  });
+  expect(!overlap, "tiles overlap");
+  // the administrator's Overview is not affected
+  expect(!(await api(page, "/api/dashboard/layout")).data.groups.some((g) => g.id === "renewals"), "layout leaked to another account");
+  // phone: one column, no sideways scrolling; the desktop layout is unchanged
+  const phone = await session("son1", { width: 390, height: 844 }, true);
+  await phone.page.goto(BASE + "/");
+  await phone.page.waitForSelector("[data-group=renewals] [data-widget=upcoming]");
+  const m = await phone.page.evaluate(() => ({ overflow: document.documentElement.scrollWidth - window.innerWidth,
+    widths: [...document.querySelectorAll("[data-group=general] .ov-cell")].map((c) => c.getBoundingClientRect().width),
+    grid: document.querySelector("[data-group=general] .ov-grid").clientWidth }));
+  expect(m.overflow <= 1 && m.widths.every((w) => Math.abs(w - m.grid) < 2), `phone layout: ${JSON.stringify(m).slice(0, 200)}`);
+  await phone.page.screenshot({ path: `${OUT}/overview-phone-groups.png` });
+  await phone.ctx.close();
+  expect((await api(son.page, "/api/dashboard/layout")).data.layout.summary.cols === cols1, "phone view changed the desktop layout");
+  // Reset Layout only resets this person
+  await son.page.click("button:has-text('Edit Layout')");
+  await son.page.click("button:has-text('Reset Layout…')");
+  await son.page.click(".modal button:has-text('Reset my layout')");
+  await son.page.waitForSelector(".toast:has-text('Layout reset')");
+  expect(!(await son.page.locator("[data-group=renewals]").count()), "group still there after reset");
+  await son.ctx.close();
+  // Settings → AI → Document Processing: the processing source defaults to Original Document — Local AI + OCR Fallback
+  await page.goto(BASE + "/settings/ai");
+  await page.waitForSelector("#s-ai\\.processing_source");
+  expect(await page.locator("#s-ai\\.processing_source").inputValue() === "original_fallback", "default processing source");
+});
+
 await step("AT-416/AT-417 Admin → Performance: metrics, throttle state, report for the main administrator only", async () => {
   await page.goto(BASE + "/settings/performance");
   await page.waitForSelector("#performance [data-throttle]");

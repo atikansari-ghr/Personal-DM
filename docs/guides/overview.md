@@ -20,16 +20,43 @@ New accounts start with the suggested widgets: Today, Weather, Documents summary
 
 ## Customize Overview {#customize}
 
-Choose **Customize Overview** to enter edit mode:
+Choose **Edit Layout** to change your Overview. Outside Edit Layout nothing moves or resizes by accident. Your layout
+is **yours alone**: it is saved on the server for your account (not only in the browser), follows you to every
+device, and never changes anyone else's Overview.
 
-- **Add widget…** adds a widget that is not shown; **×** removes one.
-- **Reorder** by dragging a widget, or with the **‹ / ›** buttons (keyboard, screen readers and touch).
-- **Resize** with **− / +**. Each widget has a minimum and maximum width on a four-column grid, so widgets never overlap or run off the screen. Tablets use two columns and phones one, keeping the order.
+### Edit Layout {#edit-layout}
+
+- **Add widget…** adds a tile that is not shown (to the General group); **×** removes one.
+- **Move** a tile by dragging it (onto another tile, or onto a group), or with the **‹ / ›** buttons and the tile's
+  **Group** list (keyboard, screen readers and touch).
+- **Resize** freely with the **corner handle**: drag it to change the width (12 columns on a desktop) and the height
+  (rows of 90 px). The **− / +** buttons change the width one column at a time and the **Height** list sets the height
+  (*fit content* or a number of rows). Every tile has a minimum and maximum size, so it stays readable; tiles never
+  overlap — the grid places them in order and reflows the rest.
 - **Style**: *Rectangular* (default), *Compact rectangular*, *Circular* or *Compact circular*. Circles are offered only for single-value widgets (Today, Weather and the counters); calendars, lists and tables stay rectangular so they remain readable.
 - **⚙ Widget settings**: show or hide the Hijri date and its Arabic month name; choose countries for the calendar and holidays; the number of items in lists.
-- **Reset to default**, **Cancel** or **Save layout**. Nothing changes until you save.
+- **Save layout** or **Cancel**. Nothing changes until you save.
 
-The order and widget selection can also be changed in Settings → My account → Appearance → Overview widgets.
+On a tablet the Overview uses two columns and on a phone (and in the installed app) one; tiles keep their groups and
+order and a fixed height becomes "fit content". This is only how the page is shown: your desktop sizes are not
+changed by opening the Overview on a phone.
+
+### Groups {#groups}
+
+Create your own groups — for example *Family*, *Documents*, *Renewals*, *Travel* or *Security* — with **Add group**.
+In Edit Layout you can rename a group, move it up or down, collapse or expand it, and move tiles in and out. A
+collapsed group stays collapsed on all your devices (you can collapse and expand outside Edit Layout too).
+
+**General** is the default group and cannot be removed. **Removing a group never removes its tiles**: when it still
+has tiles you choose the group they move to (General by default). Group names have 1 to 40 characters.
+
+### Reset Layout {#reset-layout}
+
+**Reset Layout** (in Edit Layout, after a confirmation) puts *your* Overview back to the default tiles, sizes and
+groups. It changes nothing else: no document, no setting and no other person's layout.
+
+The order and widget selection can also be changed in Settings → My account → Appearance → Overview widgets. Tiles
+added to Personal DM in a later release appear in your General group; tiles you removed stay removed.
 
 ## Hijri date {#hijri}
 

@@ -237,11 +237,18 @@ Guides: [OCR and corrections](guides/ocr-corrections.md#selective), [Office and 
   edit name, icon, description, *expiry-aware* and **reminder days** (empty = global schedule); archive or restore.
   A type in use cannot be deleted: move its documents to another type first (values are kept or become previous
   details) or archive it.
-- **Templates:** add, edit, turn off and reorder (↑/↓) fields; field type (text, long text, date, number, yes/no,
-  select, country, person, identifier), role (expiry, issue, no expiry), required, *OCR / Local AI may suggest*,
-  searchable, help text, choices and format (regular expression, maximum length). The preview shows the Details
-  panel. A field with values cannot be deleted, only turned off. Only the confirmed value of the **expiry-role**
-  field drives reminders.
+- **Templates:** add, edit, **Archive** and reorder fields by **drag and drop** (or focus the handle and press ↑/↓);
+  field type (text, long text, date, number, yes/no, select, country, person, identifier), role (expiry, issue, no
+  expiry), required, *OCR / Local AI may suggest*, searchable, help text, choices and format (regular expression,
+  maximum length). The preview shows the Details panel. Only the confirmed value of the **expiry-role** field drives
+  reminders.
+- **Archive, restore, delete** (Change Set AA): **Archive** is the standard way to remove a field — values, provenance
+  and history are kept, and the field leaves new entry, the Details panel, required checks and OCR/AI suggestions.
+  **Archived fields** lists each one with the date, who archived it and how many documents hold a value;
+  **Restore** brings back the same field. **Delete permanently…** (main administrator only, archived fields only)
+  shows the number of documents with values, asks you to type DELETE and to confirm it is you, and removes the
+  values from the live application; backups taken earlier keep them. People who may open a document can still see
+  archived values with **Show archived metadata**.
 - **Promotion:** **Add to … template…** (for example *Add to Passport template…*) on a document's additional detail adds the field to the template; only
   that document's value moves.
 - **Review untyped documents:** untyped documents with their folder and OCR suggestions; nothing is applied until you
@@ -263,7 +270,13 @@ AI is an optional layer **above** OCR, not an OCR engine. **Settings → AI:**
    provider (OpenAI, Anthropic Claude, Google Gemini, OpenRouter). API keys are stored encrypted and never shown again.
 3. For a Cloud profile, choose exactly what it may receive: OCR text, selected metadata, original images, original
    files. Images and files are off by default, and people confirm each send.
-4. Click **Test Profile**. The *Last test* line shows only the checks that actually ran.
+4. Click **Test Profile**. The *Last test* line shows only the checks that actually ran. With a vision model it also
+   checks, with a generated sample page, that the model reads images and how many pages it reads per request.
+5. **Document Processing → Default processing source** (Change Set AA): *Original Document — Local AI + OCR
+   Fallback* (default) lets a Local vision model read the original PDF or image and runs the OCR engines only when it
+   cannot; *Original Document — Local AI* never runs OCR; *OCR Text* sends only recognised text. Originals never go
+   to a Cloud profile through these modes. *Let people choose the processing source per action*, the page limit and
+   the file-size limit are next to it. AI History shows for every action what it read, and why OCR ran if it did.
 
 - AI only **suggests**: suggestions, summaries, OCR checks and answers are labelled AI-generated and change nothing
   until a person with edit rights accepts them. Values a person set are never silently replaced.
@@ -271,7 +284,8 @@ AI is an optional layer **above** OCR, not an OCR engine. **Settings → AI:**
   text** is allowed (Settings → OCR & processing). There is no fallback to another server or to the cloud.
 - Automatic AI (OCR + AI, Smart Auto) never uses a Cloud profile unless **Allow automatic AI with a Cloud profile** is on.
 - `sudo personaldocs doctor` reports the AI mode, the default profile, provider, model, capabilities and whether a key
-  is stored, never the key.
+  is stored, never the key; also the default processing source, the Local profile that can read originals, its
+  image/PDF/TIFF/structured-output capabilities and the OCR fallback chain.
 - A 2 vCPU/4 GB container cannot run useful models itself; use a LAN PC or a Cloud profile.
 
 Guide: [AI Document Intelligence](guides/local-ai.md).

@@ -414,7 +414,8 @@ def apply_confirmed_fields(doc: Document) -> None:
     doc.issue_date = d("issue")
     doc.expiry_date = d("expiry")
     doc.no_expiry = (vals.get(roles.get("no_expiry") or "") or "").lower() in ("yes", "true", "1")
-    pending = doc.fields.filter(status=DocumentField.PROPOSED).exclude(scope=DocumentField.UNMAPPED).exists()
+    pending = (doc.fields.filter(status=DocumentField.PROPOSED).exclude(scope=DocumentField.UNMAPPED)
+               .exclude(key__in=doctypes.archived_keys(doc.doc_type) if doc.doc_type_id else []).exists())
     flags = []
     if doc.issue_date and doc.expiry_date and doc.issue_date >= doc.expiry_date:
         flags.append("Issue date is not before expiry date.")

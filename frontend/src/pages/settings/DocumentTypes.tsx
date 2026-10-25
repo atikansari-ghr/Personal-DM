@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api } from "../../api";
+import { api, formatDateTime } from "../../api";
 import { Confirm, HelpTip, Icon, Modal, Skeleton, useToast } from "../../components/ui";
+import { useSortable } from "../../components/Sortable";
+import { useStepUp } from "../../components/StepUp";
+import { useSession } from "../../session";
 
 /** Settings → Documents & folders → Document types: types, their metadata templates, and review of untyped documents. */
 
-interface TField { id: number; key: string; label: string; field_type: string; enabled: boolean; required: boolean; order: number; help_text: string; extract: boolean; searchable: boolean; role: string; choices: string[]; validation: Record<string, any> }
+interface TField { id: number; key: string; label: string; field_type: string; enabled: boolean; required: boolean; order: number; help_text: string; extract: boolean; searchable: boolean; role: string; choices: string[]; validation: Record<string, any>; archived?: boolean; archived_at?: string | null; archived_by?: string | null; documents_with_values?: number }
 interface DType { id: number; name: string; emoji: string; description: string; has_expiry: boolean; archived: boolean; template: string; fields: TField[]; sort_order: number; reminder_days: number[]; is_custom: boolean; documents: number }
 interface Payload { types: DType[]; field_types: string[]; roles: string[]; templates: string[]; standard_fields: Record<string, string>; report: Record<string, number> }
 
@@ -19,7 +22,7 @@ function FieldDialog({ type, field, data, onClose, onDone }: { type: DType; fiel
   const set = (k: string, v: any) => setF({ ...f, [k]: v });
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    const body: any = { label: f.label, field_type: f.field_type, enabled: f.enabled, required: f.required, extract: f.extract, searchable: f.searchable, role: f.role, help_text: f.help_text, choices: f.choices,
+    const body: any = { label: f.label, field_type: f.field_type, required: f.required, extract: f.extract, searchable: f.searchable, role: f.role, help_text: f.help_text, choices: f.choices,
       validation: { ...(f.pattern ? { pattern: f.pattern } : {}), ...(f.max_length ? { max_length: f.max_length } : {}) } };
     if (!field && f.key) body.key = f.key;
     try { await api(field ? `document-types/${type.id}/fields/${field.id}` : `document-types/${type.id}/fields`, { method: field ? "PATCH" : "POST", body }); onDone(); }
@@ -41,7 +44,6 @@ function FieldDialog({ type, field, data, onClose, onDone }: { type: DType; fiel
         {f.field_type === "select" && <div className="field"><label htmlFor="fc">Choices (comma separated)</label><input type="text" id="fc" value={f.choices} onChange={(e) => set("choices", e.target.value)} /></div>}
         <div className="field"><label htmlFor="fh">Help text</label><input type="text" id="fh" value={f.help_text} onChange={(e) => set("help_text", e.target.value)} /></div>
         <div className="row">
-          <label className="check"><input type="checkbox" checked={f.enabled} onChange={(e) => set("enabled", e.target.checked)} /> Shown</label>
           <label className="check"><input type="checkbox" checked={f.required} onChange={(e) => set("required", e.target.checked)} /> Required</label>
           <label className="check"><input type="checkbox" checked={f.extract} onChange={(e) => set("extract", e.target.checked)} /> OCR / Local AI may suggest</label>
           <label className="check"><input type="checkbox" checked={f.searchable} onChange={(e) => set("searchable", e.target.checked)} /> Searchable</label>
@@ -67,20 +69,50 @@ function Preview({ type }: { type: DType }) {
   );
 }
 
+/** Main Admin only: permanent deletion of an archived field, after the affected-document count, a typed
+ *  confirmation and step-up authentication (the server enforces all three). */
+function DeleteFieldDialog({ type, field, onClose, onDone }: { type: DType; field: TField; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const step = useStepUp(toast);
+  const [p, setP] = useState<any>(null);
+  const [confirm, setConfirm] = useState("");
+  const [reason, setReason] = useState("");
+  useEffect(() => { api<any>(`document-types/${type.id}/fields/${field.id}`).then(setP).catch((x) => toast(x.message, "error")); }, [field.id]);
+  return (
+    <Modal title={`Permanently delete ${field.label}`} onClose={onClose}>
+      {!p ? <Skeleton /> : (
+        <div className="stack" data-delete-field={field.key}>
+          <div className="alert danger" role="alert" data-affected={p.documents_with_values}>{p.message}</div>
+          <p className="small muted">{p.backups_note} <HelpTip id="fields.delete" /></p>
+          <div className="field"><label htmlFor="dfr">Reason (kept in the audit log)</label><input id="dfr" type="text" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} /></div>
+          <div className="field"><label htmlFor="dfc">Type <strong>{p.confirm_text}</strong> to confirm</label><input id="dfc" type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} /></div>
+          <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn" onClick={onClose}>Cancel — keep it archived</button>
+            <button className="btn danger" disabled={confirm.trim() !== p.confirm_text} onClick={() => step.run(`Permanently delete the field “${field.label}”`, () => api<any>(`document-types/${type.id}/fields/${field.id}`, { method: "DELETE", body: { confirm: confirm.trim(), reason } }).then((r) => { toast(`${field.label} deleted; values removed from ${r.deleted_values} document(s)`); onDone(); }))}>Delete permanently</button></div>
+        </div>
+      )}
+      {step.dialog}
+    </Modal>
+  );
+}
+
 function TypeEditor({ type, data, all, onClose, reload }: { type: DType; data: Payload; all: DType[]; onClose: () => void; reload: () => void }) {
   const toast = useToast();
+  const { session } = useSession();
+  const isMainAdmin = !!session?.user?.is_main_admin;
   const [s, setS] = useState({ name: type.name, emoji: type.emoji, description: type.description, has_expiry: type.has_expiry, reminder_days: type.reminder_days.join(", ") });
   const [field, setField] = useState<TField | null | "new">(null);
   const [del, setDel] = useState(false);
   const [target, setTarget] = useState("");
-  const fields = [...type.fields].sort((a, b) => a.order - b.order);
-  const move = async (i: number, d: number) => {
-    const ids = fields.map((f) => f.id);
-    const j = i + d;
-    if (j < 0 || j >= ids.length) return;
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    await api(`document-types/${type.id}/fields`, { body: { reorder: ids } });
+  const [archiving, setArchiving] = useState<TField | null>(null);
+  const [deleting, setDeleting] = useState<TField | null>(null);
+  const fields = type.fields.filter((f) => f.enabled).sort((a, b) => a.order - b.order);
+  const archivedFields = type.fields.filter((f) => !f.enabled).sort((a, b) => (b.archived_at || "").localeCompare(a.archived_at || ""));
+  const sort = useSortable(fields, (f) => f.id, (f) => f.label, async (next) => {
+    try { await api(`document-types/${type.id}/fields`, { body: { reorder: next.map((f) => f.id) } }); } catch (x: any) { toast(x.message, "error"); }
     reload();
+  });
+  const restore = async (f: TField) => {
+    try { await api(`document-types/${type.id}/fields/${f.id}/restore`, { method: "POST" }); toast(`${f.label} restored with its stored values`); reload(); } catch (x: any) { toast(x.message, "error"); }
   };
   const saveType = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,23 +133,44 @@ function TypeEditor({ type, data, all, onClose, reload }: { type: DType; data: P
           </div>
           <div className="row"><button className="btn primary">Save type</button><span className="small muted">{type.documents} document{type.documents === 1 ? "" : "s"} use this type. OCR mode and languages: Settings → OCR & processing.</span></div>
         </form>
-        <div className="row between"><h3>Metadata template</h3><button className="btn small" onClick={() => setField("new")}><Icon name="plus" size={16} /> Add field</button></div>
+        <div className="row between"><h3>Metadata template <HelpTip id="fields.order" /></h3><button className="btn small" onClick={() => setField("new")}><Icon name="plus" size={16} /> Add field</button></div>
         <div style={{ overflowX: "auto" }}>
-          <table className="responsive tfields"><thead><tr><th>Order</th><th>Field</th><th>Type</th><th>Settings</th><th /></tr></thead><tbody>
-            {fields.map((f, i) => (
-              <tr key={f.id} className={f.enabled ? "" : "muted"}>
-                <td className="row" style={{ gap: 0, flexWrap: "nowrap" }}>
-                  <button className="icon-btn" aria-label={`Move ${f.label} up`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
-                  <button className="icon-btn" aria-label={`Move ${f.label} down`} disabled={i === fields.length - 1} onClick={() => move(i, 1)}>↓</button>
-                </td>
+          <table className="responsive tfields" data-sortable-fields><thead><tr><th><span className="sr-only">Order</span></th><th>Field</th><th>Type</th><th>Settings</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>
+            {sort.order.map((f) => (
+              <tr key={f.id} {...sort.rowProps(f)} data-field={f.key}>
+                <td><span {...sort.handleProps(f)}><Icon name="drag" size={18} /></span></td>
                 <td><strong>{f.label}</strong>{f.required && <span className="req"> *</span>}<div className="small muted mono">{f.key}</div></td>
                 <td className="small">{FT_LABEL[f.field_type] || f.field_type}{f.role && <div><span className="badge neutral">{ROLE_LABEL[f.role]}</span></div>}</td>
-                <td className="small">{[f.enabled ? "shown" : "hidden", f.extract ? "OCR/AI" : "", f.searchable ? "searchable" : "not searchable"].filter(Boolean).join(" · ")}</td>
-                <td><button className="btn small ghost" onClick={() => setField(f)}>Edit…</button></td>
+                <td className="small">{["shown", f.extract ? "OCR/AI" : "", f.searchable ? "searchable" : "not searchable"].filter(Boolean).join(" · ")}</td>
+                <td><div className="row" style={{ gap: ".25rem", flexWrap: "nowrap" }}>
+                  <button className="btn small ghost" onClick={() => setField(f)}>Edit…</button>
+                  <button className="btn small ghost" onClick={() => setArchiving(f)} aria-label={`Archive ${f.label}`}>Archive</button></div></td>
               </tr>
             ))}
           </tbody></table>
+          {sort.live}
         </div>
+        {fields.length === 0 && <p className="small muted">No active fields. Add one, or restore an archived field.</p>}
+        {archivedFields.length > 0 && (
+          <div className="stack" data-archived-fields>
+            <h3>Archived fields <HelpTip id="fields.archived" /></h3>
+            <div style={{ overflowX: "auto" }}>
+              <table className="responsive"><thead><tr><th>Field</th><th>Type</th><th>Archived</th><th>Documents with values</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>
+                {archivedFields.map((f) => (
+                  <tr key={f.id} data-archived-field={f.key}>
+                    <td><strong>{f.label}</strong> <span className="badge neutral">Archived</span><div className="small muted mono">{f.key}</div></td>
+                    <td className="small">{FT_LABEL[f.field_type] || f.field_type}</td>
+                    <td className="small">{f.archived_at ? formatDateTime(f.archived_at) : "—"}{f.archived_by ? <div className="muted">by {f.archived_by}</div> : null}</td>
+                    <td className="small">{f.documents_with_values ?? 0}</td>
+                    <td><div className="row" style={{ gap: ".25rem", flexWrap: "nowrap" }}>
+                      <button className="btn small" onClick={() => restore(f)} aria-label={`Restore ${f.label}`}>Restore</button>
+                      {isMainAdmin && <button className="btn small danger ghost" onClick={() => setDeleting(f)} aria-label={`Permanently delete ${f.label}`}>Delete permanently…</button>}</div></td>
+                  </tr>
+                ))}
+              </tbody></table>
+            </div>
+          </div>
+        )}
         <Preview type={type} />
         <div className="row between">
           <button className="btn" onClick={async () => { try { await api(`document-types/${type.id}`, { method: "PATCH", body: { archived: !type.archived } }); reload(); } catch (x: any) { toast(x.message, "error"); } }}>{type.archived ? "Restore type" : "Archive type"}</button>
@@ -125,6 +178,11 @@ function TypeEditor({ type, data, all, onClose, reload }: { type: DType; data: P
         </div>
       </div>
       {field && <FieldDialog type={type} field={field === "new" ? null : field} data={data} onClose={() => setField(null)} onDone={() => { setField(null); reload(); }} />}
+      {archiving && <Confirm title={`Archive ${archiving.label}`} confirmLabel="Archive field" onClose={() => setArchiving(null)}
+        message={<div className="stack"><p>The field is hidden from new documents, the Details panel, required checks and OCR / AI suggestions. <strong>Every value already stored is kept</strong>; anyone who may open a document can still see it under <em>Show archived metadata</em>, and Restore brings the field back. <HelpTip id="fields.archive" /></p>
+          {archiving.role === "expiry" && <div className="callout warning">This field is the expiry date: while it is archived, its values no longer drive expiry dates or reminders.</div>}</div>}
+        onConfirm={async () => { try { await api(`document-types/${type.id}/fields/${archiving.id}/archive`, { method: "POST" }); toast(`${archiving.label} archived; its values are kept`); setArchiving(null); reload(); } catch (x: any) { toast(x.message, "error"); } }} />}
+      {deleting && <DeleteFieldDialog type={type} field={deleting} onClose={() => setDeleting(null)} onDone={() => { setDeleting(null); reload(); }} />}
       {del && (type.documents > 0 ? (
         <Modal title={`Delete ${type.name}`} onClose={() => setDel(false)}>
           <div className="stack">

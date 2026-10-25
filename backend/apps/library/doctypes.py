@@ -142,17 +142,49 @@ def active_fields(t: DocumentType | None) -> list[DocumentTypeField]:
     return list(t.template_fields.filter(enabled=True))
 
 
-def field_json(f: DocumentTypeField) -> dict:
-    return {"id": f.id, "key": f.key, "label": f.label, "field_type": f.field_type, "enabled": f.enabled,
-            "required": f.required, "order": f.order, "help_text": f.help_text, "extract": f.extract,
-            "searchable": f.searchable, "role": f.role, "choices": f.choices, "validation": f.validation}
+def has_template(t: DocumentType | None) -> bool:
+    """The type has a template (active or archived fields). A type whose fields are all archived still has one:
+    it must not fall back to the "any field" behaviour of untyped documents."""
+    return t is not None and t.template_fields.exists()
+
+
+def archived_keys(t: DocumentType | None) -> set[str]:
+    if t is None:
+        return set()
+    return set(t.template_fields.filter(enabled=False).values_list("key", flat=True))
+
+
+def field_json(f: DocumentTypeField, value_counts: dict | None = None) -> dict:
+    out = {"id": f.id, "key": f.key, "label": f.label, "field_type": f.field_type, "enabled": f.enabled,
+           "required": f.required, "order": f.order, "help_text": f.help_text, "extract": f.extract,
+           "searchable": f.searchable, "role": f.role, "choices": f.choices, "validation": f.validation,
+           "archived": not f.enabled}
+    if not f.enabled:
+        out.update({"archived_at": f.archived_at,
+                    "archived_by": f.archived_by.display_name if f.archived_by_id and f.archived_by else None,
+                    "documents_with_values": (value_counts or {}).get(f.key, 0)})
+    return out
+
+
+def value_counts(t: DocumentType, keys) -> dict:
+    """How many documents of this type hold a stored value per field key (a count only, no content)."""
+    from django.db.models import Count
+
+    keys = list(keys)
+    if not keys:
+        return {}
+    rows = (DocumentField.objects.filter(document__doc_type=t, key__in=keys).exclude(value="")
+            .values("key").annotate(n=Count("document", distinct=True)))
+    return {r["key"]: r["n"] for r in rows}
 
 
 def type_json(t: DocumentType, *, admin: bool = False) -> dict:
     data = {"id": t.id, "name": t.name, "emoji": t.emoji, "description": t.description, "has_expiry": t.has_expiry,
             "archived": t.archived, "template": t.template}
     if admin:
-        data.update({"fields": [field_json(f) for f in t.template_fields.all()], "sort_order": t.sort_order,
+        fields = list(t.template_fields.all())
+        counts = value_counts(t, [f.key for f in fields if not f.enabled])
+        data.update({"fields": [field_json(f, counts) for f in fields], "sort_order": t.sort_order,
                      "reminder_days": t.reminder_days, "is_custom": t.is_custom, "ocr_mode": t.ocr_mode,
                      "ocr_languages": t.ocr_languages, "ocr_ai_allowed": t.ocr_ai_allowed,
                      "documents": t.documents.filter(archived_at__isnull=True).count()})
@@ -292,7 +324,7 @@ def role_keys(doc: Document) -> dict:
     """Which field keys carry the issue / expiry / no-expiry meaning for this document."""
     if doc.doc_type_id:
         fields = active_fields(doc.doc_type)
-        if fields:
+        if fields or has_template(doc.doc_type):
             out = {}
             for f in fields:
                 if f.role and f.role not in out:
@@ -302,7 +334,8 @@ def role_keys(doc: Document) -> dict:
 
 
 def details_status(doc: Document) -> dict:
-    fields = list(doc.fields.all())
+    hidden = archived_keys(doc.doc_type) if doc.doc_type_id else set()
+    fields = [f for f in doc.fields.all() if not (f.key in hidden and f.scope == DocumentField.TYPE)]
     proposed = sum(1 for f in fields if f.status == DocumentField.PROPOSED and f.scope != DocumentField.UNMAPPED)
     unmapped = sum(1 for f in fields if f.scope == DocumentField.UNMAPPED)
     flagged = sum(1 for f in fields if f.flags and f.status == DocumentField.CONFIRMED)
@@ -329,7 +362,7 @@ def details_status(doc: Document) -> dict:
 def allowed_extract_keys(doc: Document) -> set[str] | None:
     """None = any key (untyped documents keep the earlier behaviour)."""
     fields = active_fields(doc.doc_type) if doc.doc_type_id else []
-    if not fields:
+    if not fields and not (doc.doc_type_id and has_template(doc.doc_type)):
         return None
     return {f.key for f in fields if f.extract}
 
@@ -482,6 +515,8 @@ def _role_keys_for(t: DocumentType | None) -> dict:
     for f in active_fields(t):
         if f.role and f.role not in out:
             out[f.role] = f.key
+    if not out and has_template(t):
+        return out
     return out or {"issue": "issue_date", "expiry": "expiry_date", "no_expiry": "no_expiry"}
 
 
@@ -617,6 +652,105 @@ def promote(*, actor, doc_type: DocumentType, doc: Document, key: str, request=N
     audit.record("settings.document_type_field_promote", request=request, target_type="document_type",
                  target_id=str(doc_type.pk), key=new_key)
     return tf
+
+
+# ------------------------------------------------------------------ archive, restore, permanent deletion (Change Set AA)
+
+def _reapply_roles(t: DocumentType, key: str) -> None:
+    """A field that drives dates (expiry / issue / no-expiry) changed state: re-derive dates and reminders of the
+    documents that hold a value for it, from confirmed values only."""
+    from . import services as S
+
+    for doc in Document.objects.filter(doc_type=t, archived_at__isnull=True, fields__key=key).distinct()[:2000]:
+        S.apply_confirmed_fields(doc)
+
+
+def archive_field(*, actor, field: DocumentTypeField, request=None) -> DocumentTypeField:
+    """Hide a field from new entry, the Details panel, required checks and OCR / AI mapping. Its definition and every
+    stored value stay; Restore brings them back."""
+    if not field.enabled:
+        raise TypeError_("This field is already archived.")
+    field.enabled, field.archived_at, field.archived_by, field.archived_order = False, timezone.now(), actor, field.order
+    field.save(update_fields=["enabled", "archived_at", "archived_by", "archived_order", "updated_at"])
+    sync_ocr_fields(field.doc_type)
+    if field.role:
+        _reapply_roles(field.doc_type, field.key)
+    audit.record("settings.document_type_field_archive", request=request, actor=actor, target_type="document_type",
+                 target_id=str(field.doc_type_id), key=field.key,
+                 documents_with_values=value_counts(field.doc_type, [field.key]).get(field.key, 0))
+    return field
+
+
+def restore_field(*, actor, field: DocumentTypeField, request=None) -> DocumentTypeField:
+    """Reactivate the same field (same key, so the kept values show again). It returns to its previous position when
+    no active field took it; otherwise it is added at the end. Values are never duplicated: they were never moved."""
+    if field.enabled:
+        raise TypeError_("This field is not archived.")
+    t = field.doc_type
+    if field.role and t.template_fields.filter(enabled=True, role=field.role).exists():
+        raise TypeError_(f"Another active field already has the role “{field.role.replace('_', ' ')}”. Change that "
+                         "field's role first, or edit this field after restoring it.")
+    active = t.template_fields.filter(enabled=True)
+    previous = field.archived_order
+    if previous is None or active.filter(order=previous).exists():
+        field.order = (active.order_by("-order").values_list("order", flat=True).first() or 0) + 10
+        placed = "end"
+    else:
+        field.order = previous
+        placed = "previous"
+    field.enabled, field.archived_at, field.archived_by, field.archived_order = True, None, None, None
+    field.save(update_fields=["enabled", "order", "archived_at", "archived_by", "archived_order", "updated_at"])
+    sync_ocr_fields(t)
+    if field.role:
+        _reapply_roles(t, field.key)
+    audit.record("settings.document_type_field_restore", request=request, actor=actor, target_type="document_type",
+                 target_id=str(t.pk), key=field.key, position=placed)
+    return field
+
+
+def delete_field_permanently(*, actor, field: DocumentTypeField, reason: str = "", request=None) -> int:
+    """Main Admin only (checked by the view, with step-up). Removes the field and the values stored for it on
+    documents of this type from the live application. Backups already taken keep what they contained."""
+    from . import search as searchlib
+    from . import services as S
+
+    if field.enabled:
+        raise TypeError_("Archive the field first. Archive keeps its values; permanent deletion removes them.")
+    t, key = field.doc_type, field.key
+    with transaction.atomic():
+        locked = list(DocumentField.objects.select_for_update().filter(document__doc_type=t, key=key)
+                      .values_list("pk", "document_id", "value"))
+        doc_ids = sorted({d for _pk, d, _v in locked})
+        with_values = len({d for _pk, d, v in locked if v})
+        DocumentField.objects.filter(pk__in=[pk for pk, _d, _v in locked]).delete()
+        field.delete()
+        docs = list(Document.objects.filter(pk__in=doc_ids))
+        for doc in docs:
+            S._history(doc, actor, "type_field_deleted", key=key)  # never the value
+    sync_ocr_fields(t)
+    for doc in docs:
+        searchlib.update_search_vector(doc)
+    audit.record("settings.document_type_field_delete", request=request, actor=actor, target_type="document_type",
+                 target_id=str(t.pk), key=key, documents_with_values=with_values, reason=(reason or "")[:300],
+                 permanent=True)
+    return with_values
+
+
+def archived_values(doc: Document) -> list[dict]:
+    """Values kept for archived fields of this document's type (Show archived metadata). The caller checked that
+    the person may view the document."""
+    if not doc.doc_type_id:
+        return []
+    arch = {f.key: f for f in doc.doc_type.template_fields.filter(enabled=False)}
+    if not arch:
+        return []
+    out = []
+    for f in doc.fields.filter(key__in=list(arch), scope=DocumentField.TYPE).exclude(value="").order_by("key"):
+        tf = arch[f.key]
+        out.append({"key": f.key, "label": tf.label, "value": f.value, "status": f.status, "source": f.source,
+                    "source_label": SOURCE_LABELS.get(f.source, f.source), "archived_at": tf.archived_at,
+                    "identifier": f.key in DocumentField.SENSITIVE})
+    return out
 
 
 # ------------------------------------------------------------------ reports

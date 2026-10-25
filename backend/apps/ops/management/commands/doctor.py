@@ -161,6 +161,27 @@ class Command(BaseCommand):
                     warn("AI provider reachable and authenticated", f"{exc.category}: {str(exc)[:160]}")
                 if p.last_test:
                     info("AI profile last test", f"{p.last_test.get('kind')} {'passed' if p.last_test.get('ok') else 'failed'} at {p.last_test.get('at')}")
+            # Change Set AA: processing source, the Local profile that can read originals, and the OCR fallback chain
+            from apps.ai import direct
+            from apps.library import ocr_engines
+
+            src = direct.default_source()
+            info("AI default processing source", direct.LABELS[src])
+            eligible = [x for x in AIProfile.objects.filter(enabled=True) if direct.capabilities(x)["direct"]]
+            if src != "ocr_text":
+                (info if eligible else warn)(
+                    "AI Local profile for original documents",
+                    ", ".join(f"{x.name} (vision {direct.capabilities(x)['vision_tested']}, pages per request "
+                              f"{ {'supported': 'several', 'unsupported': 'one'}.get(direct.capabilities(x)['multipage_tested'], 'not tested')})"
+                              for x in eligible)
+                    or "none — original documents fall back to OCR text (add a vision model to a Local profile and run Test Profile)")
+            if p is not None:
+                dc = direct.capabilities(p)
+                info("AI default profile document capabilities",
+                     f"image {'yes' if dc['vision'] else 'no'}, PDF {'yes (pages rendered locally)' if dc['pdf'] else 'no'}, "
+                     f"TIFF {'yes (converted locally)' if dc['tiff'] else 'no'}, structured output {dc['structured_output']}, "
+                     f"up to {dc['max_pages']} page(s) and {dc['max_mb']} MB")
+            info("AI OCR fallback chain", " → ".join(ocr_engines.engine_order()) + f" ({config.get('processing.ocr_mode')})")
             for x in AIProfile.objects.filter(enabled=True, location="cloud"):
                 warn("AI Cloud profile", f"profile '{x.name}' sends permitted document content to a cloud service")
             failed = AIJob.objects.filter(status="failed", created_at__gte=timezone.now() - timedelta(days=1)).count()

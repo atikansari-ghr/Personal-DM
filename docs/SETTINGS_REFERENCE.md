@@ -1652,6 +1652,54 @@ Off: every AI Action uses the system default profile (forced by the Main Admin).
 - **Restart needed:** no
 - **Learn more:** [local-ai#profiles](guides/local-ai.md#profiles)
 
+### Default processing source (`ai.processing_source`)
+
+What AI Actions read. OCR Text: the OCR engines read the document and only their text goes to the AI. Original Document — Local AI: the PDF or image goes straight to a Local AI that can read it; OCR is not run. Original Document — Local AI + OCR Fallback: the Local AI reads the original first; if it cannot, the OCR engines run in the configured order and the AI reads their text. Original documents are never sent to a Cloud profile by these modes.
+
+- **Default:** `'original_fallback'`
+- **Allowed values:** original_fallback, original, ocr_text
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** ai.enabled
+- **Effect of changing:** Affects future processing only; nothing is re-analysed.
+- **Restart needed:** no
+- **Learn more:** [local-ai#processing-source](guides/local-ai.md#processing-source)
+
+### Let people choose the processing source per action (`ai.source_override`)
+
+On: people who may run an AI Action can pick another processing source for that action. Off: every action uses the default above.
+
+- **Default:** `True`
+- **Allowed values:** bool
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** ai.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#processing-source](guides/local-ai.md#processing-source)
+
+### Original Document: pages sent at most (`ai.direct_max_pages`)
+
+Pages of a PDF or multi-page TIFF given to the Local AI in one request (the first pages, in order). A model that reads one image at a time only gets the first page.
+
+- **Default:** `4`
+- **Allowed values:** 1–20
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** ai.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#direct-formats](guides/local-ai.md#direct-formats)
+
+### Original Document: largest file (MB) (`ai.direct_max_mb`)
+
+Larger originals are not given to the Local AI directly (with OCR fallback, OCR reads them instead).
+
+- **Default:** `20`
+- **Allowed values:** 1–100
+- **Scope:** global · **Editable by:** main administrator
+- **Depends on:** ai.enabled
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [local-ai#direct-formats](guides/local-ai.md#direct-formats)
+
 ### Parallel AI jobs (`ai.max_parallel`)
 
 AI jobs running at the same time. Keep 1 on a 2-CPU container so documents are never delayed.
@@ -2489,6 +2537,18 @@ Size, style and options of each Overview widget.
 - **Effect of changing:** Takes effect immediately.
 - **Restart needed:** no
 - **Learn more:** [overview#customize](guides/overview.md#customize)
+
+### Overview groups (`me.dashboard_groups`)
+
+Your own groups of Overview tiles (Change Set AA).
+
+- **Default:** `None`
+- **Allowed values:** dashboard_groups
+- **Scope:** user · **Editable by:** each user
+- **Depends on:** nothing
+- **Effect of changing:** Takes effect immediately.
+- **Restart needed:** no
+- **Learn more:** [overview#groups](guides/overview.md#groups)
 
 ### Weather city (`me.weather_city`)
 

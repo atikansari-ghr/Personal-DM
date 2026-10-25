@@ -62,6 +62,13 @@ with Passkey** (discoverable credential, user verification required) directly. E
 8. Update the search vector: title (A), metadata and fields excluding the document number (B), content (C).
 9. If Local AI is enabled and the document type allows AI to read its text: queue `ai_task` jobs (analysis → suggestions; embeddings) **after** the document is stored and searchable.
 
+AI Actions choose a **Processing Source** (Change Set AA, `apps/ai/direct.py`): *OCR Text* (OCR → normalised text →
+AI), *Original Document — Local AI* (original → rendered/converted PNG pages on this server → Local vision model →
+validated, evidence-backed result) or the default *Original Document — Local AI + OCR Fallback* (the direct attempt
+first; when it is not eligible, fails or is unusable, the configured OCR engine order runs and the same Local AI reads
+its text). Whatever the source, the result is a reviewable suggestion; the original file, the OCR text and confirmed
+metadata stay separate and unchanged.
+
 All tools run through `sandbox.run`: their own session, an address-space limit, a CPU-time limit, a timeout, a scrubbed environment and a private working directory.
 
 ## Reminder engine

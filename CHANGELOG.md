@@ -4,6 +4,22 @@
 
 The first implementation of the full initial-release scope. See `docs/IMPLEMENTATION_STATUS.md` for the validation still pending before family production use.
 
+### Added (2026-10-25) — direct Local AI processing, Overview groups, Document Type field management (Change Set AA)
+- **Processing Source** for AI Actions: *Original Document — Local AI + OCR Fallback* (new default), *Original
+  Document — Local AI* and *OCR Text*. A Local vision model reads the original PDF, JPEG, PNG, TIFF or WEBP (pages
+  rendered/converted on the server, bounded, temporary files removed); when it cannot, the configured OCR engine order
+  runs and the same Local AI reads the text. Originals never go to a Cloud profile through these modes. AI History
+  records the selected and final source, file type, pages, fallback and reason; Test Profile checks vision and
+  multi-page reading with a synthetic page; doctor reports the source, eligible profile, capabilities and OCR chain.
+- **Schema-aware suggestions:** the AI receives the active fields of the document's type (archived fields excluded)
+  and proposes them as reviewable suggestions with source, page and evidence; values it cannot point to are dropped.
+- **Overview — Edit Layout:** free resizing (width on a 12-column grid and height) with a corner handle or controls,
+  personal **groups** (create, rename, reorder, collapse, remove — tiles always move to another group), **Reset
+  Layout** for your own account only; phones and tablets reflow without changing the desktop layout.
+- **Document Type fields:** drag-and-drop ordering (keyboard alternative), **Archive** / **Restore** with all values
+  kept, **Archived fields** with document counts, **Show archived metadata** in Details, and Main Admin-only
+  **permanent deletion** with the affected-document count, typed confirmation and step-up authentication.
+
 ### Fixed (2026-10-18) — light-ocr self-test failed after the upgrade
 - The light-ocr self-test failed with *exit 70* on Debian 13 and OCR fell back to the next engine. Root cause (shown
   once light-ocr's own message was surfaced): *Unable to locate @arcships/light-ocr-linux-x64-gnu*. That platform

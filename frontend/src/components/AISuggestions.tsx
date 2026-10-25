@@ -58,17 +58,18 @@ export default function AISuggestions({ docId, onChange }: { docId: string; onCh
         <table className="responsive"><thead><tr>{can_edit && <th><span className="sr-only">Select</span></th>}<th>Field</th><th>Suggestion</th><th className="hide-mobile">Current</th><th /></tr></thead><tbody>
           {suggestions.map((s: any) => (
             <tr key={s.id} data-suggestion={s.field} data-conflict={s.conflict ? "1" : undefined}>
-              {can_edit && <td>{s.field !== "summary" && <input type="checkbox" aria-label={`Select ${LABEL[s.field] || s.field}`} checked={picked.has(s.id)} onChange={() => toggle(s.id)} />}</td>}
-              <td>{LABEL[s.field] || s.field}</td>
+              {can_edit && <td>{s.field !== "summary" && <input type="checkbox" aria-label={`Select ${s.field_label || LABEL[s.field] || s.field}`} checked={picked.has(s.id)} onChange={() => toggle(s.id)} />}</td>}
+              <td>{s.field_label || LABEL[s.field] || s.field}</td>
               <td>{editing?.id === s.id
                 ? <form className="row" style={{ gap: ".3rem" }} onSubmit={(e) => { e.preventDefault(); if (editing) accept(s, editing.value); }}>
-                    <input type={s.field.endsWith("_date") ? "date" : "text"} aria-label={`Edit ${LABEL[s.field] || s.field}`} value={editing?.value ?? ""} onChange={(e) => setEditing({ id: s.id, value: e.target.value })} />
+                    <input type={s.field.endsWith("_date") ? "date" : "text"} aria-label={`Edit ${s.field_label || LABEL[s.field] || s.field}`} value={editing?.value ?? ""} onChange={(e) => setEditing({ id: s.id, value: e.target.value })} />
                     <button className="btn small primary" disabled={busy}>Accept edited</button><button type="button" className="btn small ghost" onClick={() => setEditing(null)}>Cancel</button></form>
                 : <strong>{s.display}</strong>}
                 <div className="small muted">
                   {s.evidence && <span className={`badge ${s.evidence === "observed" ? "ok" : "neutral"}`} title={s.evidence === "observed" ? "Printed in the OCR text" : "Concluded by the AI, not printed as such"}>{s.evidence === "observed" ? "Observed" : "Inferred"}</span>}
                   {s.ai_confidence != null && <span title="The AI's own confidence (not the OCR confidence)"> AI confidence {Math.round(s.ai_confidence * 100)}%</span>}
                   {s.conflict && <span className="badge danger" title="Differs from a value a person set">Conflict</span>}
+                  {s.source && <span className="badge neutral" data-suggestion-source={s.source} title="What the AI read">{s.source === "original" ? `Original document${s.page ? ` · page ${s.page}` : ""}` : "OCR text"}</span>}
                   {s.note && <span> · {s.note}</span>}
                 </div></td>
               <td className="small muted hide-mobile">{s.current || "—"}</td>

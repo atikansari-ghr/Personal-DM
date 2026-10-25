@@ -148,6 +148,13 @@ DEFAULT_URLS = {"openai_cloud": "https://api.openai.com/v1", "anthropic": "https
                 "gemini": "https://generativelanguage.googleapis.com", "openrouter": "https://openrouter.ai/api/v1"}
 
 
+def _images(image) -> list[bytes]:
+    """``image`` may be one PNG (bytes) or several pages in order (a list) — Change Set AA multi-page input."""
+    if image is None:
+        return []
+    return [i for i in image if i] if isinstance(image, (list, tuple)) else [image]
+
+
 def guard_payload(profile, *, image: bool = False, file: bool = False) -> None:
     """Last line of defence below the policy check in service.py: a Cloud profile never receives an original image or
     file unless that category is switched on for it, and a text-only profile never receives one at all."""
@@ -313,8 +320,9 @@ class OpenAICompatible(Provider):
             raise AIError("This provider does not accept original files; nothing was sent.", "unsupported")
         msgs = [dict(m) for m in messages]
         if image is not None:
-            uri = "data:image/png;base64," + base64.b64encode(image).decode()
-            msgs[-1]["content"] = [{"type": "text", "text": msgs[-1]["content"]}, {"type": "image_url", "image_url": {"url": uri}}]
+            msgs[-1]["content"] = [{"type": "text", "text": msgs[-1]["content"]}] + [
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64," + base64.b64encode(img).decode()}}
+                for img in _images(image)]
         payload = {"model": model, "messages": msgs, "temperature": 0.1, self.token_param: self.profile.max_output_tokens,
                    "stream": False}
         if schema is not None:
@@ -356,7 +364,7 @@ class Ollama(Provider):
             raise AIError("Ollama does not accept original files; nothing was sent.", "unsupported")
         msgs = [dict(m) for m in messages]
         if image is not None:
-            msgs[-1]["images"] = [base64.b64encode(image).decode()]
+            msgs[-1]["images"] = [base64.b64encode(img).decode() for img in _images(image)]
         payload = {"model": model, "messages": msgs, "stream": False,
                    "options": {"temperature": 0.1, "num_predict": self.profile.max_output_tokens}}
         if schema is not None:
@@ -420,9 +428,9 @@ class Anthropic(Provider):
         msgs = [{"role": m["role"], "content": str(m.get("content", ""))} for m in rest]
         if (image is not None or file is not None) and msgs:
             parts = []
-            if image is not None:
+            for img in _images(image):
                 parts.append({"type": "image", "source": {"type": "base64", "media_type": "image/png",
-                                                          "data": base64.b64encode(image).decode()}})
+                                                          "data": base64.b64encode(img).decode()}})
             if file is not None:
                 parts.append({"type": "document", "source": {"type": "base64", "media_type": "application/pdf",
                                                              "data": base64.b64encode(file).decode()}})
@@ -467,7 +475,8 @@ class Gemini(Provider):
         contents = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": str(m.get("content", ""))}]}
                     for m in rest]
         if contents and image is not None:
-            contents[-1]["parts"].insert(0, {"inline_data": {"mime_type": "image/png", "data": base64.b64encode(image).decode()}})
+            contents[-1]["parts"][:0] = [{"inline_data": {"mime_type": "image/png", "data": base64.b64encode(img).decode()}}
+                                         for img in _images(image)]
         if contents and file is not None:
             contents[-1]["parts"].insert(0, {"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(file).decode()}})
         gen = {"temperature": 0.1, "maxOutputTokens": self.profile.max_output_tokens}

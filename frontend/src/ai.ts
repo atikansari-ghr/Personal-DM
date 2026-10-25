@@ -3,7 +3,9 @@ import { api } from "./api";
 
 export type AiStatus = { enabled: boolean; allowed: boolean; ocr_assist: boolean; smart_organization: boolean; semantic_search: boolean; assistant: boolean;
   mode?: string; actions?: boolean; profile_choice?: boolean; profiles?: { id: number; name: string; location: string }[];
-  profile?: { name: string; location: "local" | "cloud"; capabilities: Record<string, any>; allowed: string[] } | null };
+  profile?: { name: string; location: "local" | "cloud"; capabilities: Record<string, any>; allowed: string[]; direct?: Record<string, any> } | null;
+  // Change Set AA: the default processing source and whether this person may choose another one per action
+  processing?: { default: string; override: boolean; labels: Record<string, string> } };
 
 let cached: { at: number; value: AiStatus } | null = null;
 

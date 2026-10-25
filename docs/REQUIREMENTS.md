@@ -472,6 +472,30 @@ Acceptance tests AT-336…AT-355. The change prompt numbered them AT-311…AT-33
 
 Native apps, scanning enhancement, in-browser Office editing, DICOM viewing.
 
+## Change set AA (2026-10): direct Local AI processing, custom Overview layouts, Document Type field management {#change-set-aa}
+
+Acceptance tests AT-461…AT-480 (prompt AT-436…AT-455 = AT-(n+25); the prompt called itself "Change Set X", which is
+taken). See [TRACEABILITY.md](TRACEABILITY.md#change-set-aa) and [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md#change-set-aa).
+
+| ID | Requirement |
+|---|---|
+| PRS-1 | Processing Source for the AI Actions that read a document: OCR Text, Original Document — Local AI, Original Document — Local AI + OCR Fallback (default). Main Admin default in Settings → AI → Document Processing; per-action choice where the policy allows it; changing it affects future processing only. |
+| PRS-2 | OCR Text never sends the original. Original Document — Local AI never runs OCR; a failure is reported with an offer to retry with fallback. The fallback mode uses the Main Admin's OCR engine order (never hard-coded) when the direct attempt is not eligible, fails, times out or returns malformed/unusable output — never because of AI confidence alone. |
+| PRS-3 | Original modes are Local only: an explicit original mode with a Cloud profile is refused before anything is sent; the AT-435 Cloud controls stay. Eligibility: Local, vision-capable (Test Profile), supported format, within size limits, authorized. |
+| PRS-4 | Formats PDF, JPEG, PNG, TIFF/TIF, WEBP (multi-page PDF/TIFF bounded by a page limit); safe local conversion that never modifies the original, records provenance and removes temporary files; unsupported formats are refused or fall back and are never claimed as supported. Capabilities (image, PDF, TIFF, multi-page, structured output, limits) detected by Test Profile with synthetic content. |
+| PRS-5 | Schema-aware mapping against the active Document Type fields by stable key (archived fields excluded); validated output; values without printed evidence are not proposed; everything is a reviewable suggestion with source, page, evidence and conflict. |
+| PRS-6 | Provenance per job: selected source, Local profile/provider/model, file type, pages, direct status, fallback and reason, OCR engines and order, final source, duration/status — never content. Direct processing and fallbacks are audited. |
+| DSH-1 | Edit Layout mode (nothing moves outside it): drag/reorder, free width/height resizing within limits (handle plus accessible controls), no overlaps. |
+| DSH-2 | Named groups per user: create, rename, reorder, collapse/expand, move tiles, remove. General is protected; removing a group never deletes or orphans its tiles. |
+| DSH-3 | Layouts are personal and stored on the server (groups, order, sizes, collapsed state); one person's changes never affect another's. |
+| DSH-4 | Responsive reflow (desktop 12 columns, tablet 2, phone 1) that never changes the saved desktop layout; Reset Layout (confirmed) resets only the current person's layout. |
+| DSH-5 | Upgrades give every account a valid default layout; stale tile references are dropped safely; later tiles appear in General. |
+| FLD-1 | Document Type fields reorder by drag and drop with a keyboard alternative; stable ids and explicit order; AI/OCR map by key. |
+| FLD-2 | Archive (the standard removal) keeps the definition and all values and provenance, and excludes the field from entry, the Details panel, required checks and OCR/AI mapping. |
+| FLD-3 | Archived Fields lists archived date/by and the number of documents with values (no content); Show archived metadata shows kept values, labelled, to people who may open the document. |
+| FLD-4 | Restore reactivates the same field (previous position when free, otherwise appended) without duplicates. |
+| FLD-5 | Permanent deletion is Main Admin only, for archived fields, after the affected-document count, a destructive warning, typed confirmation and step-up; audited with the count and reason; backups are not claimed to change. |
+
 ## Change set Z (2026-10): optional AI Document Intelligence and the OCR engine order {#change-set-z}
 
 Acceptance tests AT-441…AT-460 (prompt AT-416…AT-435 = AT-(n+25)). See [TRACEABILITY.md](TRACEABILITY.md#change-set-z)

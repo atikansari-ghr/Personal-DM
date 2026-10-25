@@ -166,6 +166,54 @@ def _step(steps: list, name: str, ok, detail: str = "") -> None:
     steps.append({"step": name, "ok": ok, "detail": detail})
 
 
+def _synthetic_page(text: str) -> bytes:
+    """A generated page with sanitized sample text (never a family document)."""
+    import io
+
+    from PIL import Image, ImageDraw, ImageFont
+
+    img = Image.new("RGB", (900, 260), "white")
+    try:
+        font = ImageFont.truetype("DejaVuSans.ttf", 44)
+    except OSError:
+        font = ImageFont.load_default(size=44)
+    ImageDraw.Draw(img).text((40, 100), text, fill="black", font=font)
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _vision_checks(p: AIProfile, prov, steps: list) -> dict:
+    """Change Set AA capability detection with synthetic pages: can the vision model read a printed date, and can it
+    read two pages in one request? The outcome is remembered on the profile and decides whether Original Document
+    processing is offered and how many pages it gets. A failed check is reported, never hidden."""
+    caps = dict(p.capabilities or {})
+    out = {}
+    try:
+        reply = prov.chat([{"role": "user", "content": "TEST VISION: reply with the date printed in the image as YYYY-MM-DD."}],
+                          p.vision_model, image=_synthetic_page("VALID UNTIL 2031-05-20"))
+        out["reads_image"] = "2031-05-20" in reply
+    except AIError as exc:
+        out["reads_image"], out["error"] = False, str(exc)[:200]
+    caps["vision_read"] = "ok" if out["reads_image"] else "failed"
+    _step(steps, "Vision model reads a synthetic page", out["reads_image"], out.get("error", ""))
+    if out["reads_image"]:
+        try:
+            reply = prov.chat([{"role": "user", "content": "TEST VISION PAGES: two page images follow. Reply with the code "
+                                "printed on page 1 and the code printed on page 2, separated by a space."}],
+                              p.vision_model, image=[_synthetic_page("CODE A7K"), _synthetic_page("CODE Q4M")])
+            out["multipage"] = "A7K" in reply.upper() and "Q4M" in reply.upper()
+        except AIError:
+            out["multipage"] = False
+        caps["multipage"] = "supported" if out["multipage"] else "unsupported"
+        # informational: a single-page model is still usable (only the first page of a document is sent)
+        _step(steps, "Pages per request (two-page test)", True,
+              "several pages" if out["multipage"] else "one page — only the first page of a document will be sent")
+    p.capabilities = caps
+    AIProfile.objects.filter(pk=p.pk).update(capabilities=caps)
+    return out
+
+
 def _save_test(p: AIProfile, kind: str, ok: bool, steps: list, latency_ms: int | None = None, error: str = "") -> None:
     """Last Test: only the checks that actually ran, never secrets or document content."""
     from django.utils import timezone
@@ -215,6 +263,8 @@ def profile_test(request, pk):
         if p.embedding_model and p.embedding_model not in missing:
             out["embedding_dimensions"] = len(prov.embed(["test"], p.embedding_model)[0])
             _step(steps, "Embedding model returns a vector", True, f"{out['embedding_dimensions']} dimensions")
+        if p.vision_model and p.vision_model not in missing and (not p.is_cloud or p.cloud_send_images):
+            out["vision"] = _vision_checks(p, prov, steps)
     except AIError as exc:
         _step(steps, "Failed", False, str(exc))
         _save_test(p, "connection", False, steps, int((time.monotonic() - started) * 1000), str(exc))
@@ -332,6 +382,9 @@ def job_json(j: AIJob) -> dict:
             "profile": j.profile_name or (j.profile.name if j.profile_id and j.profile else None) or None,
             "provider": j.provider, "location": j.location, "data_sent": j.data_sent or [], "usage": j.usage or {},
             "trigger": j.trigger, "model": j.model, "status": j.status, "status_key": key, "status_label": label,
+            # Change Set AA: selected processing source, what the result came from, and why OCR ran
+            "processing_source": j.processing_source, "final_source": j.final_source,
+            "fallback_used": j.fallback_used, "fallback_reason": j.fallback_reason,
             "error_category": j.error_category, "error": j.error, "attempts": j.attempts, "retryable": j.retryable,
             "stage": j.stage, "stage_label": service.STAGE_LABELS.get(j.stage, ""), "detail": safe_detail(j.detail),
             "next_retry_at": j.next_retry_at, "max_attempts": ai_jobs.AI_MAX_ATTEMPTS, "duration_seconds": duration,
@@ -340,7 +393,11 @@ def job_json(j: AIJob) -> dict:
 
 SAFE_DETAIL = ("ocr_engine", "ocr_pages", "ocr_chars", "ocr_reused", "ocr_requested", "model", "parts", "total_chars",
                "analyzed_chars", "truncated", "structured_output", "fallback", "rejected_capability", "http_status",
-               "server_message", "capability", "smart", "source", "cloud_confirmed")
+               "server_message", "capability", "smart", "source", "cloud_confirmed",
+               # Change Set AA (content-free facts of a direct Local AI attempt and of the OCR fallback)
+               "processing_source", "direct_status", "direct_error_category", "file_type", "pages_total", "pages_sent",
+               "truncated", "conversion", "bytes_sent", "ocr_order", "ocr_engines_attempted", "ocr_chain_note",
+               "source_note")
 
 
 def safe_detail(detail) -> dict:
@@ -358,7 +415,9 @@ def ai_job_retry(request, pk):
     if not service.user_allowed(request.user):
         raise PermissionDenied("AI features are limited to administrators in this installation.")
     doc, _ctx = _doc(request, j.document_id, P.EDIT if j.kind in service.EDIT_ACTIONS | {AIJob.EMBED} else P.VIEW)
-    keep = {k: v for k, v in (j.detail or {}).items() if k in ("source", "profile_id", "cloud_confirmed")}
+    keep = {k: v for k, v in (j.detail or {}).items() if k in ("source", "profile_id", "cloud_confirmed", "processing_source")}
+    if request.data.get("processing_source") in ("ocr_text", "original", "original_fallback"):  # e.g. retry with fallback
+        keep["processing_source"] = request.data["processing_source"]
     new = ai_jobs.queue(j.kind, document=doc, user=request.user, requested=True, options=keep)
     audit.record("ai.job_retry", request=request, target=doc, subject_user=doc.owner, kind=j.kind)
     return Response({"job": str(new.id), "status": new.status}, status=202)
@@ -406,10 +465,13 @@ def _doc(request, pk, cap) -> tuple[Document, P.AccessContext]:
     return doc, ctx
 
 
-def suggestion_json(s: AISuggestion) -> dict:
+def suggestion_json(s: AISuggestion, labels: dict | None = None) -> dict:
+    key = s.field.removeprefix("detail:")
     return {"id": s.id, "field": s.field, "value": s.value, "display": s.display, "current": s.current, "status": s.status,
             "created_at": s.created_at, "evidence": s.evidence, "ai_confidence": s.confidence, "note": s.note,
-            "conflict": s.conflict, "editable": s.field in service.EDITABLE, "label": "AI suggestion"}
+            "conflict": s.conflict, "editable": service.is_editable(s.field), "label": "AI suggestion",
+            "field_label": (labels or {}).get(key) if s.field.startswith("detail:") else None,
+            "source": s.source, "page": s.page}
 
 
 def _check_doc_ai(request, doc) -> None:
@@ -433,6 +495,13 @@ def available_actions(request, doc, ctx) -> list[dict]:
     caps = service.profile_capabilities(profile)
     allowed = service.allowed_categories(profile)
     can_edit = ctx.can(doc, P.EDIT)
+    from . import direct
+
+    try:  # can this document's original go to the default profile? (a reason is shown when it cannot)
+        direct.eligibility(doc, profile)
+        direct_ok, direct_reason = True, ""
+    except AIError as exc:
+        direct_ok, direct_reason = False, str(exc)
     out = []
     for kind in ("analyze", "extract", "verify", "summarize", "ask", "suggest_type", "filename", "expiry"):
         if not service.action_enabled(kind) or (kind in service.EDIT_ACTIONS and not can_edit):
@@ -444,7 +513,17 @@ def available_actions(request, doc, ctx) -> list[dict]:
             sources.append("image")
         if kind in ("analyze", "extract", "verify") and caps["file"] and "file" in allowed:
             sources.append("file")
-        out.append({"kind": kind, "label": service.ACTION_LABELS[kind], "sources": sources})
+        item = {"kind": kind, "label": service.ACTION_LABELS[kind], "sources": sources}
+        if kind in direct.APPLICABLE:
+            # Change Set AA: the three processing sources; the original modes only with a Local profile that can read
+            # this file (the fallback mode still works without one: it then reads OCR text)
+            item["processing_sources"] = [
+                {"value": "original_fallback", "label": direct.LABELS["original_fallback"], "enabled": not profile.is_cloud,
+                 "direct": direct_ok, "reason": "" if direct_ok else direct_reason},
+                {"value": "original", "label": direct.LABELS["original"], "enabled": direct_ok,
+                 "reason": "" if direct_ok else direct_reason},
+                {"value": "ocr_text", "label": direct.LABELS["ocr_text"], "enabled": True, "reason": ""}]
+        out.append(item)
     return out
 
 
@@ -487,17 +566,31 @@ def document_action(request, pk):
     if source not in service.SOURCES:
         return _fail("Choose OCR text, the page image or the original file.")
     profile_id = d.get("profile") or None
+    from . import direct
+
+    psource = d.get("processing_source") or None
     try:
         profile = service.profile_for(service.action_feature(kind), profile_id)
         sent = service.plan_for(profile, source, confirmed=d.get("confirm_cloud") is True)
+        effective = "ocr_text"
+        if source == "ocr":  # the policy is checked now: a Cloud profile is refused before anything is queued
+            effective, _why = direct.resolve(psource, profile, kind, user=request.user)
+            if effective != "ocr_text":
+                sent = ["image"] + (["metadata"] if "metadata" in service.allowed_categories(profile) else [])
+                if effective == "original":
+                    direct.eligibility(doc, profile)  # no fallback: refuse at once when it cannot work
+    except direct.NotEligible as exc:  # the original cannot go to this profile: nothing was sent
+        return Response({"error": str(exc), "category": exc.category}, status=409)
     except AIError as exc:
         return _ai_error(exc)
     options = {"source": source, **({"profile_id": profile.id} if profile_id else {}),
-               **({"cloud_confirmed": True} if d.get("confirm_cloud") is True else {})}
+               **({"cloud_confirmed": True} if d.get("confirm_cloud") is True else {}),
+               **({"processing_source": psource} if psource else {})}
     job = ai_jobs.queue(kind, document=doc, user=request.user, requested=True, options=options)
     audit.record("ai.action_requested", request=request, target=doc, subject_user=doc.owner, ai_action=kind, source=source,
-                 profile=profile.name, location="cloud" if profile.is_cloud else "local", data_sent=sent)
-    return Response({"job": str(job.id), "status": job.status, "stage": job.stage,
+                 profile=profile.name, location="cloud" if profile.is_cloud else "local", data_sent=sent,
+                 processing_source=effective)
+    return Response({"job": str(job.id), "status": job.status, "stage": job.stage, "processing_source": effective,
                      "disclosure": service.disclosure(profile, sent)}, status=202)
 
 
@@ -550,7 +643,8 @@ def document_suggestions(request, pk):
     doc, ctx = _doc(request, pk, P.VIEW)
     pending = doc.ai_suggestions.filter(status=AISuggestion.PENDING)
     last = AIJob.objects.filter(document=doc, kind__in=service.EDIT_ACTIONS).first()
-    return Response({"suggestions": [suggestion_json(s) for s in pending], "can_edit": ctx.can(doc, P.EDIT),
+    labels = dict(doc.doc_type.template_fields.values_list("key", "label")) if doc.doc_type_id else {}
+    return Response({"suggestions": [suggestion_json(s, labels) for s in pending], "can_edit": ctx.can(doc, P.EDIT),
                      "last_job": {"id": str(last.id), "status": last.status, "error": last.error, "error_category": last.error_category,
                                   "kind": last.kind, "action": service.ACTION_LABELS.get(last.kind, last.kind),
                                   "status_label": service.status_label(last)[1],

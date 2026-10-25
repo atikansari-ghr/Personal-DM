@@ -44,9 +44,26 @@ WIDGET_OPTIONS = {
 }
 
 
+# Change Set AA: free resizing. Width in columns of a 12-column desktop grid ("cols"; the older "w" counts 4-column
+# steps, cols = 3 × w) and height in rows of 90 px ("h"; absent = fit the content). Limits keep every tile usable.
+HEIGHTS = {"date": (1, 4), "weather": (1, 4), "documents": (1, 4), "members": (1, 4), "expiring": (1, 4),
+           "storage": (1, 4), "review": (1, 4), "calendar": (3, 8)}
+DEFAULT_HEIGHT = (2, 8)
+
+
+def col_limits(wid: str) -> tuple[int, int]:
+    lo, _d, hi = SIZES.get(wid, (1, 2, 4))
+    return max(2, lo * 3 - 1), hi * 3
+
+
 def layout_limits() -> dict:
-    return {k: {"min": a, "default": b, "max": c, "circle": k in CIRCLE_OK, "options": list(WIDGET_OPTIONS.get(k, {}))}
-            for k, (a, b, c) in SIZES.items()}
+    out = {}
+    for k, (a, b, c) in SIZES.items():
+        cmin, cmax = col_limits(k)
+        hmin, hmax = HEIGHTS.get(k, DEFAULT_HEIGHT)
+        out[k] = {"min": a, "default": b, "max": c, "circle": k in CIRCLE_OK, "options": list(WIDGET_OPTIONS.get(k, {})),
+                  "cols_min": cmin, "cols_max": cmax, "h_min": hmin, "h_max": hmax}
+    return out
 
 
 def normalize_layout(value) -> dict:
@@ -67,6 +84,21 @@ def normalize_layout(value) -> dict:
             except (TypeError, ValueError):
                 raise SettingError("Widget width must be a whole number of columns.")
             entry["w"] = max(lo, min(hi, w))
+        if cfg.get("cols") not in (None, ""):
+            try:
+                cols = int(cfg["cols"])
+            except (TypeError, ValueError):
+                raise SettingError("Tile width must be a whole number of columns.")
+            cmin, cmax = col_limits(wid)
+            entry["cols"] = max(cmin, min(cmax, cols))
+            entry["w"] = max(lo, min(hi, round(entry["cols"] / 3) or 1))  # kept for older clients
+        if cfg.get("h") not in (None, "", 0):
+            try:
+                h = int(cfg["h"])
+            except (TypeError, ValueError):
+                raise SettingError("Tile height must be a whole number of rows.")
+            hmin, hmax = HEIGHTS.get(wid, DEFAULT_HEIGHT)
+            entry["h"] = max(hmin, min(hmax, h))
         style = cfg.get("style", "rect")
         if style not in STYLES:
             raise SettingError(f"Style must be one of: {', '.join(STYLES)}.")
@@ -95,6 +127,78 @@ def normalize_layout(value) -> dict:
             entry["settings"] = opts
         out[wid] = entry
     return out
+
+
+# ------------------------------------------------------------------ groups (Change Set AA)
+
+GENERAL = "general"
+MAX_GROUPS = 20
+_GROUP_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+
+
+def clean_group_name(name) -> str:
+    name = " ".join(str(name or "").split())
+    if not name or len(name) > 40 or any(not ch.isprintable() for ch in name) or any(ch in name for ch in "<>"):
+        raise SettingError("A group name needs 1 to 40 characters (no < or >).")
+    return name
+
+
+def normalize_groups(value) -> dict | None:
+    """{"groups": [{"id", "name", "collapsed", "widgets": [...]}], "known": [...]}. The protected General group is
+    always there (first unless moved); a tile is in at most one group; unknown or removed tiles are dropped (a stale
+    reference never breaks the Overview)."""
+    from .registry import WIDGETS
+
+    if value in (None, ""):
+        return None
+    if not isinstance(value, dict) or not isinstance(value.get("groups"), list):
+        raise SettingError("The Overview groups must be a list of groups.")
+    groups, seen_ids, seen_names, placed = [], set(), set(), set()
+    for g in value["groups"][:MAX_GROUPS + 1]:
+        if not isinstance(g, dict):
+            raise SettingError("Each group must be an object.")
+        gid = str(g.get("id") or "").strip().lower()
+        if not _GROUP_ID.match(gid) or gid in seen_ids:
+            raise SettingError("Each group needs a unique id (a-z, 0-9 and -).")
+        name = "General" if gid == GENERAL and not g.get("name") else clean_group_name(g.get("name"))
+        if name.lower() in seen_names:
+            raise SettingError(f"There is already a group called “{name}”.")
+        widgets = []
+        for w in g.get("widgets") or []:
+            if isinstance(w, str) and w in WIDGETS and w not in placed:
+                widgets.append(w)
+                placed.add(w)
+        seen_ids.add(gid)
+        seen_names.add(name.lower())
+        groups.append({"id": gid, "name": name, "collapsed": bool(g.get("collapsed")), "widgets": widgets})
+    if GENERAL not in seen_ids:
+        if "general" in seen_names:
+            raise SettingError("“General” is the name of the default group.")
+        groups.insert(0, {"id": GENERAL, "name": "General", "collapsed": False, "widgets": []})
+    if len(groups) > MAX_GROUPS:
+        raise SettingError(f"At most {MAX_GROUPS} groups.")
+    known = [w for w in (value.get("known") or []) if isinstance(w, str) and w in WIDGETS]
+    return {"groups": groups, "known": list(dict.fromkeys(known + sorted(placed)))}
+
+
+def effective_groups(user) -> dict:
+    """The person's groups, or a General group with their widget order (installations from before groups, and new
+    accounts). Tiles added to Personal DM after the layout was saved go to General; tiles the person removed stay
+    removed."""
+    from . import config
+    from .registry import DEFAULT_WIDGETS, WIDGETS, normalize_widgets
+
+    widgets = normalize_widgets(config.get_user(user, "me.dashboard_widgets"))
+    stored = config.get_user(user, "me.dashboard_groups")
+    if not stored:
+        return {"groups": [{"id": GENERAL, "name": "General", "collapsed": False, "widgets": widgets}],
+                "known": list(WIDGETS), "customized": False}
+    data = normalize_groups(stored)
+    shown = {w for g in data["groups"] for w in g["widgets"]}
+    new = [w for w in DEFAULT_WIDGETS if w not in data["known"] and w not in shown]
+    if new:
+        next(g for g in data["groups"] if g["id"] == GENERAL)["widgets"].extend(new)
+    return {**data, "customized": True}
 
 
 # ------------------------------------------------------------------ date
