@@ -56,6 +56,24 @@ The end-to-end flow covers: the setup wizard creating the Main Administrator (de
 
 Screenshots of the real application with synthetic data are in `docs/screenshots/`.
 
+## Follow-up: cards and tiles fit at every width, browser zoom and in the installed app {#layout-zoom}
+
+Reported: the Clear Safe Caches card on Settings → Maintenance & Operations cut off its five-column table at the card
+edge. Root cause: wide tables inside narrow grid cards, hidden by `overflow-x: auto` on the card (the content scrolled
+inside the card instead of fitting it). The layout audit did not look inside cards and did not cover
+`/settings/system` or Active Sessions.
+
+| Check | Result |
+|---|---|
+| `tests/e2e/layout.mjs` with the new **clipped** check (content wider than its card or tile), the two new screens and six browser zoom levels (50, 67, 125, 150, 200, 300 % of 1440×900), first run before fixing | **27 PASS, 4 FAIL**: Active Sessions table 229 px wider than its card at 820 px and 109 px at 150 % zoom; Family members table 87 px at 820 px; Offline "Manage storage" 14/54 px on 430/390 px phones (long button label). Maintenance page already fitted after the Clear Safe Caches rewrite |
+| Same suite after the fixes (fresh database; flow.mjs, then layout.mjs; 29 screens × 7 viewports + 6 zoom levels) | **31 PASS, 0 FAIL**, 0 layout defects; header geometry baseline unchanged |
+| Full-page screenshots of Maintenance, Active Sessions and Family at 1920 px, 125 % and 200 % zoom and 820 px, reviewed by eye | Clear Safe Caches spans the row as a stacked list; key/value tables stack label over value in narrow cards; session rows stack at tablet width |
+| `npx tsc --noEmit`, `npm run build`, `npx vitest run` | clean, built, 17 passed |
+| CI on the first push | e2e **1 FAIL**: the clipped check found the OCR review card 54 px wider than its card at 820 px (a document the parity suite leaves in the review queue; my local run had skipped parity). Fixed with `cq` on the review card |
+| Installed app (PWA): new step with `display-mode: standalone` and Chromium safe-area emulation (iPhone portrait 47/34 px, iPhone landscape 47 px sides + 21 px bottom, iPad 24/20 px, Android 0), run **before** the safe-area CSS | **3 FAIL** (Android passed): top-bar controls under the status bar/notch, sidebar items under the landscape notch, end of every page behind the home indicator |
+| Same after the fix (fresh database; flow, accessibility, parity, layout: 29 screens × 7 viewports, 6 zoom levels and 4 installed-app devices, plus the Share dialog and phone menu) | **35 PASS, 0 FAIL**; no serious or critical accessibility violations. Two check refinements on the way (not layout changes): items in the self-scrolling sidebar are judged by the sidebar's scroll end, and the dialog is measured after its 140 ms pop-in animation |
+| Not covered | Chromium in this container cannot switch real `display-mode` media queries, so the app's own standalone detection is stubbed; not run on a physical iPhone/Android device |
+
 ## Change set AB: Maintenance & Operations in the web interface, Active Sessions {#change-set-ab}
 
 **Numbering.** Prompt AT-456…AT-475 → **AT-481…AT-500** (the prompt's numbers are taken). Per-scenario status:

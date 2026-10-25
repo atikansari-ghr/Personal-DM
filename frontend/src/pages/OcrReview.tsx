@@ -39,7 +39,7 @@ export default function OcrReviewPage() {
       {error && <div className="alert error">{error}</div>}
       {!data ? <Skeleton lines={6} /> : data.items.length === 0 ? <div className="empty"><Icon name="check" /> Nothing waiting for review.</div> : (
         <div className="stack">{data.items.map((d) => (
-          <section key={d.id} className="card review-item">
+          <section key={d.id} className="card cq review-item">
             <div className="row between">
               <div><h2 style={{ fontSize: "1.1rem", margin: 0 }}><Link to={`/documents/${d.id}`}>{d.title}</Link></h2>
                 <div className="small muted">{d.owner.display_name}{d.type ? ` · ${d.type}` : ""}{d.updated_at ? ` · ${formatDateTime(d.updated_at)}` : ""}{d.languages?.length ? ` · ${d.languages.join(" + ")}` : ""}{d.confidence != null ? ` · confidence ${Math.round(d.confidence)}%` : ""}</div></div>
