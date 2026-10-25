@@ -828,7 +828,7 @@ await step("AT-461..AT-480 Change Set AA: field drag/drop and archive, Overview 
   expect(await page.locator(`.modal button[aria-label='Permanently delete ${victim.label}']`).count() === 1, "Main Admin sees permanent delete");
   await page.click(`.modal button[aria-label='Permanently delete ${victim.label}']`);
   await page.waitForSelector(".modal [data-delete-field] [data-affected]");
-  expect(await page.locator(".modal button:has-text('Delete permanently')").isDisabled(), "delete enabled before typing DELETE");
+  expect(await page.locator(".modal [data-delete-field] button.danger").isDisabled(), "delete enabled before typing DELETE");
   await page.click(".modal button:has-text('Cancel — keep it archived')");
   await page.click(`.modal button[aria-label='Restore ${victim.label}']`);
   await page.waitForSelector(`.modal [data-field=${victim.key}]`);

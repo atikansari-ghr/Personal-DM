@@ -693,8 +693,9 @@ i.c0 { background: #1f8a4c; } i.c1 { background: #e07b00; } i.c2 { background: #
 @media (max-width: 1100px) {
   /* reflow only: the saved desktop sizes are not changed by viewing on a smaller screen */
   .ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ov-cell.c1, .ov-cell.c2, .ov-cell.c3, .ov-cell.c4, .ov-cell.c5, .ov-cell.c6 { grid-column: span 1; }
-  .ov-cell.c7, .ov-cell.c8, .ov-cell.c9, .ov-cell.c10, .ov-cell.c11, .ov-cell.c12 { grid-column: span 2; }
+  /* as before: single-value tiles (up to a quarter of the desktop width) take half a row, everything else a full row */
+  .ov-cell.c1, .ov-cell.c2, .ov-cell.c3 { grid-column: span 1; }
+  .ov-cell.c4, .ov-cell.c5, .ov-cell.c6, .ov-cell.c7, .ov-cell.c8, .ov-cell.c9, .ov-cell.c10, .ov-cell.c11, .ov-cell.c12 { grid-column: span 2; }
 }
 @media (max-width: 640px) {
   .ov-grid { grid-template-columns: minmax(0, 1fr); }

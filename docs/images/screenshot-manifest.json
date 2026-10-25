@@ -64,7 +64,7 @@
  },
  {
   "file": "local-ai.png",
-  "caption": "Local AI profiles (optional)",
+  "caption": "AI profiles: Local and Cloud (optional)",
   "source": "real application, synthetic demo data",
   "viewport": "1440x900",
   "pixelRatio": 2
@@ -231,27 +231,6 @@
   "pixelRatio": 2
  },
  {
-  "file": "security-signin-map.png",
-  "caption": "Sign-in map: English place names, grouped sign-ins with a count, hover summary and the filters",
-  "source": "real application, synthetic demo data",
-  "viewport": "1440x900",
-  "pixelRatio": 2
- },
- {
-  "file": "security-signin-details.png",
-  "caption": "Sign-in details next to the map after selecting a sign-in (the list and map stay in sync)",
-  "source": "real application, synthetic demo data",
-  "viewport": "1440x900",
-  "pixelRatio": 2
- },
- {
-  "file": "security-devices.png",
-  "caption": "Mark Unrecognized: sessions end, follow-up actions are offered",
-  "source": "real application, synthetic demo data",
-  "viewport": "1440x900",
-  "pixelRatio": 2
- },
- {
   "file": "folders-tree.png",
   "caption": "Folder tree: expander, icon and name columns line up at every level; long names wrap",
   "source": "real application, synthetic demo data",
@@ -302,7 +281,14 @@
  },
  {
   "file": "settings-login-design.png",
-  "caption": "Sign-in designs: a design selected, the live preview and Save design",
+  "caption": "Named sign-in designs: built-in and custom designs, the actions and the live preview",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "settings-login-design-editor.png",
+  "caption": "Design editor: focal point, overlay, colour mode and palette with the device preview",
   "source": "real application, synthetic demo data",
   "viewport": "1440x900",
   "pixelRatio": 2
