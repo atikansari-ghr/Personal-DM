@@ -323,7 +323,7 @@ function History({ onOpen, version }: { onOpen: (id: string) => void; version: n
   const { data, error } = useAsync(() => api<{ jobs: Job[]; total: number }>("maintenance/jobs", { query: f }), [f, version]);
   return (
     <div className="stack" data-job-history>
-      <div className="row" style={{ flexWrap: "wrap", gap: ".4rem" }}>
+      <div className="row filter-row" style={{ flexWrap: "wrap", gap: ".4rem" }}>
         <select aria-label="Operation" value={f.operation} onChange={(e) => setF({ ...f, operation: e.target.value })}>
           <option value="">All operations</option>
           {["check_updates", "upgrade", "doctor", "repair", "restart", "rollback", "clear_caches"].map((o) => <option key={o} value={o}>{o.replace("_", " ")}</option>)}

@@ -15,7 +15,7 @@
  },
  {
   "file": "settings-offline-pwa.png",
-  "caption": "Settings → Offline & PWA: policy, per-person access, devices and app icons",
+  "caption": "Settings \u2192 Offline & PWA: policy, per-person access, devices and app icons",
   "source": "real application, synthetic demo data",
   "viewport": "1440x900",
   "pixelRatio": 2
@@ -141,7 +141,7 @@
  },
  {
   "file": "backup-nas-destination.png",
-  "caption": "Add destination → NAS share: SMB connection, server, share, folder and account (password write-only)",
+  "caption": "Add destination \u2192 NAS share: SMB connection, server, share, folder and account (password write-only)",
   "source": "real application, synthetic demo data",
   "viewport": "1440x900",
   "pixelRatio": 2
@@ -289,6 +289,69 @@
  {
   "file": "settings-login-design-editor.png",
   "caption": "Design editor: focal point, overlay, colour mode and palette with the device preview",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "maintenance-operations.png",
+  "caption": "Settings \u2192 System \u2192 Maintenance & Operations: update check, Update Application, Doctor, Repair, restart and caches",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "maintenance-upgrade-running.png",
+  "caption": "A running upgrade: each step with its status and duration, live",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "maintenance-upgrade-failed.png",
+  "caption": "Upgrade Failed \u2014 Existing Version Remains Operational, with Technical Details",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "maintenance-doctor.png",
+  "caption": "Doctor: read-only checks grouped by component, PASS / WARNING / FAIL / NOT CONFIGURED",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "maintenance-repair-plan.png",
+  "caption": "Repair Plan: problem, proposed repair, affected files and services, restart, backup and risk \u2014 before any change",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "maintenance-history.png",
+  "caption": "Maintenance Job History with operation, status and date filters",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "active-sessions-tile.png",
+  "caption": "The Active Sessions tile on the Overview: Active, Signed In and Untrusted counts and recent sessions",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "active-sessions.png",
+  "caption": "Settings \u2192 Security \u2192 Active Sessions: state, address, trust, approximate location, device and risk, with filters",
+  "source": "real application, synthetic demo data",
+  "viewport": "1440x900",
+  "pixelRatio": 2
+ },
+ {
+  "file": "active-sessions-detail.png",
+  "caption": "Session details with Terminate Session (main administrator)",
   "source": "real application, synthetic demo data",
   "viewport": "1440x900",
   "pixelRatio": 2

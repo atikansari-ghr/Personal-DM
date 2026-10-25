@@ -22,7 +22,7 @@ set -Eeuo pipefail
 LOG_DIR=/nonexistent; LOG=/dev/null; UNITS=(personaldocs-web personaldocs-worker personaldocs-scheduler)
 . "__HELPERS__"
 SC=$(cat "__SCENARIO__" 2>/dev/null || echo ok)
-P=${SLEEP:-0.8}
+P=0.8; [ "$SC" = slow ] && P=3
 echo "personaldocs $* (scripted scenario: $SC)"
 case "$1" in
   check-updates)

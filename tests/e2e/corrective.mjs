@@ -15,7 +15,10 @@ const OUT = "tests/e2e/out/corrective";
 fs.mkdirSync(OUT, { recursive: true });
 const results = [];
 let failed = 0;
+// E2E_ONLY=text runs only the steps whose name contains it (re-running one change set's steps during development)
+const ONLY = process.env.E2E_ONLY || "";
 const step = async (name, fn) => {
+  if (ONLY && !name.includes(ONLY)) return;
   try { await fn(); results.push(["PASS", name]); console.log("PASS", name); }
   catch (e) { failed++; results.push(["FAIL", name, String(e).slice(0, 800)]); console.log("FAIL", name, String(e).slice(0, 800)); }
 };
@@ -997,7 +1000,7 @@ else await step("AT-481..AT-500 Change Set AB: Maintenance & Operations jobs, fa
   await page.click(`[data-session="${target.id}"]`);
   await page.waitForSelector(`.modal [data-session-detail="${target.id}"]`);
   await page.click(".modal [data-terminate]");
-  await page.click(".modal button.danger:has-text('Terminate Session')");
+  await page.click(".modal button.danger:has-text('Terminate Session'):not([data-terminate])");
   await page.waitForSelector(".toast:has-text('Session terminated')");
   expect([401, 403].includes((await api(son.page, "/api/dashboard")).status), "terminated session still works");
   expect((await api(page, "/api/dashboard")).status === 200, "own session affected");

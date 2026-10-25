@@ -95,7 +95,7 @@ export default function ActiveSessions() {
           </div>}
         </div>
         <p className="small muted">Active: activity within the last {data?.threshold_minutes ?? 5} minutes <HelpTip id="sessions.active" />. Signed In: still signed in but idle longer <HelpTip id="sessions.signed_in" />. Locations are approximate unless a Trusted Zone matches; no GPS is used.</p>
-        <div className="row" style={{ flexWrap: "wrap", gap: ".4rem" }}>
+        <div className="row filter-row" style={{ flexWrap: "wrap", gap: ".4rem" }}>
           <select aria-label="State" value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })}><option value="">Active and Signed In</option><option value="active">Active</option><option value="signed_in">Signed In (idle)</option></select>
           <select aria-label="User" value={f.user} onChange={(e) => setF({ ...f, user: e.target.value })}><option value="">Everyone</option>{(data?.users || []).map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
           <select aria-label="Trust" value={f.trust} onChange={(e) => setF({ ...f, trust: e.target.value })}><option value="">Any trust</option><option value="trusted">Trusted / private</option><option value="untrusted">Untrusted</option></select>

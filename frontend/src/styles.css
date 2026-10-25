@@ -1195,3 +1195,10 @@ code.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 .sessions-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; }
 .sessions-rows li { gap: 0.6rem; min-width: 0; }
 .sessions-rows .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.mj-cards > *, .mj-panels > * { min-width: 0; }
+.mj-cards > .card { overflow-x: auto; }
+.mj-cards .kv-table, [data-system-info] { table-layout: fixed; width: 100%; }
+.mj-cards .kv-table td, [data-system-info] td { overflow-wrap: anywhere; }
+.filter-row > select, .filter-row > input, .filter-row > label { width: auto; flex: 0 1 13rem; min-width: 9rem; }
+.filter-row > label input { width: auto; }
+.mj-cards .kv-table th { width: 38%; }

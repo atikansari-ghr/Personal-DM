@@ -17,7 +17,10 @@ fs.mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const manifest = [];
 let failed = 0;
+// E2E_ONLY=text runs only the steps whose name contains it (re-running one change set's steps during development)
+const ONLY = process.env.E2E_ONLY || "";
 const step = async (name, fn) => {
+  if (ONLY && !name.includes(ONLY)) return;
   try { await fn(); results.push(["PASS", name]); console.log("PASS", name); }
   catch (e) { failed++; results.push(["FAIL", name, String(e).slice(0, 800)]); console.log("FAIL", name, String(e).slice(0, 800)); }
 };
@@ -364,14 +367,14 @@ await step("AT-499 Change Set AB documentation screenshots (Maintenance & Operat
   await p.waitForSelector("[data-maintenance] [data-panel=storage]");
   await capture(p, "maintenance-operations.png", "Settings → System → Maintenance & Operations: update check, Update Application, Doctor, Repair, restart and caches");
   // a running upgrade: the live steps while it runs (scripted root command, see tests/e2e/maint_helper.py)
-  fs.writeFileSync(SC, "ok");
+  fs.writeFileSync(SC, "slow");
   await api(p, "/api/backup/stepup", { body: { password: PW } });
   const up = await api(p, "/api/maintenance/run/upgrade", { body: { confirm: true } });
   expect(up.status === 202, `upgrade start ${up.status}`);
   await p.goto(`${BASE}/settings/system?job=${up.data.id}`);
-  await p.waitForSelector(".modal [data-step=fetch][data-step-status=running], .modal [data-step=dependencies][data-step-status=running]", { timeout: 60000 });
+  await p.waitForSelector(".modal [data-step=backup][data-step-status=succeeded] ~ [data-step-status=running], .modal [data-step=backup_verify][data-step-status=running], .modal [data-step=fetch][data-step-status=running]", { timeout: 90000 });
   await capture(p, "maintenance-upgrade-running.png", "A running upgrade: each step with its status and duration, live");
-  await p.waitForSelector(".modal [data-job][data-job-status=succeeded]", { timeout: 90000 });
+  await p.waitForSelector(".modal [data-job][data-job-status=succeeded]", { timeout: 120000 });
   // a failed upgrade with Technical Details
   fs.writeFileSync(SC, "fail-disk");
   await api(p, "/api/backup/stepup", { body: { password: PW } });
@@ -400,9 +403,7 @@ await step("AT-499 Change Set AB documentation screenshots (Maintenance & Operat
   await p.locator("[data-job-history]").scrollIntoViewIfNeeded();
   await p.waitForSelector("[data-job-history] [data-history-job]");
   await capture(p, "maintenance-history.png", "Maintenance Job History with operation, status and date filters");
-  // Active Sessions: a second person signs in so the tile and page show more than one session
-  const M = await session({ width: 1440, height: 900 }, "mom");
-  await M.ctx.close().catch(() => undefined);
+  // Active Sessions (the sessions the earlier suites signed in)
   await p.goto(BASE + "/");
   await p.locator("[data-widget=sessions]").scrollIntoViewIfNeeded();
   await p.waitForSelector("[data-widget=sessions] [data-sessions-tile]");
