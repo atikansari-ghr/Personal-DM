@@ -106,10 +106,11 @@ WIDGETS = {
     "shared": "Shared with me",
     "activity": "Recent activity",
     "security": "Security Health (administrators)",
+    "sessions": "Active Sessions (administrators)",
 }
 # What a new account sees first (existing accounts keep the widgets they chose).
 DEFAULT_WIDGETS = ["date", "weather", "summary", "calendar", "holidays", "upcoming", "shared", "recent", "activity",
-                   "review_queue", "backup", "my_recovery", "security"]
+                   "review_queue", "backup", "my_recovery", "security", "sessions"]
 STAT_WIDGETS = ("documents", "members", "expiring", "storage", "review")
 
 

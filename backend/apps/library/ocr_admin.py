@@ -14,7 +14,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.conf import settings
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Sum
 from django.db.models.functions import Length
 from django.utils import timezone
 

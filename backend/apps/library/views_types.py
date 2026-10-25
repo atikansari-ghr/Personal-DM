@@ -16,7 +16,7 @@ from apps.core import audit
 from . import doctypes
 from . import permissions as P
 from . import services as S
-from .models import Document, DocumentField, DocumentType, DocumentTypeField
+from .models import Document, DocumentType, DocumentTypeField
 from .serializers import document_detail
 from .views import _ctx, _err, _rebuild, get_doc
 

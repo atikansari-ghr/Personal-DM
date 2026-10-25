@@ -741,3 +741,311 @@ def test_health_panels_system_info_and_safe_caches(family, settings):
     assert j["status"] == MJ.SUCCEEDED
     assert not shared.exists() and not tmp.exists() and fresh.exists()
     assert all(k.exists() for k in keep)
+
+
+# ================================================================== Active Sessions
+
+CHROME_WIN = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+SAFARI_IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+PUBLIC_IP = "5.42.0.7"  # synthetic public address; GeoIP is emulated below
+
+
+def _signin(username, ua=CHROME_WIN, ip="10.0.0.5"):
+    from rest_framework.test import APIClient
+
+    c = APIClient(HTTP_USER_AGENT=ua, REMOTE_ADDR=ip)
+    assert c.post("/api/auth/login", {"username": username, "password": PASSWORD}, format="json").status_code == 200
+    return c
+
+
+def _session_of(user, ua=None):
+    from apps.accounts.models import UserSession
+
+    qs = UserSession.objects.filter(user=user, revoked_at__isnull=True, ended_at__isnull=True)
+    return (qs.filter(user_agent=ua) if ua else qs).latest("created_at")
+
+
+def _age(session, minutes):
+    from apps.accounts.models import UserSession
+
+    t = timezone.now() - timedelta(minutes=minutes)
+    UserSession.objects.filter(pk=session.pk).update(last_activity_at=t, last_seen_at=t)
+
+
+@pytest.fixture
+def geo(monkeypatch):
+    from apps.security import location
+
+    monkeypatch.setattr(location, "geo_detail", lambda ip: {"country": "SA", "country_name": "Saudi Arabia", "city": "Riyadh"}
+                        if str(ip) == PUBLIC_IP else None)
+
+
+# ================================================================== AT-493 (468) Active vs Signed In
+
+def test_at493_active_vs_signed_in_by_threshold(family):
+    from apps.security import active_sessions as AS
+
+    dad = _signin("dad")
+    _signin("mom", SAFARI_IOS, "10.0.0.6")
+    _signin("son1", CHROME_WIN, "10.0.0.7")
+    _age(_session_of(family["mom"]), 3)
+    _age(_session_of(family["son1"]), 8)
+    data = dad.get("/api/security/sessions").json()
+    state = {r["user"]["username"]: r["state"] for r in data["sessions"]}
+    assert state == {"dad": "active", "mom": "active", "son1": "signed_in"}
+    assert data["counts"]["active"] == 2 and data["counts"]["signed_in"] == 3 and data["threshold_minutes"] == 5
+    # the threshold is a setting with safe bounds
+    config.set_value("security.session_active_minutes", 2)
+    state = {r["user"]["username"]: r["state"] for r in dad.get("/api/security/sessions").json()["sessions"]}
+    assert state["mom"] == "signed_in"
+    from apps.core.registry import BY_KEY
+
+    d = BY_KEY["security.session_active_minutes"]
+    assert (d.default, d.min, d.max) == (5, 2, 120)
+    with pytest.raises(Exception):
+        config.set_value("security.session_active_minutes", 1)
+    assert AS.touch_interval() == timedelta(minutes=1)  # bounded writes, never per request
+
+
+def test_at493_background_refreshes_do_not_count_as_activity(family):
+    son = _signin("son1")
+    s = _session_of(family["son1"])
+    _age(s, 10)
+    son.get("/api/notifications", HTTP_X_PD_BACKGROUND="1")  # polling: keeps the session alive only
+    s.refresh_from_db()
+    assert timezone.now() - s.last_activity_at > timedelta(minutes=9)
+    assert timezone.now() - s.last_seen_at < timedelta(minutes=1)
+    son.get("/api/dashboard")  # a real request is activity
+    s.refresh_from_db()
+    assert timezone.now() - s.last_activity_at < timedelta(minutes=1)
+    # a second request right after does not write again
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    with CaptureQueriesContext(connection) as q:
+        son.get("/api/me/sessions")
+    assert not any("UPDATE" in x["sql"] and "accounts_usersession" in x["sql"] for x in q.captured_queries)
+    own = son.get("/api/me/sessions").json()
+    assert own["sessions"][0]["state"] == "active" and own["active_minutes"] == 5
+
+
+def test_at493_upgrade_backfills_activity_from_last_seen():
+    import importlib
+
+    mig = importlib.import_module("apps.accounts.migrations.0010_session_activity")
+    src = Path(mig.__file__).read_text()
+    assert 'update(last_activity_at=F("last_seen_at"))' in src
+
+
+# ================================================================== AT-494 (469) Active Sessions tile
+
+def test_at494_tile_counts_rows_and_view_all(family, geo):
+    dad = _signin("dad")
+    _signin("mom", SAFARI_IOS, "10.0.0.6")
+    _signin("son1", CHROME_WIN, PUBLIC_IP)
+    _age(_session_of(family["mom"]), 3)
+    _age(_session_of(family["son1"]), 8)
+    from apps.security.models import TrustedZone
+
+    TrustedZone.objects.create(name="Home", cidrs=["10.0.0.0/24"])
+    d = dad.get("/api/dashboard").json()
+    tile = d["active_sessions"]
+    assert tile["counts"] == {"active": 2, "signed_in": 3, "idle": 1, "untrusted": 1, "high_risk": 0}
+    assert tile["link"] == "/settings/security/sessions"
+    rows = {r["user"]["name"]: r for r in tile["sessions"]}
+    assert rows["Alex Sample"]["state_label"] == "Active" and rows["Alex Sample"]["current"] is True
+    assert rows["Alex Sample"]["location"]["text"] == "Home" and rows["Alex Sample"]["trust"] == "Trusted"
+    assert rows["Sam Sample"]["location"] == {"text": "Riyadh, Saudi Arabia", "source": "GeoIP (approximate)", "approximate": True,
+                                              "zone": "", "country": "SA"}
+    assert rows["Sam Sample"]["untrusted"] is True and rows["Sam Sample"]["state"] == "signed_in"
+    assert "ip" not in tile["sessions"][0]  # the tile shows no addresses
+    # normal members do not get the tile data; the summary endpoint is for administrators
+    son = _signin("son2", CHROME_WIN, "10.0.0.9")
+    assert "active_sessions" not in son.get("/api/dashboard").json()
+    assert son.get("/api/security/sessions/summary").status_code == 403
+
+
+# ================================================================== AT-495 (470) dashboard integration
+
+def test_at495_tile_in_layouts_groups_resize_and_per_user(family):
+    from apps.core import overview
+    from apps.core.registry import DEFAULT_WIDGETS, WIDGETS
+
+    assert "sessions" in WIDGETS and "sessions" in DEFAULT_WIDGETS
+    lim = overview.layout_limits()["sessions"]
+    assert lim["cols_min"] <= 3 and lim["cols_max"] == 12 and lim["circle"] is False  # compact … large
+    dad = client_for(_main(family))
+    # an existing customised layout (saved before the tile existed) keeps every group; the tile goes to General
+    known = [w for w in WIDGETS if w != "sessions"]
+    layout = {"groups": [{"id": "general", "name": "General", "widgets": ["date", "security"]},
+                         {"id": "g-money", "name": "Money", "widgets": ["recent"]}], "known": known}
+    config.set_user(_main(family), "me.dashboard_groups", layout)
+    eff = overview.effective_groups(_main(family))
+    gen = next(g for g in eff["groups"] if g["id"] == "general")
+    money = next(g for g in eff["groups"] if g["id"] == "g-money")
+    assert gen["widgets"][:2] == ["date", "security"] and "sessions" in gen["widgets"] and money["widgets"] == ["recent"]
+    # move it into another group and resize it (compact → large); it persists per person
+    base = dad.get("/api/dashboard/layout").json()
+    groups = [{**g, "widgets": [w for w in g["widgets"] if w != "sessions"]} for g in base["groups"]]
+    groups.append({"id": "g-sec", "name": "Security", "collapsed": False, "widgets": ["sessions"]})
+    for cols, h in ((3, 2), (6, 4), (12, 6)):
+        r = dad.put("/api/dashboard/layout", {"groups": groups, "layout": {"sessions": {"cols": cols, "h": h}}}, format="json")
+        assert r.status_code == 200, r.content
+        saved = client_for(_main(family)).get("/api/dashboard/layout").json()  # relogin sees the same
+        assert saved["layout"]["sessions"]["cols"] == cols and saved["layout"]["sessions"]["h"] == h
+    assert next(g for g in saved["groups"] if g["name"] == "Security")["widgets"] == ["sessions"]
+    # another administrator's layout is untouched
+    mom = _scoped_admin(family)
+    assert not any(g["name"] == "Security" for g in overview.effective_groups(mom)["groups"])
+
+
+# ================================================================== AT-496 (471) location and trust
+
+def test_at496_trusted_zone_first_then_private_then_approximate_geoip(family, geo):
+    from apps.security.models import TrustedZone
+
+    TrustedZone.objects.create(name="Home", cidrs=["10.0.0.0/24"], pin_lat=24.7, pin_lon=46.7)
+    dad = _signin("dad")  # 10.0.0.5 → Home
+    _signin("mom", SAFARI_IOS, "192.168.7.20")  # private, not a zone
+    _signin("son1", CHROME_WIN, PUBLIC_IP)  # public → GeoIP, approximate
+    _signin("son2", CHROME_WIN, "5.42.0.8")  # public, not in the GeoIP data
+    rows = {r["user"]["username"]: r for r in dad.get("/api/security/sessions").json()["sessions"]}
+    assert rows["dad"]["location"]["source"] == "Trusted Zone" and rows["dad"]["location"]["zone"] == "Home"
+    assert rows["dad"]["trust"] == "Trusted" and rows["dad"]["location"]["approximate"] is False
+    assert rows["mom"]["location"]["source"] == "Private network" and rows["mom"]["trust"] == "Private network"
+    assert rows["son1"]["location"] == {"text": "Riyadh, Saudi Arabia", "source": "GeoIP (approximate)", "approximate": True,
+                                        "zone": "", "country": "SA"}
+    assert rows["son1"]["trust"] == "Untrusted"
+    assert rows["son2"]["location"]["text"].startswith("Unknown location")
+    # a zone covering a public address wins over GeoIP
+    TrustedZone.objects.create(name="Office VPN", cidrs=[f"{PUBLIC_IP}/32"])
+    rows = {r["user"]["username"]: r for r in dad.get("/api/security/sessions").json()["sessions"]}
+    assert rows["son1"]["location"]["zone"] == "Office VPN" and rows["son1"]["trust"] == "Trusted"
+    # no GPS: nothing in the API or the frontend asks the browser for a position
+    for f in (ROOT / "frontend" / "src").rglob("*.tsx"):
+        assert "geolocation" not in f.read_text(), f
+
+
+def test_at496_listing_has_no_n_plus_one(family, geo):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    dad = _signin("dad")
+    for i in range(3):
+        _signin("son1", CHROME_WIN, f"10.0.1.{i + 2}")
+    with CaptureQueriesContext(connection) as small:
+        dad.get("/api/security/sessions")
+    for i in range(12):
+        _signin("son2", SAFARI_IOS, f"10.0.2.{i + 2}")
+        _signin("son3", CHROME_WIN, PUBLIC_IP)
+    with CaptureQueriesContext(connection) as big:
+        r = dad.get("/api/security/sessions")
+    assert len(r.json()["sessions"]) == 28
+    assert len(big.captured_queries) <= len(small.captured_queries) + 2, [q["sql"][:80] for q in big.captured_queries]
+
+
+# ================================================================== AT-497 (472) full Active Sessions page
+
+def test_at497_full_listing_filters_details_and_permissions(family, geo):
+    from apps.security.models import TrustedZone
+
+    TrustedZone.objects.create(name="Home", cidrs=["10.0.0.0/24"])
+    dad = _signin("dad")
+    _signin("mom", SAFARI_IOS, "10.0.0.6")
+    _signin("son1", CHROME_WIN, PUBLIC_IP)
+    _age(_session_of(family["son1"]), 30)
+    data = dad.get("/api/security/sessions").json()
+    assert data["can_terminate"] is True and {u["name"] for u in data["users"]} >= {"Alex Sample", "Maria Sample", "Sam Sample"}
+    r = next(x for x in data["sessions"] if x["user"]["username"] == "mom")
+    assert r["ip"] == "10.0.0.6"  # the complete address for the main administrator
+    assert r["device"]["browser"] == "Safari" and r["device"]["os"] == "iOS" and r["device"]["kind"] == "mobile"
+    assert r["device"]["state"] == "recognized" and r["method"].startswith("password")
+    assert r["login_at"] and r["last_activity_at"] and r["risk"] in ("normal", "low")
+    blob = json.dumps(data).lower()
+    for secret in ("sessionid", "csrftoken", "session_key", "token_hash", "pd_device"):
+        assert secret not in blob
+    # filters
+    q = lambda **f: [x["user"]["username"] for x in dad.get("/api/security/sessions", f).json()["sessions"]]  # noqa: E731
+    assert q(state="signed_in") == ["son1"]
+    assert sorted(q(state="active")) == ["dad", "mom"]
+    assert q(user=family["mom"].pk) == ["mom"]
+    assert q(trust="untrusted") == ["son1"]
+    assert q(device="mobile") == ["mom"]
+    assert q(location="riyadh") == ["son1"] and sorted(q(location="home")) == ["dad", "mom"]
+    assert q(risk="high") == []
+    # details
+    sid = next(x["id"] for x in data["sessions"] if x["user"]["username"] == "son1")
+    det = dad.get(f"/api/security/sessions/{sid}").json()
+    assert det["can_terminate"] is True and det["age_seconds"] >= 0 and det["idle_seconds"] >= 29 * 60
+    assert det["location"]["approximate"] is True
+    # a scoped administrator sees only the delegated members; normal members nothing here (their own in My account)
+    from apps.accounts.models import Delegation, FamilyGroup, GroupMembership
+
+    mom = _scoped_admin(family)
+    scoped = _signin("mom", CHROME_WIN, "10.0.0.8")
+    own_only = {x["user"]["username"] for x in scoped.get("/api/security/sessions").json()["sessions"]}
+    assert own_only == {"mom"}
+    grp = FamilyGroup.objects.create(name="Delegated test group")
+    GroupMembership.objects.create(group=grp, user=family["son1"])
+    Delegation.objects.create(delegate=mom, group=grp, scopes=["membership"], granted_by=_main(family))
+    seen = {x["user"]["username"] for x in scoped.get("/api/security/sessions").json()["sessions"]}
+    assert seen == {"mom", "son1"}
+    assert scoped.get("/api/security/sessions").json()["can_terminate"] is False
+    assert scoped.post(f"/api/security/sessions/{sid}/terminate", {"confirm": True}, format="json").status_code == 403
+    son = _signin("son2", CHROME_WIN, "10.0.0.9")
+    assert son.get("/api/security/sessions").status_code == 403
+    assert son.get(f"/api/security/sessions/{sid}").status_code == 403
+
+
+# ================================================================== AT-498 (473) Terminate Session
+
+def test_at498_terminate_invalidates_only_that_session(family):
+    dad = _signin("dad")
+    laptop = _signin("son1", CHROME_WIN, "10.0.0.5")
+    phone = _signin("son1", SAFARI_IOS, "10.0.0.6")
+    other = _signin("mom", CHROME_WIN, "10.0.0.7")
+    target = _session_of(family["son1"], SAFARI_IOS)
+    device = target.recognized_device
+    # explicit confirmation
+    r = dad.post(f"/api/security/sessions/{target.id}/terminate", {}, format="json")
+    assert r.status_code == 400 and r.json()["code"] == "confirm_required"
+    own = _session_of(family["dad"])
+    assert dad.post(f"/api/security/sessions/{own.id}/terminate", {"confirm": True}, format="json").status_code == 400
+    r = dad.post(f"/api/security/sessions/{target.id}/terminate", {"confirm": True}, format="json")
+    assert r.status_code == 200
+    # server-side invalidation: the phone's very next request is refused, even with its cookie
+    assert phone.get("/api/dashboard").status_code in (401, 403)
+    assert phone.get("/api/me/sessions").status_code in (401, 403)
+    # unrelated sessions keep working, including the same person's laptop
+    assert laptop.get("/api/dashboard").status_code == 200
+    assert other.get("/api/dashboard").status_code == 200
+    assert dad.get("/api/dashboard").status_code == 200
+    # not Mark Unrecognized: the device stays recognised
+    device.refresh_from_db()
+    assert device.revoked_at is None and device.status != "unrecognized"
+    # audit and notification
+    ev = AuditEvent.objects.filter(action="security.session_terminated").first()
+    assert ev is not None and ev.target_id == str(target.id)
+    n = Notification.objects.filter(user=family["son1"], event="security.session_terminated").first()
+    assert n is not None and "ended" in n.title.lower()
+    # a second attempt: already ended
+    assert dad.post(f"/api/security/sessions/{target.id}/terminate", {"confirm": True}, format="json").status_code == 404
+    # only the main administrator may terminate
+    _scoped_admin(family)
+    scoped = _signin("mom", CHROME_WIN, "10.0.0.8")
+    lap = _session_of(family["son1"], CHROME_WIN)
+    assert scoped.post(f"/api/security/sessions/{lap.id}/terminate", {"confirm": True}, format="json").status_code == 403
+
+
+def test_high_risk_session_notifies_main_admin_once(family):
+    from apps.notify.management.commands.scheduler import tick
+
+    _signin("dad")
+    _signin("son1", SAFARI_IOS, "10.0.0.6")
+    s = _session_of(family["son1"])
+    # (Mark Unrecognized also ends the sessions; a session still valid on an unrecognised device is high risk)
+    s.recognized_device.revoked_at = timezone.now()
+    s.recognized_device.save(update_fields=["revoked_at"])
+    tick()
+    tick()
+    assert Notification.objects.filter(user=family["dad"], event="security.session_high_risk").count() == 1

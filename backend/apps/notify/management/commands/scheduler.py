@@ -98,6 +98,9 @@ def tick() -> dict:
         from apps.ops import maintenance
 
         out["maintenance_jobs"] = maintenance.sync_active()
+        from apps.security import active_sessions
+
+        out["high_risk_sessions"] = active_sessions.scan_high_risk()
         if _due_daily("maintenance_purge", "03:50", now_local):
             out["maintenance_purged"] = maintenance.purge()
             _mark("maintenance_purge", now_local)

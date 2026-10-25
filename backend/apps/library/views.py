@@ -1,7 +1,6 @@
 """Folders, documents, versions, fields, files, permissions, search and dashboard API."""
 from __future__ import annotations
 
-import mimetypes
 import re
 from datetime import timedelta
 
@@ -26,7 +25,7 @@ from . import storage
 from . import doctypes
 from .models import (AccessRule, Correspondent, CustomFieldDef, Document, DocumentField, DocumentType, DocumentVersion, Folder,
                      DocumentHistory, SavedView, Tag)
-from .serializers import document_detail, document_row, field_json, folder_json, user_mini, version_json
+from .serializers import document_detail, document_row, folder_json, user_mini, version_json
 
 
 def _err(msg, status=400, **extra):
@@ -1035,6 +1034,12 @@ def dashboard(request):
             data["security_health"] = center.security_health()
         except Exception:  # noqa: BLE001 - the Overview must load even if a health source fails
             data["security_health"] = None
+        try:  # Change Set AB: Active Sessions tile (sessions within the administrator's scope)
+            from apps.security import active_sessions
+
+            data["active_sessions"] = active_sessions.summary(request.user, current=request.session.get("device"))
+        except Exception:  # noqa: BLE001
+            data["active_sessions"] = None
     for v in SavedView.objects.filter(user=request.user, show_on_dashboard=True):
         _rows, total, _ = searchlib.search(ctx, v.query.get("q", ""), v.query, limit=1)
         data["saved_views"].append({**_view_json(v), "count": total})

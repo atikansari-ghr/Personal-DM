@@ -86,8 +86,19 @@ def check(request) -> bool:
     if row.recognized_device is not None and row.recognized_device.revoked_at is not None:
         return False  # the device was marked Unrecognized
     now = timezone.now()
-    if now - row.last_seen_at > TOUCH_EVERY:
-        UserSession.objects.filter(pk=row.pk).update(last_seen_at=now, ip=audit.client_ip(request))
+    # Change Set AB: bounded writes (at most every touch_interval, never per request). Requests the app marks as
+    # background refreshes keep the session alive (last_seen_at) without counting as activity (last_activity_at).
+    from apps.security.active_sessions import touch_interval
+
+    every = min(TOUCH_EVERY, touch_interval())
+    background = request.META.get("HTTP_X_PD_BACKGROUND") == "1"
+    fields = {}
+    if now - row.last_seen_at > every:
+        fields.update(last_seen_at=now, ip=audit.client_ip(request))
+    if not background and now - (row.last_activity_at or row.created_at) > every:
+        fields.update(last_activity_at=now, last_seen_at=now, ip=audit.client_ip(request))
+    if fields:
+        UserSession.objects.filter(pk=row.pk).update(**fields)
     return True
 
 

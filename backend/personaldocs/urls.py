@@ -20,6 +20,7 @@ from apps.mailimport import views as mail
 from apps.notify import views as notify, views_rich as nrich
 from apps.ops import bk_views as bk, views as ops, views_maint as maint
 from apps.security import views as sec
+from apps.security import views_sessions as sess
 from apps.security import views_signins as signin
 
 
@@ -334,6 +335,10 @@ api = [
     path("security/zones/test", signin.zone_test),
     path("security/map", signin.signin_map),
     path("security/map/test", signin.map_test),
+    path("security/sessions", sess.sessions),
+    path("security/sessions/summary", sess.summary),
+    path("security/sessions/<uuid:pk>", sess.session_detail),
+    path("security/sessions/<uuid:pk>/terminate", sess.terminate),
     path("security/devices", signin.devices),
     path("security/devices/<uuid:pk>/unrecognize", signin.device_unrecognize),
     path("admin/security/policy", sec.access_policy),
