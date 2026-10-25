@@ -907,7 +907,7 @@ const jobOf = async (p, id, done) => {
 const stepUpDialog = async (p) => {
   await p.waitForSelector(".modal #su-pw");
   await p.fill(".modal #su-pw", PW);
-  await p.click(".modal button:has-text('Confirm'):not(:has-text('passkey'))");
+  await p.click(".modal form:has(#su-pw) button.primary");
 };
 if (!SCENARIO) skip("AT-481..AT-500 Change Set AB", "MAINT_SCENARIO not set (run through scripts/e2e.sh)");
 else await step("AT-481..AT-500 Change Set AB: Maintenance & Operations jobs, failures, repair plan, Active Sessions and terminate", async () => {
