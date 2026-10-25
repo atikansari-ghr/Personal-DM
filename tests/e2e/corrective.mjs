@@ -990,6 +990,14 @@ else await step("AT-481..AT-500 Change Set AB: Maintenance & Operations jobs, fa
   await page.waitForSelector("[data-job-history] [data-history-job]");
   // Active Sessions: the tile, the page, details and Terminate Session
   await page.goto(BASE + "/");
+  await page.waitForSelector("[data-edit-layout]");
+  if (!(await page.locator("[data-widget=sessions]").count())) {
+    // an earlier suite saved this person's own widget choice; the tile is then added like any other one
+    await page.click("[data-edit-layout]");
+    await page.selectOption("select[aria-label='Add widget']", "sessions");
+    await page.click("button:has-text('Save layout')");
+    await page.waitForSelector(".toast:has-text('Layout saved')");
+  }
   await page.waitForSelector("[data-widget=sessions] [data-sessions-tile]");
   expect(/\d+ Active/.test(await page.locator("[data-widget=sessions]").innerText()), "tile counts");
   await page.click("[data-widget=sessions] a:has-text('View All Sessions')");
