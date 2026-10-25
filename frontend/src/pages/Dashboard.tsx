@@ -232,7 +232,7 @@ export default function Dashboard() {
     ) : <div className="ov-empty small">Mark a saved view “Show on Overview” to see it here.</div>,
     review_queue: () => data.review.length > 0 ? <DocTable docs={data.review} empty="" /> : (editing ? <div className="ov-empty small">Nothing waits for review.</div> : null),
     security: () => data.security_health ? <HealthSummary h={data.security_health} compact /> : null,
-    sessions: (c) => data.active_sessions ? <SessionsTile data={data.active_sessions} cols={c.cols} /> : null,
+    sessions: (c) => data.active_sessions_tile ? <SessionsTile cols={c.cols} /> : null,
     backup: () => data.admin ? (data.admin.backup_health ? (
       <div className="stack backup-widget" data-health={data.admin.backup_health.state}>
         <div className="row between"><HealthBadge state={data.admin.backup_health.state} label={data.admin.backup_health.label} />
@@ -250,7 +250,7 @@ export default function Dashboard() {
       </div>
     ) : null,
   };
-  const hidden = Object.keys(WIDGET_LABELS).filter((id) => !shownIds.includes(id) && body[id] && (id !== "backup" || data.admin) && (id !== "security" || data.security_health !== undefined) && (id !== "sessions" || data.active_sessions !== undefined));
+  const hidden = Object.keys(WIDGET_LABELS).filter((id) => !shownIds.includes(id) && body[id] && (id !== "backup" || data.admin) && (id !== "security" || data.security_health !== undefined) && (id !== "sessions" || !!data.active_sessions_tile));
   const single = groups.length === 1 && groups[0].id === "general";
   const tile = (id: string, g: OvGroup, i: number) => {
     const c = cfgOf(id);

@@ -854,8 +854,8 @@ def test_at494_tile_counts_rows_and_view_all(family, geo):
     from apps.security.models import TrustedZone
 
     TrustedZone.objects.create(name="Home", cidrs=["10.0.0.0/24"])
-    d = dad.get("/api/dashboard").json()
-    tile = d["active_sessions"]
+    assert dad.get("/api/dashboard").json()["active_sessions_tile"] is True  # the tile loads its own data
+    tile = dad.get("/api/security/sessions/summary").json()
     assert tile["counts"] == {"active": 2, "signed_in": 3, "idle": 1, "untrusted": 1, "high_risk": 0}
     assert tile["link"] == "/settings/security?view=sessions"
     rows = {r["user"]["name"]: r for r in tile["sessions"]}
@@ -867,7 +867,7 @@ def test_at494_tile_counts_rows_and_view_all(family, geo):
     assert "ip" not in tile["sessions"][0]  # the tile shows no addresses
     # normal members do not get the tile data; the summary endpoint is for administrators
     son = _signin("son2", CHROME_WIN, "10.0.0.9")
-    assert "active_sessions" not in son.get("/api/dashboard").json()
+    assert "active_sessions_tile" not in son.get("/api/dashboard").json()
     assert son.get("/api/security/sessions/summary").status_code == 403
 
 

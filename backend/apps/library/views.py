@@ -1034,12 +1034,9 @@ def dashboard(request):
             data["security_health"] = center.security_health()
         except Exception:  # noqa: BLE001 - the Overview must load even if a health source fails
             data["security_health"] = None
-        try:  # Change Set AB: Active Sessions tile (sessions within the administrator's scope)
-            from apps.security import active_sessions
-
-            data["active_sessions"] = active_sessions.summary(request.user, current=request.session.get("device"))
-        except Exception:  # noqa: BLE001
-            data["active_sessions"] = None
+        # Change Set AB: the Active Sessions tile loads its own data (/api/security/sessions/summary), so the
+        # Overview itself stays within its query budget
+        data["active_sessions_tile"] = True
     for v in SavedView.objects.filter(user=request.user, show_on_dashboard=True):
         _rows, total, _ = searchlib.search(ctx, v.query.get("q", ""), v.query, limit=1)
         data["saved_views"].append({**_view_json(v), "count": total})

@@ -136,8 +136,9 @@ export default function ActiveSessions() {
 
 /** The Overview tile: compact (counts), medium (counts and a few people) or large (rows with device and location),
  * chosen from the tile's width — the same component at every size. */
-export function SessionsTile({ data, cols }: { data: any; cols: number }) {
-  if (!data) return null;
+export function SessionsTile({ cols }: { cols: number }) {
+  const { data } = useAsync(() => api<any>("security/sessions/summary", { background: true }), []);
+  if (!data) return <Skeleton lines={2} />;
   const mode = cols <= 3 ? "compact" : cols <= 6 ? "medium" : "large";
   const c = data.counts;
   return (
